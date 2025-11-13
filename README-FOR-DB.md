@@ -15,33 +15,152 @@
 |------|-----|---------|
 | `id` | UUID | Уникальный ID пользователя |
 | `email` | TEXT (UNIQUE) | Email для входа |
+| `phone` | TEXT | Номер телефона (для 2FA и уведомлений) |
 | `hashed_password` | TEXT | Хэш пароля (bcrypt) |
+| `full_name` | TEXT | ФИО (для физлиц) / Название компании (для юрлиц) |
+| `entity_type` | TEXT | `'individual'`, `'self_employed'`, `'legal_entity'` |
+| `inn` | TEXT | ИНН (опционально для физлиц, обязательно для юрлиц) |
+| `kpp` | TEXT | КПП (только для юрлиц, nullable) |
+| `legal_address` | TEXT | Юридический адрес (юрлица) |
+| `timezone` | TEXT | Часовой пояс (например, `"Europe/Moscow"`) |
 | `created_at` | TIMESTAMPTZ | Дата регистрации |
 | `is_active` | BOOLEAN | Активен ли аккаунт |
-| `timezone` | TEXT | Часовой пояс (для отчётов, например, "Europe/Moscow") |
 
+> 💡 Поле `entity_type` позволяет гибко формировать отчёты и налоговые расчёты.
 > 🔐 **Безопасность**: пароли хранятся только в хэшированном виде.
 
 ---
 
-## 🧱 2. `subscriptions` — Подписки
+## 🧱 2. `tariff_plans` — Тарифные планы (настраиваемые!)
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | TEXT (PRIMARY KEY) | Слаг: `'demo'`, `'starter'`, `'pro'`, `'enterprise'` |
+| `name` | TEXT | Отображаемое название: *"Демо"*, *"Старт (для ИП)"*, *"Про"*, *"Бизнес"* |
+| `description` | TEXT | Описание для лендинга: *"7 дней бесплатно, без карты"* |
+| `price_rub` | NUMERIC(10,2) | Цена в рублях за **месяц** (`0.00` для демо) |
+| `is_active` | BOOLEAN | Активен ли тариф (можно скрыть без удаления) |
+| `created_at` | TIMESTAMPTZ | Когда создан |
+| `updated_at` | TIMESTAMPTZ | Последнее изменение цены/лимитов |
+
+> ✅ Теперь **менять цены можно через админку или SQL-запрос**, а не релизом.
+
+---
+
+## 🧱 3. `tariff_limits` — Лимиты по тарифу
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `tariff_id` | TEXT (FK → tariff_plans.id) | К какому тарифу относится |
+| `limit_type` | TEXT | Тип: `'wb_accounts'`, `'nm_ids'`, `'sync_frequency_hours'`, `'ai_queries_per_month'`, `'retention_days'` |
+| `limit_value` | INT | Значение: `1`, `5000`, `24`, `100`, `30` |
+
+Примеры записей:
+```sql
+('starter', 'wb_accounts', 1),
+('starter', 'nm_ids', 500),
+('starter', 'sync_frequency_hours', 24),
+('starter', 'ai_queries_per_month', 20),
+('starter', 'retention_days', 30),
+
+('enterprise', 'wb_accounts', 10),
+('enterprise', 'nm_ids', 100000),
+('enterprise', 'sync_frequency_hours', 1),
+('enterprise', 'ai_queries_per_month', 5000),
+('enterprise', 'retention_days', 730)
+```
+
+> 💡 Такой подход позволяет:
+> - легко добавлять новые лимиты (например, `push_notifications_per_day`);
+> - задавать разные условия для B2B и B2C;
+> - делать A/B-тесты тарифов.
+
+---
+
+## 🧱 4. `subscriptions` — Подписки (обновлённая версия)
 
 | Поле | Тип | Описание |
 |------|-----|---------|
 | `id` | UUID | ID подписки |
 | `user_id` | UUID (FK → users.id) | Владелец |
-| `plan` | TEXT | Тариф: `'free'`, `'pro'`, `'enterprise'` |
-| `status` | TEXT | `'active'`, `'expired'`, `'cancelled'` |
-| `current_period_start` | TIMESTAMPTZ | Начало текущего периода |
-| `current_period_end` | TIMESTAMPTZ | Конец текущего периода |
-| `yookassa_payment_id` | TEXT | ID платежа в ЮKassa (для возвратов/аудита) |
-| `created_at` | TIMESTAMPTZ | Дата создания |
+| `tariff_id` | TEXT (FK → tariff_plans.id) | Текущий тариф |
+| `status` | TEXT | `'active'`, `'expired'`, `'cancelled'`, `'demo'` |
+| `current_period_start` | TIMESTAMPTZ | Начало периода |
+| `current_period_end` | TIMESTAMPTZ | Конец периода |
+| `yookassa_payment_id` | TEXT | ID в ЮKassa (nullable для демо) |
+| `created_at` | TIMESTAMPTZ | Дата оформления |
+| `updated_at` | TIMESTAMPTZ | Последнее изменение |
 
-> 💡 Подписка определяет лимиты: кол-во WB-аккаунтов, частоту обновления, доступ к AI.
+> 💡 Статус `'demo'` — особый: не требует оплаты, автоматически переходит в `'expired'` через N дней.
 
 ---
 
-## 🧱 3. `wb_accounts` — WB-кабинеты (магазины)
+## 🧱 5. `demo_access_requests` — Заявки на демо-доступ (опционально)
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID |
+| `user_id` | UUID (FK → users.id) |
+| `requested_at` | TIMESTAMPTZ |
+| `approved_at` | TIMESTAMPTZ | Когда активирован демо-доступ |
+| `expires_at` | TIMESTAMPTZ | Автоматическое окончание (например, +7 дней) |
+| `source` | TEXT | Откуда пришёл: `'landing'`, `'telegram_bot'`, `'referral'` |
+
+> 📊 Позволяет анализировать конверсию из демо → платный тариф.
+
+---
+
+## 🔄 Как это работает на практике
+
+1. Админ создаёт тарифы:
+   ```sql
+   INSERT INTO tariff_plans (id, name, price_rub, is_active)
+   VALUES ('starter', 'Старт (для ИП)', 2990.00, true);
+   
+   INSERT INTO tariff_limits (tariff_id, limit_type, limit_value)
+   VALUES 
+     ('starter', 'wb_accounts', 1),
+     ('starter', 'nm_ids', 1000),
+     ('starter', 'sync_frequency_hours', 6);
+   ```
+
+2. При регистрации пользователь выбирает тариф `'starter'`.
+
+3. При расчёте аналитики FastAPI проверяет:
+   - `sync_jobs` запускаются не чаще, чем раз в `sync_frequency_hours`;
+   - `wb_analytics_daily` хранится не дольше `retention_days`;
+   - Запросы к ИИ считают лимит `ai_queries_per_month`.
+
+4. Можно **повысить/понизить тариф** без потери данных — только `tariff_id` меняется.
+
+---
+
+## 📋 Предлагаемые тарифы (по умолчанию)
+
+| Тариф | Цена | Для кого | Ключевые лимиты |
+|-------|------|---------|----------------|
+| **`demo`** | 0 ₽ | Все новые пользователи | 3 дня, 1 магазин, 100 артикулов, 5 ИИ-запросов |
+| **`starter`** | 2 990 ₽/мес | ИП, самозанятые | 1 магазин, 1 000 артикулов, обновление 4×/день |
+| **`pro`** | 6 990 ₽/мес | Малый бизнес | 3 магазина, 10 000 артикулов, обновление ежечасно, 200 ИИ-запросов |
+| **`business`** | По запросу | Юрлица, маркетплейс-агентства | Безлимит магазинов, API-доступ, персональный менеджер |
+
+> 💡 Цены можно менять без деплоя — просто `UPDATE tariff_plans SET price_rub = 3490 WHERE id = 'starter'`.
+
+---
+
+## 🧩 Дополнительно: поддержка юрлиц в отчётах
+
+- При генерации PDF-отчёта — подставлять:
+  - `full_name` → название компании
+  - `inn`/`kpp` → в шапку документа
+  - `legal_address` → в реквизиты
+- В расчёте налога — использовать `entity_type`:
+  - `'self_employed'` → 4–6% (ПСН/УСН)
+  - `'legal_entity'` → 6% или 15% (УСН), 20% (ОСНО)
+
+---
+
+## 🧱 6. `wb_accounts` — WB-кабинеты (магазины)
 
 | Поле | Тип | Описание |
 |------|-----|---------|
@@ -59,7 +178,7 @@
 
 ---
 
-## 🧱 4. `cost_profiles` — Профили себестоимости и налогов
+## 🧱 7. `cost_profiles` — Профили себестоимости и налогов
 
 | Поле | Тип | Описание |
 |------|-----|---------|
