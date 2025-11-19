@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
     from handlers.users import routers as user_router
+    from handlers.auth import router as auth_router
 
     app = FastAPI()
     
@@ -28,6 +29,7 @@ def create_app() -> FastAPI:
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
     app.include_router(user_router)
+    app.include_router(auth_router)
 
     return app
 

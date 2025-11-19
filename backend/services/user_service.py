@@ -42,6 +42,12 @@ async def set_user_role(session: AsyncSession, new_user, role_type: str = 'user'
     )
     await session.commit()
 
+async def get_user_roles(session: AsyncSession, user: User):
+    roles_result = await session.execute(
+        select(user_roles.c.role).where(user_roles.c.user_id == user.id)
+    )
+    return [row[0] for row in roles_result.fetchall()]
+
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
     result = await session.execute(
         select(User).where(User.email == email)
