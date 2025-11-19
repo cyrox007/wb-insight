@@ -5,9 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 def create_app() -> FastAPI:
+    from handlers.users import routers as user_router
 
     app = FastAPI()
-
+    
     # Добавляем CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -25,6 +26,8 @@ def create_app() -> FastAPI:
     if not os.path.exists("uploads"):
         os.makedirs("uploads")
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+    app.include_router(user_router)
 
     return app
 

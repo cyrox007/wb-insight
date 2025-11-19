@@ -66,9 +66,6 @@ class User(Database.Base):
     staff_id = Column(String(50), nullable=True, unique=True, comment="Внутренний ID сотрудника")
     department = Column(String(100), nullable=True, comment="Отдел/Департамент")
     position = Column(String(100), nullable=True, comment="Должность")
-    
-    # Relationships
-    roles = relationship("UserRole", secondary=user_roles, backref="users")
 
     # Composite indexes for better query performance
     __table_args__ = (
