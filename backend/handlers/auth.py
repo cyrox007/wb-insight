@@ -79,12 +79,22 @@ async def login(
     
     access_token = create_access_token(token_data)
     refresh_token = create_refresh_token(token_data)
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,  # Только по HTTPS в production
+        samesite="lax",
+        max_age=30 * 24 * 60 * 60,  # в секундах
+        path="/auth/refresh"  # Доступно только для эндпоинта refresh
+    )
     
     return {
         "status": "success",
         "data": {
             "access_token": access_token,
-            "refresh_token": refresh_token,
+            #"refresh_token": refresh_token,
             "token_type": "bearer",
             "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "user": {
@@ -99,3 +109,6 @@ async def login(
             "request_id": str(uuid4())
         }
     }
+
+""" @router.post('/refresh')
+async def refresh_token() """
