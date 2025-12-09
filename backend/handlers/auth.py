@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response, status
 from core.dependencies import get_db_session
 from core.logger import setup_logger
 
-from schemas.auth import LoginRequest, TokenResponse
+from schemas.auth import LoginRequest
 from services.user_service import get_user_by_email, get_user_roles
 from utils.hashed_password import verify_password
 from utils.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, create_refresh_token
@@ -67,7 +67,6 @@ async def login(
         }
     
     # 4. Получаем роли пользователя
-    
     roles = await get_user_roles(db_session, user)
 
     # 5. Создаем токены
