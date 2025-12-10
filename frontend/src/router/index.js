@@ -8,7 +8,7 @@ const router = createRouter({
 		{
 			path: '/',
 			name: 'home',
-			component: () => import('../../pages/HomePage/index.vue'),
+			component: () => import('../pages/HomePage/index.vue'),
 			meta: {
 				title: "Главная",
 				requestGuest: true // Разрешить доступ только неавторизованным пользователям
@@ -17,7 +17,7 @@ const router = createRouter({
 		{
 			path: '/signin',
 			name: 'signin',
-			component: () => import('../../pages/LoginPage/index.vue'),
+			component: () => import('../pages/LoginPage/index.vue'),
 			meta: {
 				title: "Главная",
 				requestGuest: true // Разрешить доступ только неавторизованным пользователям
@@ -26,7 +26,7 @@ const router = createRouter({
 		{
 			path: '/dashboard',
 			name: 'dashboard.home',
-			component: () => import('../../pages/Dashboard/Main/index.vue'),
+			component: () => import('../pages/Dashboard/Main/index.vue'),
 			meta: {
 				title: "Главная",
 				requestAuth: true // Разрешить доступ только авторизованным пользователям

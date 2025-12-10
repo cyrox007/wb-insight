@@ -2,12 +2,16 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from './stores/auth';
+import AuthService from '../API/AuthService';
+import SpinnerButtonSmall from './components/Loaders/SpinnerButtonSmall.vue';
 
 // Реактивные переменные
 const showHeader = ref(true)
 const showFooter = ref(true)
 const showSearch = ref(true)
 const showDateRange = ref(true)
+
+const modalLoadedBtn = ref(false)
 
 // Авторизация
 const authStore = useAuthStore();
@@ -30,6 +34,8 @@ const showRegister = ref(false)
 // Данные форм
 const loginEmail = ref('')
 const loginPassword = ref('')
+const loginError = ref('')
+
 const registerName = ref('')
 const registerEmail = ref('')
 const registerPassword = ref('')
@@ -44,15 +50,27 @@ const toggleNotifications = () => {
 	showNotifications.value = !showNotifications.value
 }
 
-/* const performLogin = () => {
+const performLogin = async () => {
 	// Логика входа
-	console.log('Login attempt:', loginEmail.value)
-	isAuthenticated.value = true
-	showLogin.value = false
-} */
+	modalLoadedBtn.value = true;
+	if (loginEmail.value === '' && loginPassword.value === '') {
+		modalLoadedBtn.value = false
+		loginError.value = 'Введите email и пароль'
+		return;
+	}
 
-const login = () => {
-	authStore.login({ username: 'test' })
+	try {
+		let response = await AuthService.login(loginEmail.value, loginPassword.value);
+		console.log(response);
+
+	} catch (error) {
+		console.error(error);
+		if (error.response) {
+			loginError.value = error.response.data.message || 'Ошибка авторизации';
+		}
+	} finally {
+		modalLoadedBtn.value = false
+	}
 }
 
 const performRegister = () => {
@@ -112,11 +130,41 @@ onMounted(() => {
 
 			<!-- Блок авторизации для неавторизованных пользователей -->
 			<div class="auth-section" v-else>
-				<button class="btn btn-outline" @click="login">Войти</button>
+				<button class="btn btn-outline" @click="showLogin = true">
+
+					<span>Войти</span>
+				</button>
 				<button class="btn btn-primary" @click="showRegister = true">Регистрация</button>
 			</div>
 		</div>
 	</header>
+	<!-- Модальное окно авторизации -->
+	<div class="modal-overlay" v-if="showLogin">
+		<div class="modal">
+			<div class="modal-header">
+				<h3 class="modal-title">Авторизация</h3>
+				<button class="modal-close" @click="showLogin = false">&times;</button>
+			</div>
+			<div class="modal-body">
+				<div class="form-group">
+					<label class="form-label">Email</label>
+					<input type="email" class="form-input" v-model="loginEmail" placeholder="Введите email">
+				</div>
+				<div class="form-group">
+					<label class="form-label">Пароль</label>
+					<input type="password" class="form-input" v-model="loginPassword" placeholder="Введите пароль">
+				</div>
+			</div>
+			<div class="modal-error" v-if="loginError !== ''">{{ loginError }}</div>
+			<div class="modal-footer">
+				<button class="btn btn-outline" @click="showLogin = false">Отмена</button>
+				<button class="btn btn-primary" @click="performLogin" :disabled="modalLoadedBtn">
+					<SpinnerButtonSmall v-if="modalLoadedBtn" />
+					Войти
+				</button>
+			</div>
+		</div>
+	</div>
 	<!-- Основной контент страниц -->
 	<main class="main-content">
 		<RouterView />
