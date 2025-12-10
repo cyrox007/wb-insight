@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAuthStore } from './stores/auth';
 
 // Реактивные переменные
 const showHeader = ref(true)
@@ -9,12 +10,14 @@ const showSearch = ref(true)
 const showDateRange = ref(true)
 
 // Авторизация
-const isAuthenticated = ref(false)
-const userName = ref('Иван Иванов')
+const authStore = useAuthStore();
+
+const isAuthenticated = computed(() => authStore.isAuthSatus);
+/*const userName = ref('Иван Иванов')
 const userInitials = computed(() => {
 	if (!userName.value) return ''
 	return userName.value.split(' ').map(n => n[0]).join('').toUpperCase()
-})
+}) */
 
 // Уведомления
 const notificationCount = ref(3)
@@ -41,11 +44,15 @@ const toggleNotifications = () => {
 	showNotifications.value = !showNotifications.value
 }
 
-const performLogin = () => {
+/* const performLogin = () => {
 	// Логика входа
 	console.log('Login attempt:', loginEmail.value)
 	isAuthenticated.value = true
 	showLogin.value = false
+} */
+
+const login = () => {
+	authStore.login({ username: 'test' })
 }
 
 const performRegister = () => {
@@ -57,10 +64,7 @@ const performRegister = () => {
 }
 
 const logout = () => {
-	isAuthenticated.value = false
-	userName.value = ''
-	loginEmail.value = ''
-	loginPassword.value = ''
+	authStore.logout()
 }
 
 // Определяем, нужно ли показывать элементы на текущей странице
@@ -108,7 +112,7 @@ onMounted(() => {
 
 			<!-- Блок авторизации для неавторизованных пользователей -->
 			<div class="auth-section" v-else>
-				<button class="btn btn-outline" @click="showLogin = true">Войти</button>
+				<button class="btn btn-outline" @click="login">Войти</button>
 				<button class="btn btn-primary" @click="showRegister = true">Регистрация</button>
 			</div>
 		</div>
