@@ -2,19 +2,17 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
-import AuthService from '../API/AuthService';
 import SpinnerButtonSmall from './components/Loaders/SpinnerButtonSmall.vue';
+import LoginModal from './components/auth/LoginModal.vue';
 
 // Реактивные переменные
 const showHeader = ref(true)
 const showFooter = ref(true)
 
-const modalLoadedBtn = ref(false)
-
-// Авторизация
 const authStore = useAuthStore();
 const router = useRouter();
 
+// Авторизация
 const isAuthenticated = computed(() => authStore.isAuthSatus);
 const showSearch = computed(() => isAuthenticated.value ? true : false)
 const showDateRange = computed(() => isAuthenticated.value ? true : false)
@@ -26,11 +24,6 @@ const showNotifications = ref(false)
 // Модальные окна
 const showLogin = ref(false)
 const showRegister = ref(false)
-
-// Данные форм
-const loginEmail = ref('')
-const loginPassword = ref('')
-const loginError = ref('')
 
 const registerName = ref('')
 const registerEmail = ref('')
@@ -44,37 +37,6 @@ const endDate = ref('19 октября')
 // Методы
 const toggleNotifications = () => {
 	showNotifications.value = !showNotifications.value
-}
-
-const performLogin = async () => {
-	// Логика входа
-	modalLoadedBtn.value = true;
-	if (loginEmail.value === '' && loginPassword.value === '') {
-		modalLoadedBtn.value = false
-		loginError.value = 'Введите email и пароль'
-		return;
-	}
-
-	try {
-		let response = await AuthService.login(loginEmail.value, loginPassword.value);
-		if (response.data && response.data.data) {
-			if (response.data.data.access_token) {
-				authStore.login(response.data.data.user);
-				localStorage.setItem("access_token", response.data.data.access_token);
-				localStorage.setItem("user", JSON.stringify(response.data.data.user));
-				router.push('/dashboard');
-				showLogin.value = false
-			}
-		}
-
-	} catch (error) {
-		console.error(error);
-		if (error.response) {
-			loginError.value = error.response.data.message || 'Ошибка авторизации';
-		}
-	} finally {
-		modalLoadedBtn.value = false
-	}
 }
 
 const performRegister = () => {
@@ -137,7 +99,6 @@ onMounted(() => {
 			<!-- Блок авторизации для неавторизованных пользователей -->
 			<div class="auth-section" v-else>
 				<button class="btn btn-outline" @click="showLogin = true">
-
 					<span>Войти</span>
 				</button>
 				<button class="btn btn-primary" @click="showRegister = true">Регистрация</button>
@@ -145,32 +106,8 @@ onMounted(() => {
 		</div>
 	</header>
 	<!-- Модальное окно авторизации -->
-	<div class="modal-overlay" v-if="showLogin">
-		<div class="modal">
-			<div class="modal-header">
-				<h3 class="modal-title">Авторизация</h3>
-				<button class="modal-close" @click="showLogin = false">&times;</button>
-			</div>
-			<div class="modal-body">
-				<div class="form-group">
-					<label class="form-label">Email</label>
-					<input type="email" class="form-input" v-model="loginEmail" placeholder="Введите email">
-				</div>
-				<div class="form-group">
-					<label class="form-label">Пароль</label>
-					<input type="password" class="form-input" v-model="loginPassword" placeholder="Введите пароль">
-				</div>
-			</div>
-			<div class="modal-error" v-if="loginError !== ''">{{ loginError }}</div>
-			<div class="modal-footer">
-				<button class="btn btn-outline" @click="showLogin = false">Отмена</button>
-				<button class="btn btn-primary" @click="performLogin" :disabled="modalLoadedBtn">
-					<SpinnerButtonSmall v-if="modalLoadedBtn" />
-					Войти
-				</button>
-			</div>
-		</div>
-	</div>
+	<LoginModal :is-open="showLogin" @close="showLogin = false" />
+
 	<!-- Модальное окно регистрации -->
 	<!-- <div class="modal-overlay" v-if="showRegister">
 		<div class="modal">
@@ -400,7 +337,7 @@ onMounted(() => {
 	gap: 10px;
 }
 
-.modal-overlay {
+/* .modal-overlay {
 	position: fixed;
 	top: 0;
 	left: 0;
@@ -411,25 +348,25 @@ onMounted(() => {
 	align-items: center;
 	justify-content: center;
 	z-index: 1000;
-}
+} */
 
-.modal {
+/* .modal {
 	background-color: var(--card-bg);
 	border-radius: 8px;
 	padding: 20px;
 	width: 500px;
 	max-width: 90%;
 	box-shadow: var(--shadow);
-}
+} */
 
-.modal-header {
+/* .modal-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	margin-bottom: 20px;
-}
+} */
 
-.modal-title {
+/* .modal-title {
 	font-size: 20px;
 	font-weight: 600;
 }
@@ -440,9 +377,9 @@ onMounted(() => {
 	font-size: 24px;
 	cursor: pointer;
 	color: #aaa;
-}
+} */
 
-.modal-body {
+/* .modal-body {
 	margin-bottom: 20px;
 }
 
@@ -474,7 +411,7 @@ onMounted(() => {
 	display: flex;
 	justify-content: flex-end;
 	gap: 10px;
-}
+} */
 
 .footer {
 	background-color: var(--medium-bg);
