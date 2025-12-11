@@ -83,8 +83,8 @@ async def login(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,  # Только по HTTPS в production
-        samesite="lax",
+        secure=False,  # Только по HTTPS в production
+        samesite="none",
         max_age=30 * 24 * 60 * 60,  # в секундах
         path="/auth/refresh"  # Доступно только для эндпоинта refresh
     )

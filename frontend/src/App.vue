@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import AuthService from '../API/AuthService';
 import SpinnerButtonSmall from './components/Loaders/SpinnerButtonSmall.vue';
@@ -8,20 +8,16 @@ import SpinnerButtonSmall from './components/Loaders/SpinnerButtonSmall.vue';
 // Реактивные переменные
 const showHeader = ref(true)
 const showFooter = ref(true)
-const showSearch = ref(true)
-const showDateRange = ref(true)
 
 const modalLoadedBtn = ref(false)
 
 // Авторизация
 const authStore = useAuthStore();
+const router = useRouter();
 
 const isAuthenticated = computed(() => authStore.isAuthSatus);
-/*const userName = ref('Иван Иванов')
-const userInitials = computed(() => {
-	if (!userName.value) return ''
-	return userName.value.split(' ').map(n => n[0]).join('').toUpperCase()
-}) */
+const showSearch = computed(() => isAuthenticated.value ? true : false)
+const showDateRange = computed(() => isAuthenticated.value ? true : false)
 
 // Уведомления
 const notificationCount = ref(3)
@@ -61,7 +57,15 @@ const performLogin = async () => {
 
 	try {
 		let response = await AuthService.login(loginEmail.value, loginPassword.value);
-		console.log(response);
+		if (response.data && response.data.data) {
+			if (response.data.data.access_token) {
+				authStore.login(response.data.data.user);
+				localStorage.setItem("access_token", response.data.data.access_token);
+				localStorage.setItem("user", JSON.stringify(response.data.data.user));
+				router.push('/dashboard');
+				showLogin.value = false
+			}
+		}
 
 	} catch (error) {
 		console.error(error);
@@ -82,6 +86,8 @@ const performRegister = () => {
 }
 
 const logout = () => {
+	localStorage.clear();
+	router.push('/');
 	authStore.logout()
 }
 
@@ -97,10 +103,10 @@ onMounted(() => {
 	<header class="header" v-if="showHeader">
 		<div class="header-left">
 			<div class="logo">wild<span>berries</span></div>
-			<div class="search-container" v-if="showSearch">
+			<div class="search-container" v-show="showSearch">
 				<input type="text" class="search-input" placeholder="Выберите артикул..." v-model="searchQuery">
 			</div>
-			<div class="date-range" v-if="showDateRange">
+			<div class="date-range" v-show="showDateRange">
 				<span>Дата от</span>
 				<input type="text" class="date-input" placeholder="1 октября" v-model="startDate">
 				<span>до</span>
@@ -165,6 +171,33 @@ onMounted(() => {
 			</div>
 		</div>
 	</div>
+	<!-- Модальное окно регистрации -->
+	<!-- <div class="modal-overlay" v-if="showRegister">
+		<div class="modal">
+			<div class="modal-header">
+				<h3 class="modal-title">Регистрация</h3>
+				<button class="modal-close" @click="showRegister = false">&times;</button>
+			</div>
+			<div class="modal-body">
+				<div class="form-group">
+					<label class="form-label">Имя</label>
+					<input type="text" class="form-input" v-model="registerName" placeholder="Введите ваше имя">
+				</div>
+				<div class="form-group">
+					<label class="form-label">Email</label>
+					<input type="email" class="form-input" v-model="registerEmail" placeholder="Введите email">
+				</div>
+				<div class="form-group">
+					<label class="form-label">Пароль</label>
+					<input type="password" class="form-input" v-model="registerPassword" placeholder="Введите пароль">
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button class="btn btn-outline" @click="showRegister = false">Отмена</button>
+				<button class="btn btn-primary" @click="performRegister">Зарегистрироваться</button>
+			</div>
+		</div>
+	</div> -->
 	<!-- Основной контент страниц -->
 	<main class="main-content">
 		<RouterView />

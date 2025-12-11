@@ -17,7 +17,7 @@ logger = setup_logger(__name__)
 
 @routers.get('/')
 async def get_users(db_session: AsyncSession = Depends(get_db_session)):
-    print(db_session)
+    # print(db_session)
     return {}
 
 @routers.post('/create', status_code=status.HTTP_201_CREATED)
