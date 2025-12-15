@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import SpinnerButtonSmall from './components/Loaders/SpinnerButtonSmall.vue';
 import LoginModal from './components/auth/LoginModal.vue';
+import RegistrationModal from './components/auth/RegistrationModal.vue';
 
 // Реактивные переменные
 const showHeader = ref(true)
@@ -109,6 +110,7 @@ onMounted(() => {
 	<LoginModal :is-open="showLogin" @close="showLogin = false" />
 
 	<!-- Модальное окно регистрации -->
+	<RegistrationModal :is-open="showRegister" @close="showRegister = false" />
 	<!-- <div class="modal-overlay" v-if="showRegister">
 		<div class="modal">
 			<div class="modal-header">

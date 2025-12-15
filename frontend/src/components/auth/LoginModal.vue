@@ -9,25 +9,16 @@
 
 		<template #body>
 			<div class="modal-body">
-				<div class="form-group">
-					<label class="form-label">Email</label>
-					<input type="email" class="form-input" v-model="loginEmail" placeholder="Введите email">
-				</div>
-				<div class="form-group">
-					<label class="form-label">Пароль</label>
-					<input type="password" class="form-input" v-model="loginPassword" placeholder="Введите пароль">
-				</div>
+				<TextInput v-model="loginEmail" label="Email" placeholder="Введите email" type="email" />
+				<TextInput v-model="loginPassword" label="Пароль" placeholder="Введите пароль" type="password" />
 			</div>
 			<div class="modal-error" v-if="loginError !== ''">{{ loginError }}</div>
 		</template>
 
 		<template #footer>
 			<div class="modal-footer">
-				<button class="btn btn-outline" @click="$emit('close')">Отмена</button>
-				<button class="btn btn-primary" @click="performLogin" :disabled="modalLoadedBtn">
-					<SpinnerButtonSmall v-if="modalLoadedBtn" />
-					<span>Войти</span>
-				</button>
+				<ButtonCancel @click="$emit('close')" />
+				<ButtonLogin @click="performLogin" :loading="modalLoadedBtn" :disabled="modalLoadedBtn" />
 			</div>
 		</template>
 	</Modal>
@@ -35,7 +26,10 @@
 <script setup>
 import { ref, defineProps, defineEmits } from 'vue'
 import Modal from '@/components/UI/Modal.vue'
-import SpinnerButtonSmall from '@/components/Loaders/SpinnerButtonSmall.vue'
+import TextInput from '@/components/UI/TextInput.vue'
+/* import SpinnerButtonSmall from '@/components/Loaders/SpinnerButtonSmall.vue' */
+import ButtonLogin from '@/components/UI/Buttons/ButtonLogin.vue'
+import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue'
 import AuthService from '@/API/AuthService';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
@@ -110,37 +104,13 @@ const performLogin = async () => {
 	margin-bottom: 20px;
 }
 
-.form-group {
-	margin-bottom: 15px;
-}
-
-.form-label {
-	display: block;
-	margin-bottom: 5px;
-	font-size: 14px;
-}
-
-.form-input {
-	width: 100%;
-	padding: 10px;
-	border: 1px solid var(--border-color);
-	border-radius: 6px;
-	background-color: var(--medium-bg);
-	color: var(--text-color);
-}
-
-.form-input:focus {
-	outline: none;
-	border-color: var(--secondary-color);
-}
-
 .modal-footer {
 	display: flex;
 	justify-content: flex-end;
 	gap: 10px;
 }
 
-.btn {
+/* .btn {
 	padding: 10px 20px;
 	border-radius: 6px;
 	border: none;
@@ -175,5 +145,5 @@ const performLogin = async () => {
 .btn-primary:disabled {
 	opacity: 0.6;
 	cursor: not-allowed;
-}
+} */
 </style>
