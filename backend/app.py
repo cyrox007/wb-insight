@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 def create_app() -> FastAPI:
     from handlers.users import routers as user_router
     from handlers.auth import router as auth_router
+    from handlers.dashboard import router as dashboard_router
 
     app = FastAPI()
     
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
 
     app.include_router(user_router)
     app.include_router(auth_router)
+    app.include_router(dashboard_router)
 
     return app
 
