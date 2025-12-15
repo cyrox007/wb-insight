@@ -111,32 +111,7 @@ onMounted(() => {
 
 	<!-- Модальное окно регистрации -->
 	<RegistrationModal :is-open="showRegister" @close="showRegister = false" />
-	<!-- <div class="modal-overlay" v-if="showRegister">
-		<div class="modal">
-			<div class="modal-header">
-				<h3 class="modal-title">Регистрация</h3>
-				<button class="modal-close" @click="showRegister = false">&times;</button>
-			</div>
-			<div class="modal-body">
-				<div class="form-group">
-					<label class="form-label">Имя</label>
-					<input type="text" class="form-input" v-model="registerName" placeholder="Введите ваше имя">
-				</div>
-				<div class="form-group">
-					<label class="form-label">Email</label>
-					<input type="email" class="form-input" v-model="registerEmail" placeholder="Введите email">
-				</div>
-				<div class="form-group">
-					<label class="form-label">Пароль</label>
-					<input type="password" class="form-input" v-model="registerPassword" placeholder="Введите пароль">
-				</div>
-			</div>
-			<div class="modal-footer">
-				<button class="btn btn-outline" @click="showRegister = false">Отмена</button>
-				<button class="btn btn-primary" @click="performRegister">Зарегистрироваться</button>
-			</div>
-		</div>
-	</div> -->
+
 	<!-- Основной контент страниц -->
 	<main class="main-content">
 		<RouterView />
