@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Request
 
+from core.dependencies import get_db_session, require_permission
 from core.logger import setup_logger
 from utils.responce_helps import response_success
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = setup_logger(__name__)
 
-@router.get("/")
-async def dashboard(request: Request):
+
+@router.get("/", dependencies=[
+    Depends(require_permission('user.dashboard')) # проверка доступа
+])
+async def dashboard(request: Request, db_session: AsyncSession = Depends(get_db_session)):
     products = [
         { 'id': 1, 'name': 'Электросталь', 'sales': 2722, 'profit': 1500 },
         { 'id': 2, 'name': 'Коледино', 'sales': 1323, 'profit': 800 },

@@ -3,6 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.orm import load_only
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.users import UserCreateRequest
@@ -59,3 +60,33 @@ async def get_user_by_phone(session: AsyncSession, phone: str) -> Optional[User]
         select(User).where(User.phone == phone)
     )
     return result.scalar_one_or_none()
+
+async def get_user_count(session: AsyncSession) -> int:
+    result = await session.execute(
+        select(User)
+    )
+    return len(result.scalars().all())
+
+async def get_user_list(session: AsyncSession, offset: int = 0, limit: int = 10):
+    result = await session.execute(
+        select(User).options(
+            load_only(
+                User.id,
+                User.email,
+                User.phone,
+                User.full_name,
+                User.entity_type,
+                User.inn,
+                User.kpp,
+                User.legal_address,
+                User.timezone,
+                User.created_at,
+                User.is_active,
+                User.is_staff,
+                User.staff_id,
+                User.department,
+                User.position
+            )
+        ).offset(offset).limit(limit)
+    )
+    return result.scalars().all()

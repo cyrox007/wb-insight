@@ -8,6 +8,7 @@ def create_app() -> FastAPI:
     from handlers.users import routers as user_router
     from handlers.auth import router as auth_router
     from handlers.dashboard import router as dashboard_router
+    from handlers.control_panel import router as control_panel_router
 
     app = FastAPI()
     
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(user_router)
     app.include_router(auth_router)
     app.include_router(dashboard_router)
+    app.include_router(control_panel_router)
 
     return app
 
