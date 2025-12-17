@@ -68,25 +68,22 @@ async def get_user_count(session: AsyncSession) -> int:
     return len(result.scalars().all())
 
 async def get_user_list(session: AsyncSession, offset: int = 0, limit: int = 10):
-    result = await session.execute(
-        select(User).options(
-            load_only(
-                User.id,
-                User.email,
-                User.phone,
-                User.full_name,
-                User.entity_type,
-                User.inn,
-                User.kpp,
-                User.legal_address,
-                User.timezone,
-                User.created_at,
-                User.is_active,
-                User.is_staff,
-                User.staff_id,
-                User.department,
-                User.position
-            )
-        ).offset(offset).limit(limit)
-    )
-    return result.scalars().all()
+    query = select(User).with_only_columns(
+        User.id,
+        User.email,
+        User.phone,
+        User.full_name,
+        User.entity_type,
+        User.inn,
+        User.kpp,
+        User.legal_address,
+        User.timezone,
+        User.created_at,
+        User.is_active,
+        User.is_staff,
+        User.staff_id,
+        User.department,
+        User.position
+    ).offset(offset).limit(limit)
+    result = await session.execute(query)
+    return result.mappings().all()
