@@ -33,6 +33,27 @@ const router = createRouter({
 			},
 			children: []
 		},
+		{
+			path: '/control-panel',
+			name: 'control-panel.index',
+			component: () => import('../pages/ControlPanel/Main/index.vue'),
+			meta: {
+				title: "Панель управления",
+				requestAuth: true // Разрешить доступ только авторизованным пользователям
+				//requestAdmin: true // Разрешить доступ только администраторам
+			},
+			children: [
+				{
+					path: 'users', // а не '/users'
+					name: 'control-panel.users',
+					component: () => import('../pages/ControlPanel/Users/index.vue'),
+					meta: {
+						title: "Пользователи",
+						requestAuth: true
+					}
+				}
+			]
+		}
 	],
 })
 

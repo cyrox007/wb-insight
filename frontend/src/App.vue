@@ -2,7 +2,6 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
-import SpinnerButtonSmall from './components/Loaders/SpinnerButtonSmall.vue';
 import LoginModal from './components/auth/LoginModal.vue';
 import RegistrationModal from './components/auth/RegistrationModal.vue';
 
@@ -15,6 +14,7 @@ const router = useRouter();
 
 // Авторизация
 const isAuthenticated = computed(() => authStore.isAuthSatus);
+const userName = computed(() => authStore.getUser.full_name);
 const showSearch = computed(() => isAuthenticated.value ? true : false)
 const showDateRange = computed(() => isAuthenticated.value ? true : false)
 
@@ -85,7 +85,7 @@ onMounted(() => {
 				</div>
 				<div class="dropdown user-dropdown">
 					<button class="btn btn-outline">
-						<div class="user-avatar-mini">{{ userInitials }}</div>
+						<!-- <div class="user-avatar-mini">{{ userInitials }}</div> -->
 						{{ userName }}
 					</button>
 					<div class="dropdown-content">
