@@ -14,7 +14,7 @@ const router = createRouter({
 				requestGuest: true // Разрешить доступ только неавторизованным пользователям
 			}
 		},
-		{
+		/* {
 			path: '/signin',
 			name: 'signin',
 			component: () => import('../pages/LoginPage/index.vue'),
@@ -22,7 +22,7 @@ const router = createRouter({
 				title: "Главная",
 				requestGuest: true // Разрешить доступ только неавторизованным пользователям
 			}
-		},
+		}, */
 		{
 			path: '/dashboard',
 			name: 'dashboard.home',
@@ -53,8 +53,76 @@ const router = createRouter({
 					}
 				}
 			]
+		},
+		{
+			path: '/:pathMatch(.*)*',
+			name: 'not-found',
+			component: () => import('../pages/NotFoundPage/index.vue'),
+			meta: {
+				title: "Страница не найдена"
+			}
 		}
 	],
+})
+
+const isAuthenticated = () => {
+	// Пример проверки токена в localStorage
+	const token = localStorage.getItem('access_token')
+	const user = localStorage.getItem('user')
+	
+	if (token && user) {
+		try {
+			return JSON.stringify(user)
+		} catch {
+			return null
+		}
+	}
+	return null
+}
+
+// Глобальный навигационный хук
+router.beforeEach((to, from, next) => {
+	// Устанавливаем заголовок страницы
+	if (to.meta.title) {
+		document.title = to.meta.title
+	}
+	
+	const user = isAuthenticated()
+	
+	// Проверка маршрутов для авторизованных пользователей
+	if (to.meta.requestAuth && !user) {
+		// Если маршрут требует авторизации, а пользователь не авторизован
+		// Сохраняем URL, на который пытались перейти
+		if (to.path !== '/') {
+			localStorage.setItem('redirectPath', to.fullPath)
+		}
+		console.log("НЕАвторизован. Перенаправдяем на панель");
+		console.log(`${user}`);
+		next({ name: 'home' })
+		return
+	}
+	
+	// Проверка маршрутов для гостей (неавторизованных)
+	if (to.meta.requestGuest && user) {
+		// Если пользователь авторизован, но пытается попасть на страницу для гостей
+		// Перенаправляем на дашборд или главную страницу
+		console.log("Авторизован. Перенаправдяем на панель");
+		
+		next({ name: 'dashboard.home' })
+		return
+	}
+	
+	// Проверка прав администратора (если нужно)
+	if (to.meta.requestAdmin && user) {
+		// Здесь добавьте проверку на роль администратора
+		// if (!user.is_admin) {
+		//     next({ name: 'forbidden' })
+		//     return
+		// }
+	}
+	
+	// Если все проверки пройдены, разрешаем переход
+	next()
 })
 
 export default router

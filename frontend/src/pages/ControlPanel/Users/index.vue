@@ -16,7 +16,7 @@
 			</thead>
 			<tbody>
 				<tr v-for="user in users">
-					<td class="user-id">{{ user.id.substring(0, 8) }}...</td>
+					<td class="user-id">{{ user.id.substring(0, 13) }}...</td>
 					<td>
 						<div class="user-info">
 							<div class="user-avatar-small">{{ user.full_name?.charAt(0) || 'U' }}</div>
