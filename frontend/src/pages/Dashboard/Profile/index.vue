@@ -10,7 +10,7 @@
 					</svg>
 				</div>
 				<div class="user-info">
-					<h2 class="user-name">{{ user.name }}</h2>
+					<h2 class="user-name">{{ user.full_name }}</h2>
 					<p class="user-email">{{ user.email }}</p>
 				</div>
 
@@ -76,13 +76,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { computed, onMounted, ref } from 'vue'
 
-const user = ref({
-	name: 'Иван Петров',
-	email: 'ivan@example.com',
-	tariff: 'Профессиональный'
-})
+const authStore = useAuthStore();
+const user = computed(() => authStore.getUser);
 
 const tokens = ref([
 	{ id: 1, value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx', created_at: '2026-01-10T14:30:00' },
@@ -91,6 +89,16 @@ const tokens = ref([
 
 const showEditProfile = ref(false)
 const showAddTokenModal = ref(false)
+
+onMounted(() => {
+	if (!user.value) {
+		try {
+			user.value = authStore.getUser();
+		} catch {
+
+		}
+	}
+})
 
 function maskToken(token) {
 	if (token.length <= 8) return token
