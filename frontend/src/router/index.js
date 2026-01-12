@@ -14,15 +14,6 @@ const router = createRouter({
 				requestGuest: true // Разрешить доступ только неавторизованным пользователям
 			}
 		},
-		/* {
-			path: '/signin',
-			name: 'signin',
-			component: () => import('../pages/LoginPage/index.vue'),
-			meta: {
-				title: "Главная",
-				requestGuest: true // Разрешить доступ только неавторизованным пользователям
-			}
-		}, */
 		{
 			path: '/dashboard',
 			name: 'dashboard.home',
@@ -32,6 +23,15 @@ const router = createRouter({
 				requestAuth: true // Разрешить доступ только авторизованным пользователям
 			},
 			children: []
+		},
+		{
+			path: '/dashboard/profile',
+			name: 'dashboard.profile',
+			component: () => import('../pages/Dashboard/Profile/index.vue'),
+			meta: {
+				title: 'Профиль пользователя',
+				requestAuth: true
+			}
 		},
 		{
 			path: '/control-panel',
