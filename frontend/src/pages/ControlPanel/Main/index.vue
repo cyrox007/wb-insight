@@ -36,7 +36,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.admin-stats-card {
+/* .admin-stats-card {
 	background-color: var(--card-bg);
 	border: 1px solid var(--border-color);
 	border-radius: 12px;
@@ -46,7 +46,7 @@ onMounted(async () => {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-}
+} */
 
 .loading-state,
 .stats-content {

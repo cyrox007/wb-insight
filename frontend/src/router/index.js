@@ -44,11 +44,20 @@ const router = createRouter({
 			},
 			children: [
 				{
-					path: 'users', // а не '/users'
+					path: 'users',
 					name: 'control-panel.users',
 					component: () => import('../pages/ControlPanel/Users/index.vue'),
 					meta: {
 						title: "Пользователи",
+						requestAuth: true
+					}
+				},
+				{
+					path: 'edit-user/:id',
+					name: 'control-panel.edit-user',
+					component: () => import('../pages/ControlPanel/EditUser/index.vue'),
+					meta: {
+						title: "Редактировать пользователя",
 						requestAuth: true
 					}
 				}
