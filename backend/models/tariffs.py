@@ -96,3 +96,65 @@ class TariffLimit(Database.Base):
 
     def __repr__(self):
         return f"TariffLimit<{self.tariff_id}>"
+    
+
+class Subscription(Database.Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        comment="Уникальный идентификатор подписки"
+    )
+    user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Владелец подписки"
+    )
+    tariff_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tariff_plans.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+        comment="Текущий тариф"
+    )
+    status = Column(
+        String(20),
+        nullable=False,
+        default="active",
+        comment="Статус: 'active', 'expired', 'cancelled', 'demo'"
+    )
+    current_period_start = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Начало текущего оплаченного периода"
+    )
+    current_period_end = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Конец текущего оплаченного периода"
+    )
+    yookassa_payment_id = Column(
+        Text,
+        nullable=True,
+        comment="ID платежа в ЮKassa (null для демо-подписок)"
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Дата оформления подписки"
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Последнее обновление статуса или периода"
+    )
+
+    def __repr__(self):
+        return "Subscription<{}>".format(self.id)
