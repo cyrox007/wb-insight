@@ -24,7 +24,7 @@ config.set_main_option('sqlalchemy.url', cfg.database_url())
 from models.users import User
 target_metadata = User.__table__.metadata
 from models.permissions import Permission
-from models.tariffs import TariffPlan
+from models.tariffs import TariffPlan, TariffLimit
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

@@ -5,6 +5,8 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    ForeignKey,
+    Integer,
     String,
     Text,
     Numeric,
@@ -70,3 +72,27 @@ class TariffPlan(Database.Base):
             f"id={self.id}, "
             f"code={self.code}, "
             f"name={self.name}")
+    
+
+class TariffLimit(Database.Base):
+    __tablename__ = "tariff_limits"
+
+    tariff_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tariff_plans.id", ondelete="CASCADE"),
+        primary_key=True,
+        comment="Ссылка на тариф"
+    )
+    limit_type = Column(
+        String(50),
+        primary_key=True,
+        comment="Тип лимита: 'wb_accounts', 'nm_ids', 'sync_frequency_hours', 'ai_queries_per_month', 'retention_days'"
+    )
+    limit_value = Column(
+        Integer,
+        nullable=False,
+        comment="Числовое значение лимита"
+    )
+
+    def __repr__(self):
+        return f"TariffLimit<{self.tariff_id}>"
