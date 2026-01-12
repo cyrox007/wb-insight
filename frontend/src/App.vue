@@ -89,7 +89,7 @@ onMounted(() => {
 						{{ userName }}
 					</button>
 					<div class="dropdown-content">
-						<div class="dropdown-item">Профиль</div>
+						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль</div>
 						<div class="dropdown-item">Настройки</div>
 						<div class="dropdown-divider"></div>
 						<div class="dropdown-item" @click="logout">Выйти</div>
