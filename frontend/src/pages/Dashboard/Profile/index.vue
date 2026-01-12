@@ -13,15 +13,24 @@
 					<h2 class="user-name">{{ user.name }}</h2>
 					<p class="user-email">{{ user.email }}</p>
 				</div>
+
+				<div class="tariff-info">
+					<span class="tariff-label">Текущий тариф:</span>
+					<span class="tariff-name">{{ user.tariff || 'Не выбран' }}</span>
+				</div>
 			</div>
 
-			<div class="">
+			<div class="profile-actions">
 				<button @click="showEditProfile = true" class="edit-btn">
 					<svg class="edit-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
 							d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
 					</svg>
 					Редактировать профиль
+				</button>
+
+				<button @click="showTariffModal = true" class="change-tariff-btn">
+					Сменить тариф
 				</button>
 			</div>
 		</div>
@@ -71,12 +80,13 @@ import { ref } from 'vue'
 
 const user = ref({
 	name: 'Иван Петров',
-	email: 'ivan@example.com'
+	email: 'ivan@example.com',
+	tariff: 'Профессиональный'
 })
 
 const tokens = ref([
-	/* { id: 1, value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx', created_at: '2026-01-10T14:30:00' },
-	{ id: 2, value: 'abc123def456ghi789jkl000mnopqrstu', created_at: '2026-01-12T09:15:00' } */
+	{ id: 1, value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx', created_at: '2026-01-10T14:30:00' },
+	{ id: 2, value: 'abc123def456ghi789jkl000mnopqrstu', created_at: '2026-01-12T09:15:00' }
 ])
 
 const showEditProfile = ref(false)
@@ -179,13 +189,37 @@ function deleteToken(id) {
 	color: #aaa;
 }
 
-.edit-btn {
+.tariff-info {
+	margin-top: 12px;
+	font-size: 0.95rem;
+	color: #aaa;
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+
+.tariff-label {
+	font-weight: 500;
+	color: var(--text-color);
+}
+
+.tariff-name {
+	font-weight: 600;
+	color: var(--secondary-color);
+}
+
+.profile-actions {
+	display: flex;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.edit-btn,
+.change-tariff-btn {
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
 	padding: 10px 16px;
-	background-color: var(--secondary-color);
-	color: white;
 	border: none;
 	border-radius: 6px;
 	font-weight: 500;
@@ -193,14 +227,24 @@ function deleteToken(id) {
 	transition: var(--transition);
 }
 
+.edit-btn {
+	background-color: var(--secondary-color);
+	color: white;
+}
+
 .edit-btn:hover {
 	background-color: #2980b9;
 	transform: translateY(-2px);
 }
 
-.edit-icon {
-	width: 18px;
-	height: 18px;
+.change-tariff-btn {
+	background-color: var(--info-color);
+	color: white;
+}
+
+.change-tariff-btn:hover {
+	background-color: #8e44ad;
+	transform: translateY(-2px);
 }
 
 .tokens-section {
@@ -309,6 +353,16 @@ function deleteToken(id) {
 }
 
 @media (max-width: 1023px) {
+	.profile-actions {
+		flex-direction: column;
+	}
+
+	.edit-btn,
+	.change-tariff-btn {
+		width: 100%;
+		justify-content: center;
+	}
+
 	.section-header {
 		flex-direction: column;
 		align-items: flex-start;
