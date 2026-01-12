@@ -20,7 +20,7 @@ onMounted(async () => {
 
 <template>
 	<div class="panel-container">
-		<span class=".loading-state" v-if="isLoading">Загрузка...</span>
+		<span class="loading-state" v-if="isLoading">Загрузка...</span>
 		<div v-else class="stats-content">
 			<h2 class="stats-title">Количество зарегистрированных: {{ user_count }}</h2>
 			<ul class="stats-links">
