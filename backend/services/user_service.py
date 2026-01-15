@@ -3,7 +3,6 @@ from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import select
-from sqlalchemy.orm import load_only
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from schemas.users import UserCreateRequest
@@ -48,6 +47,12 @@ async def get_user_roles(session: AsyncSession, user: User):
         select(user_roles.c.role).where(user_roles.c.user_id == user.id)
     )
     return [row[0] for row in roles_result.fetchall()]
+
+async def get_user_by_uuid(session: AsyncSession, user_id: str) -> Optional[User]:
+    result = await session.execute(
+        select(User).where(User.id == user_id)
+    )
+    return result.scalar_one_or_none()
 
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
     result = await session.execute(
