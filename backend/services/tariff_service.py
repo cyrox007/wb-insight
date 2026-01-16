@@ -29,4 +29,4 @@ async def get_tariffs_list(session: AsyncSession,
                       offset: int = 0, limit: int = 10):
     query = select(TariffPlan).offset(offset).limit(limit)
     result = await session.execute(query)
-    return result.mappings().all()
+    return result.scalars().all()
