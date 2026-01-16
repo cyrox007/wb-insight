@@ -11,7 +11,7 @@ const props = defineProps({
     isOpen: Boolean
 });
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'created'])
 
 const modalLoadedBtn = ref(false)
 

@@ -44,7 +44,7 @@ function toggleActive(tariff) {
 			<ButtonPrimary @click="showCreateModal = true" text="+ Создать тариф" />
 		</div>
 
-		<CreateTariffModal :is-open="showCreateModal" @close="showCreateModal = false" />
+		<CreateTariffModal :is-open="showCreateModal" @close="showCreateModal = false" @created="loadTariffs" />
 
 		<div v-if="isLoading" class="loading-state">
 			Загрузка тарифов...
