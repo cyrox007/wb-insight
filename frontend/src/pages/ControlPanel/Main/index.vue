@@ -22,11 +22,16 @@ onMounted(async () => {
 	<div class="panel-container">
 		<span class="loading-state" v-if="isLoading">Загрузка...</span>
 		<div v-else class="stats-content">
-			<h2 class="stats-title">Количество зарегистрированных: {{ user_count }}</h2>
+			<!-- <h2 class="stats-title">Количество зарегистрированных: {{ user_count }}</h2> -->
 			<ul class="stats-links">
 				<li>
 					<router-link :to="{ name: 'control-panel.users' }" class="stats-link">
 						Пользователи
+					</router-link>
+				</li>
+				<li>
+					<router-link :to="{ name: 'control-panel.tariffs' }" class="stats-link">
+						Тарифы
 					</router-link>
 				</li>
 			</ul>
@@ -36,18 +41,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* .admin-stats-card {
-	background-color: var(--card-bg);
-	border: 1px solid var(--border-color);
-	border-radius: 12px;
-	padding: 24px;
-	box-shadow: var(--shadow);
-	min-height: 100px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-} */
-
 .loading-state,
 .stats-content {
 	width: 100%;
@@ -70,6 +63,8 @@ onMounted(async () => {
 	list-style: none;
 	padding: 0;
 	margin: 0;
+	display: flex;
+	gap: 5px;
 }
 
 .stats-link {

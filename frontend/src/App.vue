@@ -2,8 +2,8 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
-import LoginModal from './components/auth/LoginModal.vue';
-import RegistrationModal from './components/auth/RegistrationModal.vue';
+import LoginModal from './components/AuthModals/LoginModal.vue';
+import RegistrationModal from './components/AuthModals/RegistrationModal.vue';
 
 // Реактивные переменные
 const showHeader = ref(true)

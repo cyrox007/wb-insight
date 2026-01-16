@@ -7,4 +7,15 @@ export default class ControlPanelService {
     static async getUserList() {
         return await $api.get('/control-panel/users')
     }
+    static async getUserByUuid(uuid) {
+        return await $api.get(`/control-panel/users/${uuid}`)
+    }
+
+    static async getTariffList() {
+        return await $api.get('/control-panel/tariffs')
+    }
+
+    static async createTariff(tariff) {
+        return await $api.post('/control-panel/tariffs/create', tariff)
+    }
 }

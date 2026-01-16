@@ -109,41 +109,4 @@ const performLogin = async () => {
 	justify-content: flex-end;
 	gap: 10px;
 }
-
-/* .btn {
-	padding: 10px 20px;
-	border-radius: 6px;
-	border: none;
-	cursor: pointer;
-	font-size: 14px;
-	font-weight: 500;
-	transition: all 0.2s;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.btn-outline {
-	background-color: transparent;
-	border: 1px solid var(--border-color);
-	color: var(--text-color);
-}
-
-.btn-outline:hover {
-	background-color: var(--hover-bg);
-}
-
-.btn-primary {
-	background-color: var(--secondary-color);
-	color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-	background-color: #2980b9;
-}
-
-.btn-primary:disabled {
-	opacity: 0.6;
-	cursor: not-allowed;
-} */
 </style>

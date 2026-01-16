@@ -55,9 +55,18 @@ const router = createRouter({
 				{
 					path: 'edit-user/:id',
 					name: 'control-panel.edit-user',
-					component: () => import('../pages/ControlPanel/EditUser/index.vue'),
+					component: () => import('../pages/ControlPanel/Users/edit.vue'),
 					meta: {
 						title: "Редактировать пользователя",
+						requestAuth: true
+					}
+				},
+				{
+					path: 'tariffs',
+					name: 'control-panel.tariffs',
+					component: () => import('../pages/ControlPanel/Tariffs/index.vue'),
+					meta: {
+						title: "Тарифы",
 						requestAuth: true
 					}
 				}
