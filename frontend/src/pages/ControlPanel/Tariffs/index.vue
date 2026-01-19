@@ -1,5 +1,5 @@
 <script setup>
-import ControlPanelService from '@/API/ControlPanelService';
+import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
 import CreateTariffModal from '@/components/TariffModals/create.vue';
 import Modal from '@/components/UI/Modal.vue';

@@ -73,7 +73,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue';
-import ControlPanelService from '@/API/ControlPanelService';
+import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
 
 const isLoading = ref(false);
 const users = ref([]);

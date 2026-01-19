@@ -4,7 +4,7 @@ import Modal from '../UI/Modal.vue';
 import TextInput from '../UI/TextInput.vue';
 import ButtonCancel from '../UI/Buttons/ButtonCancel.vue';
 import ButtonPrimary from '../UI/Buttons/ButtonPrimary.vue';
-import ControlPanelService from '@/API/ControlPanelService';
+import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
 import StringTransform from '@/utils/string_transform.js';
 
 const props = defineProps({

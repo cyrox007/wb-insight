@@ -1,5 +1,5 @@
 <script setup>
-import ControlPanelService from '@/API/ControlPanelService';
+import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
