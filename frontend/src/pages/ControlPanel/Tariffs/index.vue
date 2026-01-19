@@ -1,9 +1,10 @@
 <script setup>
-import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
+import CP_Main from '@/API/ControlPanel/CP_Main';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
 import CreateTariffModal from '@/components/TariffModals/create.vue';
 import Modal from '@/components/UI/Modal.vue';
 import { ref, onMounted } from 'vue';
+import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs';
 
 const tariffsList = ref([]);
 const isLoading = ref(false);
@@ -24,7 +25,7 @@ onMounted(async () => {
 async function loadTariffs() {
 	isLoading.value = true
 	try {
-		const { data } = await ControlPanelService.getTariffList()
+		const { data } = await CP_Tariffs.getTariffList()
 		tariffsList.value = data.data.tariffs
 	} catch (error) {
 		console.error('Ошибка загрузки тарифов:', error)
@@ -51,7 +52,7 @@ const toggleActive = (tariff) => {
 		onConfirm: async () => {
 			try {
 				// Ваш API-вызов
-				await ControlPanelService.updateTariffStatus(tariff.id, newStatus);
+				await CP_Tariffs.updateTariffStatus(tariff.id, newStatus);
 				// Обновите список
 				await loadTariffs();
 			} catch (error) {

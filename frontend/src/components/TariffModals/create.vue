@@ -4,8 +4,9 @@ import Modal from '../UI/Modal.vue';
 import TextInput from '../UI/TextInput.vue';
 import ButtonCancel from '../UI/Buttons/ButtonCancel.vue';
 import ButtonPrimary from '../UI/Buttons/ButtonPrimary.vue';
-import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
+import ControlPanelService from '@/API/ControlPanel/CP_Main';
 import StringTransform from '@/utils/string_transform.js';
+import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs';
 
 const props = defineProps({
     isOpen: Boolean
@@ -60,7 +61,7 @@ const createTariff = async () => {
         // Опционально: округляем до 2 знаков (как в БД NUMERIC(10,2))
         const priceRounded = Number(priceNum.toFixed(2));
 
-        const response = await ControlPanelService.createTariff({
+        const response = await CP_Tariffs.createTariff({
             code: codeToSend.trim(),
             name: tariffName.value.trim(),
             price: priceRounded,

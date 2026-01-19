@@ -1,5 +1,5 @@
 <script setup>
-import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
+import CP_Main from '@/API/ControlPanel/CP_Main';
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 
@@ -10,7 +10,7 @@ const isLoading = ref(false);
 
 onMounted(async () => {
 	isLoading.value = true;
-	const response = await ControlPanelService.getControlPanel();
+	const response = await CP_Main.getControlPanel();
 	if (response.data) {
 		user_count.value = response.data.data.user_count;
 	}
