@@ -73,7 +73,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue';
-import ControlPanelService from '@/API/ControlPanel/ControlPanelService';
+import CP_Users from '@/API/ControlPanel/CP_Users';
 
 const isLoading = ref(false);
 const users = ref([]);
@@ -91,7 +91,7 @@ const formatDate = (dateString) => {
 onMounted(async () => {
 	isLoading.value = true;
 	try {
-		const response = await ControlPanelService.getUserList();
+		const response = await CP_Users.getUserList();
 		users.value = response.data.data.user_list;
 	} catch (error) {
 		console.error('Error fetching users:', error);
