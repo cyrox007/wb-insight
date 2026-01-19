@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
-from services.tariff_service import get_tariffs_list, insert_tariff
+from services.tariff_service import get_tariffs_list, insert_tariff, get_tariff_by_id, update_tariff
 from utils.responce_helps import response_error, response_success
 
 router = APIRouter(prefix='/control-panel/tariffs', tags=['Control Panel'])
@@ -56,3 +56,46 @@ async def create_tariffs(request: Request, response: Response, db_session: Async
         )
 
     return response_success(tariff=tariff)
+
+@router.put('/{tariff_id}/update-status')
+async def update_tariff_status(tariff_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    data = await request.json()
+    new_status = data.get('status', False)
+
+    tariff = await get_tariff_by_id(
+        db_session,
+        tariff_id
+    )
+
+    if not tariff:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            code='TARIFF_NOT_FOUND',
+            message='Tariff not found'
+        )
+    
+    if tariff.is_active == new_status:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_STATUS_NOT_CHANGED',
+            message='Tariff status not changed'
+        )
+    
+    tariff = await update_tariff(
+        session=db_session, 
+        tariff=tariff, 
+        tariff_data={
+            'is_active': new_status
+        }
+    )
+
+    if not tariff:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_STATUS_NOT_CHANGED',
+            message='Tariff status not changed'
+        )
+    
+    return response_success(
+        tariff=tariff
+    )

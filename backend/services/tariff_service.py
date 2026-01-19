@@ -30,3 +30,24 @@ async def get_tariffs_list(session: AsyncSession,
     query = select(TariffPlan).offset(offset).limit(limit)
     result = await session.execute(query)
     return result.scalars().all()
+
+async def get_tariff_by_id(session: AsyncSession, tariff_id: str):
+    query = select(TariffPlan).where(TariffPlan.id == tariff_id)
+    result = await session.execute(query)
+    return result.scalar_one_or_none()
+
+async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: dict):
+    try:
+        # Обновляем поля объекта
+        for key, value in tariff_data.items():
+            if hasattr(tariff, key):
+                setattr(tariff, key, value)
+        
+        session.add(tariff)
+        await session.commit()
+        await session.refresh(tariff)  # обновить данные из БД (если есть триггеры)
+        return tariff
+    except Exception as e:
+        logger.error(f"Error updating tariff: {e}")
+        await session.rollback()
+        return None
