@@ -61,6 +61,13 @@ const toggleActive = (tariff) => {
 		}
 	};
 }
+
+async function handleConfirm() {
+	if (confirmDialog.value.onConfirm) {
+		await confirmDialog.value.onConfirm();
+	}
+	confirmDialog.value.isOpen = false;
+}
 </script>
 
 <template>
@@ -71,26 +78,6 @@ const toggleActive = (tariff) => {
 		</div>
 
 		<CreateTariffModal :is-open="showCreateModal" @close="showCreateModal = false" @created="loadTariffs" />
-
-		<!-- Внизу основного шаблона -->
-		<Modal v-if="confirmDialog.isOpen" :is-open="true" @close="confirmDialog.isOpen = false">
-			<template #header>
-				<h3 class="modal-title">{{ confirmDialog.title }}</h3>
-			</template>
-			<template #body>
-				<p>{{ confirmDialog.message }}</p>
-			</template>
-			<template #footer>
-				<div class="modal-footer">
-					<button class="btn btn-secondary" @click="confirmDialog.isOpen = false">
-						Отмена
-					</button>
-					<button class="btn btn-danger" @click="handleConfirm">
-						Подтвердить
-					</button>
-				</div>
-			</template>
-		</Modal>
 
 		<div v-if="isLoading" class="loading-state">
 			Загрузка тарифов...
@@ -135,6 +122,25 @@ const toggleActive = (tariff) => {
 			</div>
 		</div>
 	</div>
+	<!-- Внизу основного шаблона -->
+	<Modal v-if="confirmDialog.isOpen" :is-open="true" @close="confirmDialog.isOpen = false">
+		<template #header>
+			<h3 class="modal-title">{{ confirmDialog.title }}</h3>
+		</template>
+		<template #body>
+			<p>{{ confirmDialog.message }}</p>
+		</template>
+		<template #footer>
+			<div class="modal-footer">
+				<button class="btn btn-secondary" @click="confirmDialog.isOpen = false">
+					Отмена
+				</button>
+				<button class="btn btn-danger" @click="handleConfirm">
+					Подтвердить
+				</button>
+			</div>
+		</template>
+	</Modal>
 </template>
 
 <style scoped>
@@ -304,7 +310,6 @@ const toggleActive = (tariff) => {
 
 .btn-danger {
 	background-color: var(--accent-color);
-	/* #e74c3c */
 	color: white;
 }
 

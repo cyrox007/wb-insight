@@ -18,4 +18,7 @@ export default class ControlPanelService {
     static async createTariff(tariff) {
         return await $api.post('/control-panel/tariffs/create', tariff)
     }
+    static async updateTariffStatus(tariffId, newStatus) {
+        return await $api.put(`/control-panel/tariffs/${tariffId}/update-status`, {status: newStatus})
+    }
 }
