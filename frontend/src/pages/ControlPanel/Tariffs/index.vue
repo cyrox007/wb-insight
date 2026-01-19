@@ -2,12 +2,20 @@
 import ControlPanelService from '@/API/ControlPanelService';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
 import CreateTariffModal from '@/components/TariffModals/create.vue';
+import Modal from '@/components/UI/Modal.vue';
 import { ref, onMounted } from 'vue';
 
 const tariffsList = ref([]);
 const isLoading = ref(false);
 
 const showCreateModal = ref(false)
+
+const confirmDialog = ref({
+	isOpen: false,
+	title: '',
+	message: '',
+	onConfirm: null
+})
 
 onMounted(async () => {
 	await loadTariffs();
@@ -31,9 +39,27 @@ function editTariff(tariff) {
 	// Реализуйте переход в форму редактирования
 }
 
-function toggleActive(tariff) {
-	console.log('Изменить статус:', tariff.id, !tariff.is_active)
-	// Здесь будет вызов API для обновления is_active
+const toggleActive = (tariff) => {
+	// console.log('Изменить статус:', tariff.id, !tariff.is_active)
+	const newStatus = !tariff.is_active;
+	const action = newStatus ? 'активировать' : 'деактивировать';
+
+	confirmDialog.value = {
+		isOpen: true,
+		title: 'Подтверждение действия',
+		message: `Вы действительно хотите ${action} тариф «${tariff.name}»?`,
+		onConfirm: async () => {
+			try {
+				// Ваш API-вызов
+				await ControlPanelService.updateTariffStatus(tariff.id, newStatus);
+				// Обновите список
+				await loadTariffs();
+			} catch (error) {
+				console.error('Ошибка:', error);
+				// Можно показать уведомление
+			}
+		}
+	};
 }
 </script>
 
@@ -45,6 +71,26 @@ function toggleActive(tariff) {
 		</div>
 
 		<CreateTariffModal :is-open="showCreateModal" @close="showCreateModal = false" @created="loadTariffs" />
+
+		<!-- Внизу основного шаблона -->
+		<Modal v-if="confirmDialog.isOpen" :is-open="true" @close="confirmDialog.isOpen = false">
+			<template #header>
+				<h3 class="modal-title">{{ confirmDialog.title }}</h3>
+			</template>
+			<template #body>
+				<p>{{ confirmDialog.message }}</p>
+			</template>
+			<template #footer>
+				<div class="modal-footer">
+					<button class="btn btn-secondary" @click="confirmDialog.isOpen = false">
+						Отмена
+					</button>
+					<button class="btn btn-danger" @click="handleConfirm">
+						Подтвердить
+					</button>
+				</div>
+			</template>
+		</Modal>
 
 		<div v-if="isLoading" class="loading-state">
 			Загрузка тарифов...
@@ -254,5 +300,15 @@ function toggleActive(tariff) {
 	.btn {
 		width: 100%;
 	}
+}
+
+.btn-danger {
+	background-color: var(--accent-color);
+	/* #e74c3c */
+	color: white;
+}
+
+.btn-danger:hover {
+	background-color: #c0392b;
 }
 </style>
