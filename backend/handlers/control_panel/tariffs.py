@@ -1,49 +1,20 @@
-from decimal import Decimal, InvalidOperation
-
+from decimal import Decimal
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, Response, status, Request
 
-from core.logger import setup_logger
 from core.dependencies import get_db_session
 from services.tariff_service import get_tariffs_list, insert_tariff
-from services.user_service import get_user_count, get_user_list, get_user_by_uuid
-from utils.responce_helps import response_success, response_error
+from utils.responce_helps import response_error, response_success
 
-router = APIRouter(prefix='/control-panel', tags=['Control Panel'])
-logger = setup_logger(__name__)
-
+router = APIRouter(prefix='/control-panel/tariffs', tags=['Control Panel'])
 
 @router.get('/')
-async def get_control_panel(db_session: AsyncSession = Depends(get_db_session)):
-    user_count = await get_user_count(db_session)
-    return response_success(
-        user_count=user_count # передаем кол-во зарегестрированных юзеров
-    )
-
-@router.get('/users')
-async def get_users(db_session: AsyncSession = Depends(get_db_session)):
-    user_list = await get_user_list(db_session)
-    return response_success(
-        user_list=user_list
-    )
-
-@router.get('/users/{user_uuid}')
-async def get_user(user_uuid: str, db_session: AsyncSession = Depends(get_db_session)):
-    target_user = await get_user_by_uuid(db_session, user_uuid)
-    del target_user.hashed_password # type: ignore
-    return response_success(
-        target_user=target_user
-    )
-
-@router.get('/tariffs')
 async def get_tariffs(db_session: AsyncSession = Depends(get_db_session)):
     tariffs = await get_tariffs_list(db_session)
 
     return response_success(tariffs=tariffs)
 
-
-
-@router.post('/tariffs/create', status_code=status.HTTP_201_CREATED)
+@router.post('/create', status_code=status.HTTP_201_CREATED)
 async def create_tariffs(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     formdata = await request.json()
     
