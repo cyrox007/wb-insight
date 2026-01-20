@@ -190,7 +190,7 @@ async def delete_tariff(tariff_id: str, response: Response, db_session: AsyncSes
     
     return response_success(deleting=result)
 
-@router.post('/{tariff_id}/limits/create')
+@router.post('/{tariff_id}/limits/create', status_code=status.HTTP_201_CREATED)
 async def create_tariff_limit(tariff_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -213,7 +213,7 @@ async def create_tariff_limit(tariff_id: str, request: Request, response: Respon
         tariff_id=tariff_id, 
         limit={
             "limit_type": insert_data.get('limit_type', None),
-            "limit_value": insert_data.get('limit_value', None)
+            "limit_value": int(insert_data.get('limit_value', 0))
         }
     )
 
