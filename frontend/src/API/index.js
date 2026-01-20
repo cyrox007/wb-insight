@@ -93,11 +93,12 @@ $api.interceptors.response.use(
 
         // Обработка других ошибок
         if (error.response?.status === 400) {
-            console.error('Ошибка валидации:', error);
-        }
+			console.warn('Ошибка валидации (400):', error.response.data);
+			// Просто пропускаем ошибку дальше — компонент сам обработает
+		}
 
         // Пробрасываем ошибку дальше
-        throw error;
+        return Promise.reject(error);
     }
 );
 

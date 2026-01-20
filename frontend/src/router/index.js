@@ -69,6 +69,15 @@ const router = createRouter({
 						title: "Тарифы",
 						requestAuth: true
 					}
+				},
+				{
+					path: 'tariffs/:id/edit-tariff',
+					name: 'control-panel.edit-tariff',
+					component: () => import('../pages/ControlPanel/Tariffs/edit.vue'),
+					meta: {
+						title: "Редактировать тариф",
+						requestAuth: true
+					}
 				}
 			]
 		},

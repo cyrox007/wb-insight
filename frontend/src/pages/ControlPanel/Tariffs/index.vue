@@ -35,11 +35,6 @@ async function loadTariffs() {
 	}
 }
 
-function editTariff(tariff) {
-	console.log('Редактировать тариф:', tariff.id)
-	// Реализуйте переход в форму редактирования
-}
-
 const toggleActive = (tariff) => {
 	// console.log('Изменить статус:', tariff.id, !tariff.is_active)
 	const newStatus = !tariff.is_active;
@@ -112,7 +107,8 @@ async function handleConfirm() {
 				</div>
 
 				<div class="tariff-actions">
-					<button @click="editTariff(tariff)" class="btn btn-secondary">
+					<button @click="$router.push({ name: 'control-panel.edit-tariff', params: { id: tariff.id } })"
+						class="btn btn-secondary">
 						Редактировать
 					</button>
 					<button @click="toggleActive(tariff)" class="btn"

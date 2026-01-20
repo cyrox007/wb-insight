@@ -299,7 +299,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import DashboardService from '@/API/DashboardService.js'
+import DashboardService from '@/API/Dashboard/DashboardService.js'
 
 // Реактивные данные
 const showMoreInfo = ref(false)
