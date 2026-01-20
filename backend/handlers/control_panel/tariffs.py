@@ -3,16 +3,53 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
-from services.tariff_service import get_tariffs_list, insert_tariff, get_tariff_by_id, update_tariff
+from services.tariff_service import (
+    get_tariffs_list, 
+    insert_tariff, 
+    get_tariff_by_id, 
+    update_tariff, 
+    get_tariff_limits_by_id, 
+    delete_tariff_by_id,
+    insert_limit_by_tariff_id,
+    get_limit_by_id,
+    update_limit,
+    delete_limit
+)
 from utils.responce_helps import response_error, response_success
 
-router = APIRouter(prefix='/control-panel/tariffs', tags=['Control Panel'])
+router = APIRouter(prefix='/control-panel/tariffs', tags=['Tariffs'])
 
 @router.get('/')
 async def get_tariffs(db_session: AsyncSession = Depends(get_db_session)):
     tariffs = await get_tariffs_list(db_session)
 
     return response_success(tariffs=tariffs)
+
+@router.get('/{tariff_id}')
+async def get_tariff(tariff_id: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    if not tariff_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_ID_NONE',
+            message='Tariff ID is required'
+        )
+    
+    tariff = await get_tariff_by_id(db_session, tariff_id)
+
+    if not tariff:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            code='TARIFF_NOT_FOUND',
+            message='Tariff not found'
+        )
+
+    limits = await get_tariff_limits_by_id(db_session, str(tariff.id))
+    
+    return response_success(
+        tariff=tariff,
+        limits=limits
+    )
+
 
 @router.post('/create', status_code=status.HTTP_201_CREATED)
 async def create_tariffs(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
@@ -98,4 +135,197 @@ async def update_tariff_status(tariff_id: str, request: Request, response: Respo
     
     return response_success(
         tariff=tariff
+    )
+
+@router.put('/{tariff_id}/edit', status_code=status.HTTP_200_OK)
+async def edit_tariff(tariff_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    input_data = await request.json()
+    if not tariff_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_ID_NONE',
+            message='Tariff ID is required'
+        )
+    
+    tariff = await get_tariff_by_id(db_session, tariff_id)
+
+    if not tariff:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            code='TARIFF_NOT_FOUND',
+            message='Tariff not found'
+        )
+
+    tariff = await update_tariff(db_session, tariff, input_data)
+
+    if not tariff:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_NOT_UPDATED',
+            message='Tariff not updated'
+        )
+    
+    return response_success(tariff=tariff)
+
+@router.delete('/{tariff_id}')
+async def delete_tariff(tariff_id: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    if not tariff_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_ID_NONE',
+            message='Tariff ID is required'
+        )
+    
+    result = await delete_tariff_by_id(db_session, tariff_id)
+
+    if result == False:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_NOT_DELETED',
+            message='Tariff not deleted'
+        )
+    
+    return response_success(deleting=result)
+
+@router.post('/{tariff_id}/limits/create')
+async def create_tariff_limit(tariff_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    if not tariff_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_ID_NONE',
+            message='Tariff ID is required'
+        )
+    
+    insert_data = await request.json()
+
+    if not insert_data:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_LIMITS_DATA_NONE',
+            message='Tariff limits data is required'
+        )
+    
+    new_limit = await insert_limit_by_tariff_id(
+        session=db_session, 
+        tariff_id=tariff_id, 
+        limit={
+            "limit_type": insert_data.get('limit_type', None),
+            "limit_value": insert_data.get('limit_value', None)
+        }
+    )
+
+    if not new_limit:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_LIMITS_NOT_CREATED',
+            message='Tariff limits not created'
+        )
+    
+    return response_success(
+        limit=new_limit
+    )
+
+@router.put('/{tariff_id}/limits/{limit_id}/edit')
+async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    if not tariff_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_ID_NONE',
+            message='Tariff ID is required'
+        )
+    
+    if not limit_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='LIMIT_ID_NONE',
+            message='Limit ID is required'
+        )
+    
+    insert_data = await request.json()
+    if not insert_data:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_LIMITS_DATA_NONE',
+            message='Tariff limits data is required'
+        )
+    
+    if not insert_data.get('limit_value', None) or not insert_data.get('limit_type', None):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_LIMITS_DATA_NONE',
+            message='Tariff limits data is required'
+        )
+    
+    limit = await get_limit_by_id(
+        session=db_session,
+        limit_id=limit_id
+    )
+
+    if not limit:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            code='LIMIT_NOT_FOUND',
+            message='Limit not found'
+        )
+    
+    if str(limit.tariff_id) != tariff_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='LIMIT_NOT_FOUND',
+            message='Limit not found'
+        )
+    
+    limit = await update_limit(
+        session=db_session,
+        limit=limit,
+        limit_data=insert_data
+    )
+
+    if not limit:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='LIMIT_NOT_UPDATED',
+            message='Limit not updated'
+        )
+    
+    return response_success(
+        limit=limit
+    )
+
+@router.delete('/{tariff_id}/limits/{limit_id}')
+async def delete_tariff_limit(tariff_id: str, limit_id: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    if not tariff_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='TARIFF_ID_NONE',
+            message='Tariff ID is required'
+        )
+    
+    if not limit_id:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='LIMIT_ID_NONE',
+            message='Limit ID is required'
+        )
+    
+    limit = await get_limit_by_id(
+        session=db_session,
+        limit_id=limit_id
+    )
+    if not limit:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            code='LIMIT_NOT_FOUND',
+            message='Limit not found'
+        )
+    
+    if await delete_limit(db_session, limit) == False:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='LIMIT_NOT_DELETED',
+            message='Limit not deleted'
+        )
+    
+    return response_success(
+        deleting=True
     )

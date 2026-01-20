@@ -1,3 +1,5 @@
+from typing import Optional
+from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,7 +8,7 @@ from models.tariffs import TariffLimit, TariffPlan
 
 logger = setup_logger(__name__)
 
-async def insert_tariff(session: AsyncSession, tariff):
+async def insert_tariff(session: AsyncSession, tariff) -> Optional[TariffPlan]:
     new_tariff = TariffPlan(
         code = tariff['code'],
         name = tariff['name'],
@@ -26,7 +28,7 @@ async def insert_tariff(session: AsyncSession, tariff):
         return None
 
 async def get_tariffs_list(session: AsyncSession, 
-                      offset: int = 0, limit: int = 10):
+                      offset: int = 0, limit: int = 10) -> Sequence[TariffPlan]:
     query = select(TariffPlan).offset(offset).limit(limit)
     result = await session.execute(query)
     return result.scalars().all()
@@ -36,7 +38,7 @@ async def get_tariff_by_id(session: AsyncSession, tariff_id: str):
     result = await session.execute(query)
     return result.scalar_one_or_none()
 
-async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: dict):
+async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: dict) -> Optional[TariffPlan]:
     try:
         # Обновляем поля объекта
         for key, value in tariff_data.items():
@@ -51,3 +53,68 @@ async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: 
         logger.error(f"Error updating tariff: {e}")
         await session.rollback()
         return None
+    
+
+async def get_tariff_limits_by_id(session: AsyncSession, tariff_id: str) -> Sequence[TariffLimit]:
+    query = select(TariffLimit).where(TariffLimit.tariff_id == tariff_id)
+    result = await session.execute(query)
+    return result.scalars().all()
+
+async def delete_tariff_by_id(session: AsyncSession, tariff_id: str) -> bool:
+    try:
+        query = TariffPlan.delete().where(TariffPlan.id == tariff_id)
+        await session.execute(query)
+        await session.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting tariff: {e}")
+        await session.rollback()
+        return False
+
+
+async def insert_limit_by_tariff_id(session: AsyncSession, tariff_id: str, limit: dict) -> Optional[TariffLimit]:
+    new_limit = TariffLimit(
+        tariff_id = tariff_id,
+        limit_type = limit['limit_type'],
+        limit_value = limit['limit_value']
+    )
+
+    try:
+        session.add(new_limit)
+        await session.commit()
+        await session.refresh(new_limit)
+        return new_limit
+    except Exception as e:
+        logger.error(f"Error inserting limit: {e}")
+        await session.rollback()
+        return None
+
+async def get_limit_by_id(session: AsyncSession, limit_id: str) -> Optional[TariffLimit]:
+    query = select(TariffLimit).where(TariffLimit.id == limit_id)
+    result = await session.execute(query)
+    return result.scalar_one_or_none()
+    
+async def update_limit(session: AsyncSession, limit: TariffLimit, limit_data: dict) -> Optional[TariffLimit]:
+    try:
+        # Обновляем поля объекта
+        for key, value in limit_data.items():
+            if hasattr(limit, key):
+                setattr(limit, key, value)
+        session.add(limit)
+        await session.commit()
+        await session.refresh(limit)  # обновить данные из БД (если есть триггеры)
+        return limit
+    except Exception as e:
+        logger.error(f"Error updating limit: {e}")
+        await session.rollback()
+        return None
+    
+async def delete_limit(session: AsyncSession, limit: TariffLimit) -> bool:
+    try:
+        await session.delete(limit)
+        await session.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting limit: {e}")
+        await session.rollback()
+        return False

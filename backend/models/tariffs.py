@@ -77,6 +77,11 @@ class TariffPlan(Database.Base):
 class TariffLimit(Database.Base):
     __tablename__ = "tariff_limits"
 
+    id = Column(
+        UUID(as_uuid=True),
+        default=uuid4,
+        primary_key=True,
+    )
     tariff_id = Column(
         UUID(as_uuid=True),
         ForeignKey("tariff_plans.id", ondelete="CASCADE"),
