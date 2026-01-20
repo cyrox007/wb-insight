@@ -155,8 +155,11 @@ async def edit_tariff(tariff_id: str, request: Request, response: Response, db_s
             code='TARIFF_NOT_FOUND',
             message='Tariff not found'
         )
-
-    tariff = await update_tariff(db_session, tariff, input_data)
+    
+    allowed_fields = {'name', 'description', 'price_rub', 'is_active'}
+    update_data = {k: v for k, v in input_data.items() if k in allowed_fields}
+    
+    tariff = await update_tariff(db_session, tariff, update_data)
 
     if not tariff:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -241,15 +244,18 @@ async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, res
             message='Limit ID is required'
         )
     
-    insert_data = await request.json()
-    if not insert_data:
+    input_data = await request.json()
+    if not input_data:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
             code='TARIFF_LIMITS_DATA_NONE',
             message='Tariff limits data is required'
         )
     
-    if not insert_data.get('limit_value', None) or not insert_data.get('limit_type', None):
+    allowed_fields = {'limit_type', 'limit_value'}
+    update_data = {k: v for k, v in input_data.items() if k in allowed_fields}
+    
+    if not update_data.get('limit_value', None) or not update_data.get('limit_type', None):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
             code='TARIFF_LIMITS_DATA_NONE',
@@ -275,10 +281,12 @@ async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, res
             message='Limit not found'
         )
     
+    
+    
     limit = await update_limit(
         session=db_session,
         limit=limit,
-        limit_data=insert_data
+        limit_data=update_data
     )
 
     if not limit:
