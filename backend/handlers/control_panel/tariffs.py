@@ -298,7 +298,7 @@ async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, res
         limit=limit
     )
 
-@router.delete('/{tariff_id}/limits/{limit_id}')
+@router.delete('/{tariff_id}/limits/{limit_id}/delete')
 async def delete_tariff_limit(tariff_id: str, limit_id: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
