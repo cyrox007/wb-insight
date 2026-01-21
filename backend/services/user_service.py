@@ -5,10 +5,13 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.logger import setup_logger
 from schemas.users import UserCreateRequest
 from models.users import User, user_roles
 from utils.hashed_password import hash_password
 
+
+logger = setup_logger(__name__)
 
 async def insert_user(session: AsyncSession, user_data: UserCreateRequest):
     new_user = User(
@@ -92,3 +95,25 @@ async def get_user_list(session: AsyncSession, offset: int = 0, limit: int = 10)
     ).offset(offset).limit(limit)
     result = await session.execute(query)
     return result.mappings().all()
+
+async def update_user(session: AsyncSession, user: User, user_data: dict) -> Optional[User]:
+    try:
+        for key, value in user_data.items():
+            setattr(user, key, value)
+        await session.commit()
+        await session.refresh(user)
+        return user
+    except Exception as e:
+        logger.error(f"Error updating user: {e}")
+        await session.rollback()
+        return None
+
+async def delete_user(session: AsyncSession, user: User):
+    try:
+        await session.delete(user)
+        await session.commit()
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting user: {e}")
+        await session.rollback()
+        return False
