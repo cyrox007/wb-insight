@@ -1,5 +1,6 @@
 <script setup>
 import CP_Users from '@/API/ControlPanel/CP_Users';
+import EditUserModal from '@/components/UserModals/edit_user.vue';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -101,7 +102,7 @@ const loadUser = async () => {
 				</div>
 			</div>
 			<div class="user-actions">
-				<button @click="openEditModal" class="btn btn-secondary">
+				<button @click="showEditModal = true" class="btn btn-secondary">
 					Редактировать профиль
 				</button>
 			</div>

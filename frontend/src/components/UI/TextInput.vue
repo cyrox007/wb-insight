@@ -2,7 +2,7 @@
 	<div class="form-group">
 		<label class="form-label">{{ label }}</label>
 		<input class="form-input" :type="type" :value="modelValue"
-			@input="$emit('update:modelValue', $event.target.value)" :placeholder="placeholder">
+			@input="$emit('update:modelValue', $event.target.value)" :placeholder="placeholder" :disabled="disabled">
 	</div>
 </template>
 
@@ -25,6 +25,10 @@ const props = defineProps({
 	type: {
 		type: String,
 		default: 'text'
+	},
+	disabled: {
+		type: Boolean,
+		default: false
 	}
 });
 </script>
@@ -52,5 +56,18 @@ const props = defineProps({
 .form-input:focus {
 	outline: none;
 	border-color: var(--secondary-color);
+}
+
+.form-input:disabled {
+	background-color: var(--dark-bg);
+	/* Более тёмный фон */
+	color: #666;
+	/* Приглушённый текст */
+	cursor: not-allowed;
+	opacity: 0.7;
+}
+
+.form-input:disabled::placeholder {
+	color: #555;
 }
 </style>
