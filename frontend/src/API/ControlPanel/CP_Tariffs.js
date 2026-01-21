@@ -22,4 +22,7 @@ export default class CP_Tariffs {
 	static async updateLimit(tariffId, limitId, limitData) {
 		return await $api.put(`/control-panel/tariffs/${tariffId}/limits/${limitId}/edit`, {...limitData});
 	}
+	static async deleteLimit(tariffId, limitId) {
+		return await $api.delete(`/control-panel/tariffs/${tariffId}/limits/${limitId}/delete`);
+	}
 }

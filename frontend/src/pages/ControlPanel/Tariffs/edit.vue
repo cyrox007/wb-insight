@@ -64,7 +64,7 @@ const deleteLimit = async (limitId) => {
 	if (!confirm('Удалить лимит? Это действие нельзя отменить.')) return;
 
 	try {
-		await CP_Tariffs.deleteLimit(limitId);
+		await CP_Tariffs.deleteLimit(route.params.id, limitId);
 		// Обновляем список лимитов
 		limits.value = limits.value.filter(l => l.id !== limitId);
 	} catch (error) {
