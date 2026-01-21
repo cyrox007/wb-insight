@@ -281,8 +281,6 @@ async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, res
             message='Limit not found'
         )
     
-    
-    
     limit = await update_limit(
         session=db_session,
         limit=limit,
