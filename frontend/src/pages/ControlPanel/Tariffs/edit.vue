@@ -2,9 +2,9 @@
 import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs';
 import EditTariffModal from '@/components/TariffModals/edit.vue';
 import CreateLimit from '@/components/TariffModals/createLimit.vue';
-import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue';
+import EditLimit from '@/components/TariffModals/editLimit.vue';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
-import Modal from '@/components/UI/Modal.vue';
+
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -15,6 +15,7 @@ const showAddLimitModal = ref(false);
 const showEditLimitModal = ref(false);
 
 const currentTariff = ref({});
+const currentLimit = ref(null);
 const limits = ref([]);
 
 onMounted(async () => {
@@ -32,6 +33,21 @@ const getLimitTypeLabel = (type) => {
 	return labels[type] || type
 }
 
+const openEditLimitModal = (limit) => {
+	currentLimit.value = { ...limit };
+	showEditLimitModal.value = true;
+};
+
+const limitUpdated = () => {
+	console.log('fff');
+
+	try {
+		loadTariff();
+	} catch (error) {
+		console.error('Ошибка обновления лимита:', error);
+	}
+}
+
 const loadTariff = async () => {
 	isLoaded.value = true;
 	try {
@@ -43,6 +59,19 @@ const loadTariff = async () => {
 	}
 	isLoaded.value = false;
 }
+
+const deleteLimit = async (limitId) => {
+	if (!confirm('Удалить лимит? Это действие нельзя отменить.')) return;
+
+	try {
+		await CP_Tariffs.deleteLimit(limitId);
+		// Обновляем список лимитов
+		limits.value = limits.value.filter(l => l.id !== limitId);
+	} catch (error) {
+		console.error('Ошибка удаления лимита:', error);
+		// Можно показать уведомление
+	}
+};
 </script>
 <template>
 	<div class="tariffs-detail-container" v-if="isLoaded">Loaded...</div>
@@ -132,23 +161,8 @@ const loadTariff = async () => {
 
 	<CreateLimit :is-open="showAddLimitModal" :tariff-id="currentTariff.id" @close="showAddLimitModal = false" />
 
-	<Modal :is-open="showEditLimitModal" @close="showEditLimitModal = false">
-		<template #header>
-			<h3>Редактировать лимит</h3>
-		</template>
-		<template #body>
-			<p v-if="limitToEdit">
-				Тип: <strong>{{ limitToEdit.limit_type }}</strong><br>
-				Текущее значение: {{ limitToEdit.limit_value }}
-			</p>
-		</template>
-		<template #footer>
-			<!-- <button class="btn btn-secondary" @click="showEditLimitModal = false">Отмена</button>
-			<button class="btn btn-success">Сохранить</button> -->
-			<ButtonCancel @click="showEditModal = false" :text="'Отмена'" />
-			<ButtonPrimary @click="showEditModal = false" :text="'Сохранить'" />
-		</template>
-	</Modal>
+	<EditLimit :is-open="showEditLimitModal" :limit="currentLimit" @close="showEditLimitModal = false"
+		@updated="limitUpdated" />
 </template>
 <style scoped>
 .tariff-detail-container {
@@ -330,5 +344,26 @@ const loadTariff = async () => {
 	display: flex;
 	gap: 8px;
 	margin-left: 16px;
+}
+
+.btn-icon {
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
+	background-color: var(--light-bg);
+	border: 1px solid var(--border-color);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: var(--transition);
+}
+
+.btn-icon:hover {
+	background-color: var(--hover-bg);
+}
+
+.delete-btn:hover {
+	background-color: rgba(231, 76, 60, 0.2);
 }
 </style>
