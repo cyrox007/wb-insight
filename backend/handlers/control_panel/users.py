@@ -12,8 +12,14 @@ router = APIRouter(prefix='/control-panel/users', tags=['Control Panel'])
 @router.get('/')
 async def get_users(db_session: AsyncSession = Depends(get_db_session)):
     user_list = await get_user_list(db_session)
+    result = []
+    for user in user_list:
+        user_dict = {c.name: getattr(user, c.name) for c in user.__table__.columns}
+        user_dict.pop('hashed_password', None)
+        user_dict['roles'] = [r.role for r in user.roles]
+        result.append(user_dict)
     return response_success(
-        user_list=user_list
+        user_list=result
     )
 
 @router.get('/{user_uuid}')
@@ -32,6 +38,14 @@ async def get_user(user_uuid: str, response: Response, db_session: AsyncSession 
         for key in insp.mapper.column_attrs.keys()
     }
     user_dict.pop('hashed_password', None)
+    user_dict['roles'] = [
+        {
+            'role': role.role,
+            'assigned_at': role.assigned_at,
+            'assigned_by': str(role.assigned_by) if role.assigned_by else None
+        }
+        for role in target_user.roles
+    ]
     return response_success(
         target_user=user_dict
     )

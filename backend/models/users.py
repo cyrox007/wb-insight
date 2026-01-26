@@ -24,16 +24,31 @@ class UserRole(Enum):
 
 
 # Таблица для связи многие-ко-многим пользователей и ролей
-user_roles = Table(
-    'user_roles',
-    Database.Base.metadata,
-    Column('id', Integer, primary_key=True),
-    Column('user_id', UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE')),
-    Column('role', String(20), nullable=False),
-    Column('assigned_at', DateTime(timezone=True), default=func.now()),
-    Index('idx_user_roles_user_id', 'user_id'),
-    Index('idx_user_roles_role', 'role'),
-)
+class UserRoleAssociation(Database.Base):
+    __tablename__ = 'user_roles'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    role = Column(String(20), nullable=False)
+    assigned_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
+    assigned_by = Column(UUID(as_uuid=True), nullable=True)  # кто назначил (опционально)
+
+    # Связь
+    user = relationship("User", back_populates="roles")
+
+    # Валидация на уровне Python (опционально)
+    def __init__(self, **kwargs):
+        role = kwargs.get('role')
+        if role and role not in [r.value for r in UserRole]:
+            raise ValueError(f"Invalid role: {role}")
+        super().__init__(**kwargs)
+
+    __table_args__ = (
+        Index('idx_user_roles_user_id', 'user_id'),
+        Index('idx_user_roles_role', 'role'),
+        # Можно добавить уникальность: один пользователь не может иметь одну роль дважды
+        Index('uq_user_role', 'user_id', 'role', unique=True),
+    )
 
 
 class User(Database.Base):
@@ -66,6 +81,13 @@ class User(Database.Base):
     staff_id = Column(String(50), nullable=True, unique=True, comment="Внутренний ID сотрудника")
     department = Column(String(100), nullable=True, comment="Отдел/Департамент")
     position = Column(String(100), nullable=True, comment="Должность")
+
+    roles = relationship(
+        "UserRoleAssociation",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
 
     # Composite indexes for better query performance
     __table_args__ = (

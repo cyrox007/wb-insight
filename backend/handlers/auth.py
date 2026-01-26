@@ -1,15 +1,15 @@
 from datetime import datetime
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from core.dependencies import get_db_session
 from core.logger import setup_logger
 
 from schemas.auth import LoginRequest
-from services.user_service import get_user_by_email, get_user_roles
+from services.user_service import get_user_by_email
 from utils.hashed_password import verify_password
-from utils.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, create_refresh_token
+from utils.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, create_refresh_token, verify_token
 from utils.responce_helps import response_error, response_success
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -47,13 +47,13 @@ async def login(
         )
     
     # 4. Получаем роли пользователя
-    roles = await get_user_roles(db_session, user)
+    # roles = await get_user_roles(db_session, user)
 
     # 5. Создаем токены
     token_data = {
         "sub": str(user.id),
         "email": user.email,
-        "roles": roles
+        # "roles": roles
     }
     
     access_token = create_access_token(token_data)
@@ -64,7 +64,7 @@ async def login(
         value=refresh_token,
         httponly=True,
         secure=False,  # Только по HTTPS в production
-        samesite="none",
+        samesite="lax",
         max_age=30 * 24 * 60 * 60,  # в секундах
         path="/auth/refresh"  # Доступно только для эндпоинта refresh
     )
@@ -76,9 +76,46 @@ async def login(
             "id": str(user.id),
             "email": user.email,
             "full_name": user.full_name,
-            "roles": roles
+            #"roles": roles
         }
     )
 
-""" @router.post('/refresh')
-async def refresh_token() """
+@router.get('/refresh')
+async def refresh_token(request: Request, response: Response):
+    refresh_token = request.cookies.get('refresh_token')
+    
+    if not refresh_token:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response_error(
+            code="INVALID_TOKEN",
+            message="Токен не найден",
+            details={}
+        )
+    
+    pyload = verify_token(refresh_token)
+
+    if not pyload:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response_error(
+            code="INVALID_TOKEN",
+            message="Неверный токен",
+            details={}
+        )
+    
+    access_token = create_access_token(pyload)
+    refresh_token = create_refresh_token(pyload)
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,  # Только по HTTPS в production
+        samesite="lax",
+        max_age=30 * 24 * 60 * 60,  # в секундах
+        path="/auth/refresh"  # Доступно только для эндпоинта refresh
+    )
+    return response_success(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )

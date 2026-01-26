@@ -13,6 +13,7 @@ def create_app() -> FastAPI:
     from handlers.control_panel.home import router as CP_home_router
     from handlers.control_panel.users import router as CP_users_router
     from handlers.control_panel.tariffs import router as CP_tariffs_router
+    from handlers.control_panel.roles import router as CP_roles_router
 
     app = FastAPI()
     
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(CP_home_router)
     app.include_router(CP_users_router)
     app.include_router(CP_tariffs_router)
+    app.include_router(CP_roles_router)
 
     return app
 
