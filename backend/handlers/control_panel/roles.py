@@ -48,20 +48,11 @@ async def create_role(request: Request, response: Response, db_session: AsyncSes
     
     return response_success(message='Роль успешно добавлена', code="role_created")
 
-@router.delete('/{role_code}', dependencies=[Depends(auth_middle)])
-async def remove_role(role_code: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
-    input_data = await request.json()
-
-    if not input_data:
+@router.delete('/{user_id}/{role_code}', dependencies=[Depends(auth_middle)])
+async def remove_role(user_id: str, role_code: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    if not user_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message='Нет входных параметров', code="no_data")
-
-    allowed_fields = ['user_id']
-    updated_data = {k: v for k, v in input_data.items() if k in allowed_fields}
-
-    if not updated_data:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(message='Нет обязательных полей', code="invalid_data")
 
     if role_code == 'user':
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -69,7 +60,7 @@ async def remove_role(role_code: str, request: Request, response: Response, db_s
     
     target_role = await get_user_role_association_by_code(
         session=db_session,
-        user_id=updated_data['user_id'],
+        user_id=user_id,
         role_code=role_code
     )
 
