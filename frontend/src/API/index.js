@@ -5,6 +5,20 @@ const $api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000', // Базовый URL вашего API
 });
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error = null) => {
+	failedQueue.forEach(({ resolve, reject }) => {
+		if (error) {
+			reject(error);
+		} else {
+			resolve();
+		}
+	});
+	failedQueue = [];
+};
+
 // Перехватчик запросов: добавляем токен в заголовки
 $api.interceptors.request.use((config) => {
     const accessToken = localStorage.getItem('access_token');
@@ -31,11 +45,11 @@ $api.interceptors.response.use(
 
                 try {
                     // Обновляем токен
-                    const refreshResponse = await axios.get(`${$api.defaults.baseURL}/refresh`, {
+                    const refreshResponse = await axios.get(`${$api.defaults.baseURL}/auth/refresh`, {
                         withCredentials: true,
                     });
-                    const { status, access_token } = refreshResponse.data;
-                    console.log(access_token);
+                    const { status, access_token } = refreshResponse.data.data;
+                    //console.log(access_token);
                     
                     // Сохраняем новый access_token
                     localStorage.setItem('access_token', access_token);
@@ -51,8 +65,12 @@ $api.interceptors.response.use(
                 } catch (refreshError) {
                     // Если обновление токена не удалось, очищаем данные и перенаправляем на страницу входа
                     processQueue(refreshError);
-                    localStorage.clear();
-                    store.dispatch('clearUser');
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('user');
+                    // И удаляем куки, если они используются
+                    document.cookie.split(";").forEach((c) => {
+                        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                    });
                     window.location.href = '/login';
                     return Promise.reject(refreshError);
                 } finally {

@@ -1,13 +1,22 @@
 <script setup>
 import CP_Users from '@/API/ControlPanel/CP_Users';
+import DateTransform from '@/utils/date_transform';
 import EditUserModal from '@/components/UserModals/edit_user.vue';
+import ChangePasswordModal from '@/components/UserModals/change_password.vue';
+import AssignRoleModal from '@/components/UserModals/assign_role.vue';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
+import ButtonOutline from '@/components/UI/Buttons/ButtonOutline.vue';
+import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue';
+import CP_Roles from '@/API/ControlPanel/CP_Roles';
 
 const route = useRoute();
 const targetUser = ref(null);
 const isLoading = ref(false);
 const showEditModal = ref(false);
+const showChangePasswordModal = ref(false);
+const showAssignRoleModal = ref(false);
 
 onMounted(async () => {
 	await loadUser();
@@ -26,6 +35,22 @@ const loadUser = async () => {
 		isLoading.value = false;
 	}
 };
+
+// Метод удаления роли
+const removeRole = async (roleCode) => {
+	if (!confirm(`Удалить роль "${roleCode}" у пользователя?`)) return;
+
+	try {
+		await CP_Roles.deleteRoleFromUser(targetUser.value.id, roleCode);
+		// Обновляем данные пользователя
+		await loadUser();
+	} catch (error) {
+		console.error('Ошибка удаления роли:', error);
+		// Можно показать уведомление
+	}
+};
+
+
 </script>
 <template>
 	<div class="user-detail-container">
@@ -101,14 +126,41 @@ const loadUser = async () => {
 					<span class="info-value">{{ targetUser.is_staff ? 'Да' : 'Нет' }}</span>
 				</div>
 			</div>
+			<!-- Блок ролей -->
+			<div class="roles-section">
+				<h3 class="section-title">Роли</h3>
+				<div v-if="targetUser.roles && targetUser.roles.length > 0" class="roles-grid">
+					<div v-for="(roleItem, index) in targetUser.roles" :key="`${roleItem.role}-${index}`"
+						class="role-card">
+						<div class="role-header">
+							<div class="role-name">{{ roleItem.role }}</div>
+							<!-- Кнопка удаления для всех ролей, кроме 'user' -->
+							<button v-if="roleItem.role !== 'user'" @click="removeRole(roleItem.role)"
+								class="role-remove-btn" title="Удалить роль">
+								&times;
+							</button>
+						</div>
+						<div class="role-meta">
+							Назначена: {{ DateTransform.formatDate(roleItem.assigned_at) }}
+							<span v-if="roleItem.assigned_by"> • {{ roleItem.assigned_by }}</span>
+						</div>
+					</div>
+				</div>
+				<p v-else class="no-roles">Роли не назначены</p>
+			</div>
 			<div class="user-actions">
-				<button @click="showEditModal = true" class="btn btn-secondary">
-					Редактировать профиль
-				</button>
+				<ButtonPrimary @click="showEditModal = true" :text="'Редактировать профиль'" />
+				<ButtonOutline @click="showChangePasswordModal = true" :text="'Сменить пароль'" />
+				<ButtonSuccess @click="showAssignRoleModal = true" :text="'Назначить роль'" />
 			</div>
 		</div>
 		<EditUserModal v-if="showEditModal" :is-open="true" :current-user="targetUser" @close="showEditModal = false"
 			@updated="loadUser" />
+		<ChangePasswordModal :is-open="showChangePasswordModal" :user-id="targetUser?.id"
+			@close="showChangePasswordModal = false" />
+
+		<AssignRoleModal :is-open="showAssignRoleModal" :user-id="targetUser?.id" @close="showAssignRoleModal = false"
+			@assigned="loadUser" />
 	</div>
 </template>
 <style scoped>
@@ -205,5 +257,78 @@ const loadUser = async () => {
 .user-actions {
 	display: flex;
 	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 15px;
+}
+
+/* === Секция ролей === */
+.roles-section {
+	margin-top: 24px;
+	padding-top: 24px;
+	border-top: 1px solid var(--border-color);
+}
+
+.section-title {
+	font-size: 1.1rem;
+	color: var(--text-color);
+	margin-bottom: 16px;
+}
+
+.roles-grid {
+	display: grid;
+	gap: 12px;
+}
+
+.role-card {
+	background-color: var(--medium-bg);
+	border-radius: 8px;
+	padding: 12px 16px;
+	border-left: 3px solid var(--secondary-color);
+}
+
+.role-name {
+	font-weight: 600;
+	color: var(--text-color);
+	font-size: 1rem;
+	margin-bottom: 4px;
+}
+
+.role-meta {
+	font-size: 0.85rem;
+	color: #aaa;
+}
+
+.no-roles {
+	color: #888;
+	font-style: italic;
+	padding: 12px 0;
+}
+
+.role-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 4px;
+}
+
+.role-remove-btn {
+	background: none;
+	border: none;
+	color: var(--accent-color);
+	font-size: 1.4rem;
+	width: 28px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	cursor: pointer;
+	transition: var(--transition);
+	opacity: 0.7;
+}
+
+.role-remove-btn:hover {
+	background-color: rgba(231, 76, 60, 0.2);
+	opacity: 1;
 }
 </style>
