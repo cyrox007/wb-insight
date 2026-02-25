@@ -14,7 +14,7 @@ const router = useRouter();
 
 // Авторизация
 const isAuthenticated = computed(() => authStore.isAuthSatus);
-const userName = computed(() => authStore.getUser.full_name);
+const user = computed(() => authStore.getUser);
 const showSearch = computed(() => isAuthenticated.value ? true : false)
 const showDateRange = computed(() => isAuthenticated.value ? true : false)
 
@@ -26,9 +26,9 @@ const showNotifications = ref(false)
 const showLogin = ref(false)
 const showRegister = ref(false)
 
-const registerName = ref('')
+/* const registerName = ref('')
 const registerEmail = ref('')
-const registerPassword = ref('')
+const registerPassword = ref('') */
 
 // Навигация
 const searchQuery = ref('')
@@ -40,13 +40,13 @@ const toggleNotifications = () => {
 	showNotifications.value = !showNotifications.value
 }
 
-const performRegister = () => {
+/* const performRegister = () => {
 	// Логика регистрации
 	console.log('Register attempt:', registerEmail.value)
 	isAuthenticated.value = true
 	userName.value = registerName.value
 	showRegister.value = false
-}
+} */
 
 const logout = () => {
 	localStorage.clear();
@@ -55,7 +55,7 @@ const logout = () => {
 }
 
 // Определяем, нужно ли показывать элементы на текущей странице
-const route = useRoute()
+/* const route = useRoute() */
 onMounted(() => {
 	// Можно настроить логику скрытия/показа элементов для разных страниц
 	// Например, на странице входа не показывать хедер
@@ -79,16 +79,20 @@ onMounted(() => {
 		<div class="header-right">
 			<!-- Блок пользователя/авторизации -->
 			<div class="user-section" v-if="isAuthenticated">
-				<div class="notification-icon" @click="toggleNotifications">
+				<!-- <div class="notification-icon" @click="toggleNotifications">
 					<i class="fas fa-bell"></i>
 					<div class="notification-count" v-if="notificationCount > 0">{{ notificationCount }}</div>
-				</div>
+				</div> -->
 				<div class="dropdown user-dropdown">
 					<button class="btn btn-outline">
 						<!-- <div class="user-avatar-mini">{{ userInitials }}</div> -->
-						{{ userName }}
+						{{ user.full_name }}
 					</button>
 					<div class="dropdown-content">
+						<div v-show="user.roles && user.roles.some(role => role.role === 'super_admin' || role.role === 'administrator')"
+							@click="router.push({ name: 'control-panel.index' })" class="dropdown-item">
+							Панель управления
+						</div>
 						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль</div>
 						<div class="dropdown-item">Настройки</div>
 						<div class="dropdown-divider"></div>

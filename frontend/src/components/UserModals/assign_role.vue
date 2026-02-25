@@ -3,7 +3,6 @@ import { ref, onMounted, watch } from 'vue';
 import Modal from '@/components/UI/Modal.vue';
 import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
-import TextInput from '@/components/UI/TextInput.vue';
 import FormMessage from '@/components/UI/FormMessage.vue';
 import CP_Roles from '@/API/ControlPanel/CP_Roles'; // ← ваш API для ролей
 

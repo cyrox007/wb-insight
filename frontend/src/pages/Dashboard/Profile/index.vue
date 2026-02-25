@@ -16,7 +16,10 @@
 
 				<div class="tariff-info">
 					<span class="tariff-label">Текущий тариф:</span>
-					<span class="tariff-name">{{ user.tariff || 'Не выбран' }}</span>
+					<span class="tariff-name">{{ user.tariff || 'DEMO' }}</span>
+					<button @click="showTariffModal = true" class="change-tariff-btn">
+						Сменить тариф
+					</button>
 				</div>
 			</div>
 
@@ -28,19 +31,13 @@
 					</svg>
 					Редактировать профиль
 				</button>
-
-				<button @click="showTariffModal = true" class="change-tariff-btn">
-					Сменить тариф
-				</button>
 			</div>
 		</div>
 
 		<div class="tokens-section">
 			<div class="section-header">
 				<h3>Токены продавца Wildberries</h3>
-				<button @click="showAddTokenModal = true" class="add-token-btn">
-					+ Добавить токен
-				</button>
+				<ButtonSuccess :loading="addBtnLoading" @click="openAddTokenModal" :text="'+ Добавить токен'" />
 			</div>
 
 			<div v-if="tokens.length === 0" class="empty-state">
@@ -51,7 +48,7 @@
 				<li v-for="token in tokens" :key="token.id" class="token-item">
 					<div class="token-content">
 						<span class="token-masked">{{ maskToken(token.value) }}</span>
-						<span class="token-meta">Добавлен: {{ formatDate(token.created_at) }}</span>
+						<span class="token-meta">Добавлен: {{ DateTransform.formatDate(token.created_at) }}</span>
 					</div>
 					<div class="token-actions">
 						<button @click="copyToken(token.value)" class="btn-icon" title="Скопировать">
@@ -73,11 +70,21 @@
 			</ul>
 		</div>
 	</div>
+
+	<!-- Модальные окна -->
+	<SelectTariffModal :is-open="showTariffModal" @close="showTariffModal = false" />
 </template>
 
 <script setup>
-import { useAuthStore } from '@/stores/auth'
 import { computed, onMounted, ref } from 'vue'
+import { useAuthStore } from '@/stores/auth';
+import { notify } from '@/composables/notification';
+import DateTransform from '@/utils/date_transform';
+
+import ProfileServices from '@/API/Dashboard/ProfileServices';
+
+import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue';
+import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue';
 
 const authStore = useAuthStore();
 const user = computed(() => authStore.getUser);
@@ -88,15 +95,16 @@ const tokens = ref([
 ])
 
 const showEditProfile = ref(false)
-const showAddTokenModal = ref(false)
+const showAddTokenModal = ref(false);
+const showTariffModal = ref(false);
+
+const addBtnLoading = ref(false);
 
 onMounted(() => {
 	if (!user.value) {
 		try {
 			user.value = authStore.getUser();
-		} catch {
-
-		}
+		} catch { }
 	}
 })
 
@@ -105,16 +113,30 @@ function maskToken(token) {
 	return token.substring(0, 4) + '••••••' + token.slice(-4)
 }
 
-// Формат даты (простой вариант)
-function formatDate(isoString) {
-	const date = new Date(isoString)
-	return date.toLocaleDateString('ru-RU', {
-		year: 'numeric',
-		month: 'short',
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit'
-	})
+const openAddTokenModal = () => {
+	addBtnLoading.value = true;
+	if (!checkPermissionsAddToken()) {
+		addBtnLoading.value = false;
+		// надо показать модалку что пользователь не может добавлять больше токенов
+		return;
+	}
+
+
+	showAddTokenModal.value = true;
+	addBtnLoading.value = false;
+}
+
+const checkPermissionsAddToken = async () => {
+	const response = await ProfileServices.checkTokenPermission(user.value.id, user.value.tariff?.id || null);
+	const result = response.data;
+	if (result.status === 'error') {
+		console.error(result.error.message);
+		notify.error(result.error.message)
+		return false;
+	}
+	console.log(response.data);
+
+	return true;
 }
 
 // Имитация действий
