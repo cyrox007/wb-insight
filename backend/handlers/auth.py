@@ -49,11 +49,12 @@ async def login(
     # 4. Получаем роли пользователя
     # roles = await get_user_roles(db_session, user)
 
+    tariff = None
+
     # 5. Создаем токены
     token_data = {
         "sub": str(user.id),
-        "email": user.email,
-        # "roles": roles
+        "email": user.email
     }
     
     access_token = create_access_token(token_data)
@@ -76,7 +77,8 @@ async def login(
             "id": str(user.id),
             "email": user.email,
             "full_name": user.full_name,
-            #"roles": roles
+            'tariff': tariff,
+            "roles": user.roles
         }
     )
 

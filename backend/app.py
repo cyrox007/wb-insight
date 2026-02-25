@@ -8,7 +8,9 @@ def create_app() -> FastAPI:
     from handlers.users import routers as user_router
     from handlers.auth import router as auth_router
     
-    from handlers.dashboard import router as dashboard_router
+    from handlers.dashboard.main import router as D_main_router
+    from handlers.dashboard.user_profile import router as D_user_profile_router
+    from handlers.dashboard.tariffs import router as D_tariffs_router
     
     from handlers.control_panel.home import router as CP_home_router
     from handlers.control_panel.users import router as CP_users_router
@@ -38,7 +40,9 @@ def create_app() -> FastAPI:
     app.include_router(user_router)
     app.include_router(auth_router)
     
-    app.include_router(dashboard_router)
+    app.include_router(D_main_router)
+    app.include_router(D_user_profile_router)
+    app.include_router(D_tariffs_router)
     
     app.include_router(CP_home_router)
     app.include_router(CP_users_router)

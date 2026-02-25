@@ -35,4 +35,6 @@ class Config:
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
         return f"{driver}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
+    ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY", 'SECRET_KEY')
+    
 config = Config()

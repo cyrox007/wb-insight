@@ -1,12 +1,12 @@
-from datetime import datetime
 from uuid import uuid4
 from enum import Enum
 
 from sqlalchemy import UUID, Boolean, Column, DateTime, String, Text, Index, Integer, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from database import Database
 
+from database import Database
+from models.tokens import APITokens
 
 class EntityType(Enum):
     INDIVIDUAL = "individual"
@@ -87,6 +87,12 @@ class User(Database.Base):
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin"
+    )
+
+    api_tokens = relationship(
+        "APITokens", 
+        back_populates="user", 
+        cascade="all, delete-orphan"
     )
 
     # Composite indexes for better query performance

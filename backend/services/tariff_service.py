@@ -28,8 +28,11 @@ async def insert_tariff(session: AsyncSession, tariff) -> Optional[TariffPlan]:
         return None
 
 async def get_tariffs_list(session: AsyncSession, 
-                      offset: int = 0, limit: int = 10) -> Sequence[TariffPlan]:
+                      offset: int = 0, limit: int = 10, **kwargs) -> Sequence[TariffPlan]:
     query = select(TariffPlan).offset(offset).limit(limit)
+    if only_active := kwargs.get('only_active'):
+        query = query.where(TariffPlan.is_active == only_active)
+        
     result = await session.execute(query)
     return result.scalars().all()
 
