@@ -5,7 +5,7 @@ from uuid import uuid4
 def response_success(**kwargs) -> dict:
     return {
         "status": "success",
-        "data": {**kwargs},
+        **kwargs,
         "meta": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "request_id": str(uuid4())
