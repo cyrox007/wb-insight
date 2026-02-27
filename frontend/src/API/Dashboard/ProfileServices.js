@@ -16,4 +16,12 @@ export default class ProfileServices {
     static async get_tariffs() {
         return await $api.get(`/dashboard/tariffs`);
     }
+
+    static async get_user_tokens_by_id(id) {
+        return await $api.get(`/dashboard/profile/tokens/${id}`);
+    }
+
+    static async delete_user_token(id) {
+        return await $api.delete(`/dashboard/profile/token/${id}`)
+    }
 }

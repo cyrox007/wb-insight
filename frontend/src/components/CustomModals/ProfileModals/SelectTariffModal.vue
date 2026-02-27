@@ -17,9 +17,9 @@ const tariffs = ref([]);
 
 const selectedTariff = ref(props.currentTariffCode || '');
 
-onMounted(() => {
+onMounted(async () => {
 	// Здесь можно загрузить реальные тарифы через API
-	loadTariffs();
+	await loadTariffs();
 });
 
 const loadTariffs = async () => {

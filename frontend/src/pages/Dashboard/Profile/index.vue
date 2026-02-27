@@ -72,7 +72,7 @@
 	</div>
 
 	<!-- Модальные окна -->
-	<SelectTariffModal :is-open="showTariffModal" @close="showTariffModal = false" />
+	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" />
 </template>
 
 <script setup>
@@ -100,12 +100,14 @@ const showTariffModal = ref(false);
 
 const addBtnLoading = ref(false);
 
-onMounted(() => {
+onMounted(async () => {
 	if (!user.value) {
 		try {
 			user.value = authStore.getUser();
 		} catch { }
 	}
+	const response = await ProfileServices.getProfile();
+	tokens.value = response.data.tokens;
 })
 
 function maskToken(token) {
@@ -148,8 +150,16 @@ function copyToken(token) {
 	})
 }
 
-function deleteToken(id) {
+const deleteToken = async (id) => {
 	if (confirm('Удалить токен? Это действие нельзя отменить.')) {
+		const response = await ProfileServices.delete_user_token(id);
+		if (response.data.status === 'error') {
+			notify.error(
+				message = response.data.error.message
+			)
+		}
+
+		notify.success(`Удаление токена ${id} успешно завершено`);
 		tokens.value = tokens.value.filter(t => t.id !== id)
 	}
 }

@@ -58,7 +58,7 @@ async def get_tokens_by_user_id(session: AsyncSession, user_id: str) -> Sequence
     )
     return result.scalars().all()
 
-async def get_token_by_id(session: AsyncSession, token_id: int) -> Optional[APITokens]:
+async def get_token_by_id(session: AsyncSession, token_id: str) -> Optional[APITokens]:
     """ получаем токен по id """
     result = await session.execute(
         select(APITokens).where(APITokens.id == token_id)

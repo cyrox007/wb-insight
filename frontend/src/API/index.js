@@ -79,13 +79,9 @@ $api.interceptors.response.use(
             } else {
                 // Добавляем запрос в очередь на повторение
                 return new Promise((resolve, reject) => {
-                    failedQueue.push((err) => {
-                        if (err) {
-                            reject(err);
-                        } else {
-                            resolve($api(originalRequest));
-                        }
-                    });
+                    failedQueue.push({ resolve, reject }); // ← ПРАВИЛЬНО: объект
+                }).then(() => {
+                    return $api(originalRequest);
                 });
             }
         }
