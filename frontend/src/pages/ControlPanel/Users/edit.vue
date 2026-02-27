@@ -27,7 +27,7 @@ const loadUser = async () => {
 	try {
 		const { data } = await CP_Users.getUserByUuid(route.params.id);
 		if (data?.status === 'success') {
-			targetUser.value = data.data.target_user;
+			targetUser.value = data.target_user;
 		}
 	} catch (error) {
 		console.error('Ошибка загрузки пользователя:', error);

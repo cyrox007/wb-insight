@@ -26,7 +26,7 @@ async function loadTariffs() {
 	isLoading.value = true
 	try {
 		const { data } = await CP_Tariffs.getTariffList()
-		tariffsList.value = data.data.tariffs
+		tariffsList.value = data.tariffs
 	} catch (error) {
 		console.error('Ошибка загрузки тарифов:', error)
 		// Здесь можно показать уведомление
