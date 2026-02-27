@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from core.dependencies import get_db_session, require_permission
 from core.logger import setup_logger
@@ -10,14 +10,18 @@ from services.tariff_service import get_tariff_by_id
 from utils.responce_helps import response_error, response_success
 
 from services.user_service import get_user_by_uuid
-from services.token_services import get_user_token_count
+from services.token_services import get_tokens_by_user_id, get_user_token_count, insert_token
 
 router = APIRouter(prefix="/dashboard/profile", tags=["dashboard.profile"])
 logger = setup_logger(__name__)
 
-@router.get("/")
-async def get_profile():
-    pass
+@router.get("/", dependencies=[Depends(auth_middle)])
+async def get_profile(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+    user_tokens = await get_tokens_by_user_id(
+        db_session, request.state.user.sub
+    )
+    print(user_tokens)
+    return response_success()
 
 @router.get("/check-token-permission/{user_id}", dependencies=[Depends(auth_middle)])
 async def check_token_permission(
@@ -71,4 +75,22 @@ async def check_token_permission(
 
     return response_success(
         can_add_token=True
+    )
+
+
+@router.post('/token/add', status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth_middle)])
+async def add_token(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    data = await request.json()
+    token = await insert_token(
+        session=db_session,
+        user_id=request.state.user.sub,
+        raw_token=data.get('token'),
+        marketplace_code='wb',
+        token_type=data.get('token_type'),
+        label=data.get('label')
+    )
+
+    print(token)
+    return response_success(
+        token=token
     )

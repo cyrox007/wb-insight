@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,3 +49,29 @@ async def insert_token(
         await session.rollback()
         logger.error(f"Ошибка при добавлении токена: {e}")
         return None
+    
+
+async def get_tokens_by_user_id(session: AsyncSession, user_id: str) -> Sequence[APITokens]:
+    """ получаем токен по user_id """
+    result = await session.execute(
+        select(APITokens).where(APITokens.user_id == user_id)
+    )
+    return result.scalars().all()
+
+async def get_token_by_id(session: AsyncSession, token_id: int) -> Optional[APITokens]:
+    """ получаем токен по id """
+    result = await session.execute(
+        select(APITokens).where(APITokens.id == token_id)
+    )
+    return result.scalar_one_or_none()
+
+async def delete_token(session: AsyncSession, token: APITokens) -> bool:
+    """ удаляем токен """
+    try:
+        await session.delete(token)
+        await session.commit()
+        return True
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Ошибка при удалении токена: {e}")
+        return False
