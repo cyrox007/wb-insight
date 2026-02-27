@@ -59,11 +59,11 @@ const performLogin = async () => {
 
 	try {
 		let response = await AuthService.login(loginEmail.value, loginPassword.value);
-		if (response.data && response.data.data) {
-			if (response.data.data.access_token) {
-				authStore.login(response.data.data.user);
-				localStorage.setItem("access_token", response.data.data.access_token);
-				localStorage.setItem("user", JSON.stringify(response.data.data.user));
+		if (response.data && response.data) {
+			if (response.data.access_token) {
+				authStore.login(response.data.user);
+				localStorage.setItem("access_token", response.data.access_token);
+				localStorage.setItem("user", JSON.stringify(response.data.user));
 				router.push('/dashboard');
 				emit('close')
 			}

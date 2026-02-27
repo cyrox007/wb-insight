@@ -424,7 +424,7 @@ onMounted(async () => {
 	// Fetch data
 	const response = await DashboardService.get_dashboard_data();
 	if (response.status === 200) {
-		let result = response.data.data;
+		let result = response.data;
 
 		products.value = result.products;
 		sizeChart.value = result.sizeChart;

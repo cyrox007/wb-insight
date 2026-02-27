@@ -47,7 +47,7 @@ const loadRoles = async () => {
 	try {
 		const response = await CP_Roles.getRolesList();
 		if (response.data?.status === 'success') {
-			rolesList.value = (response.data.data.roles || []).map(role => ({
+			rolesList.value = (response.data.roles || []).map(role => ({
 				value: role,
 				label: ROLE_LABELS[role] || role // fallback на случай новых ролей
 			}));

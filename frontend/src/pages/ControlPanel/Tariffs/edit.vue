@@ -52,8 +52,8 @@ const loadTariff = async () => {
 	isLoaded.value = true;
 	try {
 		const response = await CP_Tariffs.getTariff(route.params.id);
-		currentTariff.value = response.data.data.tariff;
-		limits.value = response.data.data.limits;
+		currentTariff.value = response.data.tariff;
+		limits.value = response.data.limits;
 	} catch (error) {
 
 	}

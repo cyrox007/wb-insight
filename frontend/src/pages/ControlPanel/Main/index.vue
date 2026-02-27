@@ -12,7 +12,7 @@ onMounted(async () => {
 	isLoading.value = true;
 	const response = await CP_Main.getControlPanel();
 	if (response.data) {
-		user_count.value = response.data.data.user_count;
+		user_count.value = response.data.user_count;
 	}
 	isLoading.value = false;
 })

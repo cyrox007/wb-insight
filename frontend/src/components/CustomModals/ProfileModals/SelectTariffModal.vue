@@ -24,7 +24,7 @@ onMounted(() => {
 
 const loadTariffs = async () => {
 	const response = await ProfileServices.get_tariffs();
-	tariffs.value = response.data.data.tariffs
+	tariffs.value = response.data.tariffs
 }
 
 const selectTariff = () => {

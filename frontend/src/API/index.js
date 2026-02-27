@@ -48,7 +48,7 @@ $api.interceptors.response.use(
                     const refreshResponse = await axios.get(`${$api.defaults.baseURL}/auth/refresh`, {
                         withCredentials: true,
                     });
-                    const { status, access_token } = refreshResponse.data.data;
+                    const { status, access_token } = refreshResponse.data;
                     //console.log(access_token);
                     
                     // Сохраняем новый access_token

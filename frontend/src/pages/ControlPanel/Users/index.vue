@@ -38,7 +38,7 @@ onMounted(async () => {
 	isLoading.value = true;
 	try {
 		const response = await CP_Users.getUserList();
-		users.value = response.data.data.user_list || [];
+		users.value = response.data.user_list || [];
 	} catch (error) {
 		console.error('Error fetching users:', error);
 	} finally {
