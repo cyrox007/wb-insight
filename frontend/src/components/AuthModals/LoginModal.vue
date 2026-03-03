@@ -24,7 +24,7 @@
 	</Modal>
 </template>
 <script setup>
-import { ref, defineEmits } from 'vue'
+import { ref } from 'vue'
 import Modal from '@/components/UI/Modal.vue'
 import TextInput from '@/components/UI/TextInput.vue'
 /* import SpinnerButtonSmall from '@/components/Loaders/SpinnerButtonSmall.vue' */
