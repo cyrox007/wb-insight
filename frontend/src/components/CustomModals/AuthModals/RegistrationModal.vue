@@ -352,7 +352,6 @@ import { useAuthStore } from '@/stores/auth'
 import Modal from '@/components/UI/Modal.vue'
 import axios from 'axios'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
 const props = defineProps({

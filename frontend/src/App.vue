@@ -1,9 +1,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from './stores/auth';
-import LoginModal from './components/AuthModals/LoginModal.vue';
-import RegistrationModal from './components/AuthModals/RegistrationModal.vue';
+import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue';
+import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue';
 
 // Реактивные переменные
 const showHeader = ref(true)
@@ -19,16 +19,11 @@ const showSearch = computed(() => isAuthenticated.value ? true : false)
 const showDateRange = computed(() => isAuthenticated.value ? true : false)
 
 // Уведомления
-const notificationCount = ref(3)
 const showNotifications = ref(false)
 
 // Модальные окна
 const showLogin = ref(false)
 const showRegister = ref(false)
-
-/* const registerName = ref('')
-const registerEmail = ref('')
-const registerPassword = ref('') */
 
 // Навигация
 const searchQuery = ref('')
@@ -54,8 +49,6 @@ const logout = () => {
 	authStore.logout()
 }
 
-// Определяем, нужно ли показывать элементы на текущей странице
-/* const route = useRoute() */
 onMounted(() => {
 	// Можно настроить логику скрытия/показа элементов для разных страниц
 	// Например, на странице входа не показывать хедер
@@ -79,13 +72,8 @@ onMounted(() => {
 		<div class="header-right">
 			<!-- Блок пользователя/авторизации -->
 			<div class="user-section" v-if="isAuthenticated">
-				<!-- <div class="notification-icon" @click="toggleNotifications">
-					<i class="fas fa-bell"></i>
-					<div class="notification-count" v-if="notificationCount > 0">{{ notificationCount }}</div>
-				</div> -->
 				<div class="dropdown user-dropdown">
 					<button class="btn btn-outline">
-						<!-- <div class="user-avatar-mini">{{ userInitials }}</div> -->
 						{{ user.full_name }}
 					</button>
 					<div class="dropdown-content">
