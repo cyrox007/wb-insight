@@ -83,71 +83,76 @@
 							<label class="form-label required">Телефон</label>
 							<div class="phone-input">
 								<div class="phone-prefix">+7</div>
-								<input type="tel" class="form-input" v-model="formData.phone"
-									placeholder="(999) 123-45-67" @input="formatPhone" @blur="validatePhone">
+								<input type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="10" class="form-input"
+									v-model="formData.phone" @input="formatPhone" @blur="validatePhone"
+									placeholder="9ХХ ХХХ ХХ ХХ" />
 							</div>
 							<div v-if="errors.phone" class="error-message">
 								{{ errors.phone }}
 							</div>
 						</div>
 
-						<div class="form-group" :class="{ 'error': errors.password }">
-							<label class="form-label required">Пароль</label>
-							<div class="password-input">
-								<input :type="showPassword ? 'text' : 'password'" class="form-input"
-									v-model="formData.password" placeholder="Минимум 8 символов"
-									@input="validatePassword">
-								<button type="button" class="password-toggle" @click="showPassword = !showPassword"
-									:title="showPassword ? 'Скрыть пароль' : 'Показать пароль'">
-									<i :class="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-								</button>
-							</div>
-							<div v-if="errors.password" class="error-message">
-								{{ errors.password }}
-							</div>
 
-							<div class="password-strength">
-								<div class="strength-label">Надёжность пароля:</div>
-								<div class="strength-bar">
-									<div class="strength-fill" :class="passwordStrengthClass"
-										:style="{ width: passwordStrength + '%' }"></div>
-								</div>
-								<div class="strength-hints">
-									<div class="hint" :class="{ 'valid': passwordHasMinLength }">
-										<i :class="passwordHasMinLength ? 'fas fa-check' : 'fas fa-circle'"></i>
-										<span>8+ символов</span>
-									</div>
-									<div class="hint" :class="{ 'valid': passwordHasUppercase }">
-										<i :class="passwordHasUppercase ? 'fas fa-check' : 'fas fa-circle'"></i>
-										<span>Заглавная буква</span>
-									</div>
-									<div class="hint" :class="{ 'valid': passwordHasNumber }">
-										<i :class="passwordHasNumber ? 'fas fa-check' : 'fas fa-circle'"></i>
-										<span>Цифра</span>
-									</div>
-									<div class="hint" :class="{ 'valid': passwordHasSpecial }">
-										<i :class="passwordHasSpecial ? 'fas fa-check' : 'fas fa-circle'"></i>
-										<span>Спецсимвол</span>
-									</div>
-								</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- Шаг 3: Пароль -->
+			<div v-if="currentStep === 2" class="registration-step">
+				<div class="form-group" :class="{ 'error': errors.password }">
+					<label class="form-label required">Пароль</label>
+					<div class="password-input">
+						<input :type="showPassword ? 'text' : 'password'" class="form-input" v-model="formData.password"
+							placeholder="Минимум 8 символов" @input="validatePassword">
+						<button type="button" class="password-toggle" @click="showPassword = !showPassword"
+							:title="showPassword ? 'Скрыть пароль' : 'Показать пароль'">
+							<i :class="showPassword ? 'fa fa-eye-slash' : 'fa fa-eye'"></i>
+						</button>
+					</div>
+					<div v-if="errors.password" class="error-message">
+						{{ errors.password }}
+					</div>
+
+					<div class="password-strength">
+						<div class="strength-label">Надёжность пароля:</div>
+						<div class="strength-bar">
+							<div class="strength-fill" :class="passwordStrengthClass"
+								:style="{ width: passwordStrength + '%' }"></div>
+						</div>
+						<div class="strength-hints">
+							<div class="hint" :class="{ 'valid': passwordHasMinLength }">
+								<i :class="passwordHasMinLength ? 'fa fa-check' : 'fa fa-circle'"></i>
+								<span>8+ символов</span>
+							</div>
+							<div class="hint" :class="{ 'valid': passwordHasUppercase }">
+								<i :class="passwordHasUppercase ? 'fa fa-check' : 'fa fa-circle'"></i>
+								<span>Заглавная буква</span>
+							</div>
+							<div class="hint" :class="{ 'valid': passwordHasNumber }">
+								<i :class="passwordHasNumber ? 'fa fa-check' : 'fa fa-circle'"></i>
+								<span>Цифра</span>
+							</div>
+							<div class="hint" :class="{ 'valid': passwordHasSpecial }">
+								<i :class="passwordHasSpecial ? 'fa fa-check' : 'fa fa-circle'"></i>
+								<span>Спецсимвол</span>
 							</div>
 						</div>
+					</div>
+				</div>
 
-						<div class="form-group" :class="{ 'error': errors.password_confirmation }">
-							<label class="form-label required">Подтверждение пароля</label>
-							<input :type="showConfirmPassword ? 'text' : 'password'" class="form-input"
-								v-model="formData.password_confirmation" placeholder="Повторите пароль"
-								@blur="validatePasswordConfirmation">
-							<div v-if="errors.password_confirmation" class="error-message">
-								{{ errors.password_confirmation }}
-							</div>
-						</div>
+				<div class="form-group" :class="{ 'error': errors.password_confirmation }">
+					<label class="form-label required">Подтверждение пароля</label>
+					<input :type="showConfirmPassword ? 'text' : 'password'" class="form-input"
+						v-model="formData.password_confirmation" placeholder="Повторите пароль"
+						@blur="validatePasswordConfirmation">
+					<div v-if="errors.password_confirmation" class="error-message">
+						{{ errors.password_confirmation }}
 					</div>
 				</div>
 			</div>
 
 			<!-- Шаг 3: Реквизиты компании (для юрлиц) или доп. информация -->
-			<div v-if="currentStep === 2" class="registration-step">
+			<div v-if="currentStep === 3" class="registration-step">
 				<div class="step-content">
 					<template v-if="isLegalEntity">
 						<h4 class="step-title">Реквизиты компании</h4>
@@ -216,7 +221,7 @@
 							<div class="form-group full-width">
 								<label class="form-label">Часовой пояс</label>
 								<div class="select-wrapper">
-									<i class="fas fa-globe"></i>
+									<i class="fa fa-globe"></i>
 									<select class="form-select" v-model="formData.timezone">
 										<option value="Europe/Moscow">Москва (MSK, UTC+3)</option>
 										<option value="Europe/Kaliningrad">Калининград (UTC+2)</option>
@@ -244,7 +249,7 @@
 			</div>
 
 			<!-- Шаг 4: Соглашения -->
-			<div v-if="currentStep === 3" class="registration-step">
+			<div v-if="currentStep === 4" class="registration-step">
 				<div class="step-content">
 					<h4 class="step-title">Соглашения</h4>
 					<p class="step-description">Для завершения регистрации примите условия</p>
@@ -255,7 +260,7 @@
 							<div class="agreement-content">
 								<p>Ознакомьтесь с условиями использования сервиса Wildberries.</p>
 								<a href="/terms" target="_blank" class="agreement-link">
-									<i class="fas fa-external-link-alt"></i>
+									<i class="fa fa-external-link"></i>
 									Открыть полный текст
 								</a>
 							</div>
@@ -274,7 +279,7 @@
 							<div class="agreement-content">
 								<p>Узнайте, как мы обрабатываем ваши персональные данные.</p>
 								<a href="/privacy" target="_blank" class="agreement-link">
-									<i class="fas fa-external-link-alt"></i>
+									<i class="fa fa-external-link"></i>
 									Открыть полный текст
 								</a>
 							</div>
@@ -303,7 +308,7 @@
 						</div>
 
 						<div class="agreement-errors" v-if="hasAgreementErrors">
-							<i class="fas fa-exclamation-circle"></i>
+							<i class="fa fa-exclamation-circle"></i>
 							<span>Необходимо принять все условия для продолжения</span>
 						</div>
 					</div>
@@ -317,16 +322,10 @@
 					<span class="step-counter">Шаг {{ currentStep + 1 }} из {{ steps.length }}</span>
 				</div>
 				<div class="step-actions">
-					<button v-if="currentStep > 0" class="btn btn-outline" @click="prevStep" :disabled="isLoading">
+					<ButtonOutline v-if="currentStep > 0" @click="prevStep" :disabled="isLoading">
 						<i class="fa fa-arrow-left"></i>
 						Назад
-					</button>
-
-					<!-- <button v-if="currentStep < steps.length - 1" class="btn btn-primary" @click="nextStep"
-                        :disabled="!canProceed || isLoading">
-                        Далее
-                        <i class="fa fa-arrow-right"></i>
-                    </button> -->
+					</ButtonOutline>
 
 					<ButtonPrimary v-if="currentStep < steps.length - 1" @click="nextStep"
 						:disabled="!canProceed || isLoading">
@@ -334,17 +333,17 @@
 						<i class="fa fa-arrow-right"></i>
 					</ButtonPrimary>
 
-					<button v-if="currentStep === steps.length - 1" class="btn btn-success" @click="performRegistration"
+					<ButtonSuccess v-if="currentStep === steps.length - 1" @click="performRegistration"
 						:disabled="!canSubmit || isLoading">
 						<span v-if="isLoading">
-							<i class="fas fa-spinner fa-spin"></i>
+							<i class="fa fa-spinner fa-spin"></i>
 							Регистрация...
 						</span>
 						<span v-else>
-							<i class="fas fa-check"></i>
+							<i class="fa fa-check"></i>
 							Зарегистрироваться
 						</span>
-					</button>
+					</ButtonSuccess>
 				</div>
 			</div>
 		</template>
@@ -355,10 +354,12 @@
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import Modal from '@/components/UI/Modal.vue'
-import axios from 'axios'
+import AuthService from '@/API/AuthService.js'
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue'
+import ButtonOutline from '@/components/UI/Buttons/ButtonOutline.vue'
+import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue'
 
-const authStore = useAuthStore()
+import { notify } from '@/composables/notification';
 
 const props = defineProps({
 	isOpen: Boolean
@@ -406,7 +407,8 @@ const errors = ref({})
 const steps = computed(() => {
 	const baseSteps = [
 		{ key: 'entity_type', label: 'Тип пользователя' },
-		{ key: 'basic_info', label: 'Основная информация' }
+		{ key: 'basic_info', label: 'Основная информация' },
+		{ key: 'password', label: 'Пароль' }
 	]
 
 	if (isLegalEntity.value) {
@@ -463,6 +465,8 @@ const canProceed = computed(() => {
 			return validateStep1()
 		case 2:
 			return validateStep2()
+		case 3:
+			return validateStep3()
 		default:
 			return true
 	}
@@ -547,9 +551,22 @@ const goToStep = (index) => {
 
 // Валидация
 const validateStep1 = () => {
-	const fields = ['full_name', 'email', 'phone', 'password', 'password_confirmation']
+	const fields = ['full_name', 'email', 'phone']
 	let isValid = true
 
+	fields.forEach(field => {
+		if (!formData.value[field]) {
+			errors.value[field] = 'Обязательное поле'
+			isValid = false
+		}
+	})
+
+	return isValid
+}
+
+const validateStep2 = () => {
+	const fields = ['password', 'password_confirmation']
+	let isValid = true
 	fields.forEach(field => {
 		if (!formData.value[field]) {
 			errors.value[field] = 'Обязательное поле'
@@ -570,7 +587,7 @@ const validateStep1 = () => {
 	return isValid
 }
 
-const validateStep2 = () => {
+const validateStep3 = () => {
 	if (isLegalEntity.value) {
 		if (!formData.value.inn) {
 			errors.value.inn = 'ИНН обязателен для юрлиц'
@@ -599,7 +616,7 @@ const validateField = (field) => {
 const validateEmail = async () => {
 	const email = formData.value.email.trim()
 	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
+	errors.value.email = '';
 	if (!email) {
 		errors.value.email = 'Email обязателен'
 		return
@@ -612,25 +629,38 @@ const validateEmail = async () => {
 
 	// Проверка уникальности
 	try {
-		const response = await axios.post('/api/auth/check-email', { email })
-		if (!response.data.available) {
-			errors.value.email = 'Этот email уже зарегистрирован'
-		} else {
-			delete errors.value.email
+		const response = await AuthService.checkEmail(email);
+		if (response.data.status == "error") {
+			errors.value.email = response.data.error.message
+				? response.data.error.message
+				: "Этот email уже зарегистрирован";
 		}
+
 	} catch (error) {
 		delete errors.value.email
 	}
 }
 
-const validatePhone = () => {
+const validatePhone = async () => {
 	const phone = formData.value.phone.replace(/\D/g, '')
 	if (!phone) {
 		errors.value.phone = 'Телефон обязателен'
 	} else if (phone.length !== 10) {
 		errors.value.phone = 'Введите корректный номер телефона'
-	} else {
-		delete errors.value.phone
+	}
+
+	try {
+		const response = await AuthService.checkPhone(phone);
+		if (response.data.status == "error") {
+			errors.value.phone = response.data.error.message
+				? response.data.error.message
+				: "Этот номер телефона уже зарегистрирован";
+		}
+
+		delete errors.value.phone;
+	} catch (error) {
+		errors.value.phone = 'Ошибка проверки номера телефона';
+		console.error(error);
 	}
 }
 
@@ -654,7 +684,7 @@ const validatePasswordConfirmation = () => {
 	}
 }
 
-const validateInn = () => {
+const validateInn = async () => {
 	const inn = formData.value.inn.replace(/\D/g, '')
 	if (!inn && isLegalEntity.value) {
 		errors.value.inn = 'ИНН обязателен для юрлиц'
@@ -662,7 +692,16 @@ const validateInn = () => {
 		errors.value.inn = 'ИНН юрлица должен содержать 10 цифр'
 	} else if (inn && !isLegalEntity.value && inn.length !== 12) {
 		errors.value.inn = 'ИНН физлица должен содержать 12 цифр'
-	} else {
+	}
+
+	try {
+		const response = await AuthService.checkInn(inn);
+		if (response.data.status == "error") {
+			errors.value.inn = response.data.error.message
+				? response.data.error.message
+				: "Этот ИНН уже зарегистрирован";
+		}
+	} catch (error) {
 		delete errors.value.inn
 	}
 }
@@ -678,15 +717,15 @@ const validateKpp = () => {
 
 // Форматирование
 const formatPhone = (event) => {
-	let value = event.target.value.replace(/\D/g, '')
-	if (value.length > 0) {
-		value = value.match(/.{1,3}/g).join(' ')
-		if (value.length > 8) {
-			value = value.substring(0, 8) + ' ' + value.substring(8, 12)
-		}
+	let value = event.target.value.replace(/\D/g, '');
+	if (value.length >= 10) {
+		//value = value.slice(0, 10);
+		console.log(value);
+
+		value = `${value.slice(0, 3)} ${value.slice(3, 6)} ${value.slice(6, 8)} ${value.slice(8, 10)}`;
 	}
-	formData.value.phone = value
-}
+	formData.value.phone = value;
+};
 
 const formatInn = (event) => {
 	let value = event.target.value.replace(/\D/g, '')
@@ -733,35 +772,38 @@ const performRegistration = async () => {
 		// Удаляем подтверждение пароля из отправляемых данных
 		delete registrationData.password_confirmation
 
-		const response = await axios.post('/api/auth/register', registrationData)
+		//const response = await axios.post('/api/auth/register', registrationData)
+		const response = await AuthService.registration(registrationData)
 
-		if (response.data.success) {
+		if (response.data.status === 'success') {
 			// Автоматически логиним
-			await authStore.login({
+			/* await authStore.login({
 				email: formData.value.email,
 				password: formData.value.password
-			})
+			}) */
 
 			emit('success')
 			handleClose()
 
 			// Показываем welcome сообщение
 			setTimeout(() => {
-				alert('Регистрация успешна! Добро пожаловать в систему.')
+				/* alert('Регистрация успешна! Добро пожаловать в систему.') */
+				notify.success('Регистрация успешна!')
 			}, 300)
+		}
+
+		if (response.data.status === 'error') {
+			notify.error(response.data.error.message)
 		}
 
 	} catch (error) {
 		console.error('Registration error:', error)
 
 		// Обработка ошибок сервера
-		if (error.response?.data?.errors) {
-			Object.keys(error.response.data.errors).forEach(key => {
-				errors.value[key] = error.response.data.errors[key]
-			})
-		} else {
-			alert(error.response?.data?.message || 'Ошибка регистрации')
-		}
+
+		//alert(error.response?.data?.message || 'Ошибка регистрации')
+		notify.error(error)
+
 
 		// Возвращаемся к шагу с ошибками
 		currentStep.value = 1
@@ -923,7 +965,7 @@ watch(() => props.isOpen, (newValue) => {
 
 .step-description {
 	color: var(--text-secondary);
-	margin-bottom: 20px;
+	margin-bottom: 15px;
 	font-size: 14px;
 }
 
