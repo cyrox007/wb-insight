@@ -7,7 +7,7 @@ from core.dependencies import get_db_session
 from core.logger import setup_logger
 
 from schemas.auth import LoginRequest
-from services.user_service import get_user_by_email
+from services.user_service import get_user_by_email, get_user_by_inn, get_user_by_phone, insert_user
 from utils.hashed_password import verify_password
 from utils.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, create_refresh_token, verify_token
 from utils.responce_helps import response_error, response_success
@@ -121,3 +121,62 @@ async def refresh_token(request: Request, response: Response):
         token_type="bearer",
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
+
+@router.post('/check-email')
+async def check_email(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+    data = await request.json()
+
+    user = await get_user_by_email(db_session, data['email'])
+    if user:
+        return response_error(
+            code="EMAIL_ALREADY_EXISTS",
+            message="Пользователь с таким Email уже зарегестрирован"
+        )
+
+    return response_success(
+        message="Email свободен"
+    )
+
+@router.post('/check-phone')
+async def check_phone(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+    data = await request.json()
+
+    user = await get_user_by_phone(db_session, data['phone'])
+    if user:
+        return response_error(
+            code="PHONE_ALREADY_EXISTS",
+            message="Пользователь с таким номером телефона уже зарегестрирован"
+        )
+    
+    return response_success(
+        message="Номер телефона свободен"
+    )
+
+@router.post('/check-inn')
+async def check_inn(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+    data = await request.json()
+
+    user = await get_user_by_inn(db_session, data['inn'])
+    if user: 
+        return response_error(
+            code="INN_ALREADY_EXISTS",
+            message="Пользователь с таким ИНН уже зарегестрирован"
+        )
+    
+    return response_success(
+        message="ИНН свободен"
+    )
+
+@router.post('/registration')
+async def registration(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+    data = await request.json()
+    regData = data.get('registrationData')
+
+    user = await insert_user(db_session, data.get('registrationData', None))
+    if not user:
+        return response_error(
+            code="REGISTRATION_ERROR",
+            message="Ошибка при регистрации"
+        )
+
+    return response_success(message='Зарегестрирован')

@@ -14,28 +14,44 @@ from utils.hashed_password import hash_password
 
 logger = setup_logger(__name__)
 
-async def insert_user(session: AsyncSession, user_data: UserCreateRequest):
+async def insert_user(session: AsyncSession, user_data: dict):
+    if not user_data:
+        logger.warning("Пустые данные пользователя")
+        return None
+
+    for field in ['email', 'phone', 'full_name', 'password']:
+        if not user_data.get(field):
+            logger.warning(f"Отсутствует обязательное поле: {field}")
+            return None
+    
     new_user = User(
         id=uuid4(),
-        email=user_data.email,
-        phone=user_data.phone,
-        full_name=user_data.full_name,
-        hashed_password=hash_password(user_data.password),
-        entity_type=user_data.entity_type.value,
-        inn=user_data.inn,
-        kpp=user_data.kpp,
-        legal_address=user_data.legal_address,
-        timezone=user_data.timezone,
+        email=user_data['email'],
+        phone=user_data['phone'],
+        full_name=user_data['full_name'],
+        hashed_password=hash_password(user_data['password']),
+        entity_type=user_data.get('entity_type', 'individual'),
+        inn=user_data['inn'],
+        kpp=user_data['kpp'],
+        legal_address=user_data['legal_address'],
+        timezone=user_data['timezone'],
         created_at=datetime.utcnow(),
         is_active=True,
         is_staff=False
     )
 
     session.add(new_user)
-    await session.commit()
+    try:
+        await session.commit()
+        await session.refresh(new_user)
+        logger.info(f"Пользователь создан: {new_user.id}")
+        return new_user
 
-    return new_user
-
+    except Exception as e:
+        await session.rollback()
+        logger.error(f'Ошибка при создании пользователя: {e}')
+        return None
+    
 async def get_user_by_uuid(session: AsyncSession, user_id: str) -> Optional[User]:
     result = await session.execute(
         select(User).where(User.id == user_id)
@@ -51,6 +67,12 @@ async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]
 async def get_user_by_phone(session: AsyncSession, phone: str) -> Optional[User]:
     result = await session.execute(
         select(User).where(User.phone == phone)
+    )
+    return result.scalar_one_or_none()
+
+async def get_user_by_inn(session: AsyncSession, inn: str) -> Optional[User]:
+    result = await session.execute(
+        select(User).where(User.inn == inn)
     )
     return result.scalar_one_or_none()
 
