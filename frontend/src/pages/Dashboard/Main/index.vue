@@ -4,7 +4,7 @@
 		<aside class="dashboard-sidebar">
 			<!-- Key Indicators -->
 			<div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fas fa-chart-line"></i> Ключевые показатели</h3>
+				<h3 class="sidebar-title"><i class="fa fa-line-chart" aria-hidden="true"></i> Ключевые показатели</h3>
 				<ul class="product-list">
 					<li v-for="product in products" :key="product.id" class="product-item"
 						:class="{ 'active': selectedProductId === product.id }" @click="selectProduct(product)">
@@ -22,7 +22,7 @@
 
 			<!-- Size Chart -->
 			<div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fas fa-ruler"></i> Размерная сетка</h3>
+				<h3 class="sidebar-title"><i class="fa fa-ruler"></i> Размерная сетка</h3>
 				<div class="size-chart-container">
 					<table class="size-table">
 						<thead>
@@ -47,7 +47,7 @@
 
 			<!-- Filters -->
 			<div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fas fa-filter"></i> Фильтры</h3>
+				<h3 class="sidebar-title"><i class="fa fa-filter"></i> Фильтры</h3>
 				<div class="filter-group">
 					<div v-for="filter in filters" :key="filter.key" class="filter-item"
 						@click="toggleFilter(filter.key)">
@@ -78,22 +78,22 @@
 
 			<!-- Quick Actions -->
 			<div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fas fa-bolt"></i> Быстрые действия</h3>
+				<h3 class="sidebar-title"><i class="fa fa-bolt"></i> Быстрые действия</h3>
 				<div class="quick-actions">
 					<button class="quick-action-btn" @click="exportData">
-						<i class="fas fa-file-export"></i>
+						<i class="fa fa-file-export"></i>
 						<span>Экспорт данных</span>
 					</button>
 					<button class="quick-action-btn" @click="generateReport">
-						<i class="fas fa-chart-bar"></i>
+						<i class="fa fa-chart-bar"></i>
 						<span>Создать отчет</span>
 					</button>
 					<button class="quick-action-btn" @click="addProduct">
-						<i class="fas fa-plus"></i>
+						<i class="fa fa-plus"></i>
 						<span>Добавить товар</span>
 					</button>
 					<button class="quick-action-btn" @click="refreshData">
-						<i class="fas fa-sync-alt"></i>
+						<i class="fa fa-sync-alt"></i>
 						<span>Обновить данные</span>
 					</button>
 				</div>
@@ -106,42 +106,116 @@
 				<h1 class="dashboard-title">Общие показатели по кабинету</h1>
 				<div class="btn-group">
 					<button class="btn btn-primary" @click="toggleMoreInfo">
-						<i class="fas fa-info-circle"></i> Больше информации
+						<i class="fa fa-info-circle"></i> Больше информации
 					</button>
 				</div>
 			</div>
 
 			<!-- Stats Grid -->
 			<div class="stats-grid">
-				<div class="stat-card">
-					<div class="stat-title">Комиссия</div>
-					<div class="stat-value primary">29,2%</div>
-					<div class="stat-change">+2,1% за период</div>
-				</div>
-				<div class="stat-card">
+				<!-- Заказано на сумму -->
+				<div class="stat-card primary">
 					<div class="stat-title">Заказано на сумму</div>
-					<div class="stat-value success">18 118 832,0 ₽</div>
-					<div class="stat-change">+15,3% за период</div>
+					<div class="stat-value primary">
+						{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' ₽' : '—'
+						}}
+					</div>
+					<div class="stat-change">
+						{{ stats.ordered_amount?.change_percent != null
+							? formatChange(stats.ordered_amount.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
 				</div>
-				<div class="stat-card">
+
+				<!-- Единиц (заказано) -->
+				<div class="stat-card primary">
+					<div class="stat-title">Единиц</div>
+					<div class="stat-value primary">
+						{{ stats.ordered_units?.value != null ? formatNumber(stats.ordered_units.value) : '—' }}
+					</div>
+					<div class="stat-change">
+						{{ stats.ordered_units?.change_percent != null
+							? formatChange(stats.ordered_units.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
+				</div>
+
+				<!-- Выручка -->
+				<div class="stat-card success">
 					<div class="stat-title">Выручка</div>
-					<div class="stat-value warning">3 747 120,0 ₽</div>
-					<div class="stat-change">+8,7% за период</div>
+					<div class="stat-value success">
+						{{ stats.revenue?.value != null ? formatNumber(stats.revenue.value) + ' ₽' : '—' }}
+					</div>
+					<div class="stat-change">
+						{{ stats.revenue?.change_percent != null
+							? formatChange(stats.revenue.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
 				</div>
-				<div class="stat-card">
+
+				<!-- Продано единиц -->
+				<div class="stat-card success">
+					<div class="stat-title">Единиц</div>
+					<div class="stat-value success">
+						{{ stats.sold_units?.value != null ? formatNumber(stats.sold_units.value) : '—' }}
+					</div>
+					<div class="stat-change">
+						{{ stats.sold_units?.change_percent != null
+							? formatChange(stats.sold_units.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
+				</div>
+
+				<!-- К выплате -->
+				<div class="stat-card accent">
 					<div class="stat-title">К выплате</div>
-					<div class="stat-value accent">1 994 325,4 ₽</div>
-					<div class="stat-change">+5,2% за период</div>
+					<div class="stat-value accent">
+						{{ stats.to_pay?.value != null ? formatNumber(stats.to_pay.value) + ' ₽' : '—' }}
+					</div>
+					<div class="stat-change">
+						{{ stats.to_pay?.change_percent != null
+							? formatChange(stats.to_pay.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
 				</div>
-				<div class="stat-card">
+
+				<!-- Прибыль -->
+				<div class="stat-card accent">
 					<div class="stat-title">Прибыль</div>
-					<div class="stat-value success">1 768 051,17 ₽</div>
-					<div class="stat-change">+12,4% за период</div>
+					<div class="stat-value accent">
+						{{ stats.profit?.value != null ? formatNumber(stats.profit.value) + ' ₽' : '—' }}
+					</div>
+					<div class="stat-change">
+						{{ stats.profit?.change_percent != null
+							? formatChange(stats.profit.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
 				</div>
-				<div class="stat-card">
-					<div class="stat-title">Маржинальность</div>
-					<div class="stat-value warning">16,5%</div>
-					<div class="stat-change">+1,8% за период</div>
+
+				<!-- Процент выкупа -->
+				<div class="stat-card warning">
+					<div class="stat-title">Процент выкупа</div>
+					<div class="stat-value warning">
+						{{ stats.buyout_rate?.value != null ? formatNumber(stats.buyout_rate.value) + '%' : '—' }}
+					</div>
+					<div class="stat-change">
+						{{ stats.buyout_rate?.change_percent != null
+							? formatChange(stats.buyout_rate.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
+				</div>
+
+				<!-- Средняя цена -->
+				<div class="stat-card warning">
+					<div class="stat-title">Средняя цена</div>
+					<div class="stat-value warning">
+						{{ stats.avg_price?.value != null ? formatNumber(stats.avg_price.value) + ' ₽' : '—' }}
+					</div>
+					<div class="stat-change">
+						{{ stats.avg_price?.change_percent != null
+							? formatChange(stats.avg_price.change_percent) + ' за период'
+							: 'Данные не синхронизированы' }}
+					</div>
 				</div>
 			</div>
 
@@ -300,6 +374,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
+import { notify } from '@/composables/notification';
+
+const stats = ref({});
 
 // Реактивные данные
 const showMoreInfo = ref(false)
@@ -411,6 +488,20 @@ const filteredProducts = computed(() => {
 	)
 })
 
+const formatNumber = (num) => {
+	return new Intl.NumberFormat('ru-RU', {
+		minimumFractionDigits: num % 1 === 0 ? 0 : 2,
+		maximumFractionDigits: 2
+	}).format(num);
+};
+
+// Вспомогательная функция для форматирования процентов
+const formatChange = (change) => {
+	if (change > 0) return `+${change}%`;
+	if (change < 0) return `${change}%`;
+	return '0%';
+};
+
 // Lifecycle hooks
 onMounted(async () => {
 	// Set default dates for filter
@@ -424,18 +515,19 @@ onMounted(async () => {
 	// Fetch data
 	const response = await DashboardService.get_dashboard_data();
 	if (response.status === 200) {
-		let result = response.data;
+		const result = response.data;
 
+		stats.value = result.stats;
 		products.value = result.products;
 		sizeChart.value = result.sizeChart;
 		abcAnalysis.value = result.abcAnalysis;
 		chartData.value = result.chartData;
 		selectedProducts.value = result.products;
 
+		if (result.is_synced == false) {
+			notify.warning("🔄 Данные синхронизируются с Wildberries. Обновление займёт некоторое время. Пожалуйста, подождите и перезагрузите страницу", 3000)
+		}
 	}
-
-
-	console.log('Dashboard mounted')
 })
 </script>
 
@@ -476,9 +568,17 @@ onMounted(async () => {
 /* Stats Grid */
 .stats-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+	grid-template-columns: repeat(4, minmax(250px, 1fr));
+	grid-template-rows: repeat(2, auto);
+	grid-auto-flow: column;
 	gap: 20px;
 	margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+	.stats-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
 }
 
 .stat-card {
@@ -490,24 +590,20 @@ onMounted(async () => {
 	border-left: 4px solid var(--secondary-color);
 }
 
-.stat-card:nth-child(2) {
+.stat-card.primary {
+	border-left-color: var(--secondary-color);
+}
+
+.stat-card.success {
 	border-left-color: var(--success-color);
 }
 
-.stat-card:nth-child(3) {
+.stat-card.warning {
 	border-left-color: var(--warning-color);
 }
 
-.stat-card:nth-child(4) {
+.stat-card.accent {
 	border-left-color: var(--accent-color);
-}
-
-.stat-card:nth-child(5) {
-	border-left-color: var(--success-color);
-}
-
-.stat-card:nth-child(6) {
-	border-left-color: var(--warning-color);
 }
 
 .stat-card:hover {
