@@ -3,8 +3,8 @@ from uuid import uuid4
 
 from enum import Enum as PyEnum
 
-from sqlalchemy import Column, UUID, String, DateTime, Boolean, Enum, Text, func, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import String, DateTime, Boolean, Enum, Text, ForeignKey
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from database import Database
 
@@ -23,38 +23,49 @@ class TokenTypeWB(PyEnum):
     TEST = "test"               # Тестовый (если используется)
 
 
-class APITokens(Database.Base):
+class APIToken(Database.Base):
     __tablename__ = 'api_tokens'
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[str] = mapped_column(
+        String(36), 
+        primary_key=True, 
+        default=lambda: str(uuid4())
+    )
 
     # Привязка к пользователю
-    user_id = Column(
-        UUID(as_uuid=True),
+    user_id: Mapped[str] = mapped_column(
         ForeignKey('users.id', ondelete='CASCADE'),
         nullable=False,
         index=True
     )
 
     # Маркетплейс
-    marketplace = Column(
+    marketplace: Mapped[Marketplace] = mapped_column(
         Enum(Marketplace, name='marketplace_enum'),
         nullable=False,
         index=True
     )
 
     # Тип токена (для WB — из(TokenTypeWB); для других — можно оставить NULL или использовать JSON/гибкое поле)
-    token_type = Column(String(50), nullable=True, index=True)
+    token_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
 
     # Зашифрованный токен (в продакшене — шифрование!)
-    encrypted_token = Column(Text, nullable=False)  # ← оригинальный токен в зашифрованном виде
+    encrypted_token: Mapped[str] = mapped_column(Text, nullable=False)  # ← оригинальный токен в зашифрованном виде
 
     # Срок действия
-    issued_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), 
+        default=lambda: datetime.now(timezone.utc), 
+        nullable=False
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Дополнительно: описание (например, "Токен для аналитики")
-    label = Column(String(255), nullable=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Отношение (опционально)
     user = relationship("User", back_populates="api_tokens")
@@ -64,7 +75,7 @@ class APITokens(Database.Base):
     
     @property
     def is_expired(self) -> bool:
-        return datetime.now(timezone.utc) > self.expires_at # type: ignore
+        return datetime.now(timezone.utc) > self.expires_at
 
     @property
     def is_valid(self) -> bool:
@@ -73,7 +84,7 @@ class APITokens(Database.Base):
     # Метод для установки срока действия (например, 180 дней для WB)
     def set_expires_for_wb(self):
         """Устанавливает срок действия на 180 дней от issued_at"""
-        if self.issued_at: # type: ignore
+        if self.issued_at:
             self.expires_at = self.issued_at + timedelta(days=180)
         else:
             now = datetime.now(timezone.utc)

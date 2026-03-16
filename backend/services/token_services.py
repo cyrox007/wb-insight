@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
-from models.tokens import APITokens, Marketplace
+from models.tokens import APIToken, Marketplace
 from utils.token_crypto import encrypt_token
 
 logger = setup_logger(__name__)
@@ -13,7 +13,7 @@ logger = setup_logger(__name__)
 async def get_user_token_count(session: AsyncSession, user_id: str) -> int:
     """ получаем кол-во токенов добавленных пользователем """
     result = await session.execute(
-        select(APITokens).where(APITokens.user_id == user_id)
+        select(APIToken).where(APIToken.user_id == user_id)
     )
     return len(result.scalars().all())
 
@@ -24,9 +24,9 @@ async def insert_token(
         marketplace_code: str = 'wb',
         token_type: str = 'personal',
         label: str = 'Токен для аналитики'
-    ) -> Optional[APITokens]:
+    ) -> Optional[APIToken]:
     """ добавляем токен """
-    token = APITokens(
+    token = APIToken(
         user_id=user_id,
         marketplace=Marketplace.WILDBERRIES if marketplace_code == 'wb' else marketplace_code,
         token_type=token_type,
@@ -51,21 +51,21 @@ async def insert_token(
         return None
     
 
-async def get_tokens_by_user_id(session: AsyncSession, user_id: str) -> Sequence[APITokens]:
+async def get_tokens_by_user_id(session: AsyncSession, user_id: str) -> Sequence[APIToken]:
     """ получаем токен по user_id """
     result = await session.execute(
-        select(APITokens).where(APITokens.user_id == user_id)
+        select(APIToken).where(APIToken.user_id == user_id)
     )
     return result.scalars().all()
 
-async def get_token_by_id(session: AsyncSession, token_id: str) -> Optional[APITokens]:
+async def get_token_by_id(session: AsyncSession, token_id: str) -> Optional[APIToken]:
     """ получаем токен по id """
     result = await session.execute(
-        select(APITokens).where(APITokens.id == token_id)
+        select(APIToken).where(APIToken.id == token_id)
     )
     return result.scalar_one_or_none()
 
-async def delete_token(session: AsyncSession, token: APITokens) -> bool:
+async def delete_token(session: AsyncSession, token: APIToken) -> bool:
     """ удаляем токен """
     try:
         await session.delete(token)

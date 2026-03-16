@@ -25,7 +25,8 @@ from models.users import User, UserRoleAssociation
 target_metadata = User.__table__.metadata
 from models.permissions import Permission
 from models.tariffs import TariffPlan, TariffLimit, Subscription
-from models.tokens import APITokens
+from models.tokens import APIToken
+from models.wb_report import WbRealizationReport
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

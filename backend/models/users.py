@@ -6,7 +6,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from database import Database
-from models.tokens import APITokens
 
 class EntityType(Enum):
     INDIVIDUAL = "individual"

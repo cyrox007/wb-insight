@@ -35,6 +35,18 @@ class Config:
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
         return f"{driver}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
+    # Безопасность
     ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY", 'SECRET_KEY')
+    
+    # Redis
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+    # Wildberries API
+    WB_API_BASE_URL: str = "https://statistics-api.wildberries.ru"
+    WB_ADVERT_API_BASE_URL: str = "https://advert-api.wildberries.ru"
+    
+    # Celery
+    CELERY_BROKER_URL: str = REDIS_URL
+    CELERY_RESULT_BACKEND: str = REDIS_URL
     
 config = Config()
