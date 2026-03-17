@@ -517,16 +517,21 @@ onMounted(async () => {
 	if (response.status === 200) {
 		const result = response.data;
 
+		if (result.status === "error") {
+			notify.error(result.error.message, 3000);
+			return;
+		}
+
+		if (result.is_synced == false) {
+			notify.warning("🔄 Данные синхронизируются с Wildberries. Обновление займёт некоторое время. Пожалуйста, подождите и перезагрузите страницу", 3000)
+		}
+
 		stats.value = result.stats;
 		products.value = result.products;
 		sizeChart.value = result.sizeChart;
 		abcAnalysis.value = result.abcAnalysis;
 		chartData.value = result.chartData;
 		selectedProducts.value = result.products;
-
-		if (result.is_synced == false) {
-			notify.warning("🔄 Данные синхронизируются с Wildberries. Обновление займёт некоторое время. Пожалуйста, подождите и перезагрузите страницу", 3000)
-		}
 	}
 })
 </script>
