@@ -1,18 +1,140 @@
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+
+from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, Request
 
 from core.dependencies import get_db_session, require_permission
 from core.logger import setup_logger
-from utils.responce_helps import response_success
+from core.middleware import auth_middle
+from utils.responce_helps import response_error, response_success
+from services.wb_report_services import check_wb_report_stats, get_base_wb_report_stats, get_returns_wb_report_stats, get_sales_wb_report_stats
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = setup_logger(__name__)
 
 
-@router.get("/", dependencies=[
-    Depends(require_permission('user.dashboard')) # проверка доступа
-])
-async def dashboard(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+@router.get("/", dependencies=[Depends(auth_middle)])
+async def dashboard(
+    request: Request, 
+    db_session: AsyncSession = Depends(get_db_session),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+):
+    end_date = end_date if end_date is not None else datetime.now(timezone.utc).date()
+    start_date = start_date if start_date is not None else end_date - timedelta(days=30)
+
+    print(request.state.user)
+    current_user = request.state.user
+
+    report_count = await check_wb_report_stats(
+        session=db_session,
+        user_id=current_user['sub'],
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    if report_count == 0:
+        # Данные отсутствуют → не синхронизировано
+        return response_error(
+            message="Данные отсутствуют → не синхронизировано",
+            code="NOT_DATA"
+        )
+
+    # Выполняем запросы
+    base_result = await get_base_wb_report_stats(
+        session=db_session,
+        user_id=current_user['sub'],
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    sales_result = await get_sales_wb_report_stats(
+        session=db_session,
+        user_id=current_user['sub'],
+        start_date=start_date,
+        end_date=end_date
+    )
+    returns_result = await get_returns_wb_report_stats(
+        session=db_session,
+        user_id=current_user['sub'],
+        start_date=start_date,
+        end_date=end_date
+    )
+
+    # Расчёт метрик
+    ordered_amount = float(getattr(base_result, 'ordered_amount', 0) or 0)
+    ordered_units = int(getattr(base_result, 'ordered_units', 0) or 0)
+    
+    sales_amount = float(getattr(sales_result, 'sales_amount', 0) or 0)
+    sales_units = int(getattr(sales_result, 'sales_units', 0) or 0)
+    returns_amount = float(getattr(returns_result, 'returns_amount', 0) or 0)
+    returns_units = int(getattr(returns_result, 'returns_units', 0) or 0)
+
+    # Выручка = продажи - возвраты
+    revenue = sales_amount - returns_amount
+    
+    # К перечислению (уже агрегировано в ppvz_for_pay)
+    to_pay = float(getattr(base_result, 'to_pay', 0) or 0)
+    
+    # К выплате = к перечислению - комиссия - логистика - штрафы - прочие - хранение
+    # (в реальности это уже учтено в ppvz_for_pay, но для расчёта прибыли нужно вычесть себестоимость)
+    payout = to_pay
+    
+    # Процент выкупа
+    buyout_rate = (sales_units / ordered_units * 100) if ordered_units else 0.0
+    
+    # Средняя цена заказа
+    avg_price = (ordered_amount / ordered_units) if ordered_units else 0.0
+    
+    # Прибыль (пока без учёта себестоимости — вернём 0 или расчёт без себестоимости)
+    # В будущем: прибыль = к выплате - себестоимость
+    profit = payout  # временно, пока нет себестоимости
+
+    stats = {
+        "ordered_amount": {
+            "value": round(ordered_amount, 2),
+            "change_percent": 0.0,  # пока без сравнения с предыдущим периодом
+            "change_abs": 0.0
+        },
+        "ordered_units": {
+            "value": ordered_units,
+            "change_percent": 0.0,
+            "change_abs": 0
+        },
+        "revenue": {
+            "value": round(revenue, 2),
+            "change_percent": 0.0,
+            "change_abs": 0.0
+        },
+        "sold_units": {
+            "value": sales_units,
+            "change_percent": 0.0,
+            "change_abs": 0
+        },
+        "to_pay": {
+            "value": round(to_pay, 2),
+            "change_percent": 0.0,
+            "change_abs": 0.0
+        },
+        "profit": {
+            "value": round(profit, 2),
+            "change_percent": 0.0,
+            "change_abs": 0.0
+        },
+        "buyout_rate": {
+            "value": round(buyout_rate, 1),
+            "change_percent": 0.0,
+            "change_abs": 0.0
+        },
+        "avg_price": {
+            "value": round(avg_price, 2),
+            "change_percent": 0.0,
+            "change_abs": 0.0
+        }
+   }
+
     products = [
         { 'id': 1, 'name': 'Электросталь', 'sales': 2722, 'profit': 1500 },
         { 'id': 2, 'name': 'Коледино', 'sales': 1323, 'profit': 800 },
@@ -123,6 +245,8 @@ async def dashboard(request: Request, db_session: AsyncSession = Depends(get_db_
         { 'label': '19.10', 'value': 80 }
     ]
     return response_success(
+        is_synced=False,
+        stats=stats,
         products=products,
         sizeChart=sizeChart,
         selectedProducts=selectedProducts,

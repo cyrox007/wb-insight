@@ -89,7 +89,7 @@ class User(Database.Base):
     )
 
     api_tokens = relationship(
-        "APITokens", 
+        "APIToken", 
         back_populates="user", 
         cascade="all, delete-orphan"
     )
