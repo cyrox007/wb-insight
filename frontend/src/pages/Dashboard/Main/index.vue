@@ -220,31 +220,10 @@
 			</div>
 
 			<!-- Chart Container -->
-			<div class="chart-container">
-				<div class="chart-header">
-					<h2 class="chart-title">Сводные данные по дням</h2>
-					<div class="chart-controls">
-						<select class="chart-dropdown" v-model="selectedChartType">
-							<option value="sales">Продажи</option>
-							<option value="revenue">Выручка</option>
-							<option value="profit">Прибыль</option>
-							<option value="margin">Маржинальность</option>
-						</select>
-					</div>
-				</div>
-				<div class="chart-area">
-					<div class="chart-bar-container">
-						<div v-for="(data, index) in chartData" :key="index" class="chart-bar"
-							:style="{ height: data.value + '%' }"
-							:title="`${data.label}: ${getChartValue(data.value)}`">
-							<div class="chart-bar-label">{{ data.label }}</div>
-						</div>
-					</div>
-				</div>
-			</div>
+			<DashboardDiagram :chart-data="chartData" />
 
 			<!-- Product Images -->
-			<div class="product-images">
+			<!-- <div class="product-images">
 				<div v-for="product in selectedProducts" :key="product.id" class="product-image-card">
 					<div class="product-image-wrapper">
 						<div class="product-image-img">
@@ -261,7 +240,7 @@
 						</div>
 					</div>
 				</div>
-			</div>
+			</div> -->
 
 			<!-- ABC Analysis -->
 			<div class="abc-analysis">
@@ -375,6 +354,7 @@
 import { ref, computed, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
+import DashboardDiagram from '@/components/Diagrams/DashboardDiagram.vue';
 
 const stats = ref({});
 
@@ -389,16 +369,16 @@ const filterEndDate = ref('')
 const products = ref([])
 
 // Size chart data
-const sizeChart = ref([])
+/* const sizeChart = ref([]) */
 
 // Filters
-const filters = ref([
+/* const filters = ref([
 	{ key: 'orders', label: 'Заказы, руб', checked: true, count: 125 },
 	{ key: 'revenue', label: 'Выкупы, руб', checked: true, count: 98 },
 	{ key: 'avgPrice', label: 'Средняя цена', checked: true, count: 45 },
 	{ key: 'profit', label: 'Прибыль, руб', checked: true, count: 76 },
 	{ key: 'margin', label: 'Маржинальность', checked: true, count: 32 }
-])
+]) */
 
 // Selected products for display
 const selectedProducts = ref([])
@@ -407,8 +387,16 @@ const selectedProducts = ref([])
 const abcAnalysis = ref([])
 
 // Chart data
-const chartData = ref([])
-
+const chartData = ref([
+	{ date: '01.09', orders: 880000, buyouts: 380000, profit: -10000, margin: -2.7, cr: 6.5, ctr: 4.6, drr: 1.4 },
+	{ date: '02.09', orders: 950000, buyouts: 410000, profit: -8000, margin: -2.5, cr: 6.3, ctr: 4.5, drr: 1.3 },
+	{ date: '03.09', orders: 820000, buyouts: 350000, profit: -12000, margin: -3.0, cr: 6.0, ctr: 4.4, drr: 1.5 },
+	{ date: '04.09', orders: 780000, buyouts: 320000, profit: -15000, margin: -3.5, cr: 5.8, ctr: 4.3, drr: 1.6 },
+	{ date: '05.09', orders: 890000, buyouts: 400000, profit: -9000, margin: -2.8, cr: 6.2, ctr: 4.5, drr: 1.4 },
+	{ date: '06.09', orders: 920000, buyouts: 420000, profit: -7000, margin: -2.3, cr: 6.4, ctr: 4.6, drr: 1.3 },
+	{ date: '07.09', orders: 860000, buyouts: 390000, profit: -11000, margin: -3.1, cr: 5.9, ctr: 4.3, drr: 1.5 }
+])
+/* 
 // Methods
 const toggleMoreInfo = () => {
 	showMoreInfo.value = !showMoreInfo.value
@@ -430,18 +418,6 @@ const toggleFilter = (key) => {
 const applyDateFilter = () => {
 	console.log('Applying date filter:', filterStartDate.value, filterEndDate.value)
 	// Add your filter logic here
-}
-
-const getChartValue = (percentage) => {
-	// Convert percentage to actual value based on chart type
-	const maxValues = {
-		sales: 1000,
-		revenue: 500000,
-		profit: 250000,
-		margin: 100
-	}
-	const maxValue = maxValues[selectedChartType.value] || 1000
-	return Math.round((percentage / 100) * maxValue).toLocaleString('ru-RU')
 }
 
 const viewProduct = (item) => {
@@ -486,7 +462,7 @@ const filteredProducts = computed(() => {
 	return products.value.filter(product =>
 		filters.value.some(filter => filter.checked)
 	)
-})
+}) */
 
 const formatNumber = (num) => {
 	return new Intl.NumberFormat('ru-RU', {
@@ -527,11 +503,12 @@ onMounted(async () => {
 		}
 
 		stats.value = result.stats;
-		products.value = result.products;
-		sizeChart.value = result.sizeChart;
-		abcAnalysis.value = result.abcAnalysis;
 		chartData.value = result.chartData;
-		selectedProducts.value = result.products;
+		/* products.value = result.products;
+		sizeChart.value = result.sizeChart;
+		abcAnalysis.value = result.abcAnalysis; */
+
+		/* selectedProducts.value = result.products; */
 	}
 })
 </script>
