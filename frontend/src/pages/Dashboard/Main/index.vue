@@ -220,8 +220,24 @@
 			</div>
 
 			<!-- Chart Container -->
-			<DashboardDiagram :chart-data="chartData" />
-
+			<!-- <DashboardDiagram :chart-data="chartData" /> -->
+			<BaseCarts :chart-data="chartData" :metrics="[
+				{ key: 'orders', name: 'Заказы, руб', color: '#ff9800', visible: true, type: 'rub' },
+				{ key: 'buyouts', name: 'Выкупы, руб', color: '#4caf50', visible: true, type: 'rub' },
+				{ key: 'avg_price', name: 'Средняя цена, руб', color: '#2196f3', visible: true, type: 'rub' },
+				{ key: 'profit', name: 'Прибыль, руб', color: '#f44336', visible: true, type: 'rub' },
+			]" />
+			<BaseCarts :chart-data="chartData" :metrics="[
+				{ key: 'views', name: 'Просмотры', color: '#ffeb3b', visible: true, type: 'number' },
+				{ key: 'clicks', name: 'Клики', color: '#ff9800', visible: true, type: 'number' },
+				{ key: 'cart', name: 'В корзину', color: '#3f51b5', visible: true, type: 'number' },
+			]" />
+			<BaseCarts :chart-data="chartData" :metrics="[
+				{ key: 'margin', name: 'Маржинальность', color: '#9c27b0', visible: true, type: 'percent' },
+				{ key: 'cr', name: 'CR', color: '#00bcd4', visible: true, type: 'percent' },
+				{ key: 'ctr', name: 'CTR', color: '#8bc34a', visible: true, type: 'percent' },
+				{ key: 'drr', name: 'ДРР', color: '#607d8b', visible: true, type: 'percent' }
+			]" />
 			<!-- Product Images -->
 			<!-- <div class="product-images">
 				<div v-for="product in selectedProducts" :key="product.id" class="product-image-card">
@@ -355,6 +371,7 @@ import { ref, computed, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
 import DashboardDiagram from '@/components/Diagrams/DashboardDiagram.vue';
+import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
 
 const stats = ref({});
 
@@ -388,14 +405,105 @@ const abcAnalysis = ref([])
 
 // Chart data
 const chartData = ref([
-	{ date: '01.09', orders: 880000, buyouts: 380000, profit: -10000, margin: -2.7, cr: 6.5, ctr: 4.6, drr: 1.4 },
-	{ date: '02.09', orders: 950000, buyouts: 410000, profit: -8000, margin: -2.5, cr: 6.3, ctr: 4.5, drr: 1.3 },
-	{ date: '03.09', orders: 820000, buyouts: 350000, profit: -12000, margin: -3.0, cr: 6.0, ctr: 4.4, drr: 1.5 },
-	{ date: '04.09', orders: 780000, buyouts: 320000, profit: -15000, margin: -3.5, cr: 5.8, ctr: 4.3, drr: 1.6 },
-	{ date: '05.09', orders: 890000, buyouts: 400000, profit: -9000, margin: -2.8, cr: 6.2, ctr: 4.5, drr: 1.4 },
-	{ date: '06.09', orders: 920000, buyouts: 420000, profit: -7000, margin: -2.3, cr: 6.4, ctr: 4.6, drr: 1.3 },
-	{ date: '07.09', orders: 860000, buyouts: 390000, profit: -11000, margin: -3.1, cr: 5.9, ctr: 4.3, drr: 1.5 }
-])
+	{
+		date: '01.09',
+		orders: 880000,
+		buyouts: 380000,
+		avg_price: 15921.64,
+		profit: -10000,
+		margin: -2.7,
+		views: 67934,
+		clicks: 3120,
+		cart: 200,
+		cr: 6.5,
+		ctr: 4.6,
+		drr: 1.4
+	},
+	{
+		date: '02.09',
+		orders: 950000,
+		buyouts: 410000,
+		avg_price: 16250.00,
+		profit: -8000,
+		margin: -2.5,
+		views: 72345,
+		clicks: 3345,
+		cart: 215,
+		cr: 6.3,
+		ctr: 4.5,
+		drr: 1.3
+	},
+	{
+		date: '03.09',
+		orders: 820000,
+		buyouts: 350000,
+		avg_price: 14890.50,
+		profit: -12000,
+		margin: -3.0,
+		views: 58923,
+		clicks: 2890,
+		cart: 185,
+		cr: 6.0,
+		ctr: 4.4,
+		drr: 1.5
+	},
+	{
+		date: '04.09',
+		orders: 780000,
+		buyouts: 320000,
+		avg_price: 14320.75,
+		profit: -15000,
+		margin: -3.5,
+		views: 54120,
+		clicks: 2650,
+		cart: 170,
+		cr: 5.8,
+		ctr: 4.3,
+		drr: 1.6
+	},
+	{
+		date: '05.09',
+		orders: 890000,
+		buyouts: 400000,
+		avg_price: 15500.00,
+		profit: -9000,
+		margin: -2.8,
+		views: 65432,
+		clicks: 3080,
+		cart: 195,
+		cr: 6.2,
+		ctr: 4.5,
+		drr: 1.4
+	},
+	{
+		date: '06.09',
+		orders: 920000,
+		buyouts: 420000,
+		avg_price: 16340.25,
+		profit: -7000,
+		margin: -2.3,
+		views: 70123,
+		clicks: 3250,
+		cart: 210,
+		cr: 6.4,
+		ctr: 4.6,
+		drr: 1.3
+	},
+	{
+		date: '07.09',
+		orders: 860000,
+		buyouts: 390000,
+		avg_price: 15210.80,
+		profit: -11000,
+		margin: -3.1,
+		views: 63210,
+		clicks: 2980,
+		cart: 188,
+		cr: 5.9,
+		ctr: 4.3,
+		drr: 1.5
+	}
+]);
 /* 
 // Methods
 const toggleMoreInfo = () => {
@@ -629,89 +737,6 @@ onMounted(async () => {
 	display: flex;
 	align-items: center;
 	gap: 5px;
-}
-
-/* Chart Container */
-.chart-container {
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	padding: 20px;
-	box-shadow: var(--shadow);
-	margin-bottom: 20px;
-}
-
-.chart-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 15px;
-}
-
-.chart-title {
-	font-size: 18px;
-	font-weight: 600;
-}
-
-.chart-controls {
-	display: flex;
-	gap: 10px;
-}
-
-.chart-dropdown {
-	background-color: var(--light-bg);
-	border: 1px solid var(--border-color);
-	color: var(--text-color);
-	padding: 8px 12px;
-	border-radius: 6px;
-	font-size: 14px;
-	cursor: pointer;
-}
-
-.chart-dropdown:focus {
-	outline: none;
-	border-color: var(--secondary-color);
-}
-
-.chart-area {
-	height: 300px;
-	background-color: var(--medium-bg);
-	border-radius: 6px;
-	position: relative;
-	padding: 20px;
-}
-
-.chart-bar-container {
-	width: 100%;
-	height: 100%;
-	display: flex;
-	align-items: flex-end;
-	justify-content: space-around;
-	gap: 8px;
-}
-
-.chart-bar {
-	flex: 1;
-	max-width: 40px;
-	background: linear-gradient(to top, var(--secondary-color), var(--accent-color));
-	border-radius: 4px 4px 0 0;
-	transition: var(--transition);
-	position: relative;
-	cursor: pointer;
-}
-
-.chart-bar:hover {
-	transform: scaleY(1.05);
-	filter: brightness(1.2);
-}
-
-.chart-bar-label {
-	position: absolute;
-	bottom: -25px;
-	left: 50%;
-	transform: translateX(-50%);
-	font-size: 12px;
-	color: #aaa;
-	white-space: nowrap;
 }
 
 /* Product Images */
