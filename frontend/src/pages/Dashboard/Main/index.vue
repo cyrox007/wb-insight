@@ -238,25 +238,6 @@
 				{ key: 'ctr', name: 'CTR', color: '#8bc34a', visible: true, type: 'percent' },
 				{ key: 'drr', name: 'ДРР', color: '#607d8b', visible: true, type: 'percent' }
 			]" />
-			<!-- Product Images -->
-			<!-- <div class="product-images">
-				<div v-for="product in selectedProducts" :key="product.id" class="product-image-card">
-					<div class="product-image-wrapper">
-						<div class="product-image-img">
-							<img :src="product.image" :alt="product.name"
-								style="width: 100%; height: 100%; object-fit: cover;">
-						</div>
-					</div>
-					<div class="product-image-info">
-						<div class="product-image-title">{{ product.name }}</div>
-						<div class="product-image-price">{{ product.price }} ₽</div>
-						<div class="product-image-stats">
-							<span class="badge badge-success">{{ product.sales || 0 }} продаж</span>
-							<span class="badge badge-warning">{{ product.rating || '4.5' }} ★</span>
-						</div>
-					</div>
-				</div>
-			</div> -->
 
 			<!-- ABC Analysis -->
 			<div class="abc-analysis">
@@ -370,7 +351,6 @@
 import { ref, computed, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
-import DashboardDiagram from '@/components/Diagrams/DashboardDiagram.vue';
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
 
 const stats = ref({});
@@ -405,7 +385,7 @@ const abcAnalysis = ref([])
 
 // Chart data
 const chartData = ref([
-	{
+	/* {
 		date: '01.09',
 		orders: 880000,
 		buyouts: 380000,
@@ -502,7 +482,7 @@ const chartData = ref([
 		cr: 5.9,
 		ctr: 4.3,
 		drr: 1.5
-	}
+	} */
 ]);
 /* 
 // Methods
@@ -612,11 +592,11 @@ onMounted(async () => {
 
 		stats.value = result.stats;
 		chartData.value = result.chartData;
-		/* products.value = result.products;
-		sizeChart.value = result.sizeChart;
-		abcAnalysis.value = result.abcAnalysis; */
+		// products.value = result.products;
+		// sizeChart.value = result.sizeChart;
+		// abcAnalysis.value = result.abcAnalysis;
 
-		/* selectedProducts.value = result.products; */
+		// selectedProducts.value = result.products;
 	}
 })
 </script>

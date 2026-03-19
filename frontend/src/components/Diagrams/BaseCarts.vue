@@ -97,28 +97,6 @@ const getBarStyles = (value, color) => {
 		};
 	}
 };
-
-/* const rubMetrics = ref([
-	{ key: 'orders', name: 'Заказы, руб', color: '#ff9800', visible: true, type: 'rub' },
-	{ key: 'buyouts', name: 'Выкупы, руб', color: '#4caf50', visible: true, type: 'rub' },
-	{ key: 'avg_price', name: 'Средняя цена, руб', color: '#2196f3', visible: true, type: 'rub' },
-	{ key: 'profit', name: 'Прибыль, руб', color: '#f44336', visible: true, type: 'rub' },
-]);
-
-const numberMetrics = ref([
-	{ key: 'views', name: 'Просмотры', color: '#ffeb3b', visible: true, type: 'number' },
-	{ key: 'clicks', name: 'Клики', color: '#ff9800', visible: true, type: 'number' },
-	{ key: 'cart', name: 'В корзину', color: '#3f51b5', visible: true, type: 'number' },
-]);
-
-const percentMetrics = ref([
-	{ key: 'margin', name: 'Маржинальность', color: '#9c27b0', visible: true, type: 'percent' },
-	{ key: 'cr', name: 'CR', color: '#00bcd4', visible: true, type: 'percent' },
-	{ key: 'ctr', name: 'CTR', color: '#8bc34a', visible: true, type: 'percent' },
-	{ key: 'drr', name: 'ДРР', color: '#607d8b', visible: true, type: 'percent' }
-]); */
-
-
 </script>
 <template>
 	<div class="chart-container">
@@ -184,7 +162,7 @@ const percentMetrics = ref([
 	</div>
 </template>
 
-<style>
+<style scoped>
 /* Основные стили */
 .chart-container {
 	background-color: var(--card-bg);
