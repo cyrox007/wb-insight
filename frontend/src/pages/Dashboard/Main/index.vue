@@ -103,11 +103,14 @@
 		<div class="main-dashboard-content">
 			<!-- Dashboard Header -->
 			<div class="dashboard-header">
-				<h1 class="dashboard-title">Общие показатели по кабинету</h1>
-				<div class="btn-group">
-					<button class="btn btn-primary" @click="toggleMoreInfo">
-						<i class="fa fa-info-circle"></i> Больше информации
-					</button>
+				<div class="search-container">
+					<input type="text" class="search-input" placeholder="Выберите артикул..." v-model="searchQuery">
+				</div>
+				<div class="date-range">
+					<span>Дата от</span>
+					<input type="text" class="date-input" placeholder="1 октября" v-model="startDate">
+					<span>до</span>
+					<input type="text" class="date-input" placeholder="19 октября" v-model="endDate">
 				</div>
 			</div>
 
@@ -244,78 +247,6 @@
 			<!-- ABC Analysis -->
 			<AbcAnalysis :items="abcAnalysis" :isLoading="isLoading" :hasData="abcAnalysis.length > 0"
 				@view="openProductModal" @edit="editProduct" @delete="confirmDelete" />
-			<!-- <div class="abc-analysis">
-				<div class="abc-header">
-					<h2 class="abc-title">ABC Анализ</h2>
-					<div class="abc-stats">
-						<div class="abc-stat">
-							<div class="abc-stat-label">Категория A</div>
-							<div class="abc-stat-value">82%</div>
-							<div class="abc-stat-subtitle">75% выручки</div>
-						</div>
-						<div class="abc-stat">
-							<div class="abc-stat-label">Категория B</div>
-							<div class="abc-stat-value">15%</div>
-							<div class="abc-stat-subtitle">90% выручки</div>
-						</div>
-						<div class="abc-stat">
-							<div class="abc-stat-label">Категория C</div>
-							<div class="abc-stat-value">3%</div>
-							<div class="abc-stat-subtitle">100% выручки</div>
-						</div>
-					</div>
-				</div>
-				<div class="abc-table-container">
-					<table class="abc-table">
-						<thead>
-							<tr>
-								<th>Артикул продавца</th>
-								<th>Артикул WB</th>
-								<th>Выручка</th>
-								<th>Прибыль</th>
-								<th>Доля</th>
-								<th>Совокупный %</th>
-								<th>Категория</th>
-								<th>Действия</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="item in abcAnalysis" :key="item.id">
-								<td>
-									<div class="product-identifier">
-										<div class="avatar">{{ item.sellerSku.substring(0, 1) }}</div>
-										{{ item.sellerSku }}
-									</div>
-								</td>
-								<td>{{ item.wbSku }}</td>
-								<td class="currency">{{ item.revenue }} ₽</td>
-								<td class="currency">{{ item.profit }} ₽</td>
-								<td>{{ item.share }}</td>
-								<td>{{ item.cumulativePercent }}</td>
-								<td>
-									<span :class="'abc-category abc-category-' + item.category.toLowerCase()">{{
-										item.category }}</span>
-								</td>
-								<td>
-									<div class="table-actions">
-										<button class="table-action view" @click="viewProduct(item)" title="Просмотр">
-											<i class="fas fa-eye"></i>
-										</button>
-										<button class="table-action edit" @click="editProduct(item)"
-											title="Редактировать">
-											<i class="fas fa-edit"></i>
-										</button>
-										<button class="table-action delete" @click="deleteProduct(item)"
-											title="Удалить">
-											<i class="fas fa-trash"></i>
-										</button>
-									</div>
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			</div> -->
 
 			<!-- Additional Info (может быть скрыто/показано) -->
 			<div class="additional-info" v-if="showMoreInfo">
@@ -365,6 +296,11 @@ const stats = ref({}); // основные показатели по кабин�
 const chartData = ref([]); // основные данные для диаграмм
 const baseStats = ref({}); // основные показатели по кабинету
 const abcAnalysis = ref([]); // ABC Analysis data
+
+// Навигация и поиск
+const searchQuery = ref('')
+const startDate = ref('1 октября')
+const endDate = ref('19 октября')
 
 // Реактивные данные
 const showMoreInfo = ref(false)
@@ -541,10 +477,47 @@ onMounted(async () => {
 	box-shadow: var(--shadow);
 }
 
-.dashboard-title {
-	font-size: 24px;
-	font-weight: 600;
+/* Search Bar */
+.search-container {
+	display: flex;
+	align-items: center;
+	background-color: var(--light-bg);
+	border-radius: 6px;
+	padding: 8px 12px;
+	width: 250px;
+}
+
+.search-input {
+	flex: 1;
+	background: transparent;
+	border: none;
 	color: var(--text-color);
+	padding: 4px 8px;
+	font-size: 14px;
+}
+
+.search-input:focus {
+	outline: none;
+}
+
+.date-range {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 14px;
+}
+
+.date-input {
+	background-color: var(--light-bg);
+	border: none;
+	color: var(--text-color);
+	padding: 6px 10px;
+	border-radius: 4px;
+	font-size: 14px;
+}
+
+.date-input:focus {
+	outline: none;
 }
 
 /* Stats Grid */
@@ -629,162 +602,6 @@ onMounted(async () => {
 	display: flex;
 	align-items: center;
 	gap: 5px;
-}
-
-/* ABC Analysis */
-.abc-analysis {
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	padding: 20px;
-	box-shadow: var(--shadow);
-	margin-bottom: 20px;
-}
-
-.abc-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 20px;
-	flex-wrap: wrap;
-	gap: 15px;
-}
-
-.abc-title {
-	font-size: 24px;
-	font-weight: 600;
-	color: var(--accent-color);
-	letter-spacing: 1px;
-}
-
-.abc-stats {
-	display: flex;
-	gap: 15px;
-	flex-wrap: wrap;
-}
-
-.abc-stat {
-	background-color: var(--medium-bg);
-	padding: 15px 20px;
-	border-radius: 6px;
-	text-align: center;
-	min-width: 120px;
-}
-
-.abc-stat-label {
-	font-size: 14px;
-	color: #aaa;
-	margin-bottom: 5px;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-}
-
-.abc-stat-value {
-	font-size: 24px;
-	font-weight: 600;
-	margin-bottom: 5px;
-}
-
-.abc-stat-subtitle {
-	font-size: 12px;
-	color: #777;
-}
-
-.abc-table-container {
-	overflow-x: auto;
-	margin-top: 20px;
-	border-radius: 6px;
-	border: 1px solid var(--border-color);
-}
-
-.abc-table {
-	width: 100%;
-	border-collapse: collapse;
-	min-width: 800px;
-}
-
-.abc-table th,
-.abc-table td {
-	padding: 12px 15px;
-	text-align: left;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.abc-table th {
-	background-color: var(--light-bg);
-	font-weight: 600;
-	font-size: 14px;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	color: #aaa;
-}
-
-.abc-table tr:hover {
-	background-color: var(--hover-bg);
-}
-
-.abc-table td.currency {
-	font-family: 'Courier New', monospace;
-	font-weight: 600;
-}
-
-.abc-category {
-	font-weight: bold;
-	padding: 4px 8px;
-	border-radius: 4px;
-	display: inline-block;
-	font-size: 12px;
-	letter-spacing: 0.5px;
-}
-
-.abc-category-a {
-	background-color: var(--success-color);
-	color: white;
-}
-
-.abc-category-b {
-	background-color: var(--warning-color);
-	color: white;
-}
-
-.abc-category-c {
-	background-color: var(--info-color);
-	color: white;
-}
-
-.table-actions {
-	display: flex;
-	gap: 5px;
-}
-
-.table-action {
-	width: 30px;
-	height: 30px;
-	border: none;
-	border-radius: 4px;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	transition: var(--transition);
-}
-
-.table-action.view {
-	background-color: var(--secondary-color);
-	color: white;
-}
-
-.table-action.edit {
-	background-color: var(--info-color);
-	color: white;
-}
-
-.table-action.delete {
-	background-color: var(--accent-color);
-	color: white;
-}
-
-.table-action:hover {
-	transform: scale(1.1);
 }
 
 /* Additional Info */

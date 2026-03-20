@@ -15,8 +15,6 @@ const router = useRouter();
 // Авторизация
 const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
-const showSearch = computed(() => isAuthenticated.value ? true : false)
-const showDateRange = computed(() => isAuthenticated.value ? true : false)
 
 // Уведомления
 const showNotifications = ref(false)
@@ -25,23 +23,10 @@ const showNotifications = ref(false)
 const showLogin = ref(false)
 const showRegister = ref(false)
 
-// Навигация
-const searchQuery = ref('')
-const startDate = ref('1 октября')
-const endDate = ref('19 октября')
-
 // Методы
 const toggleNotifications = () => {
 	showNotifications.value = !showNotifications.value
 }
-
-/* const performRegister = () => {
-	// Логика регистрации
-	console.log('Register attempt:', registerEmail.value)
-	isAuthenticated.value = true
-	userName.value = registerName.value
-	showRegister.value = false
-} */
 
 const logout = () => {
 	localStorage.clear();
@@ -59,15 +44,6 @@ onMounted(() => {
 	<header class="header" v-if="showHeader">
 		<div class="header-left">
 			<div class="logo">wild<span>berries</span></div>
-			<div class="search-container" v-show="showSearch">
-				<input type="text" class="search-input" placeholder="Выберите артикул..." v-model="searchQuery">
-			</div>
-			<div class="date-range" v-show="showDateRange">
-				<span>Дата от</span>
-				<input type="text" class="date-input" placeholder="1 октября" v-model="startDate">
-				<span>до</span>
-				<input type="text" class="date-input" placeholder="19 октября" v-model="endDate">
-			</div>
 		</div>
 		<div class="header-right">
 			<!-- Блок пользователя/авторизации -->
@@ -142,48 +118,6 @@ onMounted(() => {
 
 .logo span {
 	color: #ff6b6b;
-}
-
-.search-container {
-	display: flex;
-	align-items: center;
-	background-color: var(--light-bg);
-	border-radius: 6px;
-	padding: 8px 12px;
-	width: 250px;
-}
-
-.search-input {
-	flex: 1;
-	background: transparent;
-	border: none;
-	color: var(--text-color);
-	padding: 4px 8px;
-	font-size: 14px;
-}
-
-.search-input:focus {
-	outline: none;
-}
-
-.date-range {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	font-size: 14px;
-}
-
-.date-input {
-	background-color: var(--light-bg);
-	border: none;
-	color: var(--text-color);
-	padding: 6px 10px;
-	border-radius: 4px;
-	font-size: 14px;
-}
-
-.date-input:focus {
-	outline: none;
 }
 
 .header-right {
