@@ -25,7 +25,7 @@ async def dashboard(
     end_date = end_date if end_date is not None else datetime.now(timezone.utc).date()
     start_date = start_date if start_date is not None else end_date - timedelta(days=30)
 
-    print(request.state.user)
+    # print(request.state.user)
     current_user = request.state.user
 
     report_count = await check_wb_report_stats(
@@ -92,6 +92,7 @@ async def dashboard(
     # В будущем: прибыль = к выплате - себестоимость
     profit = payout  # временно, пока нет себестоимости
 
+    # Статистика (пример)
     stats = {
         "ordered_amount": {
             "value": round(ordered_amount, 2),
@@ -133,7 +134,107 @@ async def dashboard(
             "change_percent": 0.0,
             "change_abs": 0.0
         }
-   }
+    }
+    
+    # данные для графика (пример)
+    chartData = [{
+		'date': '01.09',
+		'orders': 880000,
+		'buyouts': 380000,
+		'avg_price': 15921.64,
+		'profit': -10000,
+		'margin': -2.7,
+		'views': 67934,
+		'clicks': 3120,
+		'cart': 200,
+		'cr': 6.5,
+		'ctr': 4.6,
+		'drr': 1.4
+	},
+	{
+		'date': '02.09',
+		'orders': 950000,
+		'buyouts': 410000,
+		'avg_price': 16250.00,
+		'profit': -8000,
+		'margin': -2.5,
+		'views': 72345,
+		'clicks': 3345,
+		'cart': 215,
+		'cr': 6.3,
+		'ctr': 4.5,
+		'drr': 1.3
+	},
+	{
+		'date': '03.09',
+		'orders': 820000,
+		'buyouts': 350000,
+		'avg_price': 14890.50,
+		'profit': -12000,
+		'margin': -3.0,
+		'views': 58923,
+		'clicks': 2890,
+		'cart': 185,
+		'cr': 6.0,
+		'ctr': 4.4,
+		'drr': 1.5
+	},
+	{
+		'date': '04.09',
+		'orders': 780000,
+		'buyouts': 320000,
+		'avg_price': 14320.75,
+		'profit': -15000,
+		'margin': -3.5,
+		'views': 54120,
+		'clicks': 2650,
+		'cart': 170,
+		'cr': 5.8,
+		'ctr': 4.3,
+		'drr': 1.6
+	},
+	{
+		'date': '05.09',
+		'orders': 890000,
+		'buyouts': 400000,
+		'avg_price': 15500.00,
+		'profit': -9000,
+		'margin': -2.8,
+		'views': 65432,
+		'clicks': 3080,
+		'cart': 195,
+		'cr': 6.2,
+		'ctr': 4.5,
+		'drr': 1.4
+	},
+	{
+		'date': '06.09',
+		'orders': 920000,
+		'buyouts': 420000,
+		'avg_price': 16340.25,
+		'profit': -7000,
+		'margin': -2.3,
+		'views': 70123,
+		'clicks': 3250,
+		'cart': 210,
+		'cr': 6.4,
+		'ctr': 4.6,
+		'drr': 1.3
+	},
+	{
+		'date': '07.09',
+		'orders': 860000,
+		'buyouts': 390000,
+		'avg_price': 15210.80,
+		'profit': -11000,
+		'margin': -3.1,
+		'views': 63210,
+		'clicks': 2980,
+		'cart': 188,
+		'cr': 5.9,
+		'ctr': 4.3,
+		'drr': 1.5
+	}]
 
     products = [
         { 'id': 1, 'name': 'Электросталь', 'sales': 2722, 'profit': 1500 },
@@ -223,33 +324,12 @@ async def dashboard(
 	    { 'id': 10, 'sellerSku': 'ПальтоХалатДрап-С', 'wbSku': '170206280', 'revenue': '114 379,2', 'profit': '58 267,9', 'share': '3,8%', 'cumulativePercent': '82,3%', 'category': 'B' }
     ]
 
-    chartData = [
-        { 'label': '01.10', 'value': 80 },
-        { 'label': '02.10', 'value': 90 },
-        { 'label': '03.10', 'value': 70 },
-        { 'label': '04.10', 'value': 75 },
-        { 'label': '05.10', 'value': 65 },
-        { 'label': '06.10', 'value': 70 },
-        { 'label': '07.10', 'value': 75 },
-        { 'label': '08.10', 'value': 85 },
-        { 'label': '09.10', 'value': 80 },
-        { 'label': '10.10', 'value': 60 },
-        { 'label': '11.10', 'value': 70 },
-        { 'label': '12.10', 'value': 90 },
-        { 'label': '13.10', 'value': 65 },
-        { 'label': '14.10', 'value': 70 },
-        { 'label': '15.10', 'value': 95 },
-        { 'label': '16.10', 'value': 80 },
-        { 'label': '17.10', 'value': 60 },
-        { 'label': '18.10', 'value': 75 },
-        { 'label': '19.10', 'value': 80 }
-    ]
     return response_success(
         is_synced=False,
         stats=stats,
+        chartData=chartData,
         products=products,
         sizeChart=sizeChart,
         selectedProducts=selectedProducts,
         abcAnalysis=abcAnalysis,
-        chartData=chartData
     )
