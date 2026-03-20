@@ -354,8 +354,6 @@ async def dashboard(
         is_synced=False,
         stats=stats,
         chartData=chartData,
-        products=products,
-        sizeChart=sizeChart,
-        selectedProducts=selectedProducts,
-        abcAnalysis=abcAnalysis,
+        baseStats=base_stats,
+        
     )

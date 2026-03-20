@@ -349,7 +349,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
@@ -357,134 +357,10 @@ import BaseStats from '@/components/BaseStats.vue';
 
 const isLoading = ref(false);
 
-const stats = ref({});
-
-// Chart data
-const chartData = ref([
-	/* {
-		date: '01.09',
-		orders: 880000,
-		buyouts: 380000,
-		avg_price: 15921.64,
-		profit: -10000,
-		margin: -2.7,
-		views: 67934,
-		clicks: 3120,
-		cart: 200,
-		cr: 6.5,
-		ctr: 4.6,
-		drr: 1.4
-	},
-	{
-		date: '02.09',
-		orders: 950000,
-		buyouts: 410000,
-		avg_price: 16250.00,
-		profit: -8000,
-		margin: -2.5,
-		views: 72345,
-		clicks: 3345,
-		cart: 215,
-		cr: 6.3,
-		ctr: 4.5,
-		drr: 1.3
-	},
-	{
-		date: '03.09',
-		orders: 820000,
-		buyouts: 350000,
-		avg_price: 14890.50,
-		profit: -12000,
-		margin: -3.0,
-		views: 58923,
-		clicks: 2890,
-		cart: 185,
-		cr: 6.0,
-		ctr: 4.4,
-		drr: 1.5
-	},
-	{
-		date: '04.09',
-		orders: 780000,
-		buyouts: 320000,
-		avg_price: 14320.75,
-		profit: -15000,
-		margin: -3.5,
-		views: 54120,
-		clicks: 2650,
-		cart: 170,
-		cr: 5.8,
-		ctr: 4.3,
-		drr: 1.6
-	},
-	{
-		date: '05.09',
-		orders: 890000,
-		buyouts: 400000,
-		avg_price: 15500.00,
-		profit: -9000,
-		margin: -2.8,
-		views: 65432,
-		clicks: 3080,
-		cart: 195,
-		cr: 6.2,
-		ctr: 4.5,
-		drr: 1.4
-	},
-	{
-		date: '06.09',
-		orders: 920000,
-		buyouts: 420000,
-		avg_price: 16340.25,
-		profit: -7000,
-		margin: -2.3,
-		views: 70123,
-		clicks: 3250,
-		cart: 210,
-		cr: 6.4,
-		ctr: 4.6,
-		drr: 1.3
-	},
-	{
-		date: '07.09',
-		orders: 860000,
-		buyouts: 390000,
-		avg_price: 15210.80,
-		profit: -11000,
-		margin: -3.1,
-		views: 63210,
-		clicks: 2980,
-		cart: 188,
-		cr: 5.9,
-		ctr: 4.3,
-		drr: 1.5
-	} */
-]);
-
-const baseStats = ref({
-	/* // Первая группа
-	adViews: 1843682,           // Просмотры Рекламы
-	clicks: 78014,              // Клики
-	clicksPercentage: 4.2,      // % кликов от просмотров
-	addToCart: 6378,            // Добавлено в корзину
-	addToCartPercentage: 8.2,   // % добавлений от кликов
-
-	// Вторая группа
-	orderedTotalCount: 3105,    // Заказано всего (количество)
-	orderedTotalAmount: 36589404.10, // Заказано всего (сумма)
-	boughtTotalCount: 2852,     // Выкуплено всего (количество)
-	boughtTotalAmount: 14255887.40,  // Выкуплено всего (сумма)
-	buyoutPercent: 1.08,        // Процент выкупа
-
-	// Третья группа
-	avgOrderValue: 4999.63,     // Средняя стоимость заказа
-	marginality: 16.6,          // Маржинальность (%)
-	expenseRatio: 83.4,         // Доля расходов от продаж (%)
-	profit: 2335140.60,         // Прибыль
-	revenue: 36589404.10,       // Выручка
-	logistics: 3345000.00,      // Логистика
-	storage: 55000.00           // Хранение */
-});
+const stats = ref({}); // основные показатели по кабинету
+const chartData = ref([]); // основные данные для диаграмм
+const baseStats = ref({}); // основные показатели по кабинету
+const abcAnalysis = ref([]); // ABC Analysis data
 
 // Реактивные данные
 const showMoreInfo = ref(false)
@@ -510,9 +386,6 @@ const products = ref([])
 
 // Selected products for display
 const selectedProducts = ref([])
-
-// ABC Analysis data
-const abcAnalysis = ref([])
 
 /* 
 // Methods
@@ -625,6 +498,7 @@ onMounted(async () => {
 
 		stats.value = result.stats;
 		chartData.value = result.chartData;
+		baseStats.value = result.baseStats;
 		// products.value = result.products;
 		// sizeChart.value = result.sizeChart;
 		// abcAnalysis.value = result.abcAnalysis;
