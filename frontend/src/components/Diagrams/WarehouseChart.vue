@@ -73,12 +73,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 
 const props = defineProps({
 	data: {
 		type: Array,
 		default: () => []
+	},
+	isLoading: {
+		type: Boolean,
+		default: false
 	}
 })
 

@@ -2,104 +2,7 @@
 	<div class="dashboard-container">
 		<!-- Сайдбар -->
 		<aside class="dashboard-sidebar">
-			<WarehouseChart :data="warehouseData" />
-
-			<!-- Key Indicators -->
-			<!-- <div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fa fa-line-chart" aria-hidden="true"></i> Ключевые показатели</h3>
-				<ul class="product-list">
-					<li v-for="product in products" :key="product.id" class="product-item"
-						:class="{ 'active': selectedProductId === product.id }" @click="selectProduct(product)">
-						<div class="product-image">{{ product.name.substring(0, 2) }}</div>
-						<div class="product-info">
-							<div class="product-name">{{ product.name }}</div>
-							<div class="product-stats">
-								<span class="stat-badge sales">{{ product.sales }} продаж</span>
-								<span class="stat-badge profit">{{ product.profit }} прибыль</span>
-							</div>
-						</div>
-					</li>
-				</ul>
-			</div> -->
-
-			<!-- Size Chart -->
-			<!-- <div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fa fa-ruler"></i> Размерная сетка</h3>
-				<div class="size-chart-container">
-					<table class="size-table">
-						<thead>
-							<tr>
-								<th>Размер</th>
-								<th>Кол-во</th>
-								<th>В пути</th>
-								<th>Доступно</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="size in sizeChart" :key="size.size">
-								<td><span class="size-badge">{{ size.size }}</span></td>
-								<td>{{ size.quantity }}</td>
-								<td><span class="transit-badge">{{ size.inTransit }}</span></td>
-								<td><span class="available-badge">{{ size.quantity - size.inTransit }}</span></td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			</div> -->
-
-			<!-- Filters -->
-			<!-- <div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fa fa-filter"></i> Фильтры</h3>
-				<div class="filter-group">
-					<div v-for="filter in filters" :key="filter.key" class="filter-item"
-						@click="toggleFilter(filter.key)">
-						<div class="filter-checkbox" :class="{ checked: filter.checked }"></div>
-						<span class="filter-label">{{ filter.label }}</span>
-						<span class="filter-count" v-if="filter.count">({{ filter.count }})</span>
-					</div>
-				</div>
-
-				
-				<div class="date-filter">
-					<h4 class="filter-subtitle">Период</h4>
-					<div class="date-inputs">
-						<div class="date-input-group">
-							<label>С</label>
-							<input type="date" v-model="filterStartDate" class="date-picker">
-						</div>
-						<div class="date-input-group">
-							<label>По</label>
-							<input type="date" v-model="filterEndDate" class="date-picker">
-						</div>
-					</div>
-					<button class="btn btn-sm btn-outline apply-filter-btn" @click="applyDateFilter">
-						Применить
-					</button>
-				</div>
-			</div> -->
-
-			<!-- Quick Actions -->
-			<!-- <div class="sidebar-section">
-				<h3 class="sidebar-title"><i class="fa fa-bolt"></i> Быстрые действия</h3>
-				<div class="quick-actions">
-					<button class="quick-action-btn" @click="exportData">
-						<i class="fa fa-file-export"></i>
-						<span>Экспорт данных</span>
-					</button>
-					<button class="quick-action-btn" @click="generateReport">
-						<i class="fa fa-chart-bar"></i>
-						<span>Создать отчет</span>
-					</button>
-					<button class="quick-action-btn" @click="addProduct">
-						<i class="fa fa-plus"></i>
-						<span>Добавить товар</span>
-					</button>
-					<button class="quick-action-btn" @click="refreshData">
-						<i class="fa fa-sync-alt"></i>
-						<span>Обновить данные</span>
-					</button>
-				</div>
-			</div> -->
+			<WarehouseChart :data="warehouseData" :is-loading="isLoading" />
 		</aside>
 		<!-- Основное содержимое дашборда -->
 		<div class="main-dashboard-content">
@@ -280,7 +183,9 @@
 			</div>
 		</div>
 
+		<aside class="dashboard-sidebar">
 
+		</aside>
 	</div>
 </template>
 
