@@ -262,6 +262,36 @@ async def dashboard(
         'storage': 55000.00           # Хранение
     }
 
+    warehouseData = [
+        { 'name': 'Тула', sum: 771, 'stock': 2722, 'goodsAmount': 0 },
+        { 'name': 'Электросталь', sum: 771, 'stock': 2431, 'goodsAmount': 0 },
+        { 'name': 'Коледино', sum: 885, 'stock': 1323, 'goodsAmount': 0 },
+        { 'name': 'Краснодар', sum: 576, 'stock': 1239, 'goodsAmount': 0 },
+        { 'name': 'Казань', sum: 309, 'stock': 838, 'goodsAmount': 0 },
+        { 'name': 'Рязань (Тюшевское)', sum: 122, 'stock': 746, 'goodsAmount': 0 },
+        { 'name': 'Невинномысск', sum: 227, 'stock': 550, 'goodsAmount': 0 },
+        { 'name': 'Екатеринбург - Испытателей 14г', sum: 174, 'stock': 473, 'goodsAmount': 0 },
+        { 'name': 'Самара (Новосемейкино)', sum: 268, 'stock': 460, 'goodsAmount': 0 },
+        { 'name': 'Санкт-Петербург Уткина Заводь', sum: 66, 'stock': 388, 'goodsAmount': 0 },
+        { 'name': 'Новосибирск', sum: 136, 'stock': 259, 'goodsAmount': 0 },
+        { 'name': 'Котовск', sum: 58, 'stock': 157, 'goodsAmount': 0 },
+        { 'name': 'Владимир', sum: 75, 'stock': 124, 'goodsAmount': 0 },
+        { 'name': 'Волгоград', sum: 69, 'stock': 122, 'goodsAmount': 0 },
+        { 'name': 'Воронеж', sum: 32, 'stock': 105, 'goodsAmount': 0 },
+        { 'name': 'Сарапул', sum: 115, 'stock': 74, 'goodsAmount': 0 },
+        { 'name': 'Екатеринбург - Перспективный 12', sum: 233, 'stock': 52, 'goodsAmount': 0 },
+        { 'name': 'Астана Карагандинское шоссе', sum: 19, 'stock': 15, 'goodsAmount': 0 },
+        { 'name': 'Белая дача', sum: 11, 'stock': 15, 'goodsAmount': 0 },
+        { 'name': 'Актобе', sum: 2, 'stock': 13, 'goodsAmount': 0 },
+        { 'name': 'Атакент', sum: 10, 'stock': 8, 'goodsAmount': 0 },
+        { 'name': 'Калининград', sum: 7, 'stock': 7, 'goodsAmount': 0 },
+        { 'name': 'СЦ Ереван', sum: 6, 'stock': 5, 'goodsAmount': 0 },
+        { 'name': 'Чашниково', sum: 2, 'stock': 3, 'goodsAmount': 0 },
+        { 'name': 'Обухово', sum: 2, 'stock': 1, 'goodsAmount': 0 },
+        { 'name': 'СЦ Барнаул', sum: 10, 'stock': 1, 'goodsAmount': 0 },
+    ]
+
+    # пример данных для таблицы ABC анализа
     abcAnalysis = [
         {
             "id": 12345,              # Уникальный ID для key в v-for
@@ -272,7 +302,17 @@ async def dashboard(
             "share": 12.5,            # Доля в выручке (число, %)
             "cumulativePercent": 45.2,# Совокупный процент (число, %)
             "category": "A"           # Категория (строка: "A", "B" или "C")
-        }
+        },
+        { 'id': 1, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '182440753', 'revenue': 624572.9, 'profit': 348148.4, 'share': 22.8, 'cumulativePercent': 22.8, 'category': 'A' },
+	    { 'id': 2, 'sellerSku': 'РубашкаШелк-01-зп', 'wbSku': '152048084', 'revenue': 324707.9, 'profit': 172073.6, 'share': 11.3, 'cumulativePercent': 34.1, 'category': 'A' },
+	    { 'id': 3, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '219169078', 'revenue': 208559.2, 'profit': 143802.8, 'share': 9.4, 'cumulativePercent': 43.6, 'category': 'A' },
+	    { 'id': 4, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '190442797', 'revenue': 189835.0, 'profit': 111008.8, 'share': 7.3, 'cumulativePercent': 50.9, 'category': 'A' },
+	    { 'id': 5, 'sellerSku': 'ВолнистаяБлузка-0', 'wbSku': '388639444', 'revenue': 177276.6, 'profit': 99807.4, 'share': 6.5, 'cumulativePercent': 57.4, 'category': 'A' },
+	    { 'id': 6, 'sellerSku': 'ПлатьеОдноПлехо-1', 'wbSku': '391354791', 'revenue': 214603.6, 'profit': 91153.8, 'share': 6.0, 'cumulativePercent': 63.4, 'category': 'A' },
+	    { 'id': 7, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '334837164', 'revenue': 120756.0, 'profit': 84180.7, 'share': 5.5, 'cumulativePercent': 68.9, 'category': 'A' },
+	    { 'id': 8, 'sellerSku': 'РубашкаШелк-01-ч', 'wbSku': '144826387', 'revenue': 138890.4, 'profit': 80063.8, 'share': 5.3, 'cumulativePercent': 74.2, 'category': 'A' },
+	    { 'id': 9, 'sellerSku': 'БлузкаПланка-01-б', 'wbSku': '104098349', 'revenue': 100457.5, 'profit': 66591.8, 'share': 4.4, 'cumulativePercent': 78.5, 'category': 'B' },
+	    { 'id': 10, 'sellerSku': 'ПальтоХалатДрап-С', 'wbSku': '170206280', 'revenue': 114379.2, 'profit': 58267.9, 'share': 3.8, 'cumulativePercent': 82.3, 'category': 'B' }
     ]
 
     products = [
@@ -348,19 +388,6 @@ async def dashboard(
             'sales': 85,
             'rating': 4.3
         }
-    ]
-
-    abcAnalysis = [
-        { 'id': 1, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '182440753', 'revenue': '624 572,9', 'profit': '348 148,4', 'share': '22,8%', 'cumulativePercent': '22,8%', 'category': 'A' },
-	    { 'id': 2, 'sellerSku': 'РубашкаШелк-01-зп', 'wbSku': '152048084', 'revenue': '324 707,9', 'profit': '172 073,6', 'share': '11,3%', 'cumulativePercent': '34,1%', 'category': 'A' },
-	    { 'id': 3, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '219169078', 'revenue': '208 559,2', 'profit': '143 802,8', 'share': '9,4%', 'cumulativePercent': '43,6%', 'category': 'A' },
-	    { 'id': 4, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '190442797', 'revenue': '189 835,0', 'profit': '111 008,8', 'share': '7,3%', 'cumulativePercent': '50,9%', 'category': 'A' },
-	    { 'id': 5, 'sellerSku': 'ВолнистаяБлузка-0', 'wbSku': '388639444', 'revenue': '177 276,6', 'profit': '99 807,4', 'share': '6,5%', 'cumulativePercent': '57,4%', 'category': 'A' },
-	    { 'id': 6, 'sellerSku': 'ПлатьеОдноПлехо-1', 'wbSku': '391354791', 'revenue': '214 603,6', 'profit': '91 153,8', 'share': '6,0%', 'cumulativePercent': '63,4%', 'category': 'A' },
-	    { 'id': 7, 'sellerSku': 'АтласРубашкаНова', 'wbSku': '334837164', 'revenue': '120 756,0', 'profit': '84 180,7', 'share': '5,5%', 'cumulativePercent': '68,9%', 'category': 'A' },
-	    { 'id': 8, 'sellerSku': 'РубашкаШелк-01-ч', 'wbSku': '144826387', 'revenue': '138 890,4', 'profit': '80 063,8', 'share': '5,3%', 'cumulativePercent': '74,2%', 'category': 'A' },
-	    { 'id': 9, 'sellerSku': 'БлузкаПланка-01-б', 'wbSku': '104098349', 'revenue': '100 457,5', 'profit': '66 591,8', 'share': '4,4%', 'cumulativePercent': '78,5%', 'category': 'B' },
-	    { 'id': 10, 'sellerSku': 'ПальтоХалатДрап-С', 'wbSku': '170206280', 'revenue': '114 379,2', 'profit': '58 267,9', 'share': '3,8%', 'cumulativePercent': '82,3%', 'category': 'B' }
     ]
 
     return response_success(
