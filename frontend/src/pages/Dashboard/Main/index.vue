@@ -220,7 +220,6 @@
 			</div>
 
 			<!-- Chart Container -->
-			<!-- <DashboardDiagram :chart-data="chartData" /> -->
 			<BaseCarts :is-loading="isLoading" :chart-data="chartData" :metrics="[
 				{ key: 'orders', name: 'Заказы, руб', color: '#ff9800', visible: true, type: 'rub' },
 				{ key: 'buyouts', name: 'Выкупы, руб', color: '#4caf50', visible: true, type: 'rub' },
@@ -239,9 +238,13 @@
 				{ key: 'drr', name: 'ДРР', color: '#607d8b', visible: true, type: 'percent' }
 			]" />
 
+			<!-- Основные показатели по кабинету -->
 			<BaseStats :is-loading="isLoading" :stats="baseStats" />
+
 			<!-- ABC Analysis -->
-			<div class="abc-analysis">
+			<AbcAnalysis :items="abcAnalysis" :isLoading="isLoading" :hasData="abcAnalysis.length > 0"
+				@view="openProductModal" @edit="editProduct" @delete="confirmDelete" />
+			<!-- <div class="abc-analysis">
 				<div class="abc-header">
 					<h2 class="abc-title">ABC Анализ</h2>
 					<div class="abc-stats">
@@ -312,7 +315,7 @@
 						</tbody>
 					</table>
 				</div>
-			</div>
+			</div> -->
 
 			<!-- Additional Info (может быть скрыто/показано) -->
 			<div class="additional-info" v-if="showMoreInfo">
@@ -354,6 +357,7 @@ import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
 import BaseStats from '@/components/BaseStats.vue';
+import AbcAnalysis from '@/components/AbcAnalysis.vue';
 
 const isLoading = ref(false);
 
