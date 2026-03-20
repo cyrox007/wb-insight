@@ -239,30 +239,7 @@
 				{ key: 'drr', name: 'ДРР', color: '#607d8b', visible: true, type: 'percent' }
 			]" />
 
-			<BaseStats :is-loading="isLoading" :stats="{
-				// Первая группа
-				adViews: 1843682,           // Просмотры Рекламы
-				clicks: 78014,              // Клики
-				clicksPercentage: 4.2,      // % кликов от просмотров
-				addToCart: 6378,            // Добавлено в корзину
-				addToCartPercentage: 8.2,   // % добавлений от кликов
-
-				// Вторая группа
-				orderedTotalCount: 3105,    // Заказано всего (количество)
-				orderedTotalAmount: 36589404.10, // Заказано всего (сумма)
-				boughtTotalCount: 2852,     // Выкуплено всего (количество)
-				boughtTotalAmount: 14255887.40,  // Выкуплено всего (сумма)
-				buyoutPercent: 1.08,        // Процент выкупа
-
-				// Третья группа
-				avgOrderValue: 4999.63,     // Средняя стоимость заказа
-				marginality: 16.6,          // Маржинальность (%)
-				expenseRatio: 83.4,         // Доля расходов от продаж (%)
-				profit: 2335140.60,         // Прибыль
-				revenue: 36589404.10,       // Выручка
-				logistics: 3345000.00,      // Логистика
-				storage: 55000.00           // Хранение
-			}" />
+			<BaseStats :is-loading="isLoading" :stats="baseStats" />
 			<!-- ABC Analysis -->
 			<div class="abc-analysis">
 				<div class="abc-header">
@@ -483,6 +460,31 @@ const chartData = ref([
 		drr: 1.5
 	} */
 ]);
+
+const baseStats = ref({
+	/* // Первая группа
+	adViews: 1843682,           // Просмотры Рекламы
+	clicks: 78014,              // Клики
+	clicksPercentage: 4.2,      // % кликов от просмотров
+	addToCart: 6378,            // Добавлено в корзину
+	addToCartPercentage: 8.2,   // % добавлений от кликов
+
+	// Вторая группа
+	orderedTotalCount: 3105,    // Заказано всего (количество)
+	orderedTotalAmount: 36589404.10, // Заказано всего (сумма)
+	boughtTotalCount: 2852,     // Выкуплено всего (количество)
+	boughtTotalAmount: 14255887.40,  // Выкуплено всего (сумма)
+	buyoutPercent: 1.08,        // Процент выкупа
+
+	// Третья группа
+	avgOrderValue: 4999.63,     // Средняя стоимость заказа
+	marginality: 16.6,          // Маржинальность (%)
+	expenseRatio: 83.4,         // Доля расходов от продаж (%)
+	profit: 2335140.60,         // Прибыль
+	revenue: 36589404.10,       // Выручка
+	logistics: 3345000.00,      // Логистика
+	storage: 55000.00           // Хранение */
+});
 
 // Реактивные данные
 const showMoreInfo = ref(false)
@@ -749,68 +751,6 @@ onMounted(async () => {
 	display: flex;
 	align-items: center;
 	gap: 5px;
-}
-
-/* Product Images */
-.product-images {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: 20px;
-	margin-bottom: 20px;
-}
-
-.product-image-card {
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	overflow: hidden;
-	box-shadow: var(--shadow);
-	transition: var(--transition);
-}
-
-.product-image-card:hover {
-	transform: translateY(-4px);
-	box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
-}
-
-.product-image-wrapper {
-	height: 250px;
-	background-color: var(--medium-bg);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	overflow: hidden;
-}
-
-.product-image-img img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-}
-
-.product-image-info {
-	padding: 15px;
-}
-
-.product-image-title {
-	font-size: 16px;
-	font-weight: 600;
-	margin-bottom: 8px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.product-image-price {
-	font-size: 18px;
-	color: var(--secondary-color);
-	font-weight: 600;
-	margin-bottom: 8px;
-}
-
-.product-image-stats {
-	display: flex;
-	gap: 8px;
-	flex-wrap: wrap;
 }
 
 /* ABC Analysis */
