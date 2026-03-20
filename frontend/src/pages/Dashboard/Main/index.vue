@@ -287,8 +287,8 @@ import { ref, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
-import BaseStats from '@/components/BaseStats.vue';
-import AbcAnalysis from '@/components/AbcAnalysis.vue';
+import BaseStats from '@/components/Widgets/BaseStats.vue';
+import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue';
 
 const isLoading = ref(false);
 
