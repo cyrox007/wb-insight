@@ -2,8 +2,10 @@
 	<div class="dashboard-container">
 		<!-- Сайдбар -->
 		<aside class="dashboard-sidebar">
+			<WarehouseChart :data="warehouseData" />
+
 			<!-- Key Indicators -->
-			<div class="sidebar-section">
+			<!-- <div class="sidebar-section">
 				<h3 class="sidebar-title"><i class="fa fa-line-chart" aria-hidden="true"></i> Ключевые показатели</h3>
 				<ul class="product-list">
 					<li v-for="product in products" :key="product.id" class="product-item"
@@ -18,10 +20,10 @@
 						</div>
 					</li>
 				</ul>
-			</div>
+			</div> -->
 
 			<!-- Size Chart -->
-			<div class="sidebar-section">
+			<!-- <div class="sidebar-section">
 				<h3 class="sidebar-title"><i class="fa fa-ruler"></i> Размерная сетка</h3>
 				<div class="size-chart-container">
 					<table class="size-table">
@@ -43,10 +45,10 @@
 						</tbody>
 					</table>
 				</div>
-			</div>
+			</div> -->
 
 			<!-- Filters -->
-			<div class="sidebar-section">
+			<!-- <div class="sidebar-section">
 				<h3 class="sidebar-title"><i class="fa fa-filter"></i> Фильтры</h3>
 				<div class="filter-group">
 					<div v-for="filter in filters" :key="filter.key" class="filter-item"
@@ -57,7 +59,7 @@
 					</div>
 				</div>
 
-				<!-- Date Filter -->
+				
 				<div class="date-filter">
 					<h4 class="filter-subtitle">Период</h4>
 					<div class="date-inputs">
@@ -74,10 +76,10 @@
 						Применить
 					</button>
 				</div>
-			</div>
+			</div> -->
 
 			<!-- Quick Actions -->
-			<div class="sidebar-section">
+			<!-- <div class="sidebar-section">
 				<h3 class="sidebar-title"><i class="fa fa-bolt"></i> Быстрые действия</h3>
 				<div class="quick-actions">
 					<button class="quick-action-btn" @click="exportData">
@@ -97,7 +99,7 @@
 						<span>Обновить данные</span>
 					</button>
 				</div>
-			</div>
+			</div> -->
 		</aside>
 		<!-- Основное содержимое дашборда -->
 		<div class="main-dashboard-content">
@@ -287,6 +289,7 @@ import { ref, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
+import WarehouseChart from '@/components/Diagrams/WarehouseChart.vue';
 import BaseStats from '@/components/Widgets/BaseStats.vue';
 import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue';
 
@@ -296,6 +299,7 @@ const stats = ref({}); // основные показатели по кабин�
 const chartData = ref([]); // основные данные для диаграмм
 const baseStats = ref({}); // основные показатели по кабинету
 const abcAnalysis = ref([]); // ABC Analysis data
+const warehouseData = ref([]) // Данные склада
 
 // Навигация и поиск
 const searchQuery = ref('')

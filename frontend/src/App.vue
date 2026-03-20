@@ -17,16 +17,16 @@ const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
 
 // Уведомления
-const showNotifications = ref(false)
+/* const showNotifications = ref(false) */
 
 // Модальные окна
 const showLogin = ref(false)
 const showRegister = ref(false)
 
 // Методы
-const toggleNotifications = () => {
+/* const toggleNotifications = () => {
 	showNotifications.value = !showNotifications.value
-}
+} */
 
 const logout = () => {
 	localStorage.clear();
@@ -34,10 +34,10 @@ const logout = () => {
 	authStore.logout()
 }
 
-onMounted(() => {
+/* onMounted(() => {
 	// Можно настроить логику скрытия/показа элементов для разных страниц
 	// Например, на странице входа не показывать хедер
-})
+}) */
 </script>
 
 <template>
@@ -239,82 +239,6 @@ onMounted(() => {
 	display: flex;
 	gap: 10px;
 }
-
-/* .modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background-color: rgba(0, 0, 0, 0.7);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 1000;
-} */
-
-/* .modal {
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	padding: 20px;
-	width: 500px;
-	max-width: 90%;
-	box-shadow: var(--shadow);
-} */
-
-/* .modal-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 20px;
-} */
-
-/* .modal-title {
-	font-size: 20px;
-	font-weight: 600;
-}
-
-.modal-close {
-	background: none;
-	border: none;
-	font-size: 24px;
-	cursor: pointer;
-	color: #aaa;
-} */
-
-/* .modal-body {
-	margin-bottom: 20px;
-}
-
-.form-group {
-	margin-bottom: 15px;
-}
-
-.form-label {
-	display: block;
-	margin-bottom: 5px;
-	font-size: 14px;
-}
-
-.form-input {
-	width: 100%;
-	padding: 10px;
-	border: 1px solid var(--border-color);
-	border-radius: 6px;
-	background-color: var(--medium-bg);
-	color: var(--text-color);
-}
-
-.form-input:focus {
-	outline: none;
-	border-color: var(--secondary-color);
-}
-
-.modal-footer {
-	display: flex;
-	justify-content: flex-end;
-	gap: 10px;
-} */
 
 .footer {
 	background-color: var(--medium-bg);
