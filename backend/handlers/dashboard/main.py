@@ -262,6 +262,19 @@ async def dashboard(
         'storage': 55000.00           # Хранение
     }
 
+    abcAnalysis = [
+        {
+            "id": 12345,              # Уникальный ID для key в v-for
+            "sellerSku": "ART-001",   # Артикул продавца (строка)
+            "wbSku": "12345678",      # Артикул WB (строка, может быть null)
+            "revenue": 150000,        # Выручка (число)
+            "profit": 45000,          # Прибыль (число)
+            "share": 12.5,            # Доля в выручке (число, %)
+            "cumulativePercent": 45.2,# Совокупный процент (число, %)
+            "category": "A"           # Категория (строка: "A", "B" или "C")
+        }
+    ]
+
     products = [
         { 'id': 1, 'name': 'Электросталь', 'sales': 2722, 'profit': 1500 },
         { 'id': 2, 'name': 'Коледино', 'sales': 1323, 'profit': 800 },
@@ -355,5 +368,5 @@ async def dashboard(
         stats=stats,
         chartData=chartData,
         baseStats=base_stats,
-        
+        abcAnalysis=abcAnalysis
     )
