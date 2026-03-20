@@ -8,6 +8,10 @@ const props = defineProps({
 	metrics: {
 		type: Array,
 		default: () => []
+	},
+	isLoading: {
+		type: Boolean,
+		default: false
 	}
 });
 
@@ -113,12 +117,19 @@ const getBarStyles = (value, color) => {
 			</div>
 		</div>
 
+		<!-- Состояние загрузки -->
+		<div v-if="isLoading" class="stats-loading">
+			<div class="loading-spinner"></div>
+			<p class="loading-text">Загрузка показателей...</p>
+		</div>
+
 		<!-- Пустое состояние -->
-		<div v-if="!hasData" class="chart-empty">
+		<div v-else-if="!hasData" class="chart-empty">
 			<div class="empty-icon">📊</div>
 			<p class="empty-text">Нет данных для отображения</p>
 			<p class="empty-hint">Данные появятся после синхронизации с Wildberries</p>
 		</div>
+
 		<!-- Диаграмма -->
 		<div v-else class="chars-area">
 			<!-- Ось Y (рубли) -->
@@ -392,5 +403,36 @@ const getBarStyles = (value, color) => {
 	font-size: 11px;
 	color: #aaa;
 	white-space: nowrap;
+}
+
+/* Состояние загрузки */
+.stats-loading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	color: #888;
+}
+
+.loading-spinner {
+	width: 24px;
+	height: 24px;
+	border: 3px solid rgba(255, 255, 255, 0.3);
+	border-radius: 50%;
+	border-top-color: #fff;
+	animation: spin 1s linear infinite;
+	margin-bottom: 12px;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.loading-text {
+	font-size: 14px;
+	color: #888;
 }
 </style>

@@ -221,24 +221,48 @@
 
 			<!-- Chart Container -->
 			<!-- <DashboardDiagram :chart-data="chartData" /> -->
-			<BaseCarts :chart-data="chartData" :metrics="[
+			<BaseCarts :is-loading="isLoading" :chart-data="chartData" :metrics="[
 				{ key: 'orders', name: 'Заказы, руб', color: '#ff9800', visible: true, type: 'rub' },
 				{ key: 'buyouts', name: 'Выкупы, руб', color: '#4caf50', visible: true, type: 'rub' },
 				{ key: 'avg_price', name: 'Средняя цена, руб', color: '#2196f3', visible: true, type: 'rub' },
 				{ key: 'profit', name: 'Прибыль, руб', color: '#f44336', visible: true, type: 'rub' },
 			]" />
-			<BaseCarts :chart-data="chartData" :metrics="[
+			<BaseCarts :is-loading="isLoading" :chart-data="chartData" :metrics="[
 				{ key: 'views', name: 'Просмотры', color: '#ffeb3b', visible: true, type: 'number' },
 				{ key: 'clicks', name: 'Клики', color: '#ff9800', visible: true, type: 'number' },
 				{ key: 'cart', name: 'В корзину', color: '#3f51b5', visible: true, type: 'number' },
 			]" />
-			<BaseCarts :chart-data="chartData" :metrics="[
+			<BaseCarts :is-loading="isLoading" :chart-data="chartData" :metrics="[
 				{ key: 'margin', name: 'Маржинальность', color: '#9c27b0', visible: true, type: 'percent' },
 				{ key: 'cr', name: 'CR', color: '#00bcd4', visible: true, type: 'percent' },
 				{ key: 'ctr', name: 'CTR', color: '#8bc34a', visible: true, type: 'percent' },
 				{ key: 'drr', name: 'ДРР', color: '#607d8b', visible: true, type: 'percent' }
 			]" />
 
+			<BaseStats :is-loading="isLoading" :stats="{
+				// Первая группа
+				adViews: 1843682,           // Просмотры Рекламы
+				clicks: 78014,              // Клики
+				clicksPercentage: 4.2,      // % кликов от просмотров
+				addToCart: 6378,            // Добавлено в корзину
+				addToCartPercentage: 8.2,   // % добавлений от кликов
+
+				// Вторая группа
+				orderedTotalCount: 3105,    // Заказано всего (количество)
+				orderedTotalAmount: 36589404.10, // Заказано всего (сумма)
+				boughtTotalCount: 2852,     // Выкуплено всего (количество)
+				boughtTotalAmount: 14255887.40,  // Выкуплено всего (сумма)
+				buyoutPercent: 1.08,        // Процент выкупа
+
+				// Третья группа
+				avgOrderValue: 4999.63,     // Средняя стоимость заказа
+				marginality: 16.6,          // Маржинальность (%)
+				expenseRatio: 83.4,         // Доля расходов от продаж (%)
+				profit: 2335140.60,         // Прибыль
+				revenue: 36589404.10,       // Выручка
+				logistics: 3345000.00,      // Логистика
+				storage: 55000.00           // Хранение
+			}" />
 			<!-- ABC Analysis -->
 			<div class="abc-analysis">
 				<div class="abc-header">
@@ -352,36 +376,11 @@ import { ref, computed, onMounted } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification';
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
+import BaseStats from '@/components/BaseStats.vue';
+
+const isLoading = ref(false);
 
 const stats = ref({});
-
-// Реактивные данные
-const showMoreInfo = ref(false)
-const selectedChartType = ref('sales')
-const selectedProductId = ref(null)
-const filterStartDate = ref('')
-const filterEndDate = ref('')
-
-// Products data
-const products = ref([])
-
-// Size chart data
-/* const sizeChart = ref([]) */
-
-// Filters
-/* const filters = ref([
-	{ key: 'orders', label: 'Заказы, руб', checked: true, count: 125 },
-	{ key: 'revenue', label: 'Выкупы, руб', checked: true, count: 98 },
-	{ key: 'avgPrice', label: 'Средняя цена', checked: true, count: 45 },
-	{ key: 'profit', label: 'Прибыль, руб', checked: true, count: 76 },
-	{ key: 'margin', label: 'Маржинальность', checked: true, count: 32 }
-]) */
-
-// Selected products for display
-const selectedProducts = ref([])
-
-// ABC Analysis data
-const abcAnalysis = ref([])
 
 // Chart data
 const chartData = ref([
@@ -484,6 +483,35 @@ const chartData = ref([
 		drr: 1.5
 	} */
 ]);
+
+// Реактивные данные
+const showMoreInfo = ref(false)
+const selectedChartType = ref('sales')
+const selectedProductId = ref(null)
+const filterStartDate = ref('')
+const filterEndDate = ref('')
+
+// Products data
+const products = ref([])
+
+// Size chart data
+/* const sizeChart = ref([]) */
+
+// Filters
+/* const filters = ref([
+	{ key: 'orders', label: 'Заказы, руб', checked: true, count: 125 },
+	{ key: 'revenue', label: 'Выкупы, руб', checked: true, count: 98 },
+	{ key: 'avgPrice', label: 'Средняя цена', checked: true, count: 45 },
+	{ key: 'profit', label: 'Прибыль, руб', checked: true, count: 76 },
+	{ key: 'margin', label: 'Маржинальность', checked: true, count: 32 }
+]) */
+
+// Selected products for display
+const selectedProducts = ref([])
+
+// ABC Analysis data
+const abcAnalysis = ref([])
+
 /* 
 // Methods
 const toggleMoreInfo = () => {
@@ -569,6 +597,8 @@ const formatChange = (change) => {
 // Lifecycle hooks
 onMounted(async () => {
 	// Set default dates for filter
+	isLoading.value = true;
+
 	const today = new Date()
 	const lastMonth = new Date()
 	lastMonth.setMonth(today.getMonth() - 1)
@@ -583,6 +613,7 @@ onMounted(async () => {
 
 		if (result.status === "error") {
 			notify.error(result.error.message, 3000);
+			isLoading.value = false;
 			return;
 		}
 
@@ -597,6 +628,7 @@ onMounted(async () => {
 		// abcAnalysis.value = result.abcAnalysis;
 
 		// selectedProducts.value = result.products;
+		isLoading.value = false;
 	}
 })
 </script>
