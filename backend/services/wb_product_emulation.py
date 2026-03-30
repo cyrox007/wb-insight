@@ -11,8 +11,13 @@ from schemas.products import (
     WbCardSchema,
     WbPriceSchema,
     WbSizeSchema,
-    WbPhotoSchema,
+    WbPhotoUrlsSchema,
+    WbVideoSchema,
+    WbWholesaleSchema,
+    WbDimensionsSchema,
     WbCharacteristicSchema,
+    WbTagSchema,
+    TagColorEnum,
     WbCardsListResponseSchema,
     ModerationStatusEnum
 )
@@ -110,16 +115,21 @@ COLORS = [
 def generate_wb_card(
     nm_id: int,
     vendor_code: str,
-    name: str,
+    title: str,
     brand: str,
-    category: str,
+    subject_name: str,
     user_id: UUIDType
 ) -> WbCardSchema:
     """
     Генерация карточки товара в формате WB API.
     
-    Соответствует структуре ответа /content/v2/get/cards/list
+    Полностью соответствует структуре ответа /content/v2/get/cards/list
     """
+    now = datetime.now(timezone.utc)
+    days_ago = random.randint(1, 365)
+    created_at = now - timedelta(days=days_ago)
+    updated_at = created_at + timedelta(days=random.randint(1, min(30, days_ago)))
+    
     # Генерируем цены в копейках (как в WB API)
     retail_price_kopecks = random.randint(200000, 2000000)  # 2000 - 20000 руб
     discount_percent = random.randint(5, 50)
@@ -131,85 +141,128 @@ def generate_wb_card(
         clubPrice=int(discounted_price_kopecks * 0.95) if random.random() > 0.7 else None
     )
     
-    # Генерируем варианты (размеры/цвета)
+    # Генерируем варианты (размеры)
     sizes_count = random.randint(1, 5)
     selected_sizes = random.sample(SIZES, sizes_count)
-    selected_color = random.choice(COLORS)
     
     sizes = []
-    for size in selected_sizes:
+    for idx, size in enumerate(selected_sizes):
         barcode = f"46{random.randint(1000000000, 9999999999)}"
-        sku = int(barcode)
-        
-        size_price = WbPriceSchema(
-            price=retail_price_kopecks,
-            discountedPrice=discounted_price_kopecks,
-            clubPrice=prices.clubPrice
-        )
         
         sizes.append(WbSizeSchema(
-            sku=sku,
-            barcode=barcode,
-            size=size,
+            chrtID=random.randint(1000000, 9999999),
             techSize=size,
-            color=selected_color[0],
-            colorName=selected_color[1],
-            vendorCode=f"{vendor_code}-{size}",
-            price=size_price
+            wbSize=size,
+            skus=[barcode]
         ))
     
-    # Генерируем фотографии
+    # Генерируем фотографии с разными форматами URL
     photos_count = random.randint(3, 10)
     photos = []
+    base_url = f"https://basket-{random.randint(1, 15)}.wb.ru/vol{random.randint(1, 1000)}/part{random.randint(1, 100)}/{nm_id}"
+    
+    # Видео URL (опционально, добавляем в первое фото)
+    video_url = None
+    if random.random() > 0.7:
+        video_url = f"{base_url}/video/video_{random.randint(1, 100)}.mp4"
+    
     for i in range(photos_count):
-        photos.append(WbPhotoSchema(
-            url=f"https://basket-{random.randint(1, 15)}.wb.ru/vol{random.randint(1, 1000)}/part{random.randint(1, 100)}/{nm_id}/images/{i}.jpg",
-            isMain=(i == 0),
-            order=i
+        photo_video = video_url if i == 0 and video_url else None
+        photos.append(WbPhotoUrlsSchema(
+            big=f"{base_url}/images/big/{i}.jpg",
+            c246x328=f"{base_url}/images/c246x328/{i}.jpg",
+            c516x688=f"{base_url}/images/c516x688/{i}.jpg",
+            square=f"{base_url}/images/square/{i}.jpg",
+            tm=f"{base_url}/images/tm/{i}.jpg",
+            video=photo_video
         ))
+    
+    # Видео как отдельный список (устаревший формат, для совместимости)
+    video = None
+    if video_url:
+        video = [WbVideoSchema(
+            url=video_url,
+            name=f"Видео {nm_id}"
+        )]
+    
+    # Оптовая продажа (опционально)
+    wholesale = None
+    if random.random() > 0.8:
+        wholesale = WbWholesaleSchema(
+            enabled=True,
+            quantum=random.randint(2, 10)
+        )
+    
+    # Габариты и вес
+    length = round(random.uniform(20, 60), 1)
+    width = round(random.uniform(15, 40), 1)
+    height = round(random.uniform(5, 20), 1)
+    weight = round(random.uniform(0.1, 3.0), 3)
+    
+    dimensions = WbDimensionsSchema(
+        length=length,
+        width=width,
+        height=height,
+        weightBrutto=weight,
+        isValid=True
+    )
     
     # Генерируем характеристики
     characteristics = [
-        WbCharacteristicSchema(name="Состав", value=f"{random.randint(70, 100)}% хлопок"),
-        WbCharacteristicSchema(name="Вес", value=f"{random.randint(100, 2000)} г"),
-        WbCharacteristicSchema(name="Страна производства", value="Россия"),
-        WbCharacteristicSchema(name="Тип застежки", value=random.choice(["Пуговицы", "Молния", "Нет"])),
+        WbCharacteristicSchema(
+            id=random.randint(1, 1000),
+            name="Состав",
+            value=f"{random.randint(70, 100)}% хлопок"
+        ),
+        WbCharacteristicSchema(
+            id=random.randint(1, 1000),
+            name="Вес товара, г",
+            value=random.randint(100, 2000)
+        ),
+        WbCharacteristicSchema(
+            id=random.randint(1, 1000),
+            name="Страна производства",
+            value="Россия"
+        ),
+        WbCharacteristicSchema(
+            id=random.randint(1, 1000),
+            name="Тип застежки",
+            value=random.choice(["Пуговицы", "Молния", "Нет"])
+        ),
     ]
     
-    # Дата создания и обновления
-    days_ago = random.randint(1, 365)
-    created_at = datetime.now(timezone.utc) - timedelta(days=days_ago)
-    updated_at = created_at + timedelta(days=random.randint(1, min(30, days_ago)))
-    
-    # Статус модерации
-    moderation_statuses = [
-        ModerationStatusEnum.APPROVED,
-        ModerationStatusEnum.APPROVED,
-        ModerationStatusEnum.APPROVED,
-        ModerationStatusEnum.PENDING,
-        ModerationStatusEnum.MODERATION
-    ]
-    moderation_status = random.choice(moderation_statuses)
+    # Ярлыки (опционально)
+    tags = []
+    if random.random() > 0.5:
+        tag_colors = list(TagColorEnum)
+        tags_count = random.randint(1, 3)
+        for i in range(tags_count):
+            tags.append(WbTagSchema(
+                id=random.randint(1, 100),
+                name=f"Ярлык {i+1}",
+                color=random.choice(tag_colors)
+            ))
     
     return WbCardSchema(
         nmID=nm_id,
-        vendorCode=vendor_code,
-        name=name,
-        brand=brand,
-        category=category,
-        subcategory=f"Подкатегория {random.randint(1, 10)}",
-        description=f"Описание товара {nm_id}. Отличное качество, современный дизайн. {name} от бренда {brand}.",
-        prices=prices,
-        discount=discount_percent,
-        sizes=sizes,
-        photos=photos,
-        characteristics=characteristics,
-        isArchived=random.random() < 0.05,  # 5% архивных
-        moderationStatus=moderation_status,
-        createdAt=created_at,
-        updatedAt=updated_at,
+        imtID=nm_id // 10,  # Группируем по 10 товаров
+        nmUUID=f"00000000-0000-0000-0000-{nm_id:012d}",
         subjectID=random.randint(1, 100),
-        rootCategory=random.randint(1, 20)
+        subjectName=subject_name,
+        vendorCode=vendor_code,
+        brand=brand,
+        title=title,
+        description=f"Описание товара {nm_id}. Отличное качество, современный дизайн. {title} от бренда {brand}.",
+        needKiz=random.random() < 0.3,  # 30% требуют маркировку
+        photos=photos,
+        video=video,
+        wholesale=wholesale,
+        dimensions=dimensions,
+        characteristics=characteristics,
+        sizes=sizes,
+        tags=tags,
+        createdAt=created_at,
+        updatedAt=updated_at
     )
 
 
@@ -235,19 +288,38 @@ async def emulate_wb_cards_sync(
     """
     cards = []
     
+    # Предметы/категории для эмуляции
+    subjects = [
+        "Платья",
+        "Рубашки",
+        "Блузки",
+        "Пальто",
+        "Куртки",
+        "Юбки",
+        "Брюки",
+        "Футболки",
+        "Свитера",
+        "Кардиганы",
+        "Джинсы",
+        "Костюмы",
+        "Топы",
+        "Сарафаны",
+        "Жакеты"
+    ]
+    
     for i in range(products_count):
         nm_id = 10000000 + i
         vendor_code = f"ART-{random.randint(1000, 9999)}"
-        product_name = f"{random.choice(PRODUCT_NAMES)} {random.choice(COLORS)[0]}"
+        subject_name = random.choice(subjects)
+        title = f"{subject_name} {random.choice(['красный', 'синий', 'черный', 'белый', 'бежевый'])}"
         brand = random.choice(BRANDS)
-        category = random.choice(CATEGORIES)
         
         card = generate_wb_card(
             nm_id=nm_id,
             vendor_code=vendor_code,
-            name=product_name,
+            title=title,
             brand=brand,
-            category=category,
+            subject_name=subject_name,
             user_id=user_id
         )
         cards.append(card)

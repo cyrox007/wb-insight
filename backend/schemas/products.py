@@ -1,12 +1,12 @@
 from datetime import date, datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from uuid import UUID
 from enum import Enum
 
 from pydantic import BaseModel, Field
 
 
-# ========== ENUM для статусов ==========
+# ========== ENUM для статусов и цветов ==========
 
 class ModerationStatusEnum(str, Enum):
     """Статусы модерации карточки товара"""
@@ -17,7 +17,91 @@ class ModerationStatusEnum(str, Enum):
     PRE_MODERATION = "pre_moderation"
 
 
+class TagColorEnum(str, Enum):
+    """Цвета ярлыков"""
+    GRAY = "D1CFD7"
+    RED = "FEE0E0"
+    PURPLE = "ECDAFF"
+    BLUE = "E4EAFF"
+    GREEN = "DEF1DD"
+    YELLOW = "FFECC7"
+
+
 # ========== Схемы для WB API /content/v2/get/cards/list ==========
+
+class WbPhotoUrlsSchema(BaseModel):
+    """Схема URL фотографий из WB API"""
+    big: str = Field(..., description="URL фото 900x1200")
+    c246x328: str = Field(..., description="URL фото 248x328")
+    c516x688: str = Field(..., description="URL фото 516x688")
+    square: str = Field(..., description="URL фото 600x600")
+    tm: str = Field(..., description="URL фото 75x100")
+    video: Optional[str] = Field(None, description="URL видео")
+    
+    class Config:
+        from_attributes = True
+
+
+class WbVideoSchema(BaseModel):
+    """Схема видео из WB API (устаревшая, video теперь в photos)"""
+    url: str = Field(..., description="URL видео")
+    name: Optional[str] = Field(None, description="Название видео")
+    
+    class Config:
+        from_attributes = True
+
+
+class WbWholesaleSchema(BaseModel):
+    """Схема оптовой продажи"""
+    enabled: bool = Field(False, description="Предназначена ли карточка для оптовой продажи")
+    quantum: Optional[int] = Field(None, ge=1, description="Количество единиц товара в упаковке")
+    
+    class Config:
+        from_attributes = True
+
+
+class WbDimensionsSchema(BaseModel):
+    """Схема габаритов и веса товара"""
+    length: Optional[float] = Field(None, description="Длина, см")
+    width: Optional[float] = Field(None, description="Ширина, см")
+    height: Optional[float] = Field(None, description="Высота, см")
+    weightBrutto: Optional[float] = Field(None, description="Вес брутто, кг", le=999.999)
+    isValid: bool = Field(True, description="Потенциальная некорректность габаритов")
+    
+    class Config:
+        from_attributes = True
+
+
+class WbCharacteristicSchema(BaseModel):
+    """Схема характеристики товара из WB API"""
+    id: int = Field(..., description="ID характеристики")
+    name: str = Field(..., description="Название характеристики")
+    value: Union[str, int, float, bool, None] = Field(..., description="Значение характеристики")
+    
+    class Config:
+        from_attributes = True
+
+
+class WbSizeSchema(BaseModel):
+    """Схема размера/варианта товара из WB API"""
+    chrtID: int = Field(..., description="Числовой ID размера для данного артикула WB")
+    techSize: str = Field(..., description="Размер товара (А, XXL, 57 и др.)")
+    wbSize: str = Field(..., description="Российский размер товара")
+    skus: List[str] = Field(default_factory=list, description="Баркод товара (список)")
+    
+    class Config:
+        from_attributes = True
+
+
+class WbTagSchema(BaseModel):
+    """Схема ярлыка"""
+    id: int = Field(..., description="ID ярлыка")
+    name: str = Field(..., description="Название ярлыка")
+    color: TagColorEnum = Field(..., description="Цвет ярлыка")
+    
+    class Config:
+        from_attributes = True
+
 
 class WbPriceSchema(BaseModel):
     """Схема цены из WB API (в копейках)"""
@@ -39,38 +123,6 @@ class WbPriceSchema(BaseModel):
     def club_price_rub(self) -> Optional[float]:
         """Клубная цена в рублях"""
         return self.clubPrice / 100 if self.clubPrice else None
-
-
-class WbSizeSchema(BaseModel):
-    """Схема размера/варианта товара из WB API"""
-    sku: int = Field(..., description="Уникальный SKU размера (barcode)")
-    barcode: str = Field(..., description="Штрихкод")
-    size: str = Field(..., description="Название размера")
-    techSize: str = Field(..., description="Технический размер")
-    color: str = Field(..., description="Цвет")
-    colorName: Optional[str] = Field(None, description="Название цвета на английском")
-    vendorCode: Optional[str] = Field(None, description="Артикул продавца для варианта")
-    price: Optional[WbPriceSchema] = Field(None, description="Цена для варианта")
-    
-    class Config:
-        from_attributes = True
-
-
-class WbPhotoSchema(BaseModel):
-    """Схема фотографии товара из WB API"""
-    url: str = Field(..., description="URL фотографии")
-    isMain: bool = Field(False, description="Главное фото")
-    order: Optional[int] = Field(None, description="Порядок отображения")
-    
-    class Config:
-        from_attributes = True
-
-
-class WbCharacteristicSchema(BaseModel):
-    """Схема характеристики товара из WB API"""
-    name: str = Field(..., description="Название характеристики")
-    value: str = Field(..., description="Значение характеристики")
-    unit: Optional[str] = Field(None, description="Единица измерения")
     
     class Config:
         from_attributes = True
@@ -80,46 +132,52 @@ class WbCardSchema(BaseModel):
     """
     Схема карточки товара из WB API /content/v2/get/cards/list
     
-    Соответствует структуре ответа Wildberries Content API v2
+    Полностью соответствует структуре ответа Wildberries Content API v2
     """
-    nmID: int = Field(..., description="Артикул WB (nmID)")
+    # Основные идентификаторы
+    nmID: int = Field(..., description="Артикул WB")
+    imtID: int = Field(..., description="ID для объединённых карточек товаров")
+    nmUUID: str = Field(..., description="Внутренний технический ID карточки товара (UUID)")
+    
+    # Категория и предмет
+    subjectID: int = Field(..., description="ID предмета")
+    subjectName: str = Field(..., description="Название предмета")
+    
+    # Основная информация
     vendorCode: str = Field(..., description="Артикул продавца")
-    name: str = Field(..., description="Название товара")
-    brand: Optional[str] = Field(None, description="Бренд")
-    category: Optional[str] = Field(None, description="Категория")
-    subcategory: Optional[str] = Field(None, description="Подкатегория")
-    description: Optional[str] = Field(None, description="Описание")
+    brand: str = Field(..., description="Бренд")
+    title: str = Field(..., description="Наименование товара")
+    description: Optional[str] = Field(None, description="Описание товара")
     
-    # Цены (основные)
-    prices: Optional[WbPriceSchema] = Field(None, description="Цены товара")
-    discount: Optional[int] = Field(None, description="Скидка в процентах")
+    # Маркировка
+    needKiz: bool = Field(False, description="Требуется ли код маркировки")
     
-    # Варианты (размеры/цвета)
-    sizes: List[WbSizeSchema] = Field(default_factory=list, description="Варианты товара")
+    # Фотографии (video теперь внутри каждого элемента photos)
+    photos: List[WbPhotoUrlsSchema] = Field(default_factory=list, description="Массив фото")
+    video: Optional[List[WbVideoSchema]] = Field(None, description="Видео (устаревшее поле)")
     
-    # Фотографии
-    photos: List[WbPhotoSchema] = Field(default_factory=list, description="Фотографии")
+    # Оптовая продажа
+    wholesale: Optional[WbWholesaleSchema] = Field(None, description="Оптовая продажа")
+    
+    # Габариты и вес
+    dimensions: Optional[WbDimensionsSchema] = Field(None, description="Габариты и вес товара")
     
     # Характеристики
     characteristics: List[WbCharacteristicSchema] = Field(default_factory=list, description="Характеристики")
     
-    # Статусы
-    isArchived: bool = Field(False, description="Архивирован")
-    moderationStatus: Optional[ModerationStatusEnum] = Field(None, description="Статус модерации")
+    # Размеры
+    sizes: List[WbSizeSchema] = Field(default_factory=list, description="Размеры товара")
+    
+    # Ярлыки
+    tags: List[WbTagSchema] = Field(default_factory=list, description="Ярлыки")
     
     # Даты
-    createdAt: Optional[datetime] = Field(None, description="Дата создания")
-    updatedAt: Optional[datetime] = Field(None, description="Дата обновления")
-    
-    # Дополнительно
-    tags: Optional[List[str]] = Field(None, description="Теги")
-    subjectID: Optional[int] = Field(None, description="ID предмета")
-    rootCategory: Optional[int] = Field(None, description="ID корневой категории")
+    createdAt: datetime = Field(..., description="Дата и время создания")
+    updatedAt: datetime = Field(..., description="Дата и время изменения")
     
     class Config:
         populate_by_name = True
         from_attributes = True
-        alias_generator = None  # Используем camelCase имена полей напрямую
 
 
 class WbCardsListResponseSchema(BaseModel):
