@@ -1,19 +1,26 @@
-from uuid import uuid4
 from enum import Enum
+from uuid import UUID as UUIDType, uuid4
+from typing import List, Optional, TYPE_CHECKING
 
-from sqlalchemy import UUID, Boolean, Column, DateTime, Float, String, Text, Index, Integer, ForeignKey, Table
-from sqlalchemy.orm import relationship
+from sqlalchemy import UUID as PG_UUID, Boolean, DateTime, Float, String, Text, Index, Integer, ForeignKey
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from database import Database
 
+if TYPE_CHECKING:
+    from .tokens import APIToken
+
+
 class EntityType(Enum):
+    """Типы юридических лиц"""
     INDIVIDUAL = "individual"
     SELF_EMPLOYED = "self_employed"
     LEGAL_ENTITY = "legal_entity"
 
 
 class UserRole(Enum):
+    """Роли пользователей в системе"""
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     MANAGER = "manager"
@@ -22,76 +29,184 @@ class UserRole(Enum):
     USER = "user"
 
 
-# Таблица для связи многие-ко-многим пользователей и ролей
 class UserRoleAssociation(Database.Base):
+    """
+    Таблица связи многие-ко-многим для пользователей и ролей.
+    
+    Позволяет одному пользователю иметь несколько ролей одновременно.
+    """
     __tablename__ = 'user_roles'
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    role = Column(String(20), nullable=False)
-    assigned_at = Column(DateTime(timezone=True), default=func.now(), nullable=False)
-    assigned_by = Column(UUID(as_uuid=True), nullable=True)  # кто назначил (опционально)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[UUIDType] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey('users.id', ondelete='CASCADE'),
+        nullable=False,
+        comment="ID пользователя"
+    )
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="Роль пользователя"
+    )
+    assigned_at: Mapped[func.now] = mapped_column(
+        DateTime(timezone=True),
+        default=func.now(),
+        nullable=False,
+        comment="Дата назначения роли"
+    )
+    assigned_by: Mapped[Optional[UUIDType]] = mapped_column(
+        PG_UUID(as_uuid=True),
+        nullable=True,
+        comment="ID пользователя, назначившего роль"
+    )
 
-    # Связь
-    user = relationship("User", back_populates="roles")
+    # Связь с пользователем
+    user: Mapped["User"] = relationship("User", back_populates="roles")
 
-    # Валидация на уровне Python (опционально)
     def __init__(self, **kwargs):
+        """Инициализация с валидацией роли"""
         role = kwargs.get('role')
         if role and role not in [r.value for r in UserRole]:
-            raise ValueError(f"Invalid role: {role}")
+            raise ValueError(f"Invalid role: {role}. Must be one of {[r.value for r in UserRole]}")
         super().__init__(**kwargs)
 
     __table_args__ = (
         Index('idx_user_roles_user_id', 'user_id'),
         Index('idx_user_roles_role', 'role'),
-        # Можно добавить уникальность: один пользователь не может иметь одну роль дважды
         Index('uq_user_role', 'user_id', 'role', unique=True),
     )
 
 
 class User(Database.Base):
+    """
+    Модель пользователя системы.
+    
+    Поддерживает различные типы сущностей (физлица, самозанятые, юрлица)
+    и систему ролей для разграничения прав доступа.
+    """
     __tablename__ = 'users'
 
     # Primary key as UUID according to specification
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, comment="Уникальный ID пользователя")
+    id: Mapped[UUIDType] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4, 
+        comment="Уникальный ID пользователя"
+    )
     
     # Authentication fields - both unique
-    email = Column(String(254), unique=True, nullable=False, index=True, comment="Email для входа")
-    phone = Column(String(20), unique=True, nullable=False, index=True, comment="Номер телефона (для 2FA и уведомлений)")
-    hashed_password = Column(String(255), nullable=False, comment="Хэш пароля (bcrypt)")
+    email: Mapped[str] = mapped_column(
+        String(254), 
+        unique=True, 
+        nullable=False, 
+        index=True, 
+        comment="Email для входа"
+    )
+    phone: Mapped[str] = mapped_column(
+        String(20), 
+        unique=True, 
+        nullable=False, 
+        index=True, 
+        comment="Номер телефона (для 2FA и уведомлений)"
+    )
+    hashed_password: Mapped[str] = mapped_column(
+        String(255), 
+        nullable=False, 
+        comment="Хэш пароля (bcrypt)"
+    )
     
     # User info fields
-    full_name = Column(String(255), nullable=False, comment="ФИО (для физлиц) / Название компании (для юрлиц)")
-    entity_type = Column(String(20), nullable=False, index=True, comment="'individual', 'self_employed', 'legal_entity'")
+    full_name: Mapped[str] = mapped_column(
+        String(255), 
+        nullable=False, 
+        comment="ФИО (для физлиц) / Название компании (для юрлиц)"
+    )
+    entity_type: Mapped[str] = mapped_column(
+        String(20), 
+        nullable=False, 
+        index=True, 
+        comment="'individual', 'self_employed', 'legal_entity'"
+    )
     
     # Legal entity fields
-    inn = Column(String(12), nullable=True, comment="ИНН (опционально для физлиц, обязательно для юрлиц)")
-    kpp = Column(String(9), nullable=True, comment="КПП (только для юрлиц, nullable)")
-    legal_address = Column(Text, nullable=True, comment="Юридический адрес (юрлица)")
+    inn: Mapped[Optional[str]] = mapped_column(
+        String(12), 
+        nullable=True, 
+        comment="ИНН (опционально для физлиц, обязательно для юрлиц)"
+    )
+    kpp: Mapped[Optional[str]] = mapped_column(
+        String(9), 
+        nullable=True, 
+        comment="КПП (только для юрлиц, nullable)"
+    )
+    legal_address: Mapped[Optional[str]] = mapped_column(
+        Text, 
+        nullable=True, 
+        comment="Юридический адрес (юрлица)"
+    )
 
     # Налоговая ставка в долях (например, 0.2 = 20%)
-    tax_rate = Column(Float, default=0.2, nullable=True)
+    tax_rate: Mapped[Optional[float]] = mapped_column(
+        Float, 
+        default=0.2, 
+        nullable=True,
+        comment="Налоговая ставка в долях"
+    )
     
     # System fields
-    timezone = Column(String(50), default="Europe/Moscow", nullable=False, comment="Часовой пояс")
-    created_at = Column(DateTime(timezone=True), default=func.now(), nullable=False, comment="Дата регистрации")
-    is_active = Column(Boolean, default=True, nullable=False, comment="Активен ли аккаунт")
+    timezone: Mapped[str] = mapped_column(
+        String(50), 
+        default="Europe/Moscow", 
+        nullable=False, 
+        comment="Часовой пояс"
+    )
+    created_at: Mapped[func.now] = mapped_column(
+        DateTime(timezone=True), 
+        default=func.now(), 
+        nullable=False, 
+        comment="Дата регистрации"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, 
+        default=True, 
+        nullable=False, 
+        comment="Активен ли аккаунт"
+    )
     
     # Staff fields
-    is_staff = Column(Boolean, default=False, nullable=False, comment="Является ли сотрудником системы")
-    staff_id = Column(String(50), nullable=True, unique=True, comment="Внутренний ID сотрудника")
-    department = Column(String(100), nullable=True, comment="Отдел/Департамент")
-    position = Column(String(100), nullable=True, comment="Должность")
+    is_staff: Mapped[bool] = mapped_column(
+        Boolean, 
+        default=False, 
+        nullable=False, 
+        comment="Является ли сотрудником системы"
+    )
+    staff_id: Mapped[Optional[str]] = mapped_column(
+        String(50), 
+        nullable=True, 
+        unique=True, 
+        comment="Внутренний ID сотрудника"
+    )
+    department: Mapped[Optional[str]] = mapped_column(
+        String(100), 
+        nullable=True, 
+        comment="Отдел/Департамент"
+    )
+    position: Mapped[Optional[str]] = mapped_column(
+        String(100), 
+        nullable=True, 
+        comment="Должность"
+    )
 
-    roles = relationship(
+    # Relationships
+    roles: Mapped[List["UserRoleAssociation"]] = relationship(
         "UserRoleAssociation",
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin"
     )
 
-    api_tokens = relationship(
+    api_tokens: Mapped[List["APIToken"]] = relationship(
         "APIToken", 
         back_populates="user", 
         cascade="all, delete-orphan"
@@ -118,26 +233,36 @@ class User(Database.Base):
         Index('idx_users_staff_id', 'staff_id'),
     )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Строковое представление пользователя"""
         return f"<User(id={self.id}, email={self.email}, role={self.primary_role})>"
 
     @property
-    def is_legal_entity(self):
+    def is_legal_entity(self) -> bool:
+        """Проверка, является ли пользователь юридическим лицом"""
         return self.entity_type == EntityType.LEGAL_ENTITY.value
 
     @property
-    def is_individual(self):
+    def is_individual(self) -> bool:
+        """Проверка, является ли пользователь физическим лицом"""
         return self.entity_type == EntityType.INDIVIDUAL.value
 
     @property
-    def is_self_employed(self):
+    def is_self_employed(self) -> bool:
+        """Проверка, является ли пользователь самозанятым"""
         return self.entity_type == EntityType.SELF_EMPLOYED.value
 
     @property
-    def primary_role(self):
-        """Основная роль пользователя (самая высокая привилегия)"""
+    def primary_role(self) -> str:
+        """
+        Основная роль пользователя (самая высокая привилегия).
+        
+        Returns:
+            str: Значение роли с наивысшим приоритетом
+        """
         if not self.roles:
             return UserRole.USER.value
+        
         role_priority = {
             UserRole.SUPER_ADMIN.value: 6,
             UserRole.ADMIN.value: 5,
@@ -146,30 +271,66 @@ class User(Database.Base):
             UserRole.ANALYST.value: 2,
             UserRole.USER.value: 1
         }
-        return max(self.roles, key=lambda r: role_priority.get(r.role, 0))
+        return max(self.roles, key=lambda r: role_priority.get(r.role, 0)).role
 
-    def has_role(self, role):
-        """Проверить, есть ли у пользователя указанная роль"""
+    def has_role(self, role: UserRole) -> bool:
+        """
+        Проверить, есть ли у пользователя указанная роль.
+        
+        Args:
+            role: Роль для проверки
+            
+        Returns:
+            bool: True если роль присутствует
+        """
         return any(user_role.role == role.value for user_role in self.roles)
 
-    def has_any_role(self, roles):
-        """Проверить, есть ли у пользователя любая из указанных ролей"""
+    def has_any_role(self, roles: List[UserRole]) -> bool:
+        """
+        Проверить, есть ли у пользователя любая из указанных ролей.
+        
+        Args:
+            roles: Список ролей для проверки
+            
+        Returns:
+            bool: True если хотя бы одна роль присутствует
+        """
         return any(self.has_role(role) for role in roles)
 
-    def can_manage_users(self):
-        """Может ли управлять пользователями"""
+    def can_manage_users(self) -> bool:
+        """
+        Может ли управлять пользователями.
+        
+        Returns:
+            bool: True если имеет права управления пользователями
+        """
         return self.has_any_role([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER])
 
-    def can_view_reports(self):
-        """Может ли просматривать отчеты"""
+    def can_view_reports(self) -> bool:
+        """
+        Может ли просматривать отчеты.
+        
+        Returns:
+            bool: True если имеет права просмотра отчетов
+        """
         return self.has_any_role([UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.ANALYST])
 
-    def can_manage_system(self):
-        """Может ли управлять системой"""
+    def can_manage_system(self) -> bool:
+        """
+        Может ли управлять системой.
+        
+        Returns:
+            bool: True если имеет права управления системой
+        """
         return self.has_any_role([UserRole.SUPER_ADMIN, UserRole.ADMIN])
 
-    def get_contact_info(self):
-        """Получить контактную информацию пользователя"""
+    def get_contact_info(self) -> dict:
+        """
+        Получить контактную информацию пользователя.
+        
+        Returns:
+            dict: Словарь с контактной информацией
+        """
         return {
             'email': self.email,
             'phone': self.phone,
