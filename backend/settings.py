@@ -51,7 +51,7 @@ class Config:
     CELERY_RESULT_BACKEND: str = REDIS_URL
 
     # Настройки JWT
-    SECRET_KEY: Optional[str] = os.getenv("JWT_SECRET_KEY")
+    SECRET_KEY = os.getenv("JWT_SECRET_KEY") or 'your-secret-key-change-in-production'
     ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = 30
     REFRESH_TOKEN_EXPIRE_DAYS = 7
