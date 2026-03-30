@@ -16,7 +16,7 @@ async def auth_middle(request: Request):
         )
 
     # Логируем полученный токен
-    logger.info(f"Полученный токен из заголовков: {token.split(' ')[1]}")
+    logger.info(f"Полученный токен из заголовков: {token.split(' ')[1][:10]}...")
 
     # Валидируем токен
     user_data = verify_token(token.split(' ')[1])

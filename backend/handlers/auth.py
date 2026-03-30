@@ -123,7 +123,14 @@ async def refresh_token(request: Request, response: Response):
     )
 
 @router.post('/check-email')
-async def check_email(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+async def check_email(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    allow_fields = ['email']
+    if not allow_fields in await request.json():
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="INVALID_REQUEST",
+            message="Неверный запрос"
+        )
     data = await request.json()
 
     user = await get_user_by_email(db_session, data['email'])

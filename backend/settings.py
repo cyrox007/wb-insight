@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -36,7 +37,7 @@ class Config:
         return f"{driver}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     
     # Безопасность
-    ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY", 'SECRET_KEY')
+    ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY")
     
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -48,5 +49,11 @@ class Config:
     # Celery
     CELERY_BROKER_URL: str = REDIS_URL
     CELERY_RESULT_BACKEND: str = REDIS_URL
+
+    # Настройки JWT
+    SECRET_KEY: Optional[str] = os.getenv("JWT_SECRET_KEY")
+    ALGORITHM = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES = 30
+    REFRESH_TOKEN_EXPIRE_DAYS = 7
     
 config = Config()
