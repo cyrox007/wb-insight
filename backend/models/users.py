@@ -1,7 +1,7 @@
 from uuid import uuid4
 from enum import Enum
 
-from sqlalchemy import UUID, Boolean, Column, DateTime, String, Text, Index, Integer, ForeignKey, Table
+from sqlalchemy import UUID, Boolean, Column, DateTime, Float, String, Text, Index, Integer, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -69,6 +69,9 @@ class User(Database.Base):
     inn = Column(String(12), nullable=True, comment="ИНН (опционально для физлиц, обязательно для юрлиц)")
     kpp = Column(String(9), nullable=True, comment="КПП (только для юрлиц, nullable)")
     legal_address = Column(Text, nullable=True, comment="Юридический адрес (юрлица)")
+
+    # Налоговая ставка в долях (например, 0.2 = 20%)
+    tax_rate = Column(Float, default=0.2, nullable=True)
     
     # System fields
     timezone = Column(String(50), default="Europe/Moscow", nullable=False, comment="Часовой пояс")
