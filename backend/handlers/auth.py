@@ -9,8 +9,10 @@ from core.logger import setup_logger
 from schemas.auth import LoginRequest
 from services.user_service import get_user_by_email, get_user_by_inn, get_user_by_phone, insert_user
 from utils.hashed_password import verify_password
-from utils.jwt import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, create_refresh_token, verify_token
+from utils.jwt import create_access_token, create_refresh_token, verify_token
 from utils.responce_helps import response_error, response_success
+
+from settings import config
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 logger = setup_logger(__name__)
@@ -72,7 +74,7 @@ async def login(
     return response_success(
         access_token=access_token,
         token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires_in=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user={
             "id": str(user.id),
             "email": user.email,
@@ -119,7 +121,7 @@ async def refresh_token(request: Request, response: Response):
     return response_success(
         access_token=access_token,
         token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        expires_in=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     )
 
 @router.post('/check-email')
