@@ -4,51 +4,74 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-def create_app() -> FastAPI:
-    from handlers.users import routers as user_router
-    from handlers.auth import router as auth_router
-    
-    from handlers.dashboard.main import router as D_main_router
-    from handlers.dashboard.user_profile import router as D_user_profile_router
-    from handlers.dashboard.tariffs import router as D_tariffs_router
-    
-    from handlers.control_panel.home import router as CP_home_router
-    from handlers.control_panel.users import router as CP_users_router
-    from handlers.control_panel.tariffs import router as CP_tariffs_router
-    from handlers.control_panel.roles import router as CP_roles_router
+from handlers.users import routers as user_router
+from handlers.auth import router as auth_router
+from handlers.dashboard.main import router as D_main_router
+from handlers.dashboard.user_profile import router as D_user_profile_router
+from handlers.dashboard.tariffs import router as D_tariffs_router
+from handlers.control_panel.home import router as CP_home_router
+from handlers.control_panel.users import router as CP_users_router
+from handlers.control_panel.tariffs import router as CP_tariffs_router
+from handlers.control_panel.roles import router as CP_roles_router
 
-    app = FastAPI()
-    
-    # Добавляем CORS middleware
+
+ALLOWED_ORIGINS = ['http://localhost:5173']
+ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE"]
+STATIC_DIRECTORIES = {
+    "static": "/static",
+    "uploads": "/uploads"
+}
+
+
+def _setup_cors(app: FastAPI) -> None:
+    """Настройка CORS middleware."""
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=['http://localhost:5173'],
+        allow_origins=ALLOWED_ORIGINS,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["*"]
+        allow_methods=ALLOWED_METHODS,
+        allow_headers=["*"],
     )
 
-    # Подключаем статические файлы
-    if not os.path.exists("static"):
-        os.makedirs("static")
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-    
-    if not os.path.exists("uploads"):
-        os.makedirs("uploads")
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-    app.include_router(user_router)
-    app.include_router(auth_router)
-    
-    app.include_router(D_main_router)
-    app.include_router(D_user_profile_router)
-    app.include_router(D_tariffs_router)
-    
-    app.include_router(CP_home_router)
-    app.include_router(CP_users_router)
-    app.include_router(CP_tariffs_router)
-    app.include_router(CP_roles_router)
+def _setup_static_files(app: FastAPI) -> None:
+    """Подключение статических файлов."""
+    for dir_name, mount_path in STATIC_DIRECTORIES.items():
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name)
+        app.mount(mount_path, StaticFiles(directory=dir_name), name=dir_name)
 
+
+def _register_routers(app: FastAPI) -> None:
+    """Регистрация всех роутеров приложения."""
+    routers = [
+        user_router,
+        auth_router,
+        D_main_router,
+        D_user_profile_router,
+        D_tariffs_router,
+        CP_home_router,
+        CP_users_router,
+        CP_tariffs_router,
+        CP_roles_router,
+    ]
+    for router in routers:
+        app.include_router(router)
+
+
+def create_app() -> FastAPI:
+    """Создание и настройка FastAPI приложения."""
+    app = FastAPI(
+        title="Wildberries Dashboard API",
+        description="API для управления дашбордом Wildberries",
+        version="1.0.0"
+    )
+    
+    _setup_cors(app)
+    _setup_static_files(app)
+    _register_routers(app)
+    
     return app
+
 
 app = create_app()
