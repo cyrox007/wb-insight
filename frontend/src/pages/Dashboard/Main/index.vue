@@ -3,6 +3,7 @@
 		<!-- Сайдбар -->
 		<aside class="dashboard-sidebar">
 			<WarehouseChart :data="warehouseData" :is-loading="isLoading" />
+			<DonutChart :data="categoryData" :is-loading="isLoading" />
 		</aside>
 		<!-- Основное содержимое дашборда -->
 		<div class="main-dashboard-content">
@@ -197,6 +198,7 @@ import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
 import WarehouseChart from '@/components/Diagrams/WarehouseChart.vue';
 import BaseStats from '@/components/Widgets/BaseStats.vue';
 import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue';
+import DonutChart from '@/components/Diagrams/DonutChart.vue';
 
 const isLoading = ref(false);
 
@@ -205,6 +207,13 @@ const chartData = ref([]); // основные данные для диагра�
 const baseStats = ref({}); // основные показатели по кабинету
 const abcAnalysis = ref([]); // ABC Analysis data
 const warehouseData = ref([]) // Данные склада
+const categoryData = ref([
+	{ category: 'Блузки', value: 2574164 },
+	{ category: 'Пальто', value: 1282464 },
+	{ category: 'Платья', value: 1047567 },
+	{ category: 'Пуховики', value: 41436 },
+	{ category: 'Рубашки', value: 5504988 }
+]); // Данные по категориям
 
 // Навигация и поиск
 const searchQuery = ref('')
@@ -586,6 +595,9 @@ onMounted(async () => {
 	height: fit-content;
 	position: sticky;
 	top: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 15px;
 }
 
 .sidebar-section {
