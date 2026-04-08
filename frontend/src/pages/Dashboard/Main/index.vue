@@ -185,7 +185,50 @@
 		</div>
 
 		<aside class="dashboard-sidebar">
-
+			<div class="stat-card">
+				<div class="stat-title">Маржинальность</div>
+				<div class="stat-value primary">
+					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
+					}}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-title">Рентабельность</div>
+				<div class="stat-value primary">
+					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
+					}}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-title">ДДР</div>
+				<div class="stat-value primary">
+					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
+					}}
+				</div>
+			</div>
+		</aside>
+		<aside class="dashboard-sidebar">
+			<div class="stat-card">
+				<div class="stat-title">Маржинальность</div>
+				<div class="stat-value primary">
+					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
+					}}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-title">Рентабельность</div>
+				<div class="stat-value primary">
+					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
+					}}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-title">ДДР</div>
+				<div class="stat-value primary">
+					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
+					}}
+				</div>
+			</div>
 		</aside>
 	</div>
 </template>
@@ -366,7 +409,7 @@ onMounted(async () => {
 /* Основная структура */
 .dashboard-container {
 	display: grid;
-	grid-template-columns: 280px 1fr;
+	grid-template-columns: 280px 1fr 280px;
 	gap: 20px;
 	padding: 20px;
 	min-height: 100vh;
@@ -441,6 +484,22 @@ onMounted(async () => {
 	grid-auto-flow: column;
 	gap: 20px;
 	margin-bottom: 20px;
+}
+
+@media screen and (max-width: 1700px) {
+	.stats-grid {
+		grid-template-columns: repeat(3, minmax(250px, 1fr));
+		grid-template-rows: repeat(3, auto);
+	}
+}
+
+@media screen and (max-width: 1440px) {
+	.stats-grid {
+		grid-template-columns: repeat(2, minmax(250px, 1fr));
+		grid-template-rows: repeat(4, auto);
+		grid-auto-flow: row;
+
+	}
 }
 
 @media (max-width: 768px) {
