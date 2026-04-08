@@ -83,3 +83,12 @@ class WbProductCard(Database.Base):
         Index('uq_wb_product_user_nmid', 'user_id', 'nm_id', unique=True),
         Index('idx_wb_product_nm_uuid', 'nm_uuid'),  # опционально
     )
+
+    def __repr__(self):
+        return (f"<WbProductCard("
+                f"id={self.id}, "
+                f"user_id={self.user_id}, "
+                f"nm_id={self.nm_id}, "
+                f"nm_uuid={self.nm_uuid})"
+                f"title={self.title}, "
+                ")>")
