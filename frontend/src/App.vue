@@ -257,6 +257,7 @@ nav {
 	background-color: var(--medium-bg);
 	display: flex;
 	gap: 20px;
+	justify-content: center;
 }
 
 .footer {
