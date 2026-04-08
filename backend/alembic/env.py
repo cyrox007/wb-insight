@@ -27,6 +27,7 @@ from models.permissions import Permission
 from models.tariffs import TariffPlan, TariffLimit, Subscription
 from models.tokens import APIToken
 from models.wb_report import WbRealizationReport
+from models.wb_product_cards import WbProductCard
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

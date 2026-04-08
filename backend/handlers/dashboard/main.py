@@ -315,6 +315,14 @@ async def dashboard(
 	    { 'id': 10, 'sellerSku': 'ПальтоХалатДрап-С', 'wbSku': '170206280', 'revenue': 114379.2, 'profit': 58267.9, 'share': 3.8, 'cumulativePercent': 82.3, 'category': 'B' }
     ]
 
+    categoryData = [
+        { "category": 'Блузки', 'value': 2574164 },
+        { "category": 'Пальто', 'value': 1282464 },
+        { "category": 'Платья', 'value': 1047567 },
+        { "category": 'Пуховики', 'value': 41436 },
+        { "category": 'Рубашки', 'value': 5504988 }
+    ]
+
     products = [
         { 'id': 1, 'name': 'Электросталь', 'sales': 2722, 'profit': 1500 },
         { 'id': 2, 'name': 'Коледино', 'sales': 1323, 'profit': 800 },

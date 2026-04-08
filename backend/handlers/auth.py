@@ -107,7 +107,7 @@ async def login(
             "email": user.email,
             "full_name": user.full_name,
             'tariff': tariff,
-            "roles": user.roles
+            "roles": [role.role for role in user.roles]
         }
     )
 
