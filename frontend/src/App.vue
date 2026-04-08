@@ -43,7 +43,7 @@ const logout = () => {
 <template>
 	<header class="header" v-if="showHeader">
 		<div class="header-left">
-			<div class="logo">wild<span>berries</span></div>
+			<div class="logo">WB<span>Insight</span></div>
 		</div>
 		<div class="header-right">
 			<!-- Блок пользователя/авторизации -->
@@ -58,7 +58,7 @@ const logout = () => {
 							Панель управления
 						</div>
 						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль</div>
-						<div class="dropdown-item">Настройки</div>
+						<!-- <div class="dropdown-item">Настройки</div> -->
 						<div class="dropdown-divider"></div>
 						<div class="dropdown-item" @click="logout">Выйти</div>
 					</div>
@@ -82,6 +82,15 @@ const logout = () => {
 
 	<!-- Основной контент страниц -->
 	<main class="main-content">
+		<nav v-if="isAuthenticated">
+			<div class="nav-item">Ключевые показатели</div>
+			<div class="nav-item">Unit-экономика</div>
+			<div class="nav-item">Внутренняя реклама</div>
+			<div class="nav-item">РнП</div>
+			<div class="nav-item">Показатели месяца</div>
+			<div class="nav-item">РнП (Джем)</div>
+			<div class="nav-item">С\С</div>
+		</nav>
 		<RouterView />
 	</main>
 
@@ -238,6 +247,16 @@ const logout = () => {
 .auth-section {
 	display: flex;
 	gap: 10px;
+}
+
+nav {
+	padding: 20px;
+	margin: 0 20px;
+	margin-top: 20px;
+	border-radius: 8px;
+	background-color: var(--medium-bg);
+	display: flex;
+	gap: 20px;
 }
 
 .footer {

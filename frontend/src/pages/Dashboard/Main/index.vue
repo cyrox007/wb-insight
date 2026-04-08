@@ -207,13 +207,7 @@ const chartData = ref([]); // основные данные для диагра�
 const baseStats = ref({}); // основные показатели по кабинету
 const abcAnalysis = ref([]); // ABC Analysis data
 const warehouseData = ref([]) // Данные склада
-const categoryData = ref([
-	{ category: 'Блузки', value: 2574164 },
-	{ category: 'Пальто', value: 1282464 },
-	{ category: 'Платья', value: 1047567 },
-	{ category: 'Пуховики', value: 41436 },
-	{ category: 'Рубашки', value: 5504988 }
-]); // Данные по категориям
+const categoryData = ref([]); // Данные по категориям
 
 // Навигация и поиск
 const searchQuery = ref('')
@@ -357,6 +351,7 @@ onMounted(async () => {
 		stats.value = result.stats;
 		chartData.value = result.chartData;
 		baseStats.value = result.baseStats;
+		categoryData.value = result.categoryData;
 		// products.value = result.products;
 		// sizeChart.value = result.sizeChart;
 		// abcAnalysis.value = result.abcAnalysis;
