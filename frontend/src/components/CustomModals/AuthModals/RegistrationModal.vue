@@ -643,24 +643,35 @@ const validateEmail = async () => {
 
 const validatePhone = async () => {
 	const phone = formData.value.phone.replace(/\D/g, '')
+
+	errors.value.phone = ''
+
 	if (!phone) {
 		errors.value.phone = 'Телефон обязателен'
-	} else if (phone.length !== 10) {
+		return
+	}
+
+	if (phone.length !== 10) {
 		errors.value.phone = 'Введите корректный номер телефона'
+		return
 	}
 
 	try {
-		const response = await AuthService.checkPhone(phone);
-		if (response.data.status == "error") {
+		const response = await AuthService.checkPhone(phone)
+
+		if (response.data.status === "error") {
 			errors.value.phone = response.data.error.message
 				? response.data.error.message
-				: "Этот номер телефона уже зарегистрирован";
+				: "Этот номер телефона уже зарегистрирован"
+			return
 		}
 
-		delete errors.value.phone;
+		// ✅ только если всё ок
+		delete errors.value.phone
+
 	} catch (error) {
-		errors.value.phone = 'Ошибка проверки номера телефона';
-		console.error(error);
+		errors.value.phone = 'Ошибка проверки номера телефона'
+		console.error(error)
 	}
 }
 
