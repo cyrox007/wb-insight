@@ -10,6 +10,12 @@ class Config:
     SERVER_HTTP_PROTOCOL = os.getenv("SERVER_HTTP_PROTOCOL", "http://")
     SERVER_ADDR = os.getenv("SERVER_ADDR", "localhost")
     SERVER_PORT = os.getenv("SERVER_PORT", "9000")
+
+    @property
+    def get_allowed_origins(self) -> list[str]:
+        origins = os.getenv("ALLOWED_ORIGINS", "")
+        return [origin.strip() for origin in origins.split(",") if origin.strip()]
+    
     @property
     def BASE_URL(self):
         """

@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
+from settings import config
+
 from handlers.users import routers as user_router
 from handlers.auth import router as auth_router
 from handlers.dashboard.main import router as D_main_router
@@ -15,7 +17,7 @@ from handlers.control_panel.tariffs import router as CP_tariffs_router
 from handlers.control_panel.roles import router as CP_roles_router
 
 
-ALLOWED_ORIGINS = ['http://localhost:5173']
+ALLOWED_ORIGINS = config.get_allowed_origins
 ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE"]
 STATIC_DIRECTORIES = {
     "static": "/static",
