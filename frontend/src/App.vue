@@ -43,7 +43,8 @@ const logout = () => {
 <template>
 	<header class="header" v-if="showHeader">
 		<div class="header-left">
-			<div class="logo">WB<span>Insight</span></div>
+			<div class="logo">WB<span>Insight</span>
+				&lt;&lt; AI &gt;&gt; </div>
 		</div>
 		<div class="header-right">
 			<!-- Блок пользователя/авторизации -->
@@ -57,7 +58,8 @@ const logout = () => {
 							@click="router.push({ name: 'control-panel.index' })" class="dropdown-item">
 							Панель управления
 						</div>
-						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль</div>
+						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль
+						</div>
 						<!-- <div class="dropdown-item">Настройки</div> -->
 						<div class="dropdown-divider"></div>
 						<div class="dropdown-item" @click="logout">Выйти</div>

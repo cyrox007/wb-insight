@@ -188,45 +188,64 @@
 			<div class="stat-card">
 				<div class="stat-title">Маржинальность</div>
 				<div class="stat-value primary">
-					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
-					}}
+					{{ stats.marginality?.value != null
+						? formatNumber(stats.marginality.value) + ' %'
+						: '—' }}
 				</div>
 			</div>
 			<div class="stat-card">
 				<div class="stat-title">Рентабельность</div>
 				<div class="stat-value primary">
-					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
+					{{ stats.profitability?.value != null ? formatNumber(stats.profitability.value) + ' %' : '—'
 					}}
 				</div>
 			</div>
 			<div class="stat-card">
 				<div class="stat-title">ДДР</div>
 				<div class="stat-value primary">
-					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
-					}}
-				</div>
-			</div>
-		</aside>
-		<aside class="dashboard-sidebar">
-			<div class="stat-card">
-				<div class="stat-title">Маржинальность</div>
-				<div class="stat-value primary">
-					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
-					}}
+					{{ stats.ddr?.value != null
+						? formatNumber(stats.ddr.value) + ' %'
+						: '—' }}
 				</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-title">Рентабельность</div>
+				<div class="stat-title">Факт на текущий месяц</div>
 				<div class="stat-value primary">
-					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
-					}}
+					{{ stats.fact_current_month?.value != null
+						? formatNumber(stats.fact_current_month.value) + ' ₽'
+						: '—' }}
 				</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-title">ДДР</div>
+				<div class="stat-title">План на текущий месяц</div>
 				<div class="stat-value primary">
-					{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' %' : '—'
-					}}
+					{{ stats.plan_current_month?.value != null
+						? formatNumber(stats.plan_current_month.value) + ' ₽'
+						: '—' }}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-title">Выполнено</div>
+				<div class="stat-value primary">
+					{{ stats.done?.value != null
+						? formatNumber(stats.done.value) + ' %'
+						: '—' }}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-title">Прогноз</div>
+				<div class="stat-value primary">
+					{{ stats.forecast?.value != null
+						? formatNumber(stats.forecast.value) + ' %'
+						: '—' }}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-title">Рекоменжуется заказов в день</div>
+				<div class="stat-value primary">
+					{{ stats.recommended_orders_per_day?.value != null
+						? formatNumber(stats.recommended_orders_per_day.value) + ' ₽'
+						: '—' }}
 				</div>
 			</div>
 		</aside>
@@ -498,7 +517,6 @@ onMounted(async () => {
 		grid-template-columns: repeat(2, minmax(250px, 1fr));
 		grid-template-rows: repeat(4, auto);
 		grid-auto-flow: row;
-
 	}
 }
 

@@ -133,6 +133,30 @@ async def dashboard(
             "value": round(avg_price, 2),
             "change_percent": 0.0,
             "change_abs": 0.0
+        },
+        "marginality": {
+            "value": round(16.6, 1)
+        },
+        "profitability": {
+            "value": round(47.8, 1)
+        },
+        "ddr": {
+            "value": round(1.08, 2)
+        },
+        "fact_current_month": {
+            "value": round(0.00, 2)
+        },
+        "plan_current_month": {
+            "value": round(50000000, 2)
+        },
+        "done": {
+            "value": round(0.0, 2)
+        },
+        "forecast": {
+            "value": round(27, 0)
+        },
+        "recommended_orders_per_day": {
+            "value": round(166593.73, 2)
         }
     }
     
