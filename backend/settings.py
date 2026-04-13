@@ -37,11 +37,13 @@ class Config:
     DB_PORT = os.getenv("DB_PORT", "5432")
     DB_NAME = os.getenv("DB_NAME", "wb")
     DB_USER = os.getenv("DB_USER", "postgres")
-    DB_PASSWORD = quote_plus(os.getenv("DB_PASSWORD", "postgres"))
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
     def database_url(self, async_mode=False):
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
-        return f"{driver}://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        password = quote_plus(self.DB_PASSWORD)
+        url = f"{driver}://{self.DB_USER}:{password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        return url.replace("%", "%%")
     
     # Безопасность
     ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY")
