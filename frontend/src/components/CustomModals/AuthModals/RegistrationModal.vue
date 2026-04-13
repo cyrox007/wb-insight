@@ -352,7 +352,6 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import Modal from '@/components/UI/Modal.vue'
 import AuthService from '@/API/AuthService.js'
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue'
@@ -551,15 +550,22 @@ const goToStep = (index) => {
 
 // Валидация
 const validateStep1 = () => {
-	const fields = ['full_name', 'email', 'phone']
+	const { full_name, email, phone } = formData.value
+
 	let isValid = true
 
-	fields.forEach(field => {
-		if (!formData.value[field]) {
-			errors.value[field] = 'Обязательное поле'
-			isValid = false
-		}
-	})
+	if (!full_name.trim()) {
+		errors.value.full_name = 'Обязательное поле'
+		isValid = false
+	}
+
+	if (!email.trim() || errors.value.email) {
+		isValid = false
+	}
+
+	if (!phone.trim() || errors.value.phone) {
+		isValid = false
+	}
 
 	return isValid
 }
@@ -704,6 +710,9 @@ const validateInn = async () => {
 	} else if (inn && !isLegalEntity.value && inn.length !== 12) {
 		errors.value.inn = 'ИНН физлица должен содержать 12 цифр'
 	}
+
+	if (!inn) return
+	if (errors.value.inn) return
 
 	try {
 		const response = await AuthService.checkInn(inn);
