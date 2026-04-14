@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue';
 import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue';
@@ -11,22 +11,16 @@ const showFooter = ref(true)
 
 const authStore = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 
 // Авторизация
 const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
-
-// Уведомления
-/* const showNotifications = ref(false) */
+const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'));
 
 // Модальные окна
 const showLogin = ref(false)
 const showRegister = ref(false)
-
-// Методы
-/* const toggleNotifications = () => {
-	showNotifications.value = !showNotifications.value
-} */
 
 const logout = () => {
 	localStorage.clear();
@@ -34,10 +28,6 @@ const logout = () => {
 	authStore.logout()
 }
 
-/* onMounted(() => {
-	// Можно настроить логику скрытия/показа элементов для разных страниц
-	// Например, на странице входа не показывать хедер
-}) */
 </script>
 
 <template>
@@ -60,7 +50,7 @@ const logout = () => {
 						</div>
 						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль
 						</div>
-						<!-- <div class="dropdown-item">Настройки</div> -->
+
 						<div class="dropdown-divider"></div>
 						<div class="dropdown-item" @click="logout">Выйти</div>
 					</div>
@@ -84,7 +74,7 @@ const logout = () => {
 
 	<!-- Основной контент страниц -->
 	<main class="main-content">
-		<nav v-if="isAuthenticated">
+		<nav v-if="isAuthenticated && !isControlPanelRoute">
 			<div class="nav-item">Ключевые показатели</div>
 			<div class="nav-item">Unit-экономика</div>
 			<div class="nav-item">Внутренняя реклама</div>
