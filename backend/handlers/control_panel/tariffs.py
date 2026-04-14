@@ -10,8 +10,9 @@ from services.tariff_service import (
     update_tariff, 
     get_tariff_limits_by_id, 
     delete_tariff_by_id,
-    insert_limit_by_tariff_id,
-    get_limit_by_id,
+    upsert_limit,
+    # insert_limit_by_tariff_id,
+    get_limit,
     update_limit,
     delete_limit
 )
@@ -208,7 +209,7 @@ async def create_tariff_limit(tariff_id: str, request: Request, response: Respon
             message='Tariff limits data is required'
         )
     
-    new_limit = await insert_limit_by_tariff_id(
+    new_limit = await upsert_limit(
         session=db_session, 
         tariff_id=tariff_id, 
         limit={
@@ -228,8 +229,8 @@ async def create_tariff_limit(tariff_id: str, request: Request, response: Respon
         limit=new_limit
     )
 
-@router.put('/{tariff_id}/limits/{limit_id}/edit')
-async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+@router.put('/{tariff_id}/limits/{limit_type}/edit')
+async def edit_tariff_limit(tariff_id: str, limit_type: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -237,10 +238,10 @@ async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, res
             message='Tariff ID is required'
         )
     
-    if not limit_id:
+    if not limit_type:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
-            code='LIMIT_ID_NONE',
+            code='LIMIT_TYPE_NONE',
             message='Limit ID is required'
         )
     
@@ -262,9 +263,10 @@ async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, res
             message='Tariff limits data is required'
         )
     
-    limit = await get_limit_by_id(
+    limit = await get_limit(
         session=db_session,
-        limit_id=limit_id
+        tariff_id=tariff_id,
+        limit_type=limit_type
     )
 
     if not limit:
@@ -298,8 +300,8 @@ async def edit_tariff_limit(tariff_id: str, limit_id: str, request: Request, res
         limit=limit
     )
 
-@router.delete('/{tariff_id}/limits/{limit_id}/delete')
-async def delete_tariff_limit(tariff_id: str, limit_id: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+@router.delete('/{tariff_id}/limits/{limit_type}/delete')
+async def delete_tariff_limit(tariff_id: str, limit_type: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -307,16 +309,17 @@ async def delete_tariff_limit(tariff_id: str, limit_id: str, response: Response,
             message='Tariff ID is required'
         )
     
-    if not limit_id:
+    if not limit_type:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
-            code='LIMIT_ID_NONE',
+            code='LIMIT_TYPE_NONE',
             message='Limit ID is required'
         )
     
-    limit = await get_limit_by_id(
+    limit = await get_limit(
         session=db_session,
-        limit_id=limit_id
+        tariff_id=tariff_id,
+        limit_type=limit_type
     )
     if not limit:
         response.status_code = status.HTTP_404_NOT_FOUND

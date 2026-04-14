@@ -1,6 +1,6 @@
 from typing import Optional
 from collections.abc import Sequence
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
@@ -75,7 +75,7 @@ async def delete_tariff_by_id(session: AsyncSession, tariff_id: str) -> bool:
         return False
 
 
-async def insert_limit_by_tariff_id(session: AsyncSession, tariff_id: str, limit: dict) -> Optional[TariffLimit]:
+""" async def insert_limit_by_tariff_id(session: AsyncSession, tariff_id: str, limit: dict) -> Optional[TariffLimit]:
     new_limit = TariffLimit(
         tariff_id = tariff_id,
         limit_type = limit['limit_type'],
@@ -90,13 +90,55 @@ async def insert_limit_by_tariff_id(session: AsyncSession, tariff_id: str, limit
     except Exception as e:
         logger.error(f"Error inserting limit: {e}")
         await session.rollback()
+        return None """
+
+async def upsert_limit(
+    session: AsyncSession,
+    tariff_id: str,
+    limit: dict
+) -> Optional[TariffLimit]:
+
+    existing = await get_limit(session, tariff_id, limit['limit_type'])
+
+    try:
+        if existing:
+            existing.limit_value = limit['limit_value']
+            await session.commit()
+            await session.refresh(existing)
+            return existing
+
+        new_limit = TariffLimit(
+            tariff_id=tariff_id,
+            limit_type=limit['limit_type'],
+            limit_value=limit['limit_value']
+        )
+
+        session.add(new_limit)
+        await session.commit()
+        await session.refresh(new_limit)
+
+        return new_limit
+
+    except Exception as e:
+        logger.error(f"Error upserting limit: {e}")
+        await session.rollback()
         return None
 
-async def get_limit_by_id(session: AsyncSession, limit_id: str) -> Optional[TariffLimit]:
-    query = select(TariffLimit).where(TariffLimit.id == limit_id)
+async def get_limit(
+    session: AsyncSession,
+    tariff_id: str,
+    limit_type: str
+) -> Optional[TariffLimit]:
+    query = select(TariffLimit).where(
+        and_(
+            TariffLimit.tariff_id == tariff_id,
+            TariffLimit.limit_type == limit_type
+        )
+    )
+
     result = await session.execute(query)
     return result.scalar_one_or_none()
-    
+
 async def update_limit(session: AsyncSession, limit: TariffLimit, limit_data: dict) -> Optional[TariffLimit]:
     try:
         # Обновляем поля объекта
