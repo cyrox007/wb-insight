@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import CardLoaders from '../UI/Loaders/CardLoaders.vue';
 const props = defineProps({
 	chartData: {
 		type: Array,
@@ -118,10 +119,7 @@ const getBarStyles = (value, color) => {
 		</div>
 
 		<!-- Состояние загрузки -->
-		<div v-if="isLoading" class="stats-loading">
-			<div class="loading-spinner"></div>
-			<p class="loading-text">Загрузка показателей...</p>
-		</div>
+		<CardLoaders v-if="isLoading" />
 
 		<!-- Пустое состояние -->
 		<div v-else-if="!hasData" class="chart-empty">
@@ -403,36 +401,5 @@ const getBarStyles = (value, color) => {
 	font-size: 11px;
 	color: #aaa;
 	white-space: nowrap;
-}
-
-/* Состояние загрузки */
-.stats-loading {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	padding: 20px;
-	color: #888;
-}
-
-.loading-spinner {
-	width: 24px;
-	height: 24px;
-	border: 3px solid rgba(255, 255, 255, 0.3);
-	border-radius: 50%;
-	border-top-color: #fff;
-	animation: spin 1s linear infinite;
-	margin-bottom: 12px;
-}
-
-@keyframes spin {
-	to {
-		transform: rotate(360deg);
-	}
-}
-
-.loading-text {
-	font-size: 14px;
-	color: #888;
 }
 </style>
