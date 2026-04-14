@@ -19,10 +19,10 @@ export default class CP_Tariffs {
 	static async createLimit(tariffId, limit) {
 		return await $api.post(`/control-panel/tariffs/${tariffId}/limits/create`, { ...limit});
 	}
-	static async updateLimit(tariffId, limitId, limitData) {
-		return await $api.put(`/control-panel/tariffs/${tariffId}/limits/${limitId}/edit`, {...limitData});
+	static async updateLimit(tariffId, limitType, limitData) {
+		return await $api.put(`/control-panel/tariffs/${tariffId}/limits/${limitType}/edit`, {...limitData});
 	}
-	static async deleteLimit(tariffId, limitId) {
-		return await $api.delete(`/control-panel/tariffs/${tariffId}/limits/${limitId}/delete`);
+	static async deleteLimit(tariffId, limitType) {
+		return await $api.delete(`/control-panel/tariffs/${tariffId}/limits/${limitType}/delete`);
 	}
 }

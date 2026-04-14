@@ -29,10 +29,10 @@ const limitData = ref({
 watch(
 	() => props.limit,
 	(newLimit) => {
-		if (newLimit && newLimit.id) {
+		if (newLimit && newLimit.limit_type) {
 			limitData.value = {
 				limit_type: newLimit.limit_type || '',
-				limit_value: String(newLimit.limit_value ?? ''),
+				limit_value: newLimit.limit_value ?? 0,
 			};
 		}
 	}
@@ -46,13 +46,12 @@ const editLimit = async () => {
 
 	try {
 		const payload = {
-			limit_type: limitData.value.limit_type,
 			limit_value: Number(limitData.value.limit_value) || 0
 		};
 
 		const response = await CP_Tariffs.updateLimit(
 			route.params.id,
-			props.limit.id,
+			props.limit.limit_type,
 			payload
 		);
 
@@ -89,7 +88,7 @@ const editLimit = async () => {
 				Текущее значение: {{ props.limit.limit_value }}
 			</p>
 
-			<TextInput label="Тип лимита" v-model="limitData.limit_type" />
+			<TextInput label="Тип лимита" v-model="limitData.limit_type" :disabled="true" />
 			<TextInput label="Значение" :type="'number'" v-model="limitData.limit_value" />
 
 		</template>
