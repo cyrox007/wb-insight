@@ -1,8 +1,12 @@
 from decimal import Decimal
+from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
+from core.logger import setup_logger
+from models.tariffs import TariffLimit
 from services.tariff_service import (
     get_tariffs_list, 
     insert_tariff, 
@@ -20,6 +24,8 @@ from utils.responce_helps import response_error, response_success
 
 router = APIRouter(prefix='/control-panel/tariffs', tags=['Tariffs'])
 
+logger = setup_logger(__name__)
+
 @router.get('/')
 async def get_tariffs(db_session: AsyncSession = Depends(get_db_session)):
     tariffs = await get_tariffs_list(db_session)
@@ -27,7 +33,7 @@ async def get_tariffs(db_session: AsyncSession = Depends(get_db_session)):
     return response_success(tariffs=tariffs)
 
 @router.get('/{tariff_id}')
-async def get_tariff(tariff_id: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def get_tariff(tariff_id: UUID, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -92,6 +98,14 @@ async def create_tariffs(request: Request, response: Response, db_session: Async
             code='TARIFF_EXISTS',
             message='Tariff with this code already exists'
         )
+    
+    try:
+        await db_session.commit()
+    except Exception as e:
+        await db_session.rollback()
+        return response_error(
+            code='TARIFF_NOT_CREATED', message=str(e)
+        )
 
     return response_success(tariff=tariff)
 
@@ -102,7 +116,7 @@ async def update_tariff_status(tariff_id: str, request: Request, response: Respo
 
     tariff = await get_tariff_by_id(
         db_session,
-        tariff_id
+        UUID(tariff_id)
     )
 
     if not tariff:
@@ -139,7 +153,7 @@ async def update_tariff_status(tariff_id: str, request: Request, response: Respo
     )
 
 @router.put('/{tariff_id}/edit', status_code=status.HTTP_200_OK)
-async def edit_tariff(tariff_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def edit_tariff(tariff_id: UUID, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     input_data = await request.json()
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -169,10 +183,18 @@ async def edit_tariff(tariff_id: str, request: Request, response: Response, db_s
             message='Tariff not updated'
         )
     
+    try:
+        await db_session.commit()
+    except Exception as e:
+        await db_session.rollback()
+        return response_error(
+            code='TARIFF_NOT_UPDATED', message=str(e)
+        )
+    
     return response_success(tariff=tariff)
 
 @router.delete('/{tariff_id}')
-async def delete_tariff(tariff_id: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def delete_tariff(tariff_id: UUID, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -188,11 +210,18 @@ async def delete_tariff(tariff_id: str, response: Response, db_session: AsyncSes
             code='TARIFF_NOT_DELETED',
             message='Tariff not deleted'
         )
-    
+    try:
+        await db_session.commit()
+    except Exception as e:
+        await db_session.rollback()
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return response_error(
+            code='TARIFF_NOT_DELETED', message=str(e)
+        )
     return response_success(deleting=result)
 
 @router.post('/{tariff_id}/limits/create', status_code=status.HTTP_201_CREATED)
-async def create_tariff_limit(tariff_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def create_tariff_limit(tariff_id: UUID, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -225,12 +254,26 @@ async def create_tariff_limit(tariff_id: str, request: Request, response: Respon
             message='Tariff limits not created'
         )
     
+    try:
+        await db_session.commit()
+    except Exception as e:
+        await db_session.rollback()
+        return response_error(
+            code='TARIFF_LIMITS_NOT_CREATED', message=str(e)
+        )
+    
     return response_success(
         limit=new_limit
     )
 
 @router.put('/{tariff_id}/limits/{limit_type}/edit')
-async def edit_tariff_limit(tariff_id: str, limit_type: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def edit_tariff_limit(tariff_id: UUID, limit_type: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    logger.info(f"tariff_id={tariff_id}, limit_type='{limit_type}'")
+    logger.info(f"type(tariff_id)={type(tariff_id)}")
+    logger.info(f"DB QUERY tariff_id={tariff_id}, limit_type='{limit_type}'")
+    query = select(TariffLimit).where(TariffLimit.tariff_id == tariff_id)
+    res = await db_session.execute(query)
+    logger.info(f"ALL LIMITS: {[l.limit_type for l in res.scalars().all()]}")
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -253,10 +296,7 @@ async def edit_tariff_limit(tariff_id: str, limit_type: str, request: Request, r
             message='Tariff limits data is required'
         )
     
-    allowed_fields = {'limit_type', 'limit_value'}
-    update_data = {k: v for k, v in input_data.items() if k in allowed_fields}
-    
-    if not update_data.get('limit_value', None) or not update_data.get('limit_type', None):
+    if 'limit_value' not in input_data:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
             code='TARIFF_LIMITS_DATA_NONE',
@@ -276,17 +316,17 @@ async def edit_tariff_limit(tariff_id: str, limit_type: str, request: Request, r
             message='Limit not found'
         )
     
-    if str(limit.tariff_id) != tariff_id:
+    """ if str(limit.tariff_id) != tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
             code='LIMIT_NOT_FOUND',
             message='Limit not found'
-        )
+        ) """
     
     limit = await update_limit(
         session=db_session,
         limit=limit,
-        limit_data=update_data
+        limit_data=input_data
     )
 
     if not limit:
@@ -296,12 +336,20 @@ async def edit_tariff_limit(tariff_id: str, limit_type: str, request: Request, r
             message='Limit not updated'
         )
     
+    try:
+        await db_session.commit()
+    except Exception as e:
+        await db_session.rollback()
+        return response_error(
+            code='LIMIT_NOT_UPDATED', message=str(e)
+        )
+    
     return response_success(
         limit=limit
     )
 
 @router.delete('/{tariff_id}/limits/{limit_type}/delete')
-async def delete_tariff_limit(tariff_id: str, limit_type: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def delete_tariff_limit(tariff_id: UUID, limit_type: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -321,6 +369,7 @@ async def delete_tariff_limit(tariff_id: str, limit_type: str, response: Respons
         tariff_id=tariff_id,
         limit_type=limit_type
     )
+
     if not limit:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(
@@ -333,6 +382,15 @@ async def delete_tariff_limit(tariff_id: str, limit_type: str, response: Respons
         return response_error(
             code='LIMIT_NOT_DELETED',
             message='Limit not deleted'
+        )
+    
+    try:
+        await db_session.commit()
+    except Exception as e:
+        await db_session.rollback()
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return response_error(
+            code='LIMIT_NOT_DELETED', message=str(e)
         )
     
     return response_success(

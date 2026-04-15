@@ -1,10 +1,12 @@
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from collections.abc import Sequence
-from sqlalchemy import and_, select
+from uuid import UUID
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
-from models.tariffs import TariffLimit, TariffPlan
+from models.tariffs import Subscription, TariffLimit, TariffPlan
 
 logger = setup_logger(__name__)
 
@@ -19,12 +21,10 @@ async def insert_tariff(session: AsyncSession, tariff) -> Optional[TariffPlan]:
 
     try:
         session.add(new_tariff)
-        await session.commit()
-        await session.refresh(new_tariff)
+        await session.flush()
         return new_tariff
     except Exception as e:
         logger.error(f"Error inserting tariff: {e}")
-        await session.rollback()
         return None
 
 async def get_tariffs_list(session: AsyncSession, 
@@ -36,7 +36,7 @@ async def get_tariffs_list(session: AsyncSession,
     result = await session.execute(query)
     return result.scalars().all()
 
-async def get_tariff_by_id(session: AsyncSession, tariff_id: str):
+async def get_tariff_by_id(session: AsyncSession, tariff_id: UUID):
     query = select(TariffPlan).where(TariffPlan.id == tariff_id)
     result = await session.execute(query)
     return result.scalar_one_or_none()
@@ -49,12 +49,11 @@ async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: 
                 setattr(tariff, key, value)
         
         session.add(tariff)
-        await session.commit()
-        await session.refresh(tariff)  # обновить данные из БД (если есть триггеры)
+        # await session.commit()
+        await session.flush()  # обновить данные из БД (если есть триггеры)
         return tariff
     except Exception as e:
         logger.error(f"Error updating tariff: {e}")
-        await session.rollback()
         return None
     
 
@@ -63,70 +62,39 @@ async def get_tariff_limits_by_id(session: AsyncSession, tariff_id: str) -> Sequ
     result = await session.execute(query)
     return result.scalars().all()
 
-async def delete_tariff_by_id(session: AsyncSession, tariff_id: str) -> bool:
+async def delete_tariff_by_id(session: AsyncSession, tariff_id: UUID) -> bool:
     try:
-        query = TariffPlan.delete().where(TariffPlan.id == tariff_id)
+        query = delete(TariffPlan).where(TariffPlan.id == tariff_id)
         await session.execute(query)
-        await session.commit()
+        # await session.commit()
         return True
     except Exception as e:
         logger.error(f"Error deleting tariff: {e}")
-        await session.rollback()
         return False
 
-
-""" async def insert_limit_by_tariff_id(session: AsyncSession, tariff_id: str, limit: dict) -> Optional[TariffLimit]:
-    new_limit = TariffLimit(
-        tariff_id = tariff_id,
-        limit_type = limit['limit_type'],
-        limit_value = limit['limit_value']
-    )
-
-    try:
-        session.add(new_limit)
-        await session.commit()
-        await session.refresh(new_limit)
-        return new_limit
-    except Exception as e:
-        logger.error(f"Error inserting limit: {e}")
-        await session.rollback()
-        return None """
-
-async def upsert_limit(
-    session: AsyncSession,
-    tariff_id: str,
-    limit: dict
-) -> Optional[TariffLimit]:
+async def upsert_limit(session: AsyncSession, tariff_id: UUID, limit: dict):
 
     existing = await get_limit(session, tariff_id, limit['limit_type'])
 
-    try:
-        if existing:
-            existing.limit_value = limit['limit_value']
-            await session.commit()
-            await session.refresh(existing)
-            return existing
+    if existing:
+        existing.limit_value = limit['limit_value']
+        await session.flush()
+        return existing
 
-        new_limit = TariffLimit(
-            tariff_id=tariff_id,
-            limit_type=limit['limit_type'],
-            limit_value=limit['limit_value']
-        )
+    new_limit = TariffLimit(
+        tariff_id=tariff_id,
+        limit_type=limit['limit_type'],
+        limit_value=limit['limit_value']
+    )
 
-        session.add(new_limit)
-        await session.commit()
-        await session.refresh(new_limit)
+    session.add(new_limit)
+    await session.flush()
 
-        return new_limit
-
-    except Exception as e:
-        logger.error(f"Error upserting limit: {e}")
-        await session.rollback()
-        return None
+    return new_limit
 
 async def get_limit(
     session: AsyncSession,
-    tariff_id: str,
+    tariff_id: UUID,
     limit_type: str
 ) -> Optional[TariffLimit]:
     query = select(TariffLimit).where(
@@ -146,20 +114,40 @@ async def update_limit(session: AsyncSession, limit: TariffLimit, limit_data: di
             if hasattr(limit, key):
                 setattr(limit, key, value)
         session.add(limit)
-        await session.commit()
-        await session.refresh(limit)  # обновить данные из БД (если есть триггеры)
+        # await session.commit()
+        await session.flush()  # обновить данные из БД (если есть триггеры)
         return limit
     except Exception as e:
         logger.error(f"Error updating limit: {e}")
-        await session.rollback()
         return None
     
 async def delete_limit(session: AsyncSession, limit: TariffLimit) -> bool:
     try:
         await session.delete(limit)
-        await session.commit()
+        # await session.commit()
         return True
     except Exception as e:
         logger.error(f"Error deleting limit: {e}")
-        await session.rollback()
         return False
+    
+
+async def create_demo_subscription(
+    session: AsyncSession,
+    user_id: UUID,
+    tariff_id: UUID
+) -> Subscription:
+    now = datetime.now(timezone.utc)
+
+    sub = Subscription(
+        user_id=user_id,
+        tariff_id=tariff_id,
+        status="demo",
+        current_period_start=now,
+        current_period_end=now + timedelta(days=7),
+        yookassa_payment_id=None
+    )
+
+    session.add(sub)
+    await session.flush()
+
+    return sub

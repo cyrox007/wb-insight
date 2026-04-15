@@ -11,6 +11,7 @@ from core.logger import setup_logger
 
 from schemas.auth import LoginRequest
 from services.user_service import (
+    create_user_role_association,
     get_user_by_email,
     get_user_by_inn,
     get_user_by_phone,
@@ -267,5 +268,7 @@ async def registration(
             code="REGISTRATION_ERROR",
             message="Ошибка при регистрации"
         )
+    
+    await create_user_role_association(db_session, str(user.id), 'user')
     
     return response_success(message='Зарегистрирован')

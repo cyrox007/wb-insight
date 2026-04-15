@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.logger import setup_logger
-from schemas.users import UserCreateRequest
 from models.users import User, UserRoleAssociation
 from utils.hashed_password import hash_password
 
@@ -42,13 +41,13 @@ async def insert_user(session: AsyncSession, user_data: dict):
 
     session.add(new_user)
     try:
-        await session.commit()
+        #await session.commit()
         await session.refresh(new_user)
         logger.info(f"Пользователь создан: {new_user.id}")
         return new_user
 
     except Exception as e:
-        await session.rollback()
+        # await session.rollback()
         logger.error(f'Ошибка при создании пользователя: {e}')
         return None
     
@@ -97,22 +96,22 @@ async def update_user(session: AsyncSession, user: User, user_data: dict) -> Opt
     try:
         for key, value in user_data.items():
             setattr(user, key, value)
-        await session.commit()
+        # await session.commit()
         await session.refresh(user)
         return user
     except Exception as e:
         logger.error(f"Error updating user: {e}")
-        await session.rollback()
+        # await session.rollback()
         return None
 
 async def delete_user(session: AsyncSession, user: User):
     try:
         await session.delete(user)
-        await session.commit()
+        # await session.commit()
         return True
     except Exception as e:
         logger.error(f"Error deleting user: {e}")
-        await session.rollback()
+        # await session.rollback()
         return False
     
 
@@ -139,19 +138,19 @@ async def create_user_role_association(session: AsyncSession, user_id: str, role
     )
     try:
         session.add(user_role_association)
-        await session.commit()
+        # await session.commit()
         return True
     except Exception as e:
         logger.error(f"Error creating user role association: {e}")
-        await session.rollback()
+        # await session.rollback()
         return False
     
 async def delete_role_association(session: AsyncSession, target_role: UserRoleAssociation):
     try:
         await session.delete(target_role)
-        await session.commit()
+        # await session.commit()
         return True
     except Exception as e:
         logger.error(f"Error deleting role association: {e}")
-        await session.rollback()
+        # await session.rollback()
         return False
