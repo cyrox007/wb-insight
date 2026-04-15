@@ -156,7 +156,8 @@ const deleteLimit = async (limitType) => {
 	<EditTariffModal :is-open="showEditModal" :current-tariff="currentTariff" @close="showEditModal = false"
 		@updated="async () => { await loadTariff() }" />
 
-	<CreateLimit :is-open="showAddLimitModal" :tariff-id="currentTariff.id" @close="showAddLimitModal = false" />
+	<CreateLimit :is-open="showAddLimitModal" :tariff-id="currentTariff.id" @close="showAddLimitModal = false"
+		@limitCreated="limitUpdated" />
 
 	<EditLimit :is-open="showEditLimitModal" :limit="currentLimit" @close="showEditLimitModal = false"
 		@updated="limitUpdated" />

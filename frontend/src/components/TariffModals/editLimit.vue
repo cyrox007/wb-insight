@@ -43,7 +43,7 @@ const editLimit = async () => {
 	formMessage.value = '';
 	msgStatus.value = '';
 	modalLoadedBtn.value = true;
-
+	console.log(props.limit.limit_type)
 	try {
 		const payload = {
 			limit_value: Number(limitData.value.limit_value) || 0

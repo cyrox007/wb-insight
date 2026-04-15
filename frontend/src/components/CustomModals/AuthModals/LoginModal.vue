@@ -27,7 +27,6 @@
 import { ref } from 'vue'
 import Modal from '@/components/UI/Modal.vue'
 import TextInput from '@/components/UI/TextInput.vue'
-/* import SpinnerButtonSmall from '@/components/Loaders/SpinnerButtonSmall.vue' */
 import ButtonLogin from '@/components/UI/Buttons/ButtonLogin.vue'
 import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue'
 import AuthService from '@/API/AuthService';

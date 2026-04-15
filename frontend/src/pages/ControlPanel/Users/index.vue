@@ -23,7 +23,10 @@ const ROLE_LABELS = {
 };
 
 const getEntityLabel = (type) => ENTITY_LABELS[type] || type;
-const getRoleLabel = (role) => ROLE_LABELS[role] || role;
+const getRoleLabel = (role) => {
+	// console.log(role.role);
+	return ROLE_LABELS[role.role] || role;
+};
 
 const getEntityClass = (type) => {
 	switch (type) {

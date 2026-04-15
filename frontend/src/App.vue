@@ -17,6 +17,11 @@ const route = useRoute();
 const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'));
+const isAdmin = computed(() => {
+	return user.value.roles?.some(
+		role => role === 'super_admin' || role === 'administrator'
+	)
+})
 
 // Модальные окна
 const showLogin = ref(false)
@@ -44,8 +49,8 @@ const logout = () => {
 						{{ user.full_name }}
 					</button>
 					<div class="dropdown-content">
-						<div v-show="user.roles && user.roles.some(role => role.role === 'super_admin' || role.role === 'administrator')"
-							@click="router.push({ name: 'control-panel.index' })" class="dropdown-item">
+						<div v-show="isAdmin" @click="router.push({ name: 'control-panel.index' })"
+							class="dropdown-item">
 							Панель управления
 						</div>
 						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль

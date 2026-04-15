@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
 import CP_Tariffs from "@/API/ControlPanel/CP_Tariffs";
 
@@ -21,7 +21,23 @@ const msgStatus = ref('');
 const formMessage = ref('');
 
 const newLimit = ref({
-	limit_type: '', limit_value: ''
+	limit_type: '',
+	limit_value: ''
+});
+
+const resetForm = () => {
+	newLimit.value = {
+		limit_type: '',
+		limit_value: ''
+	};
+	formMessage.value = '';
+	msgStatus.value = '';
+};
+
+watch(() => props.isOpen, (val) => {
+	if (val) {
+		resetForm();
+	}
 });
 
 const createLimit = async () => {
