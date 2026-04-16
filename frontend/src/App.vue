@@ -45,9 +45,9 @@ const logout = () => {
 			<!-- Блок пользователя/авторизации -->
 			<div class="user-section" v-if="isAuthenticated">
 				<div class="dropdown user-dropdown">
-					<button class="btn btn-outline">
+					<div class="user-menu">
 						{{ user.full_name }}
-					</button>
+					</div>
 					<div class="dropdown-content">
 						<div v-show="isAdmin" @click="router.push({ name: 'control-panel.index' })"
 							class="dropdown-item">
@@ -130,37 +130,6 @@ const logout = () => {
 	display: flex;
 	align-items: center;
 	gap: 15px;
-}
-
-.btn {
-	padding: 8px 16px;
-	border-radius: 6px;
-	border: none;
-	cursor: pointer;
-	font-size: 14px;
-	transition: var(--transition);
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.btn-primary {
-	background-color: var(--secondary-color);
-	color: white;
-}
-
-.btn-primary:hover {
-	background-color: #2980b9;
-}
-
-.btn-outline {
-	background-color: transparent;
-	border: 1px solid var(--border-color);
-	color: var(--text-color);
-}
-
-.btn-outline:hover {
-	background-color: var(--hover-bg);
 }
 
 .notification-icon {

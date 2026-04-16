@@ -46,12 +46,19 @@
 
 			<ul v-else class="tokens-list">
 				<li v-for="token in tokens" :key="token.id" class="token-item">
-					<div class="token-content">
-						<span class="token-masked">{{ maskToken(token.value) }}</span>
-						<span class="token-meta">Добавлен: {{ DateTransform.formatDate(token.created_at) }}</span>
+					<div class="token-left">
+						<div class="token-main">
+							<span class="token-label">Токен</span>
+							<span class="token-masked">{{ maskToken(token.encrypted_token) }}</span>
+						</div>
+
+						<div class="token-dates">
+							<span>Создан: {{ DateTransform.formatDate(token.issued_at) }}</span>
+							<span>До: {{ DateTransform.formatDate(token.expires_at) }}</span>
+						</div>
 					</div>
 					<div class="token-actions">
-						<button @click="copyToken(token.value)" class="btn-icon" title="Скопировать">
+						<button @click="copyToken(token.encrypted_token)" class="btn-icon" title="Скопировать">
 							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
 								stroke="currentColor" width="16" height="16">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -352,27 +359,48 @@ const deleteToken = async (id) => {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 14px;
+	padding: 16px;
 	background-color: var(--medium-bg);
-	border-radius: 8px;
-	margin-bottom: 10px;
+	border-radius: 10px;
+	margin-bottom: 12px;
+	border: 1px solid var(--border-color);
+	transition: var(--transition);
 }
 
-.token-content {
-	flex: 1;
+.token-item:hover {
+	background-color: var(--hover-bg);
+}
+
+.token-left {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.token-main {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.token-label {
+	font-size: 12px;
+	color: #888;
+	text-transform: uppercase;
 }
 
 .token-masked {
 	font-family: monospace;
-	font-size: 0.95rem;
+	font-size: 14px;
 	color: var(--text-color);
-	word-break: break-all;
+	letter-spacing: 1px;
 }
 
-.token-meta {
-	font-size: 0.85rem;
-	color: #888;
-	margin-top: 4px;
+.token-dates {
+	display: flex;
+	gap: 15px;
+	font-size: 12px;
+	color: #777;
 }
 
 .token-actions {

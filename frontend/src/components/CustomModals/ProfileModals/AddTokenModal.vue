@@ -1,42 +1,50 @@
 <template>
-    <div class="modal-overlay" @click.self="close">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Добавить токен Wildberries</h3>
-                <button class="close-btn" @click="close">✕</button>
-            </div>
+	<Modal :is-open="isOpen" @close="close">
+		<!-- HEADER -->
+		<template #header>
+			<div class="modal-header">
+				<h3>Добавить токен Wildberries</h3>
+				<!-- <button class="close-btn" @click="close">✕</button> -->
+			</div>
+		</template>
 
-            <div class="modal-body">
-                <TextareaInput v-model="token" label="WB API токен" placeholder="Вставьте токен продавца..."
-                    :disabled="loading" :rows="5" />
+		<!-- BODY -->
+		<template #body>
+			<TextInput v-model="label" placeholder="Название токена..." />
+			<TextareaInput v-model="token" type="textarea" label="WB API токен" placeholder="Вставьте токен продавца..."
+				:error="errorMessage" :disabled="loading" :rows="5" />
 
-                <div v-if="errorMessage" class="error-text">
-                    {{ errorMessage }}
-                </div>
+			<div class="hint">
+				Токен используется только для чтения данных (Analytics, Statistics, Promotion)
+			</div>
+		</template>
 
-                <p class="hint">
-                    Токен используется только для чтения данных (Analytics, Statistics, Promotion)
-                </p>
-            </div>
+		<!-- FOOTER -->
+		<template #footer>
+			<ButtonCancel @click="close" :disabled="loading" />
 
-            <div class="modal-footer">
-                <ButtonCancel @click="close" :disabled="loading" />
-
-                <ButtonSuccess :text="'Добавить токен'" :loading="loading" @click="submit" />
-            </div>
-        </div>
-    </div>
+			<ButtonSuccess text="Добавить токен" :loading="loading" @click="submit" />
+		</template>
+	</Modal>
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { notify } from '@/composables/notification'
-import ProfileServices from '@/API/Dashboard/ProfileServices'
 
 // UI
+import Modal from '@/components/UI/Modal.vue'
+import TextInput from '@/components/UI/TextInput.vue'
+import TextareaInput from '@/components/UI/TextareaInput.vue'
 import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue'
 import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue'
-import TextareaInput from '@/components/UI/TextareaInput.vue'
+
+// API
+import ProfileServices from '@/API/Dashboard/ProfileServices'
+
+const props = defineProps({
+	isOpen: Boolean
+})
 
 const emit = defineEmits(['close', 'success'])
 
@@ -44,124 +52,76 @@ const token = ref('')
 const loading = ref(false)
 const errorMessage = ref(null)
 
-// --- Закрытие ---
+// --- close ---
 const close = () => {
-    if (loading.value) return
-    emit('close')
+	if (loading.value) return
+	errorMessage.value = null
+	token.value = ''
+	emit('close')
 }
 
-// --- Валидация ---
+// --- validation ---
 const validate = () => {
-    if (!token.value || token.value.trim().length === 0) {
-        return 'Введите токен'
-    }
+	if (!token.value || token.value.trim().length === 0) {
+		return 'Введите токен'
+	}
 
-    if (token.value.length < 20) {
-        return 'Токен слишком короткий'
-    }
+	if (token.value.length < 20) {
+		return 'Токен слишком короткий'
+	}
 
-    if (!/^[A-Za-z0-9\.\-_]+$/.test(token.value)) {
-        return 'Некорректный формат токена'
-    }
-
-    return null
+	return null
 }
 
-// --- Submit ---
+// --- submit ---
 const submit = async () => {
-    errorMessage.value = null
+	errorMessage.value = null
 
-    const validationError = validate()
-    if (validationError) {
-        errorMessage.value = validationError
-        return
-    }
+	const error = validate()
+	if (error) {
+		errorMessage.value = error
+		return
+	}
 
-    try {
-        loading.value = true
+	try {
+		loading.value = true
 
-        const response = await ProfileServices.add_user_token({
-            token: token.value.trim()
-        })
+		const response = await ProfileServices.add_user_token({
+			token: token.value.trim()
+		})
 
-        const result = response.data
+		const result = response.data
 
-        if (result.status === 'error') {
-            errorMessage.value = result.error.message || 'Ошибка при добавлении токена'
-            notify.error(errorMessage.value)
-            return
-        }
+		if (result.status === 'error') {
+			errorMessage.value = result.error.message
+			notify.error(result.error.message)
+			return
+		}
 
-        notify.success('Токен успешно добавлен')
+		notify.success('Токен успешно добавлен')
+		emit('success')
 
-        emit('success')
-
-    } catch (e) {
-        console.error(e)
-        errorMessage.value = 'Ошибка соединения с сервером'
-        notify.error(errorMessage.value)
-    } finally {
-        loading.value = false
-    }
+	} catch (e) {
+		console.error(e)
+		errorMessage.value = 'Ошибка соединения с сервером'
+		notify.error(errorMessage.value)
+	} finally {
+		loading.value = false
+	}
 }
 </script>
 
 <style scoped>
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.modal {
-    width: 100%;
-    max-width: 500px;
-    background: var(--card-bg);
-    border-radius: 12px;
-    box-shadow: var(--shadow);
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-body {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 10px;
-}
-
 .close-btn {
-    background: none;
-    border: none;
-    font-size: 18px;
-    cursor: pointer;
-}
-
-.error-text {
-    color: var(--accent-color);
-    font-size: 0.85rem;
+	background: none;
+	border: none;
+	font-size: 18px;
+	cursor: pointer;
 }
 
 .hint {
-    font-size: 0.85rem;
-    color: #888;
+	margin-top: 10px;
+	font-size: 12px;
+	color: #888;
 }
 </style>
