@@ -15,7 +15,6 @@ from services.tariff_service import (
     get_tariff_limits_by_id, 
     delete_tariff_by_id,
     upsert_limit,
-    # insert_limit_by_tariff_id,
     get_limit,
     update_limit,
     delete_limit
@@ -315,13 +314,6 @@ async def edit_tariff_limit(tariff_id: UUID, limit_type: str, request: Request, 
             code='LIMIT_NOT_FOUND',
             message='Limit not found'
         )
-    
-    """ if str(limit.tariff_id) != tariff_id:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(
-            code='LIMIT_NOT_FOUND',
-            message='Limit not found'
-        ) """
     
     limit = await update_limit(
         session=db_session,

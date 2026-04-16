@@ -1,7 +1,8 @@
 """Модуль аутентификации и авторизации пользователей."""
 
 from datetime import datetime
-from uuid import uuid4
+from typing import cast
+from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -10,6 +11,8 @@ from core.dependencies import get_db_session
 from core.logger import setup_logger
 
 from schemas.auth import LoginRequest
+from services.subscription_service import create_subscription
+from services.tariff_service import get_tariff_by_code
 from services.user_service import (
     create_user_role_association,
     get_user_by_email,
@@ -247,6 +250,7 @@ async def check_inn(
 @router.post('/registration')
 async def registration(
     request: Request,
+    response: Response,
     db_session: AsyncSession = Depends(get_db_session)
 ) -> dict:
     """Регистрация нового пользователя.
@@ -270,5 +274,20 @@ async def registration(
         )
     
     await create_user_role_association(db_session, str(user.id), 'user')
+
+    # получаем демо подписку
+    demo = await get_tariff_by_code(db_session, 'demo')
+    if demo is None:
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return response_error(
+            code="INTERNAL_SERVER_ERROR",
+            message="Ошибка при регистрации"
+        )
+
+    await create_subscription(
+        session=db_session, 
+        user_id=user.id, 
+        tariff_id=cast(UUID, demo.id)
+    )
     
     return response_success(message='Зарегистрирован')

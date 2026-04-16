@@ -1,12 +1,12 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, cast
 from collections.abc import Sequence
 from uuid import UUID
 from sqlalchemy import and_, delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
-from models.tariffs import Subscription, TariffLimit, TariffPlan
+from models.tariffs import TariffLimit, TariffPlan
 
 logger = setup_logger(__name__)
 
@@ -23,6 +23,12 @@ async def insert_tariff(session: AsyncSession, tariff) -> Optional[TariffPlan]:
         session.add(new_tariff)
         await session.flush()
         return new_tariff
+    
+    except IntegrityError:
+        await session.rollback()
+        logger.warning(f"Tariff with code {tariff['code']} already exists")
+        return None
+    
     except Exception as e:
         logger.error(f"Error inserting tariff: {e}")
         return None
@@ -40,6 +46,12 @@ async def get_tariff_by_id(session: AsyncSession, tariff_id: UUID):
     query = select(TariffPlan).where(TariffPlan.id == tariff_id)
     result = await session.execute(query)
     return result.scalar_one_or_none()
+
+async def get_tariff_by_code(session: AsyncSession, code: str) -> TariffPlan:
+    result = await session.execute(
+        select(TariffPlan).where(TariffPlan.code == code)
+    )
+    return result.scalar_one()
 
 async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: dict) -> Optional[TariffPlan]:
     try:
@@ -130,24 +142,3 @@ async def delete_limit(session: AsyncSession, limit: TariffLimit) -> bool:
         logger.error(f"Error deleting limit: {e}")
         return False
     
-
-async def create_demo_subscription(
-    session: AsyncSession,
-    user_id: UUID,
-    tariff_id: UUID
-) -> Subscription:
-    now = datetime.now(timezone.utc)
-
-    sub = Subscription(
-        user_id=user_id,
-        tariff_id=tariff_id,
-        status="demo",
-        current_period_start=now,
-        current_period_end=now + timedelta(days=7),
-        yookassa_payment_id=None
-    )
-
-    session.add(sub)
-    await session.flush()
-
-    return sub

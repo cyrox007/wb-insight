@@ -1,10 +1,15 @@
+from datetime import datetime
+from decimal import Decimal
 from uuid import uuid4
+
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from sqlalchemy import (
     UUID,
     Boolean,
     Column,
     DateTime,
+    Enum,
     ForeignKey,
     Integer,
     String,
@@ -12,6 +17,7 @@ from sqlalchemy import (
     Numeric,
     func
 )
+from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Database
 
@@ -19,46 +25,46 @@ from database import Database
 class TariffPlan(Database.Base):
     __tablename__ = "tariff_plans"
 
-    id = Column(
+    # comment="Уникальный идентификатор"
+    id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), 
         primary_key=True, 
         default=uuid4,
-        comment="Уникальный идентификатор"
     )	
-    code = Column(
+    code: Mapped[str] = mapped_column(
         String(50),
         unique=True,
         nullable=False,
         comment="Код тарифа: 'demo', 'starter', 'pro', 'enterprise'"
     )
-    name = Column(
+    name: Mapped[str] = mapped_column(
         String(255),
         nullable=False,
         comment="Отображаемое название: 'Демо', 'Старт (для ИП)', 'Про', 'Бизнес'"
     )
-    description = Column(
+    description: Mapped[str] = mapped_column(
         Text,
         comment='Описание для лендинга: "7 дней бесплатно, без карты"'
     )
-    price_rub = Column(
+    price_rub: Mapped[Decimal] = mapped_column(
         Numeric(10, 2),
         nullable=False,
-        default=0.00,
+        default=Decimal("0.00"),
         comment="Цена в рублях за месяц (0.00 для демо)"
     )
-    is_active = Column(
+    is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=True,
         comment="Активен ли тариф (можно скрыть без удаления)"
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         comment="Когда создан"
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -98,57 +104,65 @@ class TariffLimit(Database.Base):
         return f"TariffLimit<{self.tariff_id}>"
     
 
+class SubscriptionStatus(str, Enum):
+    DEMO = "demo"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"    
+
 class Subscription(Database.Base):
     __tablename__ = "subscriptions"
 
-    id = Column(
-        UUID(as_uuid=True),
+    # comment="Уникальный идентификатор подписки"
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
         primary_key=True,
-        default=uuid4,
-        comment="Уникальный идентификатор подписки"
+        default=uuid4
     )
-    user_id = Column(
-        UUID(as_uuid=True),
+
+    # comment="Владелец подписки"
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
-        comment="Владелец подписки"
+        index=True
     )
-    tariff_id = Column(
-        UUID(as_uuid=True),
+
+    # comment="Текущий тариф"
+    tariff_id: Mapped[UUID] = mapped_column(
         ForeignKey("tariff_plans.id", ondelete="RESTRICT"),
         nullable=False,
-        index=True,
-        comment="Текущий тариф"
+        index=True
     )
-    status = Column(
+
+    # comment="Статус: 'active', 'expired', 'cancelled', 'demo'"
+    status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        default="active",
-        comment="Статус: 'active', 'expired', 'cancelled', 'demo'"
+        default="active"
     )
-    current_period_start = Column(
+    current_period_start: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         comment="Начало текущего оплаченного периода"
     )
-    current_period_end = Column(
+    current_period_end: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         comment="Конец текущего оплаченного периода"
     )
-    yookassa_payment_id = Column(
+    yookassa_payment_id: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="ID платежа в ЮKassa (null для демо-подписок)"
     )
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         comment="Дата оформления подписки"
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -158,3 +172,7 @@ class Subscription(Database.Base):
 
     def __repr__(self):
         return "Subscription<{}>".format(self.id)
+    
+    @property
+    async def is_subscription_active(self) -> bool:
+        return self.current_period_end > datetime.utcnow()
