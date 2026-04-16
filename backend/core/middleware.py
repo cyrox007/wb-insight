@@ -19,7 +19,8 @@ async def auth_middle(request: Request):
     logger.info(f"Полученный токен из заголовков: {token.split(' ')[1][:10]}...")
 
     # Валидируем токен
-    user_data = verify_token(token.split(' ')[1])
+    scheme, _, token_value = token.partition(" ")
+    user_data = verify_token(token_value)
     if not user_data:
         logger.warning("Недопустимый токен в HTTP-запросе")
         raise HTTPException(

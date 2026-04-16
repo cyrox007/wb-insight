@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Sequence
+from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +20,7 @@ async def get_user_token_count(session: AsyncSession, user_id: str) -> int:
 
 async def insert_token(
         session: AsyncSession, 
-        user_id: str, 
+        user_id: UUID, 
         raw_token: str,
         marketplace_code: str = 'wb',
         token_type: str = 'personal',
@@ -42,11 +43,10 @@ async def insert_token(
     try:
         # Сохраняем
         session.add(token)
-        await session.commit()
-        await session.refresh(token)
+        await session.flush() 
         return token
     except Exception as e:
-        await session.rollback()
+        # await session.rollback()
         logger.error(f"Ошибка при добавлении токена: {e}")
         return None
     
@@ -69,9 +69,9 @@ async def delete_token(session: AsyncSession, token: APIToken) -> bool:
     """ удаляем токен """
     try:
         await session.delete(token)
-        await session.commit()
+        await session.flush()
         return True
     except Exception as e:
-        await session.rollback()
+        # await session.rollback()
         logger.error(f"Ошибка при удалении токена: {e}")
         return False

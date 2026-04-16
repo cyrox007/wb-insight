@@ -12,6 +12,7 @@ from handlers.dashboard.main import router as D_main_router
 from handlers.dashboard.user_profile import router as D_user_profile_router
 from handlers.dashboard.tariffs import router as D_tariffs_router
 from handlers.dashboard.subscription import router as D_subscription_router
+from handlers.dashboard.token import router as D_tokens_router
 from handlers.control_panel.home import router as CP_home_router
 from handlers.control_panel.users import router as CP_users_router
 from handlers.control_panel.tariffs import router as CP_tariffs_router
@@ -54,6 +55,7 @@ def _register_routers(app: FastAPI) -> None:
         D_user_profile_router,
         D_tariffs_router,
         D_subscription_router,
+        D_tokens_router,
         CP_home_router,
         CP_users_router,
         CP_tariffs_router,
