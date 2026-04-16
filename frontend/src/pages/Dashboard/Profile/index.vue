@@ -73,6 +73,9 @@
 
 	<!-- Модальные окна -->
 	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" />
+
+	<AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false"
+		@success="handleTokenAdded" />
 </template>
 
 <script setup>
@@ -85,14 +88,12 @@ import ProfileServices from '@/API/Dashboard/ProfileServices';
 
 import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue';
 import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue';
+import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue';
 
 const authStore = useAuthStore();
-const user = computed(() => authStore.getUser);
+const user = computed(() => authStore.getUser || {})
 
-const tokens = ref([
-	{ id: 1, value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxxxx', created_at: '2026-01-10T14:30:00' },
-	{ id: 2, value: 'abc123def456ghi789jkl000mnopqrstu', created_at: '2026-01-12T09:15:00' }
-])
+const tokens = ref([]);
 
 const showEditProfile = ref(false)
 const showAddTokenModal = ref(false);
@@ -115,17 +116,26 @@ function maskToken(token) {
 	return token.substring(0, 4) + '••••••' + token.slice(-4)
 }
 
-const openAddTokenModal = () => {
+const openAddTokenModal = async () => {
 	addBtnLoading.value = true;
-	if (!checkPermissionsAddToken()) {
+	const hasPermission = await checkPermissionsAddToken();
+
+	if (!hasPermission) {
+		notify.error('Достигнут лимит токенов для вашего тарифа');
 		addBtnLoading.value = false;
-		// надо показать модалку что пользователь не может добавлять больше токенов
 		return;
 	}
 
-
 	showAddTokenModal.value = true;
 	addBtnLoading.value = false;
+}
+
+const handleTokenAdded = async () => {
+	const response = await ProfileServices.getProfile();
+	tokens.value = response.data.tokens;
+	showAddTokenModal.value = false;
+
+	notify.success('Токен успешно добавлен');
 }
 
 const checkPermissionsAddToken = async () => {
