@@ -31,8 +31,13 @@ watch(
 )
 
 const loadTariffs = async () => {
-	const response = await ProfileServices.get_tariffs();
-	tariffs.value = response.data.tariffs
+	try {
+		const response = await ProfileServices.get_tariffs();
+		tariffs.value = response.data?.tariffs || [];
+	} catch (e) {
+		console.error('Ошибка загрузки тарифов', e);
+		tariffs.value = [];
+	}
 }
 
 const selectTariff = () => {
