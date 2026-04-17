@@ -12,6 +12,5 @@ router = APIRouter(prefix='/dashboard/tariffs', tags=['Tariffs'])
 
 @router.get('/', dependencies=[Depends(auth_middle)])
 async def get_tariffs(db_session: AsyncSession = Depends(get_db_session)):
-    tariffs = await get_tariffs_list(db_session, only_active=True)
-
+    tariffs = await get_tariffs_list(db_session, only_active=True, only_public=True)
     return response_success(tariffs=tariffs)

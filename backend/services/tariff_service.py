@@ -38,6 +38,9 @@ async def get_tariffs_list(session: AsyncSession,
     query = select(TariffPlan).offset(offset).limit(limit)
     if only_active := kwargs.get('only_active'):
         query = query.where(TariffPlan.is_active == only_active)
+
+    if only_public := kwargs.get('only_public'):
+        query = query.where(TariffPlan.is_public == only_public)
         
     result = await session.execute(query)
     return result.scalars().all()

@@ -15,7 +15,8 @@ from sqlalchemy import (
     String,
     Text,
     Numeric,
-    func
+    func,
+    text
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -57,6 +58,12 @@ class TariffPlan(Database.Base):
         nullable=False,
         default=True,
         comment="Активен ли тариф (можно скрыть без удаления)"
+    )
+    is_public: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),  # 🔥 ВАЖНО
+        comment="Доступен ли тариф для выбора пользователями"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -170,7 +170,7 @@ async def edit_tariff(tariff_id: UUID, request: Request, response: Response, db_
             message='Tariff not found'
         )
     
-    allowed_fields = {'name', 'description', 'price_rub', 'is_active'}
+    allowed_fields = {'name', 'description', 'price_rub', 'is_active', 'is_public'}
     update_data = {k: v for k, v in input_data.items() if k in allowed_fields}
     
     tariff = await update_tariff(db_session, tariff, update_data)

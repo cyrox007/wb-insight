@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, Request, Response, status
 
@@ -20,14 +21,13 @@ async def get_profile(request: Request, db_session: AsyncSession = Depends(get_d
     user_tokens = await get_tokens_by_user_id(
         db_session, request.state.user['sub']
     )
-    
+    print(user_tokens)
     return response_success(tokens=user_tokens)
 
 @router.get("/check-token-permission/{user_id}", dependencies=[Depends(auth_middle)])
 async def check_token_permission(
-    user_id: str, 
-    request: Request, 
-    tariff_id: Optional[str] = None, 
+    user_id: str,
+    tariff_id: Optional[UUID] = None, 
     db_session: AsyncSession = Depends(get_db_session)
 ):
     current_user = await get_user_by_uuid(db_session, user_id)
