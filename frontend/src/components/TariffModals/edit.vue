@@ -12,6 +12,14 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'updated']);
+const tariffData = ref({
+	name: '',
+	description: '',
+	price_rub: '',
+	is_active: false,
+	is_public: false
+})
+const modalLoadedBtn = ref(false);
 
 watch(
 	() => props.currentTariff,
@@ -21,20 +29,13 @@ watch(
 				name: newTariff.name || '',
 				description: newTariff.description || '',
 				price_rub: String(newTariff.price_rub ?? ''),
-				is_active: Boolean(newTariff.is_active)
-			};
+				is_active: Boolean(newTariff.is_active),
+				is_public: Boolean(newTariff.is_public)
+			}
 		}
-	}
+	},
+	{ immediate: true }
 )
-
-const modalLoadedBtn = ref(false);
-
-const tariffData = ref({
-	name: '',
-	description: '',
-	price_rub: '',
-	is_active: false
-});
 
 const editTariff = async () => {
 	modalLoadedBtn.value = true;
@@ -43,7 +44,8 @@ const editTariff = async () => {
 			name: tariffData.value.name,
 			description: tariffData.value.description,
 			price_rub: parseFloat(tariffData.value.price_rub) || 0,
-			is_active: tariffData.value.is_active
+			is_active: tariffData.value.is_active,
+			is_public: tariffData.value.is_public
 		};
 
 		const response = await CP_Tariffs.editTariff(props.currentTariff.id, payload);
@@ -78,8 +80,19 @@ const editTariff = async () => {
 						<div class="toggle-slider" :class="{ 'toggle-on': tariffData.is_active }"></div>
 					</div>
 				</label>
+				<div class="toggle-hint">{{ typeof tariffData.is_active }}
+					{{ tariffData.is_active ? 'Тариф доступен для подключения' : 'Тариф неактивен' }}
+				</div>
+			</div>
+			<div class="form-group">
+				<label class="toggle-label">
+					Опубликован ли тариф?
+					<div class="toggle-switch" @click="tariffData.is_public = !tariffData.is_public">
+						<div class="toggle-slider" :class="{ 'toggle-on': tariffData.is_public }"></div>
+					</div>
+				</label>
 				<div class="toggle-hint">
-					{{ tariffData.is_active ? 'Тариф доступен для подключения' : 'Тариф скрыт и недоступен' }}
+					{{ tariffData.is_public ? 'Тариф опубликован' : 'Тариф скрыт' }}
 				</div>
 			</div>
 		</template>

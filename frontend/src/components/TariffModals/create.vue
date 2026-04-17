@@ -20,6 +20,7 @@ const tariffName = ref('');
 const tariffPrice = ref('');
 const tariffDescription = ref('');
 const isActive = ref(true);
+const isPublic = ref(true);
 
 const formError = ref('')
 
@@ -65,7 +66,8 @@ const createTariff = async () => {
             name: tariffName.value.trim(),
             price: priceRounded,
             description: tariffDescription.value.trim(),
-            isActive: isActive.value
+            isActive: isActive.value,
+            isPublic: isPublic.value
         });
 
         if (response.data?.status === 'success') {
@@ -115,6 +117,17 @@ const createTariff = async () => {
                     </label>
                     <div class="toggle-hint">
                         {{ isActive ? 'Тариф доступен для подключения' : 'Тариф скрыт и недоступен' }}
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-label">
+                        Публичен ли тариф? (виден ли в списке тарифов и доступен)
+                        <div class="toggle-switch" @click="isPublic = !isPublic">
+                            <div class="toggle-slider" :class="{ 'toggle-on': isPublic }"></div>
+                        </div>
+                    </label>
+                    <div class="toggle-hint">
+                        {{ isPublic ? 'Тариф опубликован' : 'Тариф скрыт и недоступен' }}
                     </div>
                 </div>
             </div>

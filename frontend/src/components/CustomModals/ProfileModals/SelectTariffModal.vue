@@ -2,7 +2,7 @@
 import Modal from '@/components/UI/Modal.vue';
 import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import ProfileServices from '@/API/Dashboard/ProfileServices';
 
 const props = defineProps({
@@ -21,6 +21,14 @@ onMounted(async () => {
 	// Здесь можно загрузить реальные тарифы через API
 	await loadTariffs();
 });
+
+watch(
+	() => props.currentTariffCode,
+	(val) => {
+		selectedTariff.value = val || ''
+	},
+	{ immediate: true }
+)
 
 const loadTariffs = async () => {
 	const response = await ProfileServices.get_tariffs();
@@ -42,7 +50,7 @@ const selectTariff = () => {
 		<template #body>
 			<div class="tariffs-grid">
 				<div v-for="tariff in tariffs" :key="tariff.code" class="tariff-card"
-					:class="{ 'selected': selectedTariff === tariff.code }" @click="selectedTariff = tariff.code">
+					:class="{ selected: selectedTariff === tariff.code }" @click="selectedTariff = tariff.code">
 					<div class="tariff-header">
 						<h4 class="tariff-name">{{ tariff.name }}</h4>
 						<div class="tariff-price">
