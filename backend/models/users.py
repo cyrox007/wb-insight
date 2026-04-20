@@ -9,7 +9,7 @@ from sqlalchemy.sql import func
 
 from database import Database
 if TYPE_CHECKING:
-    from .tokens import APIToken
+    from .tokens_model import APIToken
 
 
 class EntityType(Enum):

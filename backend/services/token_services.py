@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
-from models.tokens import APIToken, Marketplace
+from models.tokens_model import APIToken, Marketplace
 from utils.token_crypto import encrypt_token
 
 logger = setup_logger(__name__)
