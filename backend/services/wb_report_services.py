@@ -61,4 +61,6 @@ async def get_returns_wb_report_stats(session: AsyncSession, user_id: str, start
     )
 
     result = await session.execute(query)
-    return result.fetchone()
+    stats = result.fetchone()
+    print(stats)
+    return stats

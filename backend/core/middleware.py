@@ -30,4 +30,4 @@ async def auth_middle(request: Request):
 
     # Сохраняем данные пользователя в request.state для дальнейшего использования
     request.state.user = user_data
-    logger.info(f"Аутентифицированный пользователь: {user_data}")
+    # logger.info(f"Аутентифицированный пользователь: {user_data}")

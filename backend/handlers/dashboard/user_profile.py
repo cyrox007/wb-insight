@@ -16,13 +16,30 @@ from services.token_services import get_tokens_by_user_id, get_user_token_count,
 router = APIRouter(prefix="/dashboard/profile", tags=["dashboard.profile"])
 logger = setup_logger(__name__)
 
+def mask_token(token: str) -> str:
+    if len(token) <= 8:
+        return "*" * len(token)
+    return token[:4] + "*" * 8 + token[-4:]
+
 @router.get("/", dependencies=[Depends(auth_middle)])
 async def get_profile(request: Request, db_session: AsyncSession = Depends(get_db_session)):
     user_tokens = await get_tokens_by_user_id(
         db_session, request.state.user['sub']
     )
-    print(user_tokens)
-    return response_success(tokens=user_tokens)
+
+    return response_success(
+        tokens=[
+            {
+                "id": str(token.id),
+                "label": token.label,
+                "marketplace": token.marketplace,
+                "encrypted_token": mask_token(token.encrypted_token),
+                "issued_at": token.issued_at,
+                "expires_at": token.expires_at
+            }
+            for token in user_tokens
+        ]
+    )
 
 @router.get("/check-token-permission/{user_id}", dependencies=[Depends(auth_middle)])
 async def check_token_permission(

@@ -69,6 +69,7 @@ async def dashboard(
     
     sales_amount = float(getattr(sales_result, 'sales_amount', 0) or 0)
     sales_units = int(getattr(sales_result, 'sales_units', 0) or 0)
+    
     returns_amount = float(getattr(returns_result, 'returns_amount', 0) or 0)
     returns_units = int(getattr(returns_result, 'returns_units', 0) or 0)
 
