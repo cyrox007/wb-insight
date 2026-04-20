@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.tariffs import Subscription
+from models.subscription_model import Subscription
 
 
 async def create_subscription(

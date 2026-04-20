@@ -24,7 +24,8 @@ config.set_main_option('sqlalchemy.url', cfg.database_url())
 from models.users import User, UserRoleAssociation
 target_metadata = User.__table__.metadata
 from models.permissions import Permission
-from models.tariffs import TariffPlan, TariffLimit, Subscription
+from models.tariffs_model import TariffPlan, TariffLimit
+from models.subscription_model import Subscription
 from models.tokens import APIToken
 from models.wb_report import WbRealizationReport
 from models.wb_product_cards import WbProductCard

@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
-from models.tariffs import TariffLimit, TariffPlan
+from models.tariffs_model import TariffLimit, TariffPlan
 
 logger = setup_logger(__name__)
 

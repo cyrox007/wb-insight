@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
 from core.logger import setup_logger
-from models.tariffs import TariffLimit
+from models.tariffs_model import TariffLimit
 from services.tariff_service import (
     get_tariffs_list, 
     insert_tariff, 
