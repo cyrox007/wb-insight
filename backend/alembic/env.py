@@ -21,7 +21,7 @@ config.set_main_option('sqlalchemy.url', cfg.database_url())
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from models.users import User, UserRoleAssociation
+from models.users_model import User, UserRoleAssociation
 target_metadata = User.__table__.metadata
 from models.permissions_model import Permission
 from models.tariffs_model import TariffPlan, TariffLimit

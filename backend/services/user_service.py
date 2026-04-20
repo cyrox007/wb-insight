@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.logger import setup_logger
-from models.users import User, UserRoleAssociation
+from models.users_model import User, UserRoleAssociation
 from utils.hashed_password import hash_password
 
 

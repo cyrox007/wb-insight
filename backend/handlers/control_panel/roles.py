@@ -5,7 +5,7 @@ from core.dependencies import get_db_session
 from core.middleware import auth_middle
 from services.user_service import create_user_role_association, get_user_role_association_by_code, delete_role_association
 from utils.responce_helps import response_success, response_error
-from models.users import UserRole
+from models.users_model import UserRole
 
 router = APIRouter(prefix='/control-panel/roles', tags=['Roles'])
 
