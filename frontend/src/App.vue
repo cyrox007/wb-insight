@@ -13,6 +13,18 @@ const authStore = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 
+const navItems = [
+	{ name: 'dashboard.home', label: 'Ключевые показатели' },
+	{ name: 'unit', label: 'Unit-экономика' },
+	{ name: 'ads', label: 'Внутренняя реклама' },
+	{ name: 'rnp', label: 'РнП' },
+	{ name: 'month', label: 'Показатели месяца' },
+	{ name: 'jam', label: 'РнП (Джем)' },
+	{ name: 'cost', label: 'С/С' }
+]
+
+const isActive = (name) => route.name === name
+
 // Авторизация
 const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
@@ -80,13 +92,10 @@ const logout = () => {
 	<!-- Основной контент страниц -->
 	<main class="main-content">
 		<nav v-if="isAuthenticated && !isControlPanelRoute">
-			<div class="nav-item">Ключевые показатели</div>
-			<div class="nav-item">Unit-экономика</div>
-			<div class="nav-item">Внутренняя реклама</div>
-			<div class="nav-item">РнП</div>
-			<div class="nav-item">Показатели месяца</div>
-			<div class="nav-item">РнП (Джем)</div>
-			<div class="nav-item">С\С</div>
+			<div v-for="item in navItems" :key="item.name" class="nav-item" :class="{ active: isActive(item.name) }"
+				@click="router.push({ name: item.name })">
+				{{ item.label }}
+			</div>
 		</nav>
 		<RouterView />
 	</main>
@@ -216,14 +225,41 @@ const logout = () => {
 }
 
 nav {
-	padding: 20px;
-	margin: 0 20px;
-	margin-top: 20px;
-	border-radius: 8px;
+	padding: 12px;
+	margin: 20px;
+	border-radius: 10px;
 	background-color: var(--medium-bg);
 	display: flex;
-	gap: 20px;
+	gap: 10px;
 	justify-content: center;
+	flex-wrap: wrap;
+	border: 1px solid var(--border-color);
+}
+
+.nav-item {
+	padding: 8px 14px;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 14px;
+	color: #ccc;
+	transition: var(--transition);
+	background-color: transparent;
+	border: 1px solid transparent;
+}
+
+/* hover */
+.nav-item:hover {
+	background-color: var(--hover-bg);
+	color: #fff;
+	border-color: var(--border-color);
+}
+
+/* ACTIVE STATE 🔥 */
+.nav-item.active {
+	background-color: var(--secondary-color);
+	color: white;
+	border-color: var(--secondary-color);
+	box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
 }
 
 .footer {
