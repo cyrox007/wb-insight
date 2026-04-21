@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from settings import config
 
 from handlers.users import routers as user_router
-from handlers.auth import router as auth_router
+from handlers.auth_handler import router as auth_router
 from handlers.dashboard.main import router as D_main_router
 from handlers.dashboard.user_profile import router as D_user_profile_router
 from handlers.dashboard.tariffs import router as D_tariffs_router

@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +51,7 @@ async def insert_user(session: AsyncSession, user_data: dict):
         logger.error(f'Ошибка при создании пользователя: {e}')
         return None
     
-async def get_user_by_uuid(session: AsyncSession, user_id: str) -> Optional[User]:
+async def get_user_by_uuid(session: AsyncSession, user_id: UUID) -> Optional[User]:
     result = await session.execute(
         select(User).where(User.id == user_id)
     )
