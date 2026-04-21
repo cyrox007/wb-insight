@@ -50,36 +50,52 @@ const logout = () => {
 <template>
 	<header class="header" v-if="showHeader">
 		<div class="header-left">
-			<div class="logo">WB<span>Insight</span>
-				&lt;&lt; AI &gt;&gt; </div>
+			<div class="logo" @click="router.push('/')">
+				WB<span>Insight</span>
+				<span class="logo-ai">AI</span>
+			</div>
 		</div>
+
 		<div class="header-right">
-			<!-- Блок пользователя/авторизации -->
+			<!-- Авторизованный -->
 			<div class="user-section" v-if="isAuthenticated">
-				<div class="dropdown user-dropdown">
-					<div class="user-menu">
-						{{ user.full_name }}
-					</div>
-					<div class="dropdown-content">
-						<div v-show="isAdmin" @click="router.push({ name: 'control-panel.index' })"
-							class="dropdown-item">
-							Панель управления
+				<div class="user-dropdown">
+					<div class="user-trigger">
+						<div class="avatar">
+							{{ user.full_name?.charAt(0) }}
 						</div>
-						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">Профиль
+						<div class="user-info-mini">
+							<div class="user-name">{{ user.full_name }}</div>
+							<div class="user-email">{{ user.email }}</div>
+						</div>
+					</div>
+
+					<div class="dropdown-content">
+						<div v-if="isAdmin" @click="router.push({ name: 'control-panel.index' })" class="dropdown-item">
+							⚙ Панель управления
+						</div>
+
+						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">
+							👤 Профиль
 						</div>
 
 						<div class="dropdown-divider"></div>
-						<div class="dropdown-item" @click="logout">Выйти</div>
+
+						<div class="dropdown-item logout" @click="logout">
+							🚪 Выйти
+						</div>
 					</div>
 				</div>
 			</div>
 
-			<!-- Блок авторизации для неавторизованных пользователей -->
+			<!-- Не авторизован -->
 			<div class="auth-section" v-else>
 				<button class="btn btn-outline" @click="showLogin = true">
-					<span>Войти</span>
+					Войти
 				</button>
-				<button class="btn btn-primary" @click="showRegister = true">Регистрация</button>
+				<button class="btn btn-primary" @click="showRegister = true">
+					Регистрация
+				</button>
 			</div>
 		</div>
 	</header>
@@ -107,38 +123,130 @@ const logout = () => {
 </template>
 
 <style scoped>
-/* Стили из вашего кода, которые относятся к общим элементам */
 .header {
-	background-color: var(--medium-bg);
-	padding: 12px 20px;
+	background: linear-gradient(90deg, #1a1a1a, #222);
+	padding: 12px 24px;
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
 	border-bottom: 1px solid var(--border-color);
-	box-shadow: var(--shadow);
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
-.header-left {
+/* LOGO */
+.logo {
+	font-size: 22px;
+	font-weight: 700;
+	color: #fff;
+	cursor: pointer;
 	display: flex;
 	align-items: center;
-	gap: 20px;
-}
-
-.logo {
-	font-size: 24px;
-	font-weight: bold;
-	color: #fff;
-	letter-spacing: 1px;
+	gap: 6px;
 }
 
 .logo span {
 	color: #ff6b6b;
 }
 
-.header-right {
+.logo-ai {
+	font-size: 12px;
+	background: linear-gradient(45deg, #ff6b6b, #8e44ad);
+	padding: 2px 6px;
+	border-radius: 6px;
+	color: white;
+}
+
+/* USER BLOCK */
+.user-dropdown {
+	position: relative;
+}
+
+.user-trigger {
 	display: flex;
 	align-items: center;
-	gap: 15px;
+	gap: 10px;
+	cursor: pointer;
+	padding: 6px 10px;
+	border-radius: 8px;
+	transition: 0.2s;
+}
+
+.user-trigger:hover {
+	background-color: var(--hover-bg);
+}
+
+/* AVATAR */
+.avatar {
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: linear-gradient(135deg, #3498db, #8e44ad);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: white;
+	font-weight: 600;
+}
+
+/* MINI INFO */
+.user-info-mini {
+	display: flex;
+	flex-direction: column;
+}
+
+.user-name {
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.user-email {
+	font-size: 12px;
+	color: #aaa;
+}
+
+/* DROPDOWN */
+.dropdown-content {
+	position: absolute;
+	top: 100%;
+	right: 0;
+
+	background-color: var(--card-bg);
+	border-radius: 10px;
+	min-width: 200px;
+
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.2s;
+}
+
+/* показываем */
+.user-dropdown:hover>.dropdown-content {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* ITEMS */
+.dropdown-item {
+	padding: 12px 16px;
+	cursor: pointer;
+	transition: 0.2s;
+	font-size: 14px;
+}
+
+.dropdown-item:hover {
+	background-color: var(--hover-bg);
+}
+
+.dropdown-item.logout:hover {
+	background-color: rgba(231, 76, 60, 0.2);
+	color: #e74c3c;
+}
+
+.dropdown-divider {
+	height: 1px;
+	background-color: var(--border-color);
 }
 
 .notification-icon {
@@ -164,7 +272,7 @@ const logout = () => {
 	font-size: 12px;
 }
 
-.dropdown {
+/* .dropdown {
 	position: relative;
 	display: inline-block;
 }
@@ -222,7 +330,7 @@ const logout = () => {
 .auth-section {
 	display: flex;
 	gap: 10px;
-}
+} */
 
 nav {
 	padding: 12px;
