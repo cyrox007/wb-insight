@@ -1,90 +1,3 @@
-<template>
-	<div class="dashboard-container">
-		<div class="profile-card">
-			<div class="profile-header">
-				<div class="avatar-placeholder">
-					<!-- Можно заменить на <img :src="user.avatar" /> при наличии -->
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-							d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-					</svg>
-				</div>
-				<div class="user-info">
-					<h2 class="user-name">{{ user.full_name }}</h2>
-					<p class="user-email">{{ user.email }}</p>
-				</div>
-
-				<div class="tariff-info">
-					<span class="tariff-label">Текущий тариф:</span>
-					<span class="tariff-name">{{ user.tariff || 'DEMO' }}</span>
-					<button @click="showTariffModal = true" class="change-tariff-btn">
-						Сменить тариф
-					</button>
-				</div>
-			</div>
-
-			<div class="profile-actions">
-				<button @click="showEditProfile = true" class="edit-btn">
-					<svg class="edit-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-							d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-					</svg>
-					Редактировать профиль
-				</button>
-			</div>
-		</div>
-
-		<div class="tokens-section">
-			<div class="section-header">
-				<h3>Токены продавца Wildberries</h3>
-				<ButtonSuccess :loading="addBtnLoading" @click="openAddTokenModal" :text="'+ Добавить токен'" />
-			</div>
-
-			<div v-if="tokens.length === 0" class="empty-state">
-				У вас пока нет токенов. Добавьте первый токен для доступа к данным Wildberries.
-			</div>
-
-			<ul v-else class="tokens-list">
-				<li v-for="token in tokens" :key="token.id" class="token-item">
-					<div class="token-left">
-						<div class="token-main">
-							<span class="token-label">Токен</span>
-							<span class="token-masked">{{ maskToken(token.encrypted_token) }}</span>
-						</div>
-
-						<div class="token-dates">
-							<span>Создан: {{ DateTransform.formatDate(token.issued_at) }}</span>
-							<span>До: {{ DateTransform.formatDate(token.expires_at) }}</span>
-						</div>
-					</div>
-					<div class="token-actions">
-						<button @click="copyToken(token.encrypted_token)" class="btn-icon" title="Скопировать">
-							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-								stroke="currentColor" width="16" height="16">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-									d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-							</svg>
-						</button>
-						<button @click="deleteToken(token.id)" class="btn-icon delete-btn" title="Удалить">
-							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-								stroke="currentColor" width="16" height="16">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-									d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M9 7h6" />
-							</svg>
-						</button>
-					</div>
-				</li>
-			</ul>
-		</div>
-	</div>
-
-	<!-- Модальные окна -->
-	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
-
-	<AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false"
-		@success="handleTokenAdded" />
-</template>
-
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth';
@@ -100,6 +13,9 @@ import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal
 
 const authStore = useAuthStore();
 const user = computed(() => authStore.getUser || {})
+
+const subscription = ref(null)
+const isLoading = ref(true)
 
 const tokens = ref([]);
 
@@ -187,6 +103,123 @@ const toPay = async (payment_id) => {
 }
 </script>
 
+<template>
+	<div class="dashboard-container">
+		<div class="profile-card">
+			<div class="profile-header">
+				<div class="left">
+					<div class="avatar-placeholder">
+						{{ user.full_name?.charAt(0) }}
+					</div>
+
+					<div class="user-info">
+						<h2 class="user-name">{{ user.full_name }}</h2>
+						<p class="user-email">{{ user.email }}</p>
+					</div>
+				</div>
+
+				<div class="right">
+					<div class="tariff-badge">
+						<span class="tariff-name">{{ user.tariff || 'DEMO' }}</span>
+						<span class="tariff-status active">Активен</span>
+					</div>
+
+					<button @click="showTariffModal = true" class="change-tariff-btn">
+						Сменить тариф
+					</button>
+				</div>
+			</div>
+
+			<div class="profile-actions">
+				<button @click="showEditProfile = true" class="edit-btn">
+					<svg class="edit-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+							d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+					</svg>
+					Редактировать профиль
+				</button>
+			</div>
+		</div>
+		<div class="account-grid">
+			<div class="account-card">
+				<div class="card-title">Тип аккаунта</div>
+				<div class="card-value">
+					{{ user.entity_type === 'individual' ? 'Физ. лицо' : 'Компания' }}
+				</div>
+			</div>
+
+			<div class="account-card">
+				<div class="card-title">Налог</div>
+				<div class="card-value">
+					{{ (user.tax_rate * 100).toFixed(0) }}%
+				</div>
+			</div>
+
+			<div class="account-card">
+				<div class="card-title">Часовой пояс</div>
+				<div class="card-value">
+					{{ user.timezone }}
+				</div>
+			</div>
+
+			<div class="account-card">
+				<div class="card-title">Дата регистрации</div>
+				<div class="card-value">
+					{{ DateTransform.formatDate(user.created_at) }}
+				</div>
+			</div>
+		</div>
+		<div class="tokens-section">
+			<div class="section-header">
+				<h3>Токены продавца Wildberries</h3>
+				<ButtonSuccess :loading="addBtnLoading" @click="openAddTokenModal" :text="'+ Добавить токен'" />
+			</div>
+
+			<div v-if="tokens.length === 0" class="empty-state">
+				У вас пока нет токенов. Добавьте первый токен для доступа к данным Wildberries.
+			</div>
+
+			<ul v-else class="tokens-list">
+				<li v-for="token in tokens" :key="token.id" class="token-item">
+					<div class="token-left">
+						<div class="token-main">
+							<span class="token-label">Токен</span>
+							<span class="token-masked">{{ maskToken(token.encrypted_token) }}</span>
+						</div>
+
+						<div class="token-dates">
+							<span>Создан: {{ DateTransform.formatDate(token.issued_at) }}</span>
+							<span>До: {{ DateTransform.formatDate(token.expires_at) }}</span>
+						</div>
+					</div>
+					<div class="token-actions">
+						<button @click="copyToken(token.encrypted_token)" class="btn-icon" title="Скопировать">
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+								stroke="currentColor" width="16" height="16">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+									d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+							</svg>
+						</button>
+						<button @click="deleteToken(token.id)" class="btn-icon delete-btn" title="Удалить">
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+								stroke="currentColor" width="16" height="16">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+									d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M9 7h6" />
+							</svg>
+						</button>
+					</div>
+				</li>
+			</ul>
+		</div>
+	</div>
+
+	<!-- Модальные окна -->
+	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
+
+	<AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false"
+		@success="handleTokenAdded" />
+</template>
+
 <style scoped>
 .dashboard-container {
 	padding: 20px;
@@ -214,60 +247,42 @@ const toPay = async (payment_id) => {
 
 .profile-header {
 	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.left {
+	display: flex;
 	align-items: center;
 	gap: 16px;
 }
 
-.avatar-placeholder {
-	width: 60px;
-	height: 60px;
-	border-radius: 50%;
-	background-color: var(--medium-bg);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: var(--secondary-color);
-}
-
-.avatar-placeholder svg {
-	width: 32px;
-	height: 32px;
-}
-
-.user-info {
+.right {
 	display: flex;
 	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
 }
 
-.user-name {
-	font-size: 1.4rem;
-	font-weight: 600;
-	color: var(--text-color);
-	margin-bottom: 4px;
-}
-
-.user-email {
-	font-size: 0.95rem;
-	color: #aaa;
-}
-
-.tariff-info {
-	margin-top: 12px;
-	font-size: 0.95rem;
-	color: #aaa;
+.tariff-badge {
 	display: flex;
-	gap: 6px;
 	align-items: center;
+	gap: 10px;
+	background: rgba(52, 152, 219, 0.1);
+	padding: 6px 12px;
+	border-radius: 20px;
+	border: 1px solid rgba(52, 152, 219, 0.3);
 }
 
-.tariff-label {
-	font-weight: 500;
-	color: var(--text-color);
+.tariff-status {
+	font-size: 12px;
+	padding: 2px 6px;
+	border-radius: 6px;
 }
 
-.tariff-name {
-	font-weight: 600;
-	color: var(--secondary-color);
+.tariff-status.active {
+	background: rgba(46, 204, 113, 0.2);
+	color: #2ecc71;
 }
 
 .profile-actions {
@@ -327,6 +342,39 @@ const toPay = async (payment_id) => {
 
 .section-header h3 {
 	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--text-color);
+}
+
+.account-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 16px;
+	margin-top: 20px;
+}
+
+.account-card {
+	background: var(--medium-bg);
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	padding: 16px;
+	transition: 0.2s;
+}
+
+.account-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.card-title {
+	font-size: 12px;
+	color: #888;
+	margin-bottom: 6px;
+	text-transform: uppercase;
+}
+
+.card-value {
+	font-size: 16px;
 	font-weight: 600;
 	color: var(--text-color);
 }
