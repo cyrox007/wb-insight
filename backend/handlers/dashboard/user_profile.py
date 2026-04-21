@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, cast
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -23,6 +23,10 @@ def mask_token(token: str) -> str:
 
 @router.get("/", dependencies=[Depends(auth_middle)])
 async def get_profile(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+    current_user = await get_user_by_uuid(
+        session=db_session,
+        user_id=cast(UUID, request.state.user['sub'])
+    )
     user_tokens = await get_tokens_by_user_id(
         db_session, request.state.user['sub']
     )
@@ -38,12 +42,13 @@ async def get_profile(request: Request, db_session: AsyncSession = Depends(get_d
                 "expires_at": token.expires_at
             }
             for token in user_tokens
-        ]
+        ],
+        user=current_user
     )
 
 @router.get("/check-token-permission/{user_id}", dependencies=[Depends(auth_middle)])
 async def check_token_permission(
-    user_id: str,
+    user_id: UUID,
     tariff_id: Optional[UUID] = None, 
     db_session: AsyncSession = Depends(get_db_session)
 ):
@@ -96,7 +101,7 @@ async def check_token_permission(
 
 
 @router.post('/token/add', status_code=status.HTTP_201_CREATED, dependencies=[Depends(auth_middle)])
-async def add_token(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def add_token(request: Request, db_session: AsyncSession = Depends(get_db_session)):
     data = await request.json()
     token = await insert_token(
         session=db_session,
@@ -107,13 +112,12 @@ async def add_token(request: Request, response: Response, db_session: AsyncSessi
         label=data.get('label')
     )
 
-    print(token)
     return response_success(
         token=token
     )
 
 @router.delete('/token/{token_id}', dependencies=[Depends(auth_middle)])
-async def delete_user_token(token_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def delete_user_token(token_id: UUID, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     token = await get_token_by_id(db_session, token_id)
 
     if token is None:

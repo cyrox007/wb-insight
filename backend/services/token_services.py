@@ -11,7 +11,7 @@ from utils.token_crypto import encrypt_token
 logger = setup_logger(__name__)
 
 
-async def get_user_token_count(session: AsyncSession, user_id: str) -> int:
+async def get_user_token_count(session: AsyncSession, user_id: UUID) -> int:
     """ получаем кол-во токенов добавленных пользователем """
     result = await session.execute(
         select(APIToken).where(APIToken.user_id == user_id)
@@ -58,7 +58,7 @@ async def get_tokens_by_user_id(session: AsyncSession, user_id: str) -> Sequence
     )
     return result.scalars().all()
 
-async def get_token_by_id(session: AsyncSession, token_id: str) -> Optional[APIToken]:
+async def get_token_by_id(session: AsyncSession, token_id: UUID) -> Optional[APIToken]:
     """ получаем токен по id """
     result = await session.execute(
         select(APIToken).where(APIToken.id == token_id)
@@ -72,6 +72,5 @@ async def delete_token(session: AsyncSession, token: APIToken) -> bool:
         await session.flush()
         return True
     except Exception as e:
-        # await session.rollback()
         logger.error(f"Ошибка при удалении токена: {e}")
         return False
