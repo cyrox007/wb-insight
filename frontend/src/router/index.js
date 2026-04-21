@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-//import HomePage from '../pages/HomePage/index.vue'
 
 const router = createRouter({
 	history: createWebHistory(import.meta.env.BASE_URL),
@@ -30,6 +29,15 @@ const router = createRouter({
 			component: () => import('../pages/Dashboard/Profile/index.vue'),
 			meta: {
 				title: 'Профиль пользователя',
+				requestAuth: true
+			}
+		},
+		{
+			path: '/billing/success',
+			name: 'billing.success',
+			component: () => import('../pages/Billing/Success/index.vue'),
+			meta: {
+				title: "Успешная оплата",
 				requestAuth: true
 			}
 		},

@@ -42,7 +42,11 @@ class Subscription(Database.Base):
 
     # comment="Статус: 'active', 'expired', 'cancelled', 'demo'"
     status: Mapped[SubscriptionStatus] = mapped_column(
-        PgEnum(SubscriptionStatus, name="subscription_status"),
+        PgEnum(
+            SubscriptionStatus,
+            values_callable=lambda x: [e.value for e in x],
+            name="subscription_status"
+        ),
         nullable=False,
         default=SubscriptionStatus.ACTIVE
     )

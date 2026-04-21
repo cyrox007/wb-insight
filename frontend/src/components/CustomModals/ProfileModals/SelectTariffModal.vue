@@ -4,6 +4,8 @@ import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
 import { ref, onMounted, watch } from 'vue';
 import ProfileServices from '@/API/Dashboard/ProfileServices';
+import TariffService from '@/API/Dashboard/TariffService';
+import { notify } from '@/composables/notification';
 
 const props = defineProps({
 	isOpen: Boolean,
@@ -15,7 +17,11 @@ const emit = defineEmits(['close', 'select']);
 // Мок-данные (замените на API-запрос)
 const tariffs = ref([]);
 
+// Состояние выбранного тарифа
 const selectedTariff = ref(props.currentTariffCode || '');
+
+// Состояние загрузки
+const loadingPayment = ref(false);
 
 onMounted(async () => {
 	// Здесь можно загрузить реальные тарифы через API
@@ -40,10 +46,30 @@ const loadTariffs = async () => {
 	}
 }
 
-const selectTariff = () => {
-	if (!selectedTariff.value) return;
-	emit('select', selectedTariff.value);
-	emit('close');
+const selectTariff = async () => {
+	if (!selectedTariff.value || loadingPayment.value) return;
+
+	loadingPayment.value = true;
+
+	try {
+		const response = await TariffService.paymetTariff(selectedTariff.value);
+		const data = response.data;
+
+		if (data.status === 'error') {
+			console.log(data.error);
+			notify.error(data.error.message);
+			return;
+		}
+
+		emit('payment', data.payment_id);
+	} catch (error) {
+		notify.error(error);
+	} finally {
+		loadingPayment.value = false;
+		emit('close');
+	}
+
+
 };
 </script>
 
@@ -74,7 +100,8 @@ const selectTariff = () => {
 		</template>
 		<template #footer>
 			<ButtonCancel @click="$emit('close')" text="Отмена" />
-			<ButtonPrimary @click="selectTariff" :disabled="!selectedTariff" text="Применить тариф" />
+			<ButtonPrimary @click="selectTariff" :disabled="!selectedTariff" text="Применить тариф"
+				:loading="loadingPayment" />
 		</template>
 	</Modal>
 </template>

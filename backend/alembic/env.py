@@ -26,6 +26,7 @@ target_metadata = User.__table__.metadata
 from models.permissions_model import Permission
 from models.tariffs_model import TariffPlan, TariffLimit
 from models.subscription_model import Subscription
+from models.payments_model import Payment
 from models.tokens_model import APIToken
 from models.wb_report import WbRealizationReport
 from models.wb_product_cards import WbProductCard

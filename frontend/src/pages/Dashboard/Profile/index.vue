@@ -79,7 +79,7 @@
 	</div>
 
 	<!-- Модальные окна -->
-	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" />
+	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
 
 	<AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false"
 		@success="handleTokenAdded" />
@@ -92,6 +92,7 @@ import { notify } from '@/composables/notification';
 import DateTransform from '@/utils/date_transform';
 
 import ProfileServices from '@/API/Dashboard/ProfileServices';
+import TariffService from '@/API/Dashboard/TariffService';
 
 import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue';
 import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue';
@@ -179,6 +180,10 @@ const deleteToken = async (id) => {
 		notify.success(`Удаление токена ${id} успешно завершено`);
 		tokens.value = tokens.value.filter(t => t.id !== id)
 	}
+}
+
+const toPay = async (payment_id) => {
+	location.href = `/billing/success?payment_id=${payment_id}`;
 }
 </script>
 

@@ -81,11 +81,15 @@ async def delete_tariff_by_id(session: AsyncSession, tariff_id: UUID) -> bool:
     try:
         query = delete(TariffPlan).where(TariffPlan.id == tariff_id)
         await session.execute(query)
-        # await session.commit()
         return True
     except Exception as e:
         logger.error(f"Error deleting tariff: {e}")
         return False
+    
+async def get_tariff_by_code(session: AsyncSession, code: str) -> TariffPlan:
+    query = select(TariffPlan).where(TariffPlan.code == code)
+    result = await session.execute(query)
+    return result.scalar_one_or_none()
 
 async def upsert_limit(session: AsyncSession, tariff_id: UUID, limit: dict):
 

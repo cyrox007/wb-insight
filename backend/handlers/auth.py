@@ -11,7 +11,7 @@ from core.dependencies import get_db_session
 from core.logger import setup_logger
 
 from schemas.auth import LoginRequest
-from services.subscription_service import create_subscription
+from services.subscription_service import create_demo_subscription, create_subscription
 from services.tariff_service import get_tariff_by_code
 from services.user_service import (
     create_user_role_association,
@@ -284,10 +284,9 @@ async def registration(
             message="Ошибка при регистрации"
         )
 
-    await create_subscription(
-        session=db_session, 
-        user_id=user.id, 
-        tariff_id=cast(UUID, demo.id)
+    await create_demo_subscription(
+        db=db_session, 
+        user_id=user.id
     )
     
     return response_success(message='Зарегистрирован')
