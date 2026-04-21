@@ -3,7 +3,7 @@ from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Enum as PgEnum, ForeignKey, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from database import Database
@@ -78,6 +78,8 @@ class Subscription(Database.Base):
         onupdate=func.now(),
         comment="Последнее обновление статуса или периода"
     )
+
+    tariff = relationship("TariffPlan", back_populates="subscriptions")
 
     def __repr__(self):
         return "Subscription<{}>".format(self.id)

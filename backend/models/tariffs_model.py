@@ -18,7 +18,7 @@ from sqlalchemy import (
     func,
     text
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Database
 
@@ -78,6 +78,8 @@ class TariffPlan(Database.Base):
         onupdate=func.now(),
         comment="Последнее изменение цены/лимитов"
     )
+
+    subscriptions = relationship("Subscription", back_populates="tariff")
 
     def __repr__(self):
         return (

@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.subscription_model import Subscription, SubscriptionStatus
@@ -117,3 +118,16 @@ async def deactivate_active_subscriptions(session: AsyncSession, user_id: UUID):
         .where(Subscription.status == SubscriptionStatus.ACTIVE)
         .values(status=SubscriptionStatus.EXPIRED)
     )
+
+async def get_user_subscription(
+    db: AsyncSession,
+    user_id: UUID,
+) -> Subscription | None:
+    result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user_id)
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+        .options(selectinload(Subscription.tariff))
+    )
+    return result.scalar_one_or_none()

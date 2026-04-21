@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from core.dependencies import get_db_session, require_permission
 from core.logger import setup_logger
 from core.middleware import auth_middle
+from services.subscription_service import get_user_subscription
 from services.tariff_service import get_tariff_by_id
 from utils.responce_helps import response_error, response_success
 
@@ -22,11 +23,23 @@ def mask_token(token: str) -> str:
     return token[:4] + "*" * 8 + token[-4:]
 
 @router.get("/", dependencies=[Depends(auth_middle)])
-async def get_profile(request: Request, db_session: AsyncSession = Depends(get_db_session)):
+async def get_profile(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     current_user = await get_user_by_uuid(
         session=db_session,
         user_id=cast(UUID, request.state.user['sub'])
     )
+    if current_user is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response_error(
+            code="UNAUTHORIZED",
+            message="Неавторизован"
+        )
+    
+    subscription = await get_user_subscription(
+        db_session,
+        cast(UUID, request.state.user['sub'])
+    )
+
     user_tokens = await get_tokens_by_user_id(
         db_session, request.state.user['sub']
     )
@@ -43,7 +56,29 @@ async def get_profile(request: Request, db_session: AsyncSession = Depends(get_d
             }
             for token in user_tokens
         ],
-        user=current_user
+        user={
+            "id": current_user.id,
+            "full_name": current_user.full_name,
+            "email": current_user.email,
+            "phone": current_user.phone,
+
+            "entity_type": current_user.entity_type,
+            "tax_rate": float(current_user.tax_rate or 0),
+            "timezone": current_user.timezone,
+
+            "is_active": current_user.is_active,
+
+            "roles": [r.role for r in current_user.roles],
+
+            "created_at": current_user.created_at,
+        },
+        subscription = None if not subscription else {
+            "tariff_name": subscription.tariff.name,
+            "status": subscription.status,
+            "start_date": subscription.current_period_start,
+            "end_date": subscription.current_period_end,
+            "is_active": subscription.status in ["active", "demo"]
+        }
     )
 
 @router.get("/check-token-permission/{user_id}", dependencies=[Depends(auth_middle)])

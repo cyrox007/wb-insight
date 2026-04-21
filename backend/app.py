@@ -9,7 +9,7 @@ from settings import config
 from handlers.users_handler import routers as user_router
 from handlers.auth_handler import router as auth_router
 from handlers.dashboard.main_handler import router as D_main_router
-from handlers.dashboard.user_profile import router as D_user_profile_router
+from handlers.dashboard.profile_handler import router as D_user_profile_router
 from handlers.dashboard.tariffs_handler import router as D_tariffs_router
 from handlers.dashboard.subscription_handler import router as D_subscription_router
 from handlers.dashboard.token_handler import router as D_tokens_router
