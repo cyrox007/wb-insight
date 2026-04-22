@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -145,7 +145,7 @@ async def save_realization(
             "ppvz_vw": item.get("ppvz_vw"),
             "ppvz_vw_nds": item.get("ppvz_vw_nds"),
 
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
 
     BATCH_SIZE = 500

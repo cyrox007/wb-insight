@@ -24,7 +24,7 @@ async def create_payment(
         amount=amount,
         status=PaymentStatus.PENDING.value,
         provider=provider,
-        updated_at=datetime.utcnow()
+        updated_at=datetime.now(timezone.utc)
     )
 
     db.add(payment)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -34,7 +34,7 @@ async def insert_user(session: AsyncSession, user_data: dict):
         kpp=user_data['kpp'],
         legal_address=user_data['legal_address'],
         timezone=user_data['timezone'],
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         is_active=True,
         is_staff=False
     )

@@ -41,7 +41,7 @@ async def create_demo_subscription(
     )
     demo_tariff = result.scalar_one()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     subscription = Subscription(
         user_id=user_id,

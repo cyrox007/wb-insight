@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 from sqlalchemy import select
@@ -47,7 +47,7 @@ async def _process_job(job_id: str):
         return
 
     job.status = "processing"
-    job.started_at = datetime.utcnow()
+    job.started_at = datetime.now(timezone.utc)
     await session.commit()
 
     # 🔑 токен
@@ -72,7 +72,7 @@ async def _process_job(job_id: str):
         await update_sync_state(session, job)
 
         job.status = "done"
-        job.finished_at = datetime.utcnow()
+        job.finished_at = datetime.now(timezone.utc)
 
     except Exception as e:
         job.status = "failed"
@@ -106,6 +106,6 @@ async def update_sync_state(session, job):
         )
         session.add(state)
 
-    state.last_sync_at = datetime.utcnow()
-    state.last_success_at = datetime.utcnow()
+    state.last_sync_at = datetime.now(timezone.utc)
+    state.last_success_at = datetime.now(timezone.utc)
     state.last_error = None

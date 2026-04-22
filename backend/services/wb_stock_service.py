@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.dialects.postgresql import insert
 
@@ -42,7 +42,7 @@ async def save_stocks(session, user_id, token_id, data):
             "price": stmt.excluded.price,
             "discount": stmt.excluded.discount,
             "last_change_date": stmt.excluded.last_change_date,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
     )
 

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import cast
 from uuid import UUID
 
@@ -72,7 +72,7 @@ async def create_job_if_needed(
     entity: str,
     limits: dict
 ):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # 1. берём состояние синка
     state = await session.execute(
@@ -113,7 +113,7 @@ async def create_job_if_needed(
     await session.commit()
 
 def build_payload(entity, state, limits):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     retention_days = limits.get("retention_days", 30)
     max_lookback = timedelta(days=retention_days)
