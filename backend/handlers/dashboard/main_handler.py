@@ -8,7 +8,7 @@ from core.dependencies import get_db_session, require_permission
 from core.logger import setup_logger
 from core.middleware import auth_middle
 from utils.responce_helps import response_error, response_success
-from services.wb_report_services import check_wb_report_stats, get_base_wb_report_stats, get_returns_wb_report_stats, get_sales_wb_report_stats
+from services.wb_report_service import check_wb_report_stats, get_base_wb_report_stats, get_returns_wb_report_stats, get_sales_wb_report_stats
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = setup_logger(__name__)

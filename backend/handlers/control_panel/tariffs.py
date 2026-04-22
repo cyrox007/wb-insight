@@ -1,4 +1,5 @@
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import select
@@ -49,7 +50,7 @@ async def get_tariff(tariff_id: UUID, response: Response, db_session: AsyncSessi
             message='Tariff not found'
         )
 
-    limits = await get_tariff_limits_by_id(db_session, str(tariff.id))
+    limits = await get_tariff_limits_by_id(db_session, cast(UUID, tariff.id))
     
     return response_success(
         tariff=tariff,

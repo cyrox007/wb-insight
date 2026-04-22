@@ -11,9 +11,7 @@ import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue';
 import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue';
 import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue';
 
-const authStore = useAuthStore();
-const user = computed(() => authStore.getUser || {})
-
+const user = ref({})
 const subscription = ref(null)
 const isLoading = ref(true)
 
@@ -26,13 +24,21 @@ const showTariffModal = ref(false);
 const addBtnLoading = ref(false);
 
 onMounted(async () => {
-	if (!user.value) {
-		try {
-			user.value = authStore.getUser();
-		} catch { }
+	try {
+		isLoading.value = true
+
+		const response = await ProfileServices.getProfile()
+
+		tokens.value = response.data.tokens
+		subscription.value = response.data.subscription
+		user.value = response.data.user
+
+	} catch (e) {
+		console.error(e)
+		notify.error('Ошибка загрузки профиля')
+	} finally {
+		isLoading.value = false
 	}
-	const response = await ProfileServices.getProfile();
-	tokens.value = response.data.tokens;
 })
 
 function maskToken(token) {
@@ -101,6 +107,19 @@ const deleteToken = async (id) => {
 const toPay = async (payment_id) => {
 	location.href = `/billing/success?payment_id=${payment_id}`;
 }
+
+const getStatusLabel = (status) => {
+	switch (status) {
+		case 'active': return 'Активна'
+		case 'expired': return 'Истекла'
+		case 'cancelled': return 'Отменена'
+		default: return 'Нет подписки'
+	}
+}
+
+const isExpired = (date) => {
+	return new Date(date) < new Date()
+}
 </script>
 
 <template>
@@ -120,12 +139,17 @@ const toPay = async (payment_id) => {
 
 				<div class="right">
 					<div class="tariff-badge">
-						<span class="tariff-name">{{ user.tariff || 'DEMO' }}</span>
-						<span class="tariff-status active">Активен</span>
+						<span class="tariff-name">{{ subscription?.tariff_name || 'DEMO' }}</span>
+						<span class="tariff-status" :class="subscription?.status">
+							{{ getStatusLabel(subscription?.status) }}
+						</span>
+						<div class="tariff-dates" v-if="subscription">
+							до {{ DateTransform.formatDate(subscription.end_date) }}
+						</div>
 					</div>
 
 					<button @click="showTariffModal = true" class="change-tariff-btn">
-						Сменить тариф
+						{{ subscription?.status === 'active' ? 'Сменить тариф' : 'Продлить подписку' }}
 					</button>
 				</div>
 			</div>
@@ -183,8 +207,11 @@ const toPay = async (payment_id) => {
 				<li v-for="token in tokens" :key="token.id" class="token-item">
 					<div class="token-left">
 						<div class="token-main">
-							<span class="token-label">Токен</span>
 							<span class="token-masked">{{ maskToken(token.encrypted_token) }}</span>
+
+							<span class="token-status" :class="{ expired: isExpired(token.expires_at) }">
+								{{ isExpired(token.expires_at) ? 'Истёк' : 'Активен' }}
+							</span>
 						</div>
 
 						<div class="token-dates">
@@ -274,15 +301,26 @@ const toPay = async (payment_id) => {
 	border: 1px solid rgba(52, 152, 219, 0.3);
 }
 
-.tariff-status {
-	font-size: 12px;
-	padding: 2px 6px;
-	border-radius: 6px;
-}
-
 .tariff-status.active {
 	background: rgba(46, 204, 113, 0.2);
 	color: #2ecc71;
+}
+
+.tariff-status.expired {
+	background: rgba(231, 76, 60, 0.2);
+	color: #e74c3c;
+}
+
+.tariff-status.cancelled {
+	background: rgba(241, 196, 15, 0.2);
+	color: #f1c40f;
+}
+
+.tariff-dates {
+	font-size: 12px;
+	color: #888;
+	margin-top: 4px;
+	text-align: right;
 }
 
 .profile-actions {
@@ -418,16 +456,32 @@ const toPay = async (payment_id) => {
 	margin-bottom: 12px;
 	border: 1px solid var(--border-color);
 	transition: var(--transition);
+	transition: 0.2s;
 }
 
 .token-item:hover {
 	background-color: var(--hover-bg);
+	transform: translateY(-2px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .token-left {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
+}
+
+.token-status {
+	font-size: 12px;
+	padding: 2px 8px;
+	border-radius: 6px;
+	background: rgba(46, 204, 113, 0.2);
+	color: #2ecc71;
+}
+
+.token-status.expired {
+	background: rgba(231, 76, 60, 0.2);
+	color: #e74c3c;
 }
 
 .token-main {

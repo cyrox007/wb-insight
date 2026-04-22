@@ -51,7 +51,7 @@ async def insert_token(
         return None
     
 
-async def get_tokens_by_user_id(session: AsyncSession, user_id: str) -> Sequence[APIToken]:
+async def get_tokens_by_user_id(session: AsyncSession, user_id: UUID) -> Sequence[APIToken]:
     """ получаем токен по user_id """
     result = await session.execute(
         select(APIToken).where(APIToken.user_id == user_id)

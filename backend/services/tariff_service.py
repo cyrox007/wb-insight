@@ -50,11 +50,11 @@ async def get_tariff_by_id(session: AsyncSession, tariff_id: UUID):
     result = await session.execute(query)
     return result.scalar_one_or_none()
 
-async def get_tariff_by_code(session: AsyncSession, code: str) -> TariffPlan:
+""" async def get_tariff_by_code(session: AsyncSession, code: str) -> TariffPlan:
     result = await session.execute(
         select(TariffPlan).where(TariffPlan.code == code)
     )
-    return result.scalar_one()
+    return result.scalar_one() """
 
 async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: dict) -> Optional[TariffPlan]:
     try:
@@ -72,7 +72,7 @@ async def update_tariff(session: AsyncSession, tariff: TariffPlan, tariff_data: 
         return None
     
 
-async def get_tariff_limits_by_id(session: AsyncSession, tariff_id: str) -> Sequence[TariffLimit]:
+async def get_tariff_limits_by_id(session: AsyncSession, tariff_id: UUID) -> Sequence[TariffLimit]:
     query = select(TariffLimit).where(TariffLimit.tariff_id == tariff_id)
     result = await session.execute(query)
     return result.scalars().all()

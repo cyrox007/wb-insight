@@ -41,7 +41,7 @@ async def get_profile(request: Request, response: Response, db_session: AsyncSes
     )
 
     user_tokens = await get_tokens_by_user_id(
-        db_session, request.state.user['sub']
+        db_session, cast(UUID, request.state.user['sub'])
     )
 
     return response_success(
