@@ -14,7 +14,7 @@ async def process_realization(session, job, token: str):
         )
 
     if response.status_code == 429:
-        raise Exception("Rate limit")
+        raise Exception("rate_limit")
 
     if response.status_code != 200:
         raise Exception(response.text)

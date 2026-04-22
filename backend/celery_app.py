@@ -3,6 +3,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from settings import config
+import models
 
 celery_app = Celery(
     "wb_analytics",

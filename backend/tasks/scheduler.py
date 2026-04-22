@@ -2,11 +2,13 @@
 
 from celery_app import celery_app
 import asyncio
+from asyncio import get_event_loop
 
 
 @celery_app.task(name="tasks.scheduler.schedule_sync")
 def schedule_sync():
-    asyncio.run(_schedule())
+    loop = get_event_loop()
+    loop.run_until_complete(_schedule())
 
 
 async def _schedule():

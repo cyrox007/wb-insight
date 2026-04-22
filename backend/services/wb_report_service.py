@@ -5,6 +5,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.wb_report import WbRealizationReport
+from utils.batcher import chunks
+from utils.date_parser import parse_dt
 
 async def check_wb_report_stats(session: AsyncSession, user_id: str, start_date: date, end_date: date):
     data_check_query = select(func.count(WbRealizationReport.id)).where(
@@ -87,9 +89,9 @@ async def save_realization(
             "user_id": user_id,
 
             # даты
-            "rr_dt": item["rr_dt"],
-            "order_dt": item.get("order_dt"),
-            "sale_dt": item.get("sale_dt"),
+            "rr_dt": parse_dt(item["rr_dt"]),
+            "order_dt": parse_dt(item.get("order_dt")),
+            "sale_dt": parse_dt(item.get("sale_dt")),
             "date_from": item.get("date_from"),
             "date_to": item.get("date_to"),
             "create_dt": item.get("create_dt"),
@@ -146,11 +148,13 @@ async def save_realization(
             "created_at": datetime.utcnow(),
         })
 
-    stmt = insert(WbRealizationReport).values(values)
+    BATCH_SIZE = 500
+    for batch in chunks(data, BATCH_SIZE):
+        stmt = insert(WbRealizationReport).values(batch)
 
-    # ❗ ключевая часть — НЕ обновляем, просто игнорим дубли
-    stmt = stmt.on_conflict_do_nothing(
-        index_elements=["rrd_id"]
-    )
+        # ❗ ключевая часть — НЕ обновляем, просто игнорим дубли
+        stmt = stmt.on_conflict_do_nothing(
+            index_elements=["rrd_id"]
+        )
 
-    await session.execute(stmt)
+        await session.execute(stmt)

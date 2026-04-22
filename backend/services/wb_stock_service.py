@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.dialects.postgresql import insert
 
 from models.wb_stock import WbStock
-
+from utils.date_parser import parse_dt
 
 async def save_stocks(session, user_id, token_id, data):
     stmt = insert(WbStock).values([
@@ -27,7 +27,7 @@ async def save_stocks(session, user_id, token_id, data):
             "is_supply": item.get("isSupply"),
             "is_realization": item.get("isRealization"),
             "sc_code": item.get("SCCode"),
-            "last_change_date": item["lastChangeDate"],
+            "last_change_date": parse_dt(item.get("lastChangeDate")),
         }
         for item in data
     ])

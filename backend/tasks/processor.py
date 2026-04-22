@@ -5,9 +5,22 @@ from requests_handler.process_realization import process_realization
 from requests_handler.stocks import process_stocks
 from utils.token_crypto import decrypt_token
 
-@celery_app.task(bind=True, autoretry_for=(Exception,), retry_backoff=True, retry_kwargs={"max_retries": 5})
+def run_async(coro):
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+@celery_app.task(
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_kwargs={"max_retries": 5},
+)
 def process_job(self, job_id: str):
-    asyncio.run(_process_job(job_id))
+    run_async(_process_job(job_id))
 
 
 from datetime import datetime

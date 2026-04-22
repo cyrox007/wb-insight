@@ -18,7 +18,7 @@ async def process_stocks(session, job, token: str):
         response = await client.get(url, headers=headers, params=params)
 
     if response.status_code == 429:
-        raise Exception("Rate limit")  # триггер retry
+        raise Exception("rate_limit")  # триггер retry
 
     if response.status_code != 200:
         raise Exception(f"WB error: {response.text}")
@@ -26,4 +26,3 @@ async def process_stocks(session, job, token: str):
     data = response.json()
 
     await save_stocks(session, job.user_id, job.token_id, data)
-
