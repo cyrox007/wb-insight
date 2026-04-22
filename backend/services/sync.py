@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import cast
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,7 +52,7 @@ async def schedule_all_users(session: AsyncSession):
             await create_job_if_needed(
                 session,
                 user_id=user.id,
-                token_id=token.id,
+                token_id=cast(UUID, token.id),
                 entity="stocks",
                 limits=limits
             )
@@ -59,17 +60,17 @@ async def schedule_all_users(session: AsyncSession):
             await create_job_if_needed(
                 session,
                 user_id=user.id,
-                token_id=token.id,
+                token_id=cast(UUID, token.id),
                 entity="realization",
                 limits=limits
             )
 
 async def create_job_if_needed(
-    session,
-    user_id,
-    token_id,
-    entity,
-    limits
+    session: AsyncSession,
+    user_id: UUID,
+    token_id: UUID,
+    entity: str,
+    limits: dict
 ):
     now = datetime.utcnow()
 
@@ -84,7 +85,8 @@ async def create_job_if_needed(
     state = state.scalar_one_or_none()
 
     # 2. проверяем частоту (из тарифа)
-    interval = timedelta(hours=limits.sync_frequency_hours())
+    sync_hours = limits.get("sync_frequency_hours", 1)  # дефолт 1 час
+    interval = timedelta(hours=sync_hours)
 
     if state and state.last_sync_at:
         if now - state.last_sync_at < interval:

@@ -30,6 +30,9 @@ from models.payments_model import Payment
 from models.tokens_model import APIToken
 from models.wb_report import WbRealizationReport
 from models.wb_product_cards import WbProductCard
+from models.wb_stock import WbStock
+from models.sync_job_model import SyncJob
+from models.user_sync_state_model import UserSyncState
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
