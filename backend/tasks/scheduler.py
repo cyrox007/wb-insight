@@ -1,7 +1,6 @@
 # tasks/scheduler.py
 
 from celery_app import celery_app
-import asyncio
 from asyncio import get_event_loop
 
 
@@ -12,11 +11,11 @@ def schedule_sync():
 
 
 async def _schedule():
-    from database import Database
+    from database_celery import get_session
     from services.sync import schedule_all_users
 
     # async with Database.get_session() as db:
-    session = await Database.get_session()
+    session = await get_session()
     try:
         await schedule_all_users(session)
     finally:

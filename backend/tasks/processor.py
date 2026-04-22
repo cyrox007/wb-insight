@@ -4,7 +4,7 @@ import asyncio
 from sqlalchemy import select
 
 from celery_app import celery_app
-from database import Database
+from database_celery import get_session
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from models.user_sync_state_model import UserSyncState
@@ -12,13 +12,16 @@ from requests_handler.process_realization import process_realization
 from requests_handler.stocks import process_stocks
 from utils.token_crypto import decrypt_token
 
+_loop = None
+
 def run_async(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        asyncio.set_event_loop(loop)
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    global _loop
+
+    if _loop is None:
+        _loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_loop)
+
+    return _loop.run_until_complete(coro)
 
 @celery_app.task(
     bind=True,
@@ -33,7 +36,7 @@ def process_job(self, job_id: str):
 
 async def _process_job(job_id: str):
     # async with Database.get_session() as session:
-    session = await Database.get_session()
+    session = await get_session()
     job = await session.get(SyncJob, job_id)
 
     if not job:
