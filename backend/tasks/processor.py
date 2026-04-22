@@ -1,6 +1,13 @@
-from celery_app import celery_app
+from datetime import datetime
 import asyncio
 
+from sqlalchemy import select
+
+from celery_app import celery_app
+from database import Database
+from models.sync_job_model import SyncJob
+from models.tokens_model import APIToken
+from models.user_sync_state_model import UserSyncState
 from requests_handler.process_realization import process_realization
 from requests_handler.stocks import process_stocks
 from utils.token_crypto import decrypt_token
@@ -22,15 +29,6 @@ def run_async(coro):
 )
 def process_job(self, job_id: str):
     run_async(_process_job(job_id))
-
-
-from datetime import datetime
-from sqlalchemy import select
-
-from database import Database
-from models.sync_job_model import SyncJob
-from models.tokens_model import APIToken
-from models.user_sync_state_model import UserSyncState
 
 
 async def _process_job(job_id: str):
