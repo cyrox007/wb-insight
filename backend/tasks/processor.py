@@ -14,6 +14,7 @@ def run_async(coro):
         loop.close()
 
 @celery_app.task(
+    bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=600,
