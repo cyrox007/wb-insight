@@ -13,10 +13,13 @@ logger = setup_logger(__name__)
 class Database:
     _engine = None
     _async_session_maker = None
+    _engine_loop = None
     
     @classmethod
     def get_engine(cls):
-        if cls._engine is None:
+        current_loop = asyncio.get_event_loop()
+
+        if cls._engine is None or cls._engine_loop != current_loop:
             cls._engine = create_async_engine(
                 config.database_url(async_mode=True),
                 # Оптимизированные настройки пула
@@ -41,7 +44,8 @@ class Database:
                     }
                 } if "postgresql" in config.database_url(async_mode=True) else {}
             )
-            #logger.info("Database engine initialized")
+            cls._engine_loop = current_loop
+            
         return cls._engine
     
     @classmethod
