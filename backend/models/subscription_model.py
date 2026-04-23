@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Enum as PgEnum, ForeignKey, String, Text, func
@@ -8,6 +9,10 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from core.database import Database
 
+if TYPE_CHECKING:
+    from models.tariffs_model import TariffPlan
+    from models.users_model import User
+    
 
 class SubscriptionStatus(str, Enum):
     DEMO = "demo"
@@ -79,7 +84,8 @@ class Subscription(Database.Base):
         comment="Последнее обновление статуса или периода"
     )
 
-    tariff = relationship("TariffPlan", back_populates="subscriptions")
+    tariff: Mapped["TariffPlan"] = relationship("TariffPlan", back_populates="subscriptions")
+    user: Mapped["User"] = relationship("User", back_populates="subscription")
 
     def __repr__(self):
         return "Subscription<{}>".format(self.id)

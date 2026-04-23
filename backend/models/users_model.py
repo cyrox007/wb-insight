@@ -253,7 +253,8 @@ class User(Database.Base):
         "Subscription",
         back_populates="user", 
         cascade="all, delete-orphan",
-        lazy="selectin"
+        lazy="selectin",
+        uselist=False
     )
 
     sync_states: Mapped[List["UserSyncState"]] = relationship(
