@@ -10,8 +10,10 @@ celery_app = Celery(
     broker=config.CELERY_BROKER_URL,
     backend=config.CELERY_RESULT_BACKEND,
     include=[
-        "tasks.scheduler",     # 👈 новый
-        "tasks.processor",     # 👈 новый
+        "tasks.schedulers.create_state_scheduler",
+        "tasks.schedulers.state_scheduler",
+        "tasks.processors.job_processor",     # 👈 новый
+        
     ]
 )
 
@@ -38,11 +40,11 @@ celery_app.conf.update(
 # ❗ ЕДИНСТВЕННЫЙ SCHEDULER
 celery_app.conf.beat_schedule = {
     "wb-global-sync-scheduler": {
-        "task": "tasks.schedulers.state_sheduler.schedule_sync",
+        "task": "tasks.schedulers.state_scheduler.schedule_sync",
         "schedule": 60.0,  # каждую минуту проверяем
     },
     "wb-global-sync-scheduler-2": {
-        "task": "tasks.schedulers.create_state_sheduler.schedule_sync",
+        "task": "tasks.schedulers.create_state_scheduler.schedule_sync",
         "schedule": 600.0,  # каждую 5 минуту проверяем
     },
 }
