@@ -1,7 +1,7 @@
 # core/dependencies.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.logger import setup_logger
-from database import Database
+from core.database import Database
 from fastapi import HTTPException, Request
 
 logger = setup_logger(__name__)

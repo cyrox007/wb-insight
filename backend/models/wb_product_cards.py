@@ -5,7 +5,7 @@ from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from database import Database
+from core.database import Database
 
 
 class WbProductCard(Database.Base):

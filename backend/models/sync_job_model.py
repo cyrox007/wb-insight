@@ -5,7 +5,7 @@ from sqlalchemy import JSON, UUID as PG_UUID, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 
-from database import Database
+from core.database import Database
 
 class SyncJob(Database.Base):
     __tablename__ = "sync_jobs"

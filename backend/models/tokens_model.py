@@ -6,7 +6,7 @@ from enum import Enum as PyEnum
 from sqlalchemy import String, DateTime, Boolean, Enum, Text, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
-from database import Database
+from core.database import Database
 
 class Marketplace(PyEnum):
     WILDBERRIES = "wildberries"

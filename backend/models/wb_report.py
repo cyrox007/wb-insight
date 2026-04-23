@@ -6,7 +6,7 @@ from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, Stri
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from database import Database
+from core.database import Database
 
 class WbRealizationReport(Database.Base):
     __tablename__ = 'wb_realization_reports'

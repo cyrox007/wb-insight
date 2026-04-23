@@ -1,4 +1,4 @@
-from celery_app import celery_app
+""" from celery_app import celery_app
 import asyncio
 
 from core.logger import setup_logger
@@ -25,3 +25,4 @@ async def _schedule():
 def schedule_sync():
     logger.info("Начинаем планировщик")
     asyncio.run(_schedule())
+ """

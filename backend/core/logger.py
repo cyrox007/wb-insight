@@ -25,6 +25,8 @@ def setup_logger(
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
+    log_file = '.logs/' + log_file
+
     # Хендлер для записи в файл (опционально)
     file_handler = RotatingFileHandler(
         log_file, 

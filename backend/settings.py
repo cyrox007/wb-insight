@@ -8,6 +8,8 @@ load_dotenv()
 class Config:
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
+    PATH_TO_DIR = os.path.dirname(os.path.abspath(__file__))
+
     SERVER_HTTP_PROTOCOL = os.getenv("SERVER_HTTP_PROTOCOL", "http://")
     SERVER_ADDR = os.getenv("SERVER_ADDR", "localhost")
     SERVER_PORT = os.getenv("SERVER_PORT", "9000")

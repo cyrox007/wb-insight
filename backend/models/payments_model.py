@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, ForeignKey, Numeric
 
-from database import Database
+from core.database import Database
 
 from sqlalchemy import (
     DateTime,

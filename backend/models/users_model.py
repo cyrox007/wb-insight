@@ -7,7 +7,7 @@ from sqlalchemy import UUID as PG_UUID, Boolean, Column, DateTime, Float, String
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
-from database import Database
+from core.database import Database
 if TYPE_CHECKING:
     from .tokens_model import APIToken
 

@@ -20,7 +20,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from database import Database
+from core.database import Database
 
 
 class TariffPlan(Database.Base):

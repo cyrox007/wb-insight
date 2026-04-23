@@ -1,6 +1,6 @@
 # Таблица для разрешений (если нужна детальная система прав)
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, func
-from database import Database
+from core.database import Database
 
 
 class Permission(Database.Base):

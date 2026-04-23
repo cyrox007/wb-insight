@@ -4,7 +4,7 @@ from uuid import UUID as UUIDType, uuid4
 from sqlalchemy import UUID as PG_UUID, ForeignKey, String, DateTime, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from database import Database
+from core.database import Database
 
 class UserSyncState(Database.Base):
     __tablename__ = "user_sync_states"

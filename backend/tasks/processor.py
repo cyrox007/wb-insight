@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+""" from datetime import datetime, timezone
 import asyncio
 
 from sqlalchemy import select
@@ -15,8 +15,8 @@ from core.logger import setup_logger
 
 logger = setup_logger(__name__, "processor.log")
 
-""" def run_async(coro):
-    return asyncio.run(coro) """
+def run_async(coro):
+    return asyncio.run(coro)
 
 @celery_app.task
 def process_job(job_id: str):
@@ -151,4 +151,4 @@ async def update_sync_state_error(session, job, error):
     state.last_sync_at = now
     state.last_error = error
 
-    logger.info(f"[STATE ERROR AFTER] last_error={state.last_error}")
+    logger.info(f"[STATE ERROR AFTER] last_error={state.last_error}") """

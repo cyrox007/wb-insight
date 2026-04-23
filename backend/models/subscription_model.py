@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, Enum as PgEnum, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
-from database import Database
+from core.database import Database
 
 
 class SubscriptionStatus(str, Enum):
