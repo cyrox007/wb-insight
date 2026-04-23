@@ -1,5 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
+import os
+from settings import config
 
 # Создаем логгер
 def setup_logger(
@@ -25,7 +27,11 @@ def setup_logger(
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    log_file = '.logs/' + log_file
+    log_dir = f'{config.PATH_TO_DIR}/.logs/'
+
+    os.makedirs(log_dir, exist_ok=True)
+    
+    log_file = log_dir + log_file
 
     # Хендлер для записи в файл (опционально)
     file_handler = RotatingFileHandler(
