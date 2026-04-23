@@ -114,6 +114,6 @@ async def _shedule():
     finally:
         await session.close()
 
-@celery_app.task(name='tasks.sheduler.shedule_sync')
-def shedule_sync():
+@celery_app.task(name='tasks.schedulers.state_scheduler.schedule_sync')
+def schedule_sync():
     asyncio.run(_shedule())
