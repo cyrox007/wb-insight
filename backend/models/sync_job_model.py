@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import JSON, UUID as PG_UUID, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, UUID as PG_UUID, Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -19,13 +19,6 @@ class SyncJob(Database.Base):
     user_id: Mapped[UUIDType] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False
-    )
-
-    token_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("api_tokens.id", ondelete="CASCADE"),
         index=True,
         nullable=False
     )
@@ -52,6 +45,22 @@ class SyncJob(Database.Base):
         DateTime(timezone=True),
         default=datetime.utcnow
     )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default="true",
+        nullable=False,
+        index=True
+    )
 
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "entity",
+            "status",
+            name="uq_job_unique_pending"
+        ),
+    )

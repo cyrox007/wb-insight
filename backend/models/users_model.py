@@ -3,13 +3,16 @@ from enum import Enum
 from typing import List, Optional, TYPE_CHECKING
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import UUID as PG_UUID, Boolean, Column, DateTime, Float, String, Text, Index, Integer, ForeignKey, Table
+from sqlalchemy import UUID as PG_UUID, Boolean, DateTime, Float, String, Text, Index, Integer, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from core.database import Database
+
 if TYPE_CHECKING:
-    from .tokens_model import APIToken
+    from models.tokens_model import APIToken
+    from models.user_sync_state_model import UserSyncState
+    from models.subscription_model import Subscription
 
 
 class EntityType(Enum):
@@ -243,6 +246,19 @@ class User(Database.Base):
     api_tokens: Mapped[List["APIToken"]] = relationship(
         "APIToken", 
         back_populates="user", 
+        cascade="all, delete-orphan"
+    )
+
+    subscription: Mapped["Subscription"] = relationship(
+        "Subscription",
+        back_populates="user", 
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+
+    sync_states: Mapped[List["UserSyncState"]] = relationship(
+        "UserSyncState",
+        back_populates="user",
         cascade="all, delete-orphan"
     )
 

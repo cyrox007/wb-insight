@@ -1,10 +1,14 @@
 from datetime import datetime
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import UUID as PG_UUID, ForeignKey, String, DateTime, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import UUID as PG_UUID, ForeignKey, String, DateTime, Text, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Database
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from models.users_model import User
 
 class UserSyncState(Database.Base):
     __tablename__ = "user_sync_states"
@@ -22,17 +26,17 @@ class UserSyncState(Database.Base):
         nullable=False
     )
 
-    token_id: Mapped[str] = mapped_column(   # 🔥 КЛЮЧЕВОЕ
-        String(36),
-        ForeignKey("api_tokens.id", ondelete="CASCADE"),
-        index=True,
-        nullable=False
-    )
-
     entity: Mapped[str] = mapped_column(     # stocks / realization
         String(50),
         index=True,
         nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Дата создания"
     )
 
     last_sync_at: Mapped[datetime | None] = mapped_column(
@@ -50,6 +54,12 @@ class UserSyncState(Database.Base):
         nullable=True
     )
 
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="sync_states",
+        lazy="selectin"
+    )
+
     __table_args__ = (
-        UniqueConstraint("user_id", "token_id", "entity", name="uq_sync_state"),
+        UniqueConstraint("user_id", "entity", name="uq_sync_state"),
     )

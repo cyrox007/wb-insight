@@ -38,7 +38,11 @@ celery_app.conf.update(
 # ❗ ЕДИНСТВЕННЫЙ SCHEDULER
 celery_app.conf.beat_schedule = {
     "wb-global-sync-scheduler": {
-        "task": "tasks.scheduler.schedule_sync",
+        "task": "tasks.schedulers.state_sheduler.schedule_sync",
         "schedule": 60.0,  # каждую минуту проверяем
+    },
+    "wb-global-sync-scheduler-2": {
+        "task": "tasks.schedulers.create_state_sheduler.schedule_sync",
+        "schedule": 600.0,  # каждую 5 минуту проверяем
     },
 }

@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import cast, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -76,20 +76,19 @@ async def get_user_by_inn(session: AsyncSession, inn: str) -> Optional[User]:
     return result.scalar_one_or_none()
 
 async def get_user_count(session: AsyncSession) -> int:
-    result = await session.execute(
-        select(User)
-    )
-    return len(result.scalars().all())
+    query = select(func.count()).select_from(User)
+    result = await session.execute(query)
 
-async def get_user_list(session: AsyncSession, offset: int = 0, limit: int = 10):
-    stmt = (
-        select(User)
-        .options(selectinload(User.roles))  # ← загружает роли отдельным запросом
-        .offset(offset)
-        .limit(limit)
-    )
-    result = await session.execute(stmt)
-    users = result.scalars().all()
+    return result.scalar_one()
+
+async def get_user_list(session: AsyncSession, offset: int = 0, limit: int | None = 10) -> list[User]:
+    query = select(User).options(selectinload(User.roles)).order_by(User.created_at.desc())
+        
+    if limit is not None:
+        query = query.offset(offset).limit(limit)
+    
+    result = await session.execute(query)
+    users: list[User] = list(result.scalars().unique().all())
     return users
 
 async def update_user(session: AsyncSession, user: User, user_data: dict) -> Optional[User]:

@@ -1,15 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
-from uuid import uuid4
+from uuid import uuid4, UUID as UUIDType
 
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from sqlalchemy import (
-    UUID,
     Boolean,
     Column,
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     String,
@@ -21,14 +19,15 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Database
+from models.subscription_model import Subscription
 
 
 class TariffPlan(Database.Base):
     __tablename__ = "tariff_plans"
 
     # comment="Уникальный идентификатор"
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), 
+    id: Mapped[UUIDType] = mapped_column(
+        PG_UUID(as_uuid=True), 
         primary_key=True, 
         default=uuid4,
     )	
@@ -79,7 +78,9 @@ class TariffPlan(Database.Base):
         comment="Последнее изменение цены/лимитов"
     )
 
-    subscriptions = relationship("Subscription", back_populates="tariff")
+    subscriptions: Mapped["Subscription"] = relationship("Subscription", back_populates="tariff")
+
+    limits: Mapped[list["TariffLimit"]] = relationship("TariffLimit", back_populates='tariff')
 
     def __repr__(self):
         return (
@@ -92,18 +93,18 @@ class TariffPlan(Database.Base):
 class TariffLimit(Database.Base):
     __tablename__ = "tariff_limits"
 
-    tariff_id = Column(
-        UUID(as_uuid=True),
+    tariff_id: Mapped[UUIDType] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("tariff_plans.id", ondelete="CASCADE"),
         primary_key=True,
         comment="Ссылка на тариф"
     )
-    limit_type = Column(
+    limit_type: Mapped[str] = mapped_column(
         String(50),
         primary_key=True,
         comment="Тип лимита: 'wb_accounts', 'nm_ids', 'sync_frequency_hours', 'ai_queries_per_month', 'retention_days'"
     )
-    limit_value = Column(
+    limit_value: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         comment="Числовое значение лимита"
