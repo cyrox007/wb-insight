@@ -1,5 +1,26 @@
-__pycache__
-.logs/
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Logs
 *.log
+logs/
+
+# Env
 .env
+.env.*
+
+# Celery
 celerybeat-schedule
+celerybeat-schedule.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
