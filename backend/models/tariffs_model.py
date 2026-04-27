@@ -110,5 +110,7 @@ class TariffLimit(Database.Base):
         comment="Числовое значение лимита"
     )
 
+    tariff: Mapped["TariffPlan"] = relationship("TariffPlan", back_populates="limits")
+
     def __repr__(self):
         return f"TariffLimit<{self.tariff_id}>"

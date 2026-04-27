@@ -11,7 +11,12 @@ from models.tokens_model import APIToken
 from models.user_sync_state_model import UserSyncState
 from models.users_model import User
 
-ALL_ENTITIES = ["stocks", "realization", "orders", "sales"]
+ALL_ENTITIES = [
+#    "stocks", 
+    "realization", 
+#    "orders", 
+#    "sales"
+]
 
 async def ensure_states_exist():
     try:

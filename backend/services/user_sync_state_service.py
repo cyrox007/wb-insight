@@ -57,7 +57,7 @@ async def get_states_batch(session: AsyncSession, last_created_at: datetime|None
             .selectinload(User.api_tokens),
         
         selectinload(UserSyncState.user)
-            .selectinload(User.subscription)
+            .selectinload(User.subscriptions)
             .selectinload(Subscription.tariff)
             .selectinload(TariffPlan.limits)
     )
@@ -65,3 +65,15 @@ async def get_states_batch(session: AsyncSession, last_created_at: datetime|None
     result = await session.execute(stmt)
     states: list[UserSyncState] = list(result.scalars().unique().all())
     return states
+
+
+async def get_state(session: AsyncSession, user_id: UUID, entity_code: str) -> UserSyncState:
+    query = select(UserSyncState).where(
+        and_(
+            UserSyncState.user_id == user_id,
+            UserSyncState.entity == entity_code
+        )
+    )
+
+    result = await session.execute(query)
+    return result.scalar_one()

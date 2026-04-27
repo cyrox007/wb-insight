@@ -249,12 +249,9 @@ class User(Database.Base):
         cascade="all, delete-orphan"
     )
 
-    subscription: Mapped["Subscription"] = relationship(
+    subscriptions: Mapped[list["Subscription"]] = relationship(
         "Subscription",
-        back_populates="user", 
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        uselist=False
+        back_populates="user"
     )
 
     sync_states: Mapped[List["UserSyncState"]] = relationship(

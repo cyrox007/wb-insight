@@ -85,7 +85,7 @@ class Subscription(Database.Base):
     )
 
     tariff: Mapped["TariffPlan"] = relationship("TariffPlan", back_populates="subscriptions")
-    user: Mapped["User"] = relationship("User", back_populates="subscription")
+    user: Mapped["User"] = relationship("User", back_populates="subscriptions")
 
     def __repr__(self):
         return "Subscription<{}>".format(self.id)

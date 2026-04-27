@@ -56,11 +56,14 @@ class SyncJob(Database.Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    from sqlalchemy import Index
+
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_job_active",
             "user_id",
             "entity",
-            "status",
-            name="uq_job_unique_pending"
+            unique=True,
+            postgresql_where=(is_active == True)
         ),
     )
