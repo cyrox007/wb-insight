@@ -45,7 +45,7 @@ celery_app.conf.beat_schedule = {
     },
     "wb-global-sync-scheduler-2": {
         "task": "tasks.schedulers.create_state_scheduler.schedule_sync",
-        "schedule": 600.0,  # каждую 5 минуту проверяем
+        "schedule": 600.0,  # каждые 5 минут проверяем
     },
     "wb-job-worker": {
         "task": "tasks.processors.job_processor.run",
