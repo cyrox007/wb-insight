@@ -17,6 +17,11 @@ logger = setup_logger(__name__, 'sheduler.log')
 
 BATCH_SIZE = 50
 
+_scheduler_state = {
+    "last_created_at": None,
+    "last_id": None
+}
+
 def filter_user_tokens(user: User) -> list[APIToken]:
     logger.debug(f"[TOKENS] user={user.id} start filtering")
     sub = next(
@@ -49,8 +54,11 @@ def filter_user_tokens(user: User) -> list[APIToken]:
 async def function_sheduler(session: AsyncSession):
     logger.info("[SCHEDULER] start")
 
-    last_created_at = None
-    last_id = None
+    #last_created_at = None
+    #last_id = None
+
+    last_created_at = _scheduler_state["last_created_at"]
+    last_id = _scheduler_state["last_id"]
 
     #while True:
     logger.debug(
@@ -69,9 +77,14 @@ async def function_sheduler(session: AsyncSession):
     if not states:
         logger.info("[SCHEDULER] no more states, exit")
         return
+    
+    jobs_created = 0
+    users_processed = set()
 
     for state in states:
         user = state.user
+
+        users_processed.add(user.id)
 
         logger.debug(
             f"[STATE] id={state.id} user={user.id} entity={state.entity}"
@@ -142,8 +155,15 @@ async def function_sheduler(session: AsyncSession):
             }
         )
 
-    last_created_at = states[-1].created_at
-    last_id = states[-1].id
+        jobs_created += 1
+
+    #last_created_at = states[-1].created_at
+    #last_id = states[-1].id
+
+    # Сохраняем состояние для следующего запуска
+    if states:
+        _scheduler_state["last_created_at"] = states[-1].created_at
+        _scheduler_state["last_id"] = states[-1].id
 
     logger.debug(
         f"[BATCH] next cursor created_at={last_created_at} id={last_id}"

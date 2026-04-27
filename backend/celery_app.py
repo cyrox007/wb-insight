@@ -49,6 +49,6 @@ celery_app.conf.beat_schedule = {
     },
     "wb-job-worker": {
         "task": "tasks.processors.job_processor.run",
-        "schedule": 10.0,  # каждые 10 секунд
+        "schedule": 100.0,  # каждые 100 секунд
     },
 }
