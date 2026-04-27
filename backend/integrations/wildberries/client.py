@@ -34,5 +34,9 @@ class WBClient:
         
     # === endpoints ===
 
-    async def get_realization(self, params: dict):
-        return await self._request("GET", endpoints.REALIZATION, params)
+    async def get_realization(self, payload: dict = {}):
+        return await self._request(
+            "POST", 
+            endpoints.SALES_REPORT_DETAILED, 
+            params=payload
+        )

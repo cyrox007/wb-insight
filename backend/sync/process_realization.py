@@ -18,7 +18,7 @@ async def process_realization(session: AsyncSession, job: SyncJob, token: APITok
         data = await client.get_realization(job.payload)
 
         logger.info(data)
-        #await save_realization(session, job.user_id, data)
+        await save_realization(session, job.user_id, data)
     
     except Exception as e:
         logger.error(f"Случилась ошибка: {e}")

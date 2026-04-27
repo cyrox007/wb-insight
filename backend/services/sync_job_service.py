@@ -7,11 +7,11 @@ from sqlalchemy.orm import aliased
 
 from models.sync_job_model import SyncJob
 
-async def create_sync_job(session: AsyncSession, user_id: UUID, entity: str):
+async def create_sync_job(session: AsyncSession, user_id: UUID, entity: str, payload: dict = {}):
     stmt = insert(SyncJob).values(
         user_id=user_id,
         entity=entity,
-        payload={},
+        payload=payload,
         status="pending",
         is_active=True
     )

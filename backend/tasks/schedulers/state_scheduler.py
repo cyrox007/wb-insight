@@ -52,101 +52,105 @@ async def function_sheduler(session: AsyncSession):
     last_created_at = None
     last_id = None
 
-    while True:
+    #while True:
+    logger.debug(
+        f"[BATCH] request last_created_at={last_created_at} last_id={last_id}"
+    )
+
+    states = await get_states_batch(
+        session=session,
+        last_created_at=last_created_at,
+        last_id=last_id,
+        limit=BATCH_SIZE
+    )
+
+    logger.info(f"[BATCH] fetched states={len(states)}")
+
+    if not states:
+        logger.info("[SCHEDULER] no more states, exit")
+        return
+
+    for state in states:
+        user = state.user
+
         logger.debug(
-            f"[BATCH] request last_created_at={last_created_at} last_id={last_id}"
+            f"[STATE] id={state.id} user={user.id} entity={state.entity}"
         )
 
-        states = await get_states_batch(
-            session=session,
-            last_created_at=last_created_at,
-            last_id=last_id,
-            limit=BATCH_SIZE
+        if not user.subscriptions:
+            logger.debug(f"[SKIP] user={user.id} no subscriptions")
+            continue
+
+        now = datetime.now(timezone.utc)
+
+        active_sub = next(
+            (s for s in user.subscriptions if s.status == SubscriptionStatus.ACTIVE),
+            None
         )
 
-        logger.info(f"[BATCH] fetched states={len(states)}")
+        if not active_sub:
+            logger.debug(f"[SKIP] user={user.id} no active subscription")
+            continue
 
-        if not states:
-            logger.info("[SCHEDULER] no more states, exit")
-            break
+        if not active_sub.tariff:
+            logger.debug(f"[SKIP] user={user.id} no tariff")
+            continue
 
-        for state in states:
-            user = state.user
+        limits = active_sub.tariff.limits
 
+        sync_limit = next(
+            (l for l in limits if l.limit_type == "sync_frequency_hours"),
+            None
+        )
+
+        if not sync_limit:
+            logger.debug(f"[SKIP] user={user.id} no sync_frequency_hours limit")
+            continue
+
+        hours = int(sync_limit.limit_value)
+        interval = timedelta(hours=hours)
+
+        if state.last_sync_at:
+            diff = now - state.last_sync_at
+            
             logger.debug(
-                f"[STATE] id={state.id} user={user.id} entity={state.entity}"
+                f"[CHECK] user={user.id} entity={state.entity} "
+                f"last_sync={state.last_sync_at} diff={diff} interval={interval}"
             )
-
-            if not user.subscriptions:
-                logger.debug(f"[SKIP] user={user.id} no subscriptions")
+            
+            if diff < interval:
+                logger.debug(f"[SKIP] cooldown not passed")
                 continue
 
-            now = datetime.now(timezone.utc)
+        tokens = filter_user_tokens(user)
 
-            active_sub = next(
-                (s for s in user.subscriptions if s.status == SubscriptionStatus.ACTIVE),
-                None
-            )
+        if not tokens:
+            logger.debug(f"[SKIP] user={user.id} no valid tokens")
+            continue
 
-            if not active_sub:
-                logger.debug(f"[SKIP] user={user.id} no active subscription")
-                continue
-
-            if not active_sub.tariff:
-                logger.debug(f"[SKIP] user={user.id} no tariff")
-                continue
-
-            limits = active_sub.tariff.limits
-
-            sync_limit = next(
-                (l for l in limits if l.limit_type == "sync_frequency_hours"),
-                None
-            )
-
-            if not sync_limit:
-                logger.debug(f"[SKIP] user={user.id} no sync_frequency_hours limit")
-                continue
-
-            hours = int(sync_limit.limit_value)
-            interval = timedelta(hours=hours)
-
-            if state.last_sync_at:
-                diff = now - state.last_sync_at
-                
-                logger.debug(
-                    f"[CHECK] user={user.id} entity={state.entity} "
-                    f"last_sync={state.last_sync_at} diff={diff} interval={interval}"
-                )
-                
-                if diff < interval:
-                    logger.debug(f"[SKIP] cooldown not passed")
-                    continue
-
-            tokens = filter_user_tokens(user)
-
-            if not tokens:
-                logger.debug(f"[SKIP] user={user.id} no valid tokens")
-                continue
-
-            logger.info(
-                f"[JOB] create user={user.id} entity={state.entity}"
-            )
-
-            await create_sync_job(
-                session=session,
-                user_id=user.id,
-                entity=state.entity
-            )
-
-        last_created_at = states[-1].created_at
-        last_id = states[-1].id
-
-        logger.debug(
-            f"[BATCH] next cursor created_at={last_created_at} id={last_id}"
+        logger.info(
+            f"[JOB] create user={user.id} entity={state.entity}"
         )
 
-        await session.commit()
-        logger.debug("[BATCH] committed")
+        await create_sync_job(
+            session=session,
+            user_id=user.id,
+            entity=state.entity,
+            payload={
+                "date_from": state.last_sync_at.isoformat() if state.last_sync_at else None,
+                "date_to": datetime.now(timezone.utc).isoformat()
+            }
+        )
+
+    last_created_at = states[-1].created_at
+    last_id = states[-1].id
+
+    logger.debug(
+        f"[BATCH] next cursor created_at={last_created_at} id={last_id}"
+    )
+
+    await session.commit()
+    logger.debug("[BATCH] committed")
 
     logger.info("[SCHEDULER] finished")
 

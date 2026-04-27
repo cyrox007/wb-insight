@@ -17,30 +17,30 @@ from sync.router import call_wb_api
 logger = setup_logger(__name__, 'processor.log')
 
 async def worker_loop(session: AsyncSession):
-    while True:
-        jobs = await get_next_jobs(session, limit=10)
+    #while True:
+    jobs = await get_next_jobs(session, limit=10)
 
-        if not jobs:
-            break
+    if not jobs:
+        return
 
-        await mark_jobs_processing(session, jobs)
-        await session.commit()
+    await mark_jobs_processing(session, jobs)
+    await session.commit()
 
-        for job in jobs:
-            try:
-                await process_job(session, job)
+    for job in jobs:
+        try:
+            await process_job(session, job)
 
-                job.status = "done"
-                job.is_active = False
-                job.finished_at = datetime.now(timezone.utc)
+            job.status = "done"
+            job.is_active = False
+            job.finished_at = datetime.now(timezone.utc)
 
-            except Exception as e:
-                job.status = "failed"
-                job.error = str(e)
-                job.is_active = False
-                job.finished_at = datetime.now(timezone.utc)
+        except Exception as e:
+            job.status = "failed"
+            job.error = str(e)
+            job.is_active = False
+            job.finished_at = datetime.now(timezone.utc)
 
-        await session.commit()
+    await session.commit()
 
 
 async def process_job(session: AsyncSession, job: SyncJob):

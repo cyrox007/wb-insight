@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+from uuid import uuid4, UUID as UUIDType
 
 from enum import Enum as PyEnum
 
 from sqlalchemy import String, DateTime, Boolean, Enum, Text, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 
 from core.database import Database
 
@@ -26,14 +27,15 @@ class TokenTypeWB(PyEnum):
 class APIToken(Database.Base):
     __tablename__ = 'api_tokens'
 
-    id: Mapped[str] = mapped_column(
-        String(36), 
-        primary_key=True, 
-        default=lambda: str(uuid4())
+    id: Mapped[UUIDType] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4
     )
 
     # Привязка к пользователю
-    user_id: Mapped[str] = mapped_column(
+    user_id: Mapped[UUIDType] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey('users.id', ondelete='CASCADE'),
         nullable=False,
         index=True

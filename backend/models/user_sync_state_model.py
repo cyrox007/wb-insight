@@ -23,35 +23,40 @@ class UserSyncState(Database.Base):
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
-        nullable=False
+        nullable=False,
+        comment="кому принадлежит состояние"
     )
 
     entity: Mapped[str] = mapped_column(     # stocks / realization
         String(50),
         index=True,
-        nullable=False
+        nullable=False,
+        comment="тип данных, которые ты синкаешь"
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
-        comment="Дата создания"
+        comment="когда создали запись состояния"
     )
 
     last_sync_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=True
+        nullable=True,
+        comment="последняя попытка синхронизации"
     )
 
     last_success_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=True
+        nullable=True,
+        comment="последний успешный синк"
     )
 
     last_error: Mapped[str | None] = mapped_column(
         Text,
-        nullable=True
+        nullable=True,
+        comment="текст последней ошибки"
     )
 
     user: Mapped["User"] = relationship(

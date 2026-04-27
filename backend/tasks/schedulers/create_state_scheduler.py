@@ -1,7 +1,6 @@
 import asyncio
 
 from sqlalchemy import exists, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
 from celery_app import celery_app

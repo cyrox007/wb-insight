@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,15 @@ class WbRealizationReport(Database.Base):
         PG_UUID(as_uuid=True),
         ForeignKey('users.id', ondelete='CASCADE'),
         nullable=False,
+        index=True
+    )
+
+    # привязка к токену
+    token_id: Mapped[UUIDType] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey('api_tokens.id', ondelete='CASCADE'),
+        nullable=False,
+        server_default=text('gen_random_uuid()'),
         index=True
     )
     
