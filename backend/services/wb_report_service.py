@@ -145,62 +145,28 @@ def normalize_wb_report_item(item: dict, user_id: UUID, token_id: UUID) -> dict:
         "user_id": user_id,
         "token_id": token_id,
 
-        # даты
+        # dates
         "rr_dt": parse_dt_safe(pick(item, "rr_dt", "rrDate")),
         "order_dt": parse_dt_safe(pick(item, "order_dt", "orderDt")),
         "sale_dt": parse_dt_safe(pick(item, "sale_dt", "saleDt")),
-        "date_from": pick(item, "date_from", "dateFrom"),
-        "date_to": pick(item, "date_to", "dateTo"),
-        "create_dt": parse_dt_safe(pick(item, "create_dt", "createDate")),
 
-        # идентификаторы
+        # ids
         "nm_id": to_int(pick(item, "nm_id", "nmId")),
         "rrd_id": to_int(pick(item, "rrd_id", "rrdId")),
-        "realizationreport_id": to_int(pick(item, "realizationreport_id", "reportId")),
-        "gi_id": to_int(pick(item, "gi_id", "giId")),
         "srid": to_str(pick(item, "srid")),
-        "order_uid": to_str(pick(item, "order_uid", "orderUid")),
-        "assembly_id": to_str(pick(item, "assembly_id", "orderId")),
-        "shk_id": to_str(pick(item, "shk_id", "shkId")),
 
-        # типы
+        # operation
         "supplier_oper_name": to_str(pick(item, "supplier_oper_name", "sellerOperName")),
-        "doc_type_name": to_str(pick(item, "doc_type_name", "docTypeName")),
 
-        # товар
-        "subject_name": to_str(pick(item, "subject_name", "subjectName")),
-        "brand_name": to_str(pick(item, "brand_name", "brandName")),
-        "sa_name": to_str(pick(item, "sa_name", "vendorCode")),
-        "ts_name": to_str(pick(item, "ts_name", "techSize")),
-        "barcode": to_str(pick(item, "barcode", "sku")),
-        "kiz": to_str(pick(item, "kiz")),
+        # minimal business data
         "office_name": to_str(pick(item, "office_name", "officeName")),
 
-        # деньги (Decimal!)
-        "retail_amount": to_decimal(pick(item, "retail_amount", "retailAmount")),
-        "retail_price": to_decimal(pick(item, "retail_price", "retailPrice")),
-        "retail_price_withdisc_rub": to_decimal(pick(item, "retail_price_withdisc_rub", "retailPriceWithDisc")),
+        # facts
         "quantity": to_int(pick(item, "quantity")),
-        "delivery_amount": to_decimal(pick(item, "delivery_amount", "deliveryAmount")),
-        "return_amount": to_decimal(pick(item, "return_amount", "returnAmount")),
-        "ppvz_sales_commission": to_decimal(pick(item, "ppvz_sales_commission", "ppvzSalesCommission")),
-        "delivery_rub": to_decimal(pick(item, "delivery_rub", "deliveryService")),
-        "penalty": to_decimal(pick(item, "penalty")),
-        "additional_payment": to_decimal(pick(item, "additional_payment", "additionalPayment")),
-        "storage_fee": to_decimal(pick(item, "storage_fee", "paidStorage")),
+        "retail_amount": to_decimal(pick(item, "retail_amount", "retailAmount")),
         "ppvz_for_pay": to_decimal(pick(item, "ppvz_for_pay", "forPay")),
-        "ppvz_reward": to_decimal(pick(item, "ppvz_reward", "ppvzReward")),
-        "acquiring_fee": to_decimal(pick(item, "acquiring_fee", "acquiringFee")),
 
-        # проценты
-        "sale_percent": to_decimal(pick(item, "sale_percent", "salePercent")),
-        "commission_percent": to_decimal(pick(item, "commission_percent", "commissionPercent")),
-        "ppvz_spp_prc": to_decimal(pick(item, "ppvz_spp_prc", "spp")),
-        "ppvz_kvw_prc_base": to_decimal(pick(item, "ppvz_kvw_prc_base", "kvwBase")),
-        "ppvz_kvw_prc": to_decimal(pick(item, "ppvz_kvw_prc", "kvw")),
-        "ppvz_vw": to_decimal(pick(item, "ppvz_vw", "vw")),
-        "ppvz_vw_nds": to_decimal(pick(item, "ppvz_vw_nds", "vwNds")),
-
+        # audit
         "created_at": datetime.now(timezone.utc),
     }
 
