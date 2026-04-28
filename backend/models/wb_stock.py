@@ -1,10 +1,9 @@
 from datetime import datetime
-from uuid import uuid4
-from typing import Optional
+from uuid import uuid4, UUID as UUIDType
 
 from sqlalchemy import (
-    String, Integer, Boolean, DateTime, Numeric,
-    ForeignKey, UniqueConstraint, Index
+    String, Integer, DateTime, Numeric,
+    ForeignKey, UniqueConstraint
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -15,21 +14,21 @@ from core.database import Database
 class WbStock(Database.Base):
     __tablename__ = "wb_stocks"
 
-    id: Mapped[str] = mapped_column(
+    id: Mapped[UUIDType] = mapped_column(
         PG_UUID(as_uuid=True),
         primary_key=True,
         default=uuid4
     )
 
     # 🔗 привязка
-    user_id: Mapped[str] = mapped_column(
+    user_id: Mapped[UUIDType] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         index=True,
         nullable=False
     )
 
-    token_id: Mapped[str] = mapped_column(
+    token_id: Mapped[UUIDType] = mapped_column(
         String(36),
         ForeignKey("api_tokens.id", ondelete="CASCADE"),
         index=True,
