@@ -36,33 +36,18 @@ class WbStock(Database.Base):
         nullable=False
     )
 
-    # 📦 идентификация товара
-    nm_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-    barcode: Mapped[Optional[str]] = mapped_column(String(50), index=True)
-    supplier_article: Mapped[Optional[str]] = mapped_column(String(100))
+    # 📍 идентификаторы склада
+    nm_id = mapped_column(Integer, index=True)
+    warehouse_id = mapped_column(Integer, index=True)
+    warehouse_name = mapped_column(String(100), index=True)
 
-    # 📍 склад
-    warehouse_name: Mapped[str] = mapped_column(String(100), index=True)
+    # 📦 остатки (уже агрегированные)
+    quantity = mapped_column(Integer, default=0)
+    in_way_to_client = mapped_column(Integer, default=0)
+    in_way_from_client = mapped_column(Integer, default=0)
 
-    # 📊 остатки
-    quantity: Mapped[int] = mapped_column(Integer, default=0)
-    quantity_full: Mapped[int] = mapped_column(Integer, default=0)
-    in_way_to_client: Mapped[int] = mapped_column(Integer, default=0)
-    in_way_from_client: Mapped[int] = mapped_column(Integer, default=0)
-
-    # 💰 цена
-    price: Mapped[Optional[float]] = mapped_column(Numeric(12, 2))
-    discount: Mapped[Optional[int]] = mapped_column(Integer)
-
-    # 📦 доп поля
-    category: Mapped[Optional[str]] = mapped_column(String(100))
-    subject: Mapped[Optional[str]] = mapped_column(String(100))
-    brand: Mapped[Optional[str]] = mapped_column(String(100))
-    tech_size: Mapped[Optional[str]] = mapped_column(String(50))
-
-    is_supply: Mapped[Optional[bool]] = mapped_column(Boolean)
-    is_realization: Mapped[Optional[bool]] = mapped_column(Boolean)
-    sc_code: Mapped[Optional[str]] = mapped_column(String(50))
+    # 💰 (опционально, если считаешь в UI)
+    price = mapped_column(Numeric(12, 2), nullable=True)
 
     # ⏱ WB время изменения
     last_change_date: Mapped[datetime] = mapped_column(
@@ -80,18 +65,12 @@ class WbStock(Database.Base):
     )
 
     __table_args__ = (
-        # 🔥 КРИТИЧНО: уникальность
         UniqueConstraint(
             "token_id",
             "nm_id",
-            "warehouse_name",
-            "barcode",
-            name="uq_wb_stock_unique"
+            "warehouse_id",
+            name="uq_wb_stock_ui"
         ),
-
-        # 🔍 индексы
-        Index("idx_wb_stock_user_nm", "user_id", "nm_id"),
-        Index("idx_wb_stock_token_nm", "token_id", "nm_id"),
     )
 
     def __repr__(self):

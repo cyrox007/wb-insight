@@ -1,33 +1,24 @@
 from datetime import datetime, timezone
+from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
 from models.wb_stock import WbStock
 from utils.date_parser import parse_dt
 
-async def save_stocks(session, user_id, token_id, data):
+async def save_stocks(session: AsyncSession, user_id: UUID, token_id: UUID, data: list[dict]):
     stmt = insert(WbStock).values([
         {
             "user_id": user_id,
             "token_id": token_id,
-            "nm_id": item["nmId"],
-            "barcode": item.get("barcode"),
-            "supplier_article": item.get("supplierArticle"),
-            "warehouse_name": item["warehouseName"],
-            "quantity": item["quantity"],
-            "quantity_full": item["quantityFull"],
-            "in_way_to_client": item["inWayToClient"],
-            "in_way_from_client": item["inWayFromClient"],
-            "price": item.get("Price"),
-            "discount": item.get("Discount"),
-            "category": item.get("category"),
-            "subject": item.get("subject"),
-            "brand": item.get("brand"),
-            "tech_size": item.get("techSize"),
-            "is_supply": item.get("isSupply"),
-            "is_realization": item.get("isRealization"),
-            "sc_code": item.get("SCCode"),
-            "last_change_date": parse_dt(item.get("lastChangeDate")),
+
+            "nm_id": item.get("nmId"),
+            "warehouse_name": item.get("warehouseName"),
+
+            "quantity": item.get("quantity") or 0,
+            "in_way_to_client": item.get("inWayToClient") or 0,
+            "in_way_from_client": item.get("inWayFromClient") or 0,
         }
         for item in data
     ])
@@ -36,12 +27,9 @@ async def save_stocks(session, user_id, token_id, data):
         constraint="uq_wb_stock_unique",
         set_={
             "quantity": stmt.excluded.quantity,
-            "quantity_full": stmt.excluded.quantity_full,
             "in_way_to_client": stmt.excluded.in_way_to_client,
             "in_way_from_client": stmt.excluded.in_way_from_client,
-            "price": stmt.excluded.price,
-            "discount": stmt.excluded.discount,
-            "last_change_date": stmt.excluded.last_change_date,
+            "warehouse_name": stmt.excluded.warehouse_name,
             "updated_at": datetime.now(timezone.utc),
         }
     )

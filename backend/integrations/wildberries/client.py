@@ -36,7 +36,14 @@ class WBClient:
 
     async def get_realization(self, payload: dict = {}):
         return await self._request(
-            "POST", 
+            "GET", 
             endpoints.REALIZATION, 
+            params=payload
+        )
+    
+    async def get_stock(self, payload: dict = {}):
+        return await self._request(
+            "GET",
+            endpoints.STOCKS,
             params=payload
         )
