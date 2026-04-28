@@ -37,6 +37,6 @@ class WBClient:
     async def get_realization(self, payload: dict = {}):
         return await self._request(
             "POST", 
-            endpoints.SALES_REPORT_DETAILED, 
+            endpoints.REALIZATION, 
             params=payload
         )

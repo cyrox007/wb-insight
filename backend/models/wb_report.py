@@ -225,10 +225,10 @@ class WbRealizationReport(Database.Base):
     )
     
     # Стоимость возврата логистики
-    return_rub: Mapped[Optional[float]] = mapped_column(
+    """ return_rub: Mapped[Optional[float]] = mapped_column(
         Numeric(15, 2),
         nullable=True
-    )
+    ) """
     
     # Штрафы
     penalty: Mapped[float] = mapped_column(

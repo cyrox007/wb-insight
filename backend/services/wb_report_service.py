@@ -1,4 +1,6 @@
-from datetime import date, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from typing import Any, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -73,10 +75,139 @@ from sqlalchemy.dialects.postgresql import insert
 
 from models.wb_report import WbRealizationReport
 
+def pick(item: dict, *keys: str) -> Any:
+    """Берёт первое НЕ None значение из списка ключей"""
+    for k in keys:
+        if k in item and item[k] is not None:
+            return item[k]
+    return None
+
+# ------------------------
+# helpers
+# ------------------------
+
+def to_int(value: Any, default: int = 0) -> int:
+    if value is None:
+        return default
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float):
+        return int(value)
+
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except ValueError:
+            return default
+
+    return default
+
+
+def to_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
+    if value is None:
+        return default
+
+    try:
+        return Decimal(str(value).replace(",", "."))
+    except Exception:
+        return default
+
+
+def to_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return str(value)
+
+
+def parse_dt_safe(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+
+    if isinstance(value, datetime):
+        return value
+
+    if isinstance(value, str):
+        try:
+            # если у тебя уже есть parse_dt — можешь использовать его
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    return None
+
+# ------------------------
+# нормализатор
+# ------------------------
+def normalize_wb_report_item(item: dict, user_id: UUID, token_id: UUID) -> dict:
+    return {
+        "user_id": user_id,
+        "token_id": token_id,
+
+        # даты
+        "rr_dt": parse_dt_safe(pick(item, "rr_dt", "rrDate")),
+        "order_dt": parse_dt_safe(pick(item, "order_dt", "orderDt")),
+        "sale_dt": parse_dt_safe(pick(item, "sale_dt", "saleDt")),
+        "date_from": pick(item, "date_from", "dateFrom"),
+        "date_to": pick(item, "date_to", "dateTo"),
+        "create_dt": parse_dt_safe(pick(item, "create_dt", "createDate")),
+
+        # идентификаторы
+        "nm_id": to_int(pick(item, "nm_id", "nmId")),
+        "rrd_id": to_int(pick(item, "rrd_id", "rrdId")),
+        "realizationreport_id": to_int(pick(item, "realizationreport_id", "reportId")),
+        "gi_id": to_int(pick(item, "gi_id", "giId")),
+        "srid": to_str(pick(item, "srid")),
+        "order_uid": to_str(pick(item, "order_uid", "orderUid")),
+        "assembly_id": to_str(pick(item, "assembly_id", "orderId")),
+        "shk_id": to_str(pick(item, "shk_id", "shkId")),
+
+        # типы
+        "supplier_oper_name": to_str(pick(item, "supplier_oper_name", "sellerOperName")),
+        "doc_type_name": to_str(pick(item, "doc_type_name", "docTypeName")),
+
+        # товар
+        "subject_name": to_str(pick(item, "subject_name", "subjectName")),
+        "brand_name": to_str(pick(item, "brand_name", "brandName")),
+        "sa_name": to_str(pick(item, "sa_name", "vendorCode")),
+        "ts_name": to_str(pick(item, "ts_name", "techSize")),
+        "barcode": to_str(pick(item, "barcode", "sku")),
+        "kiz": to_str(pick(item, "kiz")),
+        "office_name": to_str(pick(item, "office_name", "officeName")),
+
+        # деньги (Decimal!)
+        "retail_amount": to_decimal(pick(item, "retail_amount", "retailAmount")),
+        "retail_price": to_decimal(pick(item, "retail_price", "retailPrice")),
+        "retail_price_withdisc_rub": to_decimal(pick(item, "retail_price_withdisc_rub", "retailPriceWithDisc")),
+        "quantity": to_int(pick(item, "quantity")),
+        "delivery_amount": to_decimal(pick(item, "delivery_amount", "deliveryAmount")),
+        "return_amount": to_decimal(pick(item, "return_amount", "returnAmount")),
+        "ppvz_sales_commission": to_decimal(pick(item, "ppvz_sales_commission", "ppvzSalesCommission")),
+        "delivery_rub": to_decimal(pick(item, "delivery_rub", "deliveryService")),
+        "penalty": to_decimal(pick(item, "penalty")),
+        "additional_payment": to_decimal(pick(item, "additional_payment", "additionalPayment")),
+        "storage_fee": to_decimal(pick(item, "storage_fee", "paidStorage")),
+        "ppvz_for_pay": to_decimal(pick(item, "ppvz_for_pay", "forPay")),
+        "ppvz_reward": to_decimal(pick(item, "ppvz_reward", "ppvzReward")),
+        "acquiring_fee": to_decimal(pick(item, "acquiring_fee", "acquiringFee")),
+
+        # проценты
+        "sale_percent": to_decimal(pick(item, "sale_percent", "salePercent")),
+        "commission_percent": to_decimal(pick(item, "commission_percent", "commissionPercent")),
+        "ppvz_spp_prc": to_decimal(pick(item, "ppvz_spp_prc", "spp")),
+        "ppvz_kvw_prc_base": to_decimal(pick(item, "ppvz_kvw_prc_base", "kvwBase")),
+        "ppvz_kvw_prc": to_decimal(pick(item, "ppvz_kvw_prc", "kvw")),
+        "ppvz_vw": to_decimal(pick(item, "ppvz_vw", "vw")),
+        "ppvz_vw_nds": to_decimal(pick(item, "ppvz_vw_nds", "vwNds")),
+
+        "created_at": datetime.now(timezone.utc),
+    }
 
 async def save_realization(
     session: AsyncSession,
     user_id: UUID,
+    token_id: UUID,
     data: list[dict],
 ):
     if not data:
@@ -85,68 +216,7 @@ async def save_realization(
     values = []
 
     for item in data:
-        values.append({
-            "user_id": user_id,
-
-            # даты
-            "rr_dt": parse_dt(item["rr_dt"]),
-            "order_dt": parse_dt(item.get("order_dt")),
-            "sale_dt": parse_dt(item.get("sale_dt")),
-            "date_from": item.get("date_from"),
-            "date_to": item.get("date_to"),
-            "create_dt": item.get("create_dt"),
-
-            # идентификаторы
-            "nm_id": item["nm_id"],
-            "rrd_id": item["rrd_id"],
-            "realizationreport_id": item["realizationreport_id"],
-            "gi_id": item.get("gi_id"),
-            "srid": item.get("srid"),
-            "order_uid": item.get("order_uid"),
-            "assembly_id": item.get("assembly_id"),
-            "shk_id": item.get("shk_id"),
-
-            # типы
-            "supplier_oper_name": item["supplier_oper_name"],
-            "doc_type_name": item.get("doc_type_name"),
-
-            # товар
-            "subject_name": item.get("subject_name"),
-            "brand_name": item.get("brand_name"),
-            "sa_name": item.get("sa_name"),
-            "ts_name": item.get("ts_name"),
-            "barcode": item.get("barcode"),
-            "kiz": item.get("kiz"),
-            "office_name": item.get("office_name"),
-
-            # деньги
-            "retail_amount": item.get("retail_amount", 0),
-            "retail_price": item.get("retail_price"),
-            "retail_price_withdisc_rub": item.get("retail_price_withdisc_rub"),
-            "quantity": item.get("quantity", 0),
-            "delivery_amount": item.get("delivery_amount"),
-            "return_amount": item.get("return_amount"),
-            "ppvz_sales_commission": item.get("ppvz_sales_commission", 0),
-            "delivery_rub": item.get("delivery_rub", 0),
-            "return_rub": item.get("return_rub"),
-            "penalty": item.get("penalty", 0),
-            "additional_payment": item.get("additional_payment", 0),
-            "storage_fee": item.get("storage_fee", 0),
-            "ppvz_for_pay": item.get("ppvz_for_pay", 0),
-            "ppvz_reward": item.get("ppvz_reward"),
-            "acquiring_fee": item.get("acquiring_fee"),
-
-            # проценты
-            "sale_percent": item.get("sale_percent"),
-            "commission_percent": item.get("commission_percent"),
-            "ppvz_spp_prc": item.get("ppvz_spp_prc"),
-            "ppvz_kvw_prc_base": item.get("ppvz_kvw_prc_base"),
-            "ppvz_kvw_prc": item.get("ppvz_kvw_prc"),
-            "ppvz_vw": item.get("ppvz_vw"),
-            "ppvz_vw_nds": item.get("ppvz_vw_nds"),
-
-            "created_at": datetime.now(timezone.utc),
-        })
+        values.append(normalize_wb_report_item(item, user_id, token_id))
 
     BATCH_SIZE = 500
     for batch in chunks(data, BATCH_SIZE):
@@ -154,7 +224,7 @@ async def save_realization(
 
         # ❗ ключевая часть — НЕ обновляем, просто игнорим дубли
         stmt = stmt.on_conflict_do_nothing(
-            index_elements=["rrd_id"]
+            index_elements=["rrd_id", 'user_id']
         )
 
         await session.execute(stmt)
