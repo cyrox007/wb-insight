@@ -10,27 +10,27 @@ logger = setup_logger(__name__, 'wb_client.log')
 
 class WBClient:   
     def __init__(self, token: APIToken) -> None:
-        self.token = token
+        self.token = decrypt_token(token.encrypted_token)
+        self.client = httpx.AsyncClient(timeout=60)
 
 
     async def _request(self, method: str, url: str, params: dict | None = None):
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.request(
-                method=method,
-                url=url,
-                headers={"Authorization": decrypt_token(self.token.encrypted_token)},
-                params=params
-            )
+        response = await self.client.request(
+            method=method,
+            url=url,
+            headers={"Authorization": self.token},
+            params=params
+        )
 
-            if response.status_code == 429:
-                logger.error("rate_limit")
-                raise RuntimeError("rate_limit")
+        if response.status_code == 429:
+            logger.error("rate_limit")
+            raise RuntimeError("rate_limit")
 
-            if response.status_code != 200:
-                logger.error(f"WB error: {response.status_code} {response.text}")
-                raise Exception(f"WB error: {response.status_code} {response.text}")
-            
-            return response.json()
+        if response.status_code != 200:
+            logger.error(f"WB error: {response.status_code} {response.text}")
+            raise Exception(f"WB error: {response.status_code} {response.text}")
+        
+        return response.json()
         
     # === endpoints ===
 

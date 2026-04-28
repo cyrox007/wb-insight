@@ -3,13 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from sync.process_realization import process_realization
-#from sync.process_stocks import process_stocks
+from sync.process_stock import process_stock
 #from sync.process_orders import process_orders
 #from sync.process_sales import process_sales
 
 HANDLERS = {
     "realization": process_realization,
-#    "stocks": process_stocks,
+    "stocks": process_stock,
 #    "sales": process_sales,
 #    "orders": process_orders,
 }

@@ -11,7 +11,7 @@ from models.user_sync_state_model import UserSyncState
 from models.users_model import User
 
 ALL_ENTITIES = [
-#    "stocks", 
+    "stocks", 
     "realization", 
 #    "orders", 
 #    "sales"

@@ -19,10 +19,7 @@ async def process_stock(session: AsyncSession, job: SyncJob, token: APIToken):
         logger.debug(data)
 
         await save_stocks(session, job.user_id, token.id, data)
-    
+        logger.info("[STOCK] success")
     except Exception as e:
         logger.info(f"[STOCK] error: {e}")
         raise
-    
-    finally:
-        logger.info("[STOCK] success")

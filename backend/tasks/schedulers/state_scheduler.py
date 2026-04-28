@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,7 @@ logger = setup_logger(__name__, 'sheduler.log')
 
 BATCH_SIZE = 50
 
-_scheduler_state = {
+_scheduler_state: dict[str, Optional[object]] = {
     "last_created_at": None,
     "last_id": None
 }
@@ -149,9 +150,13 @@ async def function_sheduler(session: AsyncSession):
             session=session,
             user_id=user.id,
             entity=state.entity,
-            payload={
-                "date_from": state.last_sync_at.isoformat() if state.last_sync_at else None,
-                "date_to": datetime.now(timezone.utc).isoformat()
+            payload = {
+                "dateFrom": (
+                    state.last_sync_at.date().isoformat()
+                    if state.last_sync_at
+                    else (datetime.now(timezone.utc).date().isoformat())
+                ),
+                "dateTo": datetime.now(timezone.utc).date().isoformat(),
             }
         )
 
