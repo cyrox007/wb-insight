@@ -29,7 +29,7 @@ class WbStock(Database.Base):
     )
 
     token_id: Mapped[UUIDType] = mapped_column(
-        String(36),
+        PG_UUID(as_uuid=True),
         ForeignKey("api_tokens.id", ondelete="CASCADE"),
         index=True,
         nullable=False

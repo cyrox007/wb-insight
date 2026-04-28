@@ -66,7 +66,7 @@ async def process_job(session: AsyncSession, job: SyncJob):
             state.last_success_at = now
         except Exception as e:
             logger.error(f"Произошла ошибка по время вызова API: {e}")
-
+            state.last_error = str(e)
         finally:
             state.last_sync_at = now
         

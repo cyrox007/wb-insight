@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, TypedDict
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,9 +19,13 @@ logger = setup_logger(__name__, 'sheduler.log')
 
 BATCH_SIZE = 50
 
-_scheduler_state: dict[str, Optional[object]] = {
+class SchedulerState(TypedDict):
+    last_created_at: Optional[datetime]
+    last_id: Optional[UUID]
+
+_scheduler_state: SchedulerState = {
     "last_created_at": None,
-    "last_id": None
+    "last_id": None,
 }
 
 def filter_user_tokens(user: User) -> list[APIToken]:
@@ -55,13 +60,9 @@ def filter_user_tokens(user: User) -> list[APIToken]:
 async def function_sheduler(session: AsyncSession):
     logger.info("[SCHEDULER] start")
 
-    #last_created_at = None
-    #last_id = None
-
     last_created_at = _scheduler_state["last_created_at"]
     last_id = _scheduler_state["last_id"]
 
-    #while True:
     logger.debug(
         f"[BATCH] request last_created_at={last_created_at} last_id={last_id}"
     )
@@ -161,9 +162,6 @@ async def function_sheduler(session: AsyncSession):
         )
 
         jobs_created += 1
-
-    #last_created_at = states[-1].created_at
-    #last_id = states[-1].id
 
     # Сохраняем состояние для следующего запуска
     if states:

@@ -14,7 +14,7 @@ async def process_stock(session: AsyncSession, job: SyncJob, token: APIToken):
 
     client = WBClient(token)
     try:
-        data = await client.get_realization(job.payload)
+        data = await client.get_stock(job.payload)
 
         logger.debug(data)
 
@@ -22,4 +22,6 @@ async def process_stock(session: AsyncSession, job: SyncJob, token: APIToken):
         logger.info("[STOCK] success")
     except Exception as e:
         logger.info(f"[STOCK] error: {e}")
+        job.status = "failed"
+        job.error = str(e)
         raise
