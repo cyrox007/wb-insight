@@ -38,14 +38,16 @@ class APIToken(Database.Base):
         PG_UUID(as_uuid=True),
         ForeignKey('users.id', ondelete='CASCADE'),
         nullable=False,
-        index=True
+        index=True,
+        comment='Привязка к пользователю'
     )
 
     # Маркетплейс
     marketplace: Mapped[Marketplace] = mapped_column(
         Enum(Marketplace, name='marketplace_enum'),
         nullable=False,
-        index=True
+        index=True,
+        comment='Маркетплейс'
     )
 
     # Тип токена (для WB — из(TokenTypeWB); для других — можно оставить NULL или использовать JSON/гибкое поле)
@@ -58,7 +60,7 @@ class APIToken(Database.Base):
     issued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
         default=lambda: datetime.now(timezone.utc), 
-        nullable=False
+        nullable=False,
     )
 
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
