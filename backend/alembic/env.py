@@ -33,6 +33,7 @@ from models.wb_product import WbProduct
 from models.wb_stock import WbStock
 from models.sync_job_model import SyncJob
 from models.user_sync_state_model import UserSyncState
+from models.product_cost_price_model import ProductCostPrice
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
