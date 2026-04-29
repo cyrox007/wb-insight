@@ -47,3 +47,10 @@ class WBClient:
             endpoints.STOCKS,
             params=payload
         )
+    
+    async def get_products(self, payload: dict = {}):
+        return await self._request(
+            "POST",
+            endpoints.PRODUCTS,
+            params=payload
+        )
