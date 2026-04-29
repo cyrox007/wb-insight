@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -263,3 +263,211 @@ async def save_realization(
         )
 
         await session.execute(stmt)
+
+async def get_chart_data(
+    session: AsyncSession,
+    user_id: str,
+    start_date: date,
+    end_date: date
+) -> List[Dict[str, Any]]:
+    """Получить данные для графика продаж по дням"""
+    query = select(
+        WbRealizationReport.rr_dt.label('date'),
+        func.sum(WbRealizationReport.retail_amount).label('sales_amount'),
+        func.sum(WbRealizationReport.quantity).label('sales_units')
+    ).where(
+        WbRealizationReport.user_id == user_id,
+        WbRealizationReport.rr_dt >= start_date,
+        WbRealizationReport.rr_dt <= end_date,
+        WbRealizationReport.supplier_oper_name == 'Продажа'
+    ).group_by(
+        WbRealizationReport.rr_dt
+    ).order_by(
+        WbRealizationReport.rr_dt
+    )
+
+    result = await session.execute(query)
+    rows = result.fetchall()
+
+    return [
+        {
+            'date': row.date.isoformat(),
+            'sales_amount': float(row.sales_amount) if row.sales_amount else 0.0,
+            'sales_units': int(row.sales_units) if row.sales_units else 0
+        }
+        for row in rows
+    ]
+
+async def get_warehouse_data(
+    session: AsyncSession,
+    user_id: str
+) -> List[Dict[str, Any]]:
+    """Получить данные по складам (остатки)"""
+    query = select(
+        WbRealizationReport.office_name.label('warehouse'),
+        func.sum(WbRealizationReport.quantity).label('quantity'),
+        func.sum(WbRealizationReport.retail_amount).label('amount')
+    ).where(
+        WbRealizationReport.user_id == user_id,
+        WbRealizationReport.office_name.isnot(None)
+    ).group_by(
+        WbRealizationReport.office_name
+    ).order_by(
+        func.sum(WbRealizationReport.retail_amount).desc()
+    )
+
+    result = await session.execute(query)
+    rows = result.fetchall()
+
+    return [
+        {
+            'warehouse': row.warehouse or 'Не указан',
+            'quantity': int(row.quantity) if row.quantity else 0,
+            'amount': float(row.amount) if row.amount else 0.0
+        }
+        for row in rows
+    ]
+
+async def get_abc_analysis(
+    session: AsyncSession,
+    user_id: str,
+    start_date: date,
+    end_date: date
+) -> List[Dict[str, Any]]:
+    """ABC анализ товаров по выручке"""
+    # Сначала получаем общую сумму продаж
+    total_query = select(
+        func.sum(WbRealizationReport.retail_amount).label('total_amount')
+    ).where(
+        WbRealizationReport.user_id == user_id,
+        WbRealizationReport.rr_dt >= start_date,
+        WbRealizationReport.rr_dt <= end_date,
+        WbRealizationReport.supplier_oper_name == 'Продажа'
+    )
+
+    total_result = await session.execute(total_query)
+    total_amount = total_result.scalar() or 0.0
+
+    # Получаем данные по товарам
+    products_query = select(
+        WbRealizationReport.nm_id.label('nm_id'),
+        WbRealizationReport.brand_name.label('brand'),
+        WbRealizationReport.sa_name.label('article'),
+        func.sum(WbRealizationReport.retail_amount).label('sales_amount'),
+        func.sum(WbRealizationReport.quantity).label('sales_units')
+    ).where(
+        WbRealizationReport.user_id == user_id,
+        WbRealizationReport.rr_dt >= start_date,
+        WbRealizationReport.rr_dt <= end_date,
+        WbRealizationReport.supplier_oper_name == 'Продажа'
+    ).group_by(
+        WbRealizationReport.nm_id,
+        WbRealizationReport.brand_name,
+        WbRealizationReport.sa_name
+    ).order_by(
+        func.sum(WbRealizationReport.retail_amount).desc()
+    )
+
+    result = await session.execute(products_query)
+    rows = result.fetchall()
+
+    # Рассчитываем ABC категории
+    abc_data = []
+    cumulative_percent = 0.0
+
+    for row in rows:
+        if total_amount > 0:
+            item_percent = (float(row.sales_amount) if row.sales_amount else 0.0) / total_amount * 100
+        else:
+            item_percent = 0.0
+
+        cumulative_percent += item_percent
+
+        if cumulative_percent <= 80:
+            category = 'A'
+        elif cumulative_percent <= 95:
+            category = 'B'
+        else:
+            category = 'C'
+
+        abc_data.append({
+            'nm_id': int(row.nm_id) if row.nm_id else 0,
+            'brand': row.brand or 'Не указан',
+            'article': row.article or 'Не указан',
+            'sales_amount': float(row.sales_amount) if row.sales_amount else 0.0,
+            'sales_units': int(row.sales_units) if row.sales_units else 0,
+            'percent': round(item_percent, 2),
+            'category': category
+        })
+
+    return abc_data
+
+async def get_category_data(
+    session: AsyncSession,
+    user_id: str,
+    start_date: date,
+    end_date: date
+) -> List[Dict[str, Any]]:
+    """Получить данные по категориям (предметам)"""
+    query = select(
+        WbRealizationReport.subject_name.label('category'),
+        func.sum(WbRealizationReport.retail_amount).label('sales_amount'),
+        func.sum(WbRealizationReport.quantity).label('sales_units')
+    ).where(
+        WbRealizationReport.user_id == user_id,
+        WbRealizationReport.rr_dt >= start_date,
+        WbRealizationReport.rr_dt <= end_date,
+        WbRealizationReport.supplier_oper_name == 'Продажа',
+        WbRealizationReport.subject_name.isnot(None)
+    ).group_by(
+        WbRealizationReport.subject_name
+    ).order_by(
+        func.sum(WbRealizationReport.retail_amount).desc()
+    )
+
+    result = await session.execute(query)
+    rows = result.fetchall()
+
+    return [
+        {
+            'category': row.category or 'Не указана',
+            'sales_amount': float(row.sales_amount) if row.sales_amount else 0.0,
+            'sales_units': int(row.sales_units) if row.sales_units else 0
+        }
+        for row in rows
+    ]
+
+async def get_size_chart(
+    session: AsyncSession,
+    user_id: str,
+    start_date: date,
+    end_date: date
+) -> List[Dict[str, Any]]:
+    """Получить данные по размерам"""
+    query = select(
+        WbRealizationReport.ts_name.label('size'),
+        func.sum(WbRealizationReport.retail_amount).label('sales_amount'),
+        func.sum(WbRealizationReport.quantity).label('sales_units')
+    ).where(
+        WbRealizationReport.user_id == user_id,
+        WbRealizationReport.rr_dt >= start_date,
+        WbRealizationReport.rr_dt <= end_date,
+        WbRealizationReport.supplier_oper_name == 'Продажа',
+        WbRealizationReport.ts_name.isnot(None)
+    ).group_by(
+        WbRealizationReport.ts_name
+    ).order_by(
+        func.sum(WbRealizationReport.retail_amount).desc()
+    )
+
+    result = await session.execute(query)
+    rows = result.fetchall()
+
+    return [
+        {
+            'size': row.size or 'Не указан',
+            'sales_amount': float(row.sales_amount) if row.sales_amount else 0.0,
+            'sales_units': int(row.sales_units) if row.sales_units else 0
+        }
+        for row in rows
+    ]
