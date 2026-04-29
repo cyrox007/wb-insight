@@ -44,8 +44,6 @@ async def worker_loop(session: AsyncSession):
 
 
 async def process_job(session: AsyncSession, job: SyncJob):
-    # user = await session.get(User, job.user_id)
-
     user_tokens = await get_tokens_by_user_id(session, job.user_id)
 
     tokens = [

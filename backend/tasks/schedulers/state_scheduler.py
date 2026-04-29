@@ -14,6 +14,7 @@ from models.subscription_model import SubscriptionStatus
 from models.tokens_model import APIToken, Marketplace
 from services.sync_job_service import create_sync_job
 from services.user_sync_state_service import get_states_batch
+from services.payload_builder import build_payload_for_entity
 
 logger = setup_logger(__name__, 'sheduler.log')
 
@@ -147,18 +148,13 @@ async def function_sheduler(session: AsyncSession):
             f"[JOB] create user={user.id} entity={state.entity}"
         )
 
+        payload = build_payload_for_entity(state.entity, state.last_sync_at)
+
         await create_sync_job(
             session=session,
             user_id=user.id,
             entity=state.entity,
-            payload = {
-                "dateFrom": (
-                    state.last_sync_at.date().isoformat()
-                    if state.last_sync_at
-                    else (datetime.now(timezone.utc).date().isoformat())
-                ),
-                "dateTo": datetime.now(timezone.utc).date().isoformat(),
-            }
+            payload=payload
         )
 
         jobs_created += 1
