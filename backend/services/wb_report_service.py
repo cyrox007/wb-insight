@@ -146,25 +146,94 @@ def normalize_wb_report_item(item: dict, user_id: UUID, token_id: UUID) -> dict:
         "token_id": token_id,
 
         # dates
-        "rr_dt": parse_dt_safe(pick(item, "rr_dt", "rrDate")),
-        "order_dt": parse_dt_safe(pick(item, "order_dt", "orderDt")),
-        "sale_dt": parse_dt_safe(pick(item, "sale_dt", "saleDt")),
+        "rr_dt": parse_dt_safe(pick(item, "rrDt", "rr_dt")),
+        "order_dt": parse_dt_safe(pick(item, "orderDt", "order_dt")),
+        "sale_dt": parse_dt_safe(pick(item, "saleDt", "sale_dt")),
+        "create_dt": parse_dt_safe(pick(item, "createDt", "create_dt")),
 
         # ids
-        "nm_id": to_int(pick(item, "nm_id", "nmId")),
-        "rrd_id": to_int(pick(item, "rrd_id", "rrdId")),
-        "srid": to_str(pick(item, "srid")),
+        "nm_id": to_int(pick(item, "nmId", "nm_id")),
+        "rrd_id": to_int(pick(item, "rrdId", "rrd_id")),
+        "gi_id": to_int(pick(item, "giId", "gi_id")),  # Номер поставки
+        "shk_id": to_int(pick(item, "shkId", "shk_id")),  # Штрих-код
+        "srid": to_str(pick(item, "srid", "SRID")),
+        "realization_report_id": to_int(pick(item, "realizationreportId", "realizationReportId")),  # Номер отчета
 
         # operation
-        "supplier_oper_name": to_str(pick(item, "supplier_oper_name", "sellerOperName")),
+        "supplier_oper_name": to_str(pick(item, "supplierOperName", "sellerOperName")),
+        "doc_type_name": to_str(pick(item, "docTypeName", "docTypeName")),  # Тип документа
 
-        # minimal business data
-        "office_name": to_str(pick(item, "office_name", "officeName")),
+        # product info
+        "subject_name": to_str(pick(item, "subjectName", "subjectName")),  # Предмет
+        "brand_name": to_str(pick(item, "brandName", "brandName")),  # Бренд
+        "sa_name": to_str(pick(item, "saName", "saName")),  # Артикул продавца
+        "ts_name": to_str(pick(item, "tsName", "tsName")),  # Размер
+        "barcode": to_str(pick(item, "barcode", "Barcode")),  # Баркод
+        "title": to_str(pick(item, "title", "Title")),  # Название товара (новое поле)
+
+        # warehouse/logistics
+        "office_name": to_str(pick(item, "officeName", "officeName")),  # Склад
+        "gi_box_type_name": to_str(pick(item, "giBoxTypeName", "giBoxTypeName")),  # Тип коробов
+        "ppvz_office_id": to_int(pick(item, "ppvzOfficeId", "ppvzOfficeId")),  # Номер офиса
+        "ppvz_office_name": to_str(pick(item, "ppvzOfficeName", "ppvzOfficeName")),  # Наименование офиса доставки
 
         # facts
-        "quantity": to_int(pick(item, "quantity")),
-        "retail_amount": to_decimal(pick(item, "retail_amount", "retailAmount")),
-        "ppvz_for_pay": to_decimal(pick(item, "ppvz_for_pay", "forPay")),
+        "quantity": to_int(pick(item, "quantity", "Quantity")),
+        "retail_price": to_decimal(pick(item, "retailPrice", "retailPrice")),  # Цена розничная
+        "retail_amount": to_decimal(pick(item, "retailAmount", "retailAmount")),  # Сумма продаж
+        "retail_price_with_disc_rub": to_decimal(pick(item, "retailPriceWithdiscRub", "retailPriceWithdiscRub")),  # Цена с учетом скидки
+
+        # discounts and commissions
+        "sale_percent": to_decimal(pick(item, "salePercent", "salePercent")),  # Согласованная скидка
+        "commission_percent": to_decimal(pick(item, "commissionPercent", "commissionPercent")),  # Процент комиссии
+        "product_discount_for_report": to_decimal(pick(item, "productDiscountForReport", "productDiscountForReport")),  # Продуктовый дисконт
+        "ppvz_spp_prc": to_decimal(pick(item, "ppvzSppPrc", "ppvzSppPrc")),  # Скидка постоянного покупателя
+
+        # KVV (комиссия за выдачу и возврат)
+        "ppvz_kvw_prc_base": to_decimal(pick(item, "ppvzKvwPrcBase", "ppvzKvwPrcBase")),  # Размер КВВ без НДС
+        "ppvz_kvw_prc": to_decimal(pick(item, "ppvzKvwPrc", "ppvzKvwPrc")),  # Итоговый КВВ без НДС
+        "sup_rating_prc_up": to_decimal(pick(item, "supRatingPrcUp", "supRatingPrcUp")),  # Снижение КВВ из-за рейтинга
+        "is_kgvp_v2": to_decimal(pick(item, "isKgvpV2", "isKgvpV2")),  # Снижение КВВ из-за акции
+
+        # financial
+        "ppvz_for_pay": to_decimal(pick(item, "ppvzForPay", "forPay")),  # К перечислению продавцу (теперь string!)
+        "ppvz_sales_commission": to_decimal(pick(item, "ppvzSalesCommission", "ppvzSalesCommission")),  # Вознаграждение с продаж
+        "ppvz_reward": to_decimal(pick(item, "ppvzReward", "ppvzReward")),  # Возмещение за выдачу и возврат товаров
+        "ppvz_vw": to_decimal(pick(item, "ppvzVw", "ppvzVw")),  # Вознаграждение WB без НДС
+        "ppvz_vw_nds": to_decimal(pick(item, "ppvzVwNds", "ppvzVwNds")),  # НДС с вознаграждения WB
+
+        # logistics costs
+        "delivery_amount": to_int(pick(item, "deliveryAmount", "deliveryAmount")),  # Количество доставок
+        "return_amount": to_int(pick(item, "returnAmount", "returnAmount")),  # Количество возвратов
+        "delivery_rub": to_decimal(pick(item, "deliveryRub", "deliveryRub")),  # Стоимость логистики
+        "return_rub": to_decimal(pick(item, "returnRub", "returnRub")),  # Стоимость возврата
+        "rebill_logistic_cost": to_decimal(pick(item, "rebillLogisticCost", "rebillLogisticCost")),  # Возмещение издержек по перевозке
+        "rebill_logistic_org": to_str(pick(item, "rebillLogisticOrg", "rebillLogisticOrg")),  # Организатор перевозки
+        "storage_fee": to_decimal(pick(item, "storageFee", "storageFee")),  # Стоимость хранения
+        "acceptance": to_decimal(pick(item, "acceptance", "acceptance")),  # Стоимость платной приемки
+
+        # payments and penalties
+        "penalty": to_decimal(pick(item, "penalty", "penalty")),  # Штрафы
+        "additional_payment": to_decimal(pick(item, "additionalPayment", "additionalPayment")),  # Доплаты
+        "deduction": to_decimal(pick(item, "deduction", "deduction")),  # Прочие удержания
+        "acquiring_fee": to_decimal(pick(item, "acquiringFee", "acquiringFee")),  # Издержки по эквайрингу
+        "acquiring_bank": to_str(pick(item, "acquiringBank", "acquiringBank")),  # Банк эквайер
+
+        # promo and marketing
+        "supplier_promo": to_str(pick(item, "supplierPromo", "supplierPromo")),  # Промокод
+        "order_uid": to_str(pick(item, "orderUid", "orderUid")),  # Уникальный идентификатор заказа
+        "kiz": to_str(pick(item, "kiz", "kiz")),  # Код маркировки
+        "declaration_number": to_str(pick(item, "declarationNumber", "declarationNumber")),  # Номер таможенной декларации
+
+        # partner info (ppvzSupplierId больше не поддерживается!)
+        "ppvz_supplier_id": to_int(pick(item, "ppvzSupplierId", "ppvzSupplierId")),  # Номер партнера (может быть null)
+        "ppvz_supplier_name": to_str(pick(item, "ppvzSupplierName", "ppvzSupplierName")),  # Партнер
+        "ppvz_inn": to_str(pick(item, "ppvzInn", "ppvzInn")),  # ИНН партнера
+
+        # report meta
+        "currency_name": to_str(pick(item, "currencyName", "currencyName")),  # Валюта отчета
+        "report_type": to_int(pick(item, "reportType", "reportType")),  # Тип отчета
+        "trbx_id": to_str(pick(item, "trbxId", "trbxId")),  # Месяц
 
         # audit
         "created_at": datetime.now(timezone.utc),
