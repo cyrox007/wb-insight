@@ -38,7 +38,7 @@ async def get_base_wb_report_stats(session: AsyncSession, user_id: str, start_da
     )
 
     result = await session.execute(query)
-    return result.fetchone() 
+    return result.one() 
 
 async def get_sales_wb_report_stats(session: AsyncSession, user_id: str, start_date: date, end_date: date):
     query = select(

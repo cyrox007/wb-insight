@@ -9,6 +9,7 @@ from core.logger import setup_logger
 from core.middleware import auth_middle
 from utils.responce_helps import response_error, response_success
 from services.wb_report_service import check_wb_report_stats, get_base_wb_report_stats, get_returns_wb_report_stats, get_sales_wb_report_stats
+from services.cost_price_service import get_dashboard_unit_economy
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = setup_logger(__name__)
@@ -87,10 +88,23 @@ async def dashboard(
     
     # Средняя цена заказа
     avg_price = (ordered_amount / ordered_units) if ordered_units else 0.0
+
+    # Расчёт unit-экономики с учётом себестоимости
+    unit_economy = await get_dashboard_unit_economy(
+        session=db_session,
+        user_id=current_user['sub'],
+        start_date=start_date,
+        end_date=end_date
+    )
     
-    # Прибыль (пока без учёта себестоимости — вернём 0 или расчёт без себестоимости)
-    # В будущем: прибыль = к выплате - себестоимость
-    profit = payout  # временно, пока нет себестоимости
+    # Прибыль = к выплате - себестоимость
+    profit = unit_economy['total_profit']
+    # Маржинальность % = (прибыль / выручка) × 100
+    marginality = unit_economy['avg_margin_percent']
+    # Рентабельность % = (прибыль / к выплате) × 100
+    profitability = (profit / to_pay * 100) if to_pay > 0 else 0.0
+    # DRR = доля расходов от продаж
+    ddr = unit_economy['avg_drr_percent']
 
     # Статистика (пример)
     stats = {
@@ -135,13 +149,13 @@ async def dashboard(
             "change_abs": 0.0
         },
         "marginality": {
-            "value": round(16.6, 1)
+            "value": round(marginality, 1) if marginality else 0.0
         },
         "profitability": {
-            "value": round(47.8, 1)
+            "value": round(profitability, 1) if profitability else 0.0
         },
         "ddr": {
-            "value": round(1.08, 2)
+            "value": round(ddr, 2) if ddr else 0.0
         },
         "fact_current_month": {
             "value": round(0.00, 2)
