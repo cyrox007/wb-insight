@@ -12,20 +12,14 @@
 		<template #body>
 			<TextInput v-model="label" placeholder="Название токена..." />
 
-			<div class="form-row">
-				<div class="form-group">
-					<label>Тип токена</label>
-					<select v-model="tokenType" :disabled="loading" class="token-type-select">
-						<option value="personal">Персональный</option>
-						<option value="service">Сервисный</option>
-					</select>
-				</div>
+			<FormRow>
+				<SelectInput v-model="tokenType" label="Тип токена" :options="[
+					{ value: 'personal', label: 'Персональный' },
+					{ value: 'service', label: 'Сервисный' }
+				]" :disabled="loading" />
 
-				<div class="form-group">
-					<label>Магазин</label>
-					<input type="text" v-model="marketplace" disabled class="marketplace-input" />
-				</div>
-			</div>
+				<TextInput v-model="marketplace" label="Магазин" disabled />
+			</FormRow>
 
 			<TextareaInput v-model="token" type="textarea" label="WB API токен" placeholder="Вставьте токен продавца..."
 				:error="errorMessage" :disabled="loading" :rows="5" />
@@ -67,6 +61,8 @@ import TextInput from '@/components/UI/TextInput.vue'
 import TextareaInput from '@/components/UI/TextareaInput.vue'
 import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue'
 import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue'
+import FormRow from '@/components/UI/FormCustum/FormRow.vue'
+import SelectInput from '@/components/UI/SelectInput.vue'
 
 // API
 import ProfileServices from '@/API/Dashboard/ProfileServices'
