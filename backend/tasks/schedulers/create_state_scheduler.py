@@ -12,7 +12,8 @@ from models.users_model import User
 
 ALL_ENTITIES = [
     "stocks", 
-    "realization", 
+    "realization",
+    "products",
 #    "orders", 
 #    "sales"
 ]
