@@ -24,7 +24,13 @@ $api.interceptors.request.use((config) => {
     const accessToken = localStorage.getItem('access_token');
     if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
-        config.headers['X-User-UID'] = JSON.parse(localStorage.getItem('user')).id
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            if (user && user.id) {
+                config.headers['X-User-UID'] = user.id;
+            }
+        }
     }
     return config;
 }, (error) => {

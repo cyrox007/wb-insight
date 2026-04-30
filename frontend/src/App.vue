@@ -58,14 +58,14 @@ const logout = () => {
 
 		<div class="header-right">
 			<!-- Авторизованный -->
-			<div class="user-section" v-if="isAuthenticated">
+			<div class="user-section" v-if="isAuthenticated && user">
 				<div class="user-dropdown">
 					<div class="user-trigger">
 						<div class="avatar">
 							{{ user.full_name?.charAt(0) }}
 						</div>
 						<div class="user-info-mini">
-							<div class="user-name">{{ user.full_name }}</div>
+							<div class="user-name">{{ user?.full_name }}</div>
 							<div class="user-email">{{ user.email }}</div>
 						</div>
 					</div>
