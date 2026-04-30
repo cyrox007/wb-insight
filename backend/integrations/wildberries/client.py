@@ -125,5 +125,5 @@ class WBClient:
         return await self._request(
             "POST",
             endpoints.PRODUCTS,
-            params=payload
+            json_data=payload
         )

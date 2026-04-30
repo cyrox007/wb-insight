@@ -18,10 +18,9 @@ async def process_realization(session: AsyncSession, job: SyncJob, token: APITok
         logger.debug(data)
 
         await save_realization(session, job.user_id, token.id, data)
-    
+        logger.info("[REALIZATION] success")
     except Exception as e:
         logger.info(f"[REALIZATION] error: {e}")
+        job.status = "failed"
+        job.error = str(e)
         raise
-    
-    finally:
-        logger.info("[REALIZATION] success")
