@@ -11,11 +11,40 @@
 		<!-- BODY -->
 		<template #body>
 			<TextInput v-model="label" placeholder="Название токена..." />
+
+			<div class="form-row">
+				<div class="form-group">
+					<label>Тип токена</label>
+					<select v-model="tokenType" :disabled="loading" class="token-type-select">
+						<option value="personal">Персональный</option>
+						<option value="service">Сервисный</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label>Магазин</label>
+					<input type="text" v-model="marketplace" disabled class="marketplace-input" />
+				</div>
+			</div>
+
 			<TextareaInput v-model="token" type="textarea" label="WB API токен" placeholder="Вставьте токен продавца..."
 				:error="errorMessage" :disabled="loading" :rows="5" />
 
 			<div class="hint">
-				Токен используется только для чтения данных (Analytics, Statistics, Promotion)
+				<strong>Требования к токену и типы токенов:</strong>
+				<ul>
+					<li><b>Персональный токен</b> — выдается в личном кабинете продавца. Wildberries не рекомендует
+						использовать его в сервисах (только для личного ПО), но формально работает. Мы шифруем его своим
+						алгоритмом для безопасности и не передаем третьим лицам.</li>
+					<li><b>Сервисный токен</b> — новый тип токена, создается через раздел "Сервисные токены" в кабинете.
+						Обычно связан с конкретным сервисом. Мы работаем над возможностью выбора нашего ПО при создании
+						сервисного токена.</li>
+					<li><b>Базовый токен</b> — имеет жесткие ограничения API, которые не совпадают с лимитами подписки.
+						Данные могут быть устаревшими. Не рекомендуется к использованию.</li>
+					<li><b>Тестовый токен</b> — только для тестирования. Не рекомендуется вводить в систему.</li>
+				</ul>
+				<p><b>Важно:</b> Для работы с финансами (отчеты по продажам) требуется токен с доступом к категории
+					"Финансы". Срок действия токена — 180 дней.</p>
 			</div>
 		</template>
 
@@ -49,6 +78,9 @@ const props = defineProps({
 const emit = defineEmits(['close', 'success'])
 
 const token = ref('')
+const label = ref('')
+const tokenType = ref('personal')
+const marketplace = ref('WB')
 const loading = ref(false)
 const errorMessage = ref(null)
 
@@ -57,6 +89,8 @@ const close = () => {
 	if (loading.value) return
 	errorMessage.value = null
 	token.value = ''
+	label.value = ''
+	tokenType.value = 'personal'
 	emit('close')
 }
 
@@ -87,7 +121,10 @@ const submit = async () => {
 		loading.value = true
 
 		const response = await ProfileServices.add_user_token({
-			token: token.value.trim()
+			token: token.value.trim(),
+			label: label.value.trim(),
+			token_type: tokenType.value,
+			marketplace: marketplace.value
 		})
 
 		const result = response.data
@@ -123,5 +160,58 @@ const submit = async () => {
 	margin-top: 10px;
 	font-size: 12px;
 	color: #888;
+}
+
+.form-row {
+	display: flex;
+	gap: 15px;
+	margin-bottom: 15px;
+}
+
+.form-group {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.form-group label {
+	font-size: 13px;
+	color: #555;
+	margin-bottom: 5px;
+	font-weight: 500;
+}
+
+.token-type-select {
+	padding: 8px 12px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-size: 14px;
+	background-color: #fff;
+	cursor: pointer;
+}
+
+.token-type-select:disabled {
+	background-color: #f5f5f5;
+	cursor: not-allowed;
+}
+
+.marketplace-input {
+	padding: 8px 12px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-size: 14px;
+	background-color: #f5f5f5;
+	color: #666;
+	cursor: not-allowed;
+}
+
+.hint ul {
+	margin: 8px 0 0 20px;
+	padding: 0;
+}
+
+.hint li {
+	margin-bottom: 4px;
+	line-height: 1.4;
 }
 </style>
