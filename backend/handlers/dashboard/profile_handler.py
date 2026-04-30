@@ -84,7 +84,6 @@ async def get_profile(request: Request, response: Response, db_session: AsyncSes
 @router.get("/check-token-permission/{user_id}", dependencies=[Depends(auth_middle)])
 async def check_token_permission(
     user_id: UUID,
-    tariff_id: Optional[UUID] = None, 
     db_session: AsyncSession = Depends(get_db_session)
 ):
     current_user = await get_user_by_uuid(db_session, user_id)
