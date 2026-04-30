@@ -395,7 +395,7 @@ onMounted(async () => {
 	filterStartDate.value = lastMonth.toISOString().split('T')[0]
 	filterEndDate.value = today.toISOString().split('T')[0]
 
-	// Fetch data
+	// Fetch basic data (fast)
 	const response = await DashboardService.get_dashboard_data();
 	if (response.status === 200) {
 		const result = response.data;
@@ -411,17 +411,39 @@ onMounted(async () => {
 		}
 
 		stats.value = result.stats;
-		chartData.value = result.chartData;
 		baseStats.value = result.baseStats;
-		categoryData.value = result.categoryData;
-		// products.value = result.products;
-		// sizeChart.value = result.sizeChart;
-		// abcAnalysis.value = result.abcAnalysis;
+		isLoading.value = false;
+		// Загружаем тяжёлые данные графиков отдельно (не блокируя интерфейс)
+		loadChartsData();
 
-		// selectedProducts.value = result.products;
 		isLoading.value = false;
 	}
 })
+
+// Функция для загрузки данных графиков (асинхронно, после отображения основных данных)
+const loadChartsData = async () => {
+	try {
+		const chartsResponse = await DashboardService.get_dashboard_charts({
+			start_date: filterStartDate.value,
+			end_date: filterEndDate.value
+		});
+
+		if (chartsResponse.status === 200) {
+			const chartsResult = chartsResponse.data;
+
+			if (chartsResult.status !== "error") {
+				chartData.value = chartsResult.chartData || [];
+				warehouseData.value = chartsResult.warehouseData || [];
+				categoryData.value = chartsResult.categoryData || [];
+				abcAnalysis.value = chartsResult.abcAnalysis || [];
+				// sizeChart.value = chartsResult.sizeChart || [];
+			}
+		}
+	} catch (error) {
+		console.error('Ошибка загрузки данных графиков:', error);
+		// Не показываем ошибку пользователю, так как основные данные уже отображены
+	}
+};
 </script>
 
 <style scoped>
