@@ -50,46 +50,39 @@ _rate_limiter = UserRateLimiter(min_interval=1.0)
 
 class WBClient:   
     def __init__(self, token: APIToken) -> None:
-        self.token = decrypt_token(token.encrypted_token)
+        self._encrypted_token = token.encrypted_token
+        self._user_id = str(token.user_id)
         self.client = httpx.AsyncClient(timeout=60)
-        # Ключ для лимитера — сам токен (уникален для каждого пользователя)
-        self._rate_limit_key = self.token
+        # Ключ для лимитера — зашифрованный токен (уникален для каждого пользователя)
+        self._rate_limit_key = self._encrypted_token
 
+    def _get_token(self) -> str:
+        """Расшифровывает токен только на момент использования."""
+        return decrypt_token(self._encrypted_token, self._user_id)
 
     async def _request(self, method: str, url: str, params: dict | None = None, json_data: dict | None = None):
         # 1. Ждем, пока пройдет необходимое время с последнего запроса этого юзера
         # Это предотвращает отправку нескольких запросов одновременно от одного пользователя
         await _rate_limiter.wait(self._rate_limit_key)
 
-        # 2. Выполняем запрос
+        # 2. Расшифровываем токен только на время запроса
+        token = self._get_token()
         try:
             response = await self.client.request(
                 method=method,
                 url=url,
-                headers={"Authorization": self.token},
+                headers={"Authorization": token},
                 params=params,
                 json=json_data
             )
-        except Exception as e:
-            logger.error(f"Network error during request: {e}")
-            raise
+        finally:
+            # Сразу удаляем токен из памяти после использования
+            del token
 
         if response.status_code == 429:
             logger.warning("Received 429 Rate Limit despite throttling. Consider increasing min_interval or implementing retry with backoff.")
             raise RuntimeError("rate_limit")
-        
-        response = await self.client.request(
-            method=method,
-            url=url,
-            headers={"Authorization": self.token},
-            params=params,
-            json=json_data
-        )
 
-        if response.status_code == 429:
-            logger.error("rate_limit")
-            raise RuntimeError("rate_limit")
-        
         if response.status_code == 204:
             # Нет данных за период - возвращаем пустой список
             logger.info("No content (204) - empty report")
@@ -98,7 +91,7 @@ class WBClient:
         if response.status_code != 200:
             logger.error(f"WB error: {response.status_code} {response.text}")
             raise Exception(f"WB error: {response.status_code} {response.text}")
-        
+
         return response.json()
         
     # === endpoints ===

@@ -31,7 +31,7 @@ async def insert_token(
         user_id=user_id,
         marketplace=Marketplace.WILDBERRIES if marketplace_code == 'wb' else marketplace_code,
         token_type=token_type,
-        encrypted_token=encrypt_token(raw_token),
+        encrypted_token=encrypt_token(raw_token, str(user_id)),
         label=label
     )
 
