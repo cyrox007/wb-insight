@@ -22,6 +22,7 @@ from services.wb_report_service import (
     get_size_chart
 )
 from services.cost_price_service import get_dashboard_unit_economy
+from services.user_sync_state_service import get_user_sync_states
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = setup_logger(__name__)
@@ -161,7 +162,7 @@ async def dashboard(
 
     current_user = request.state.user
 
-    # Быстрая проверка наличия данных
+    """ # Быстрая проверка наличия данных
     report_count = await check_wb_report_stats(
         session=db_session,
         user_id=current_user['sub'],
@@ -173,6 +174,41 @@ async def dashboard(
         return response_error(
             message="Данные отсутствуют → не синхронизировано",
             code="NOT_DATA"
+        ) """
+    
+    states = await get_user_sync_states(
+        session=db_session,
+        user_id=current_user['sub']
+    )
+
+    has_any_success = any(s.last_success_at is not None for s in states)
+    is_sync_running = any(
+        s.last_sync_at and (
+            not s.last_success_at or s.last_sync_at > s.last_success_at
+        )
+        for s in states
+    )
+    has_errors = any(s.last_error for s in states)
+
+    if not has_any_success:
+        return response_error(
+            message="Данные отсутствуют → синхронизация не запускалась",
+            code="NOT_SYNCED"
+        )
+    
+    if is_sync_running:
+        return response_success(
+            is_synced=False,
+            is_syncing=True,
+            message="Идёт синхронизация данных",
+            stats={},
+            partial=True
+        )
+    
+    if has_errors and not has_any_success:
+        return response_error(
+            message="Ошибка синхронизации",
+            code="SYNC_ERROR"
         )
 
     # Получаем только основную статистику (быстро)

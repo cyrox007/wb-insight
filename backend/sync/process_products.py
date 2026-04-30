@@ -32,7 +32,7 @@ async def process_products(session: AsyncSession, job: SyncJob, token: APIToken)
     try:
         total_loaded = 0
         while True:
-            data: dict = await client.get_products(job.payload)
+            data = dict(await client.get_products(job.payload))
 
             # WB возвращает данные в массиве cards
             cards = data.get('cards', [])

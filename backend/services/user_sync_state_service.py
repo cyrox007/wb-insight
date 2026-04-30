@@ -77,3 +77,11 @@ async def get_state(session: AsyncSession, user_id: UUID, entity_code: str) -> U
 
     result = await session.execute(query)
     return result.scalar_one()
+
+async def get_user_sync_states(session: AsyncSession, user_id: UUID) -> list[UserSyncState]:
+    query = select(UserSyncState).where(
+        UserSyncState.user_id == user_id
+    )
+
+    result = await session.execute(query)
+    return list(result.scalars().unique().all())

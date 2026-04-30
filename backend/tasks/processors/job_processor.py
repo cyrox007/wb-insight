@@ -58,15 +58,14 @@ async def process_job(session: AsyncSession, job: SyncJob):
         state = await get_state(session, job.user_id, job.entity)
 
         now = datetime.now(timezone.utc)
-
+        state.last_sync_at = now
         try:
             await call_wb_api(session=session, token=token, job=job)
             state.last_success_at = now
         except Exception as e:
             logger.error(f"Произошла ошибка по время вызова API: {e}")
             state.last_error = str(e)
-        finally:
-            state.last_sync_at = now
+            
         
 
 @celery_app.task(name="tasks.processors.job_processor.run")
