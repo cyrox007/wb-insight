@@ -21,7 +21,7 @@ async def check_wb_report_stats(session: AsyncSession, user_id: str, start_date:
 
     return data_count.scalar() or 0
 
-async def get_base_wb_report_stats(session: AsyncSession, user_id: str, start_date: date, end_date: date):
+async def get_base_wb_report_stats(session: AsyncSession, user_id: UUID, start_date: date, end_date: date):
     query = select(
         func.coalesce(func.sum(WbRealizationReport.retail_amount), 0).label("ordered_amount"),
         func.coalesce(func.sum(WbRealizationReport.quantity), 0).label("ordered_units"),
@@ -40,7 +40,7 @@ async def get_base_wb_report_stats(session: AsyncSession, user_id: str, start_da
     result = await session.execute(query)
     return result.one() 
 
-async def get_sales_wb_report_stats(session: AsyncSession, user_id: str, start_date: date, end_date: date):
+async def get_sales_wb_report_stats(session: AsyncSession, user_id: UUID, start_date: date, end_date: date):
     query = select(
         func.sum(WbRealizationReport.retail_amount).label('sales_amount'),
         func.sum(WbRealizationReport.quantity).label('sales_units')
@@ -54,7 +54,7 @@ async def get_sales_wb_report_stats(session: AsyncSession, user_id: str, start_d
     result = await session.execute(query)
     return result.fetchone()
 
-async def get_returns_wb_report_stats(session: AsyncSession, user_id: str, start_date: date, end_date: date):
+async def get_returns_wb_report_stats(session: AsyncSession, user_id: UUID, start_date: date, end_date: date):
     query = select(
         func.sum(WbRealizationReport.retail_amount).label('returns_amount'),
         func.sum(WbRealizationReport.quantity).label('returns_units')
