@@ -94,41 +94,50 @@ async def check_token_permission(
             message='Пользователь не найден'
         )
 
-    # проверим является ли наш тариф демо
-    if tariff_id is None: # id тарифа не указано значит у нас демо тариф 
-        # получим дату регистрации пользователя
-        created_at = current_user.created_at 
-        if created_at.tzinfo is None:
-            # Если в БД хранится naive datetime — считаем его UTC
-            created_at = created_at.replace(tzinfo=timezone.utc)
+    # Сначала проверим активную подписку пользователя
+    subscription = await get_user_subscription(db_session, user_id)
 
-        demo_expires_at = created_at + timedelta(days=7)
-        now = datetime.now(timezone.utc)
-        
-        if now > demo_expires_at: # type: ignore
-            return response_error(
-                code="DEMO_EXPIRED",
-                message="Демо-период истёк. Пожалуйста, подключите тариф."
-            )
-        
-        # надо проверить еще, если демо период не истек, то мы можем добавить только один токен
-        # если он уже добавлен то мы не можем добавить еще один
-        if await get_user_token_count(db_session, user_id) >= 1:
+    # Если есть активная платная подписка — проверяем лимиты тарифа
+    if subscription and subscription.status == "active":
+        tariff = subscription.tariff
+        max_tokens = tariff.max_tokens if hasattr(tariff, 'max_tokens') else 1
+
+        current_count = await get_user_token_count(db_session, user_id)
+        if current_count >= max_tokens:
             return response_error(
                 code="TOKEN_LIMIT_EXCEEDED",
-                message="Вы достигли лимита токенов. Пожалуйста, подключите тариф."
+                message=f"Вы достигли лимита токенов ({max_tokens}) для вашего тарифа."
             )
-        
-        # если мы дошли до этого места, значит у нас есть демо период и мы можем добавить 1 токен, проверка завершена, ответим фронтенду что можно добавлять
+
         return response_success(
             can_add_token=True
         )
-        
-    # дальше проверки если у нас не демо
-    # в первую очередь нам надо проверить наш тариф и какие у нас есть разрешения на нем
-    tariff = await get_tariff_by_id(db_session, tariff_id)
 
-    print(tariff.__dict__)
+    # Если активной подписки нет — проверяем демо-режим
+    # получим дату регистрации пользователя
+    created_at = current_user.created_at
+    if created_at.tzinfo is None:
+        # Если в БД хранится naive datetime — считаем его UTC
+        created_at = created_at.replace(tzinfo=timezone.utc)
+
+    demo_expires_at = created_at + timedelta(days=7)
+    now = datetime.now(timezone.utc)
+
+    if now > demo_expires_at: # type: ignore
+        return response_error(
+            code="DEMO_EXPIRED",
+            message="Демо-период истёк. Пожалуйста, подключите тариф."
+        )
+
+    # надо проверить еще, если демо период не истек, то мы можем добавить только один токен
+    # если он уже добавлен то мы не можем добавить еще один
+    if await get_user_token_count(db_session, user_id) >= 1:
+        return response_error(
+            code="TOKEN_LIMIT_EXCEEDED",
+            message="Вы достигли лимита токенов. Пожалуйста, подключите тариф."
+        )
+
+    # если мы дошли до этого места, значит у нас есть демо период и мы можем добавить 1 токен, проверка завершена, ответим фронтенду что можно добавлять
 
     return response_success(
         can_add_token=True
@@ -162,7 +171,7 @@ async def delete_user_token(token_id: UUID, request: Request, response: Response
             message="Токен не найден"
         )
     
-    if token.user_id != request.state.user["sub"]:
+    if token.user_id != UUID(request.state.user["sub"]):
         response.status_code = status.HTTP_403_FORBIDDEN
         return response_error(
             code="TOKEN_NOT_FOUND",
