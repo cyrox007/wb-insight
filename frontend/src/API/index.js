@@ -94,21 +94,13 @@ $api.interceptors.response.use(
 
         // Обработка ошибки 403 Forbidden
         if (error.response?.status === 403) {
-            console.error('Доступ запрещен: токен недействителен или удален.');
+            console.warn('Доступ запрещен:', error.response.data?.message || 'Недостаточно прав для выполнения действия');
 
-            // Очищаем данные аутентификации
-            localStorage.clear();
-            store.dispatch('clearUser');
-            
-            // Перенаправляем пользователя на страницу входа
-            const allowedPaths = ['/login', '/registration'];
+            // НЕ делаем логаут! 403 может означать просто отсутствие прав на конкретное действие
+            // (например, попытка удалить чужой токен), а не невалидность сессии
 
-            if (!allowedPaths.some(path => window.location.pathname.includes(path))) {
-                window.location.href = '/login';
-            }
-
-            // Прерываем выполнение
-            throw error;
+            // Просто пробрасываем ошибку дальше — компонент сам решит как обработать
+            return Promise.reject(error);
         }
 
         // Обработка других ошибок
