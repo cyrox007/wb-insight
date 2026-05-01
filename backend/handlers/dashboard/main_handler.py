@@ -161,20 +161,6 @@ async def dashboard(
     start_date = start_date if start_date is not None else end_date - timedelta(days=30)
 
     current_user = request.state.user
-
-    """ # Быстрая проверка наличия данных
-    report_count = await check_wb_report_stats(
-        session=db_session,
-        user_id=current_user['sub'],
-        start_date=start_date,
-        end_date=end_date
-    )
-
-    if report_count == 0:
-        return response_error(
-            message="Данные отсутствуют → не синхронизировано",
-            code="NOT_DATA"
-        ) """
     
     states = await get_user_sync_states(
         session=db_session,
