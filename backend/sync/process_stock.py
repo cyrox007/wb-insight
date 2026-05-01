@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
@@ -14,11 +16,12 @@ async def process_stock(session: AsyncSession, job: SyncJob, token: APIToken):
 
     client = WBClient(token)
     try:
-        data = await client.get_stock(job.payload)
+        data: Dict[str, Any] = await client.get_stock(job.payload) # type: ignore
 
         logger.debug(data)
+        items = data["data"]["items"]
 
-        await save_stocks(session, job.user_id, token.id, data)
+        await save_stocks(session, job.user_id, token.id, items)
         logger.info("[STOCK] success")
     except Exception as e:
         logger.info(f"[STOCK] error: {e}")
