@@ -91,7 +91,11 @@ class WBClient:
             logger.error(f"WB error: {response.status_code} {response.text}")
             raise Exception(f"WB error: {response.status_code} {response.text}")
 
-        return response.json()
+        try:
+            return response.json()
+        except Exception:
+            logger.error(f"Invalid JSON response: {response.text}")
+            raise
         
     # === endpoints ===
 
@@ -114,10 +118,14 @@ class WBClient:
         )
     
     async def get_stock(self, payload: dict = {}):
+        payload = payload or {
+            "limit": 250000,
+            "offset": 0
+        }
         return await self._request(
-            "GET",
-            endpoints.STOCKS,
-            params=payload
+            "POST",
+            endpoints.STOCKS_V2,
+            json_data=payload
         )
     
     async def get_products(self, payload: dict = {}):
