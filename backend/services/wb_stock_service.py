@@ -20,7 +20,7 @@ async def save_stocks(session: AsyncSession, user_id: UUID, token_id: UUID, data
             "in_way_to_client": item.get("inWayToClient") or 0,
             "in_way_from_client": item.get("inWayFromClient") or 0,
 
-            "last_change_date": isoparse(item["lastChangeDate"]),
+            #"last_change_date": isoparse(item["lastChangeDate"]),
         }
         for item in data
     ])
