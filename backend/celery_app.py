@@ -12,7 +12,7 @@ celery_app = Celery(
     include=[
         "tasks.schedulers.create_state_scheduler",
         "tasks.schedulers.state_scheduler",
-        "tasks.processors.job_processor",     # 👈 новый
+        "tasks.processors.job_processor",
         
     ]
 )
@@ -28,7 +28,7 @@ celery_app.conf.update(
     task_time_limit=30 * 60,
     task_soft_time_limit=25 * 60,
 
-    worker_concurrency=2,
+    worker_concurrency=1,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
 

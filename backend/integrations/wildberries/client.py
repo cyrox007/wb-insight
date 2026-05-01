@@ -45,8 +45,7 @@ class UserRateLimiter:
 
 
 # Глобальный экземпляр лимитера для всех клиентов
-# Интервал 1.0 сек — безопасное значение для WB API (можно увеличить при необходимости)
-_rate_limiter = UserRateLimiter(min_interval=1.0)
+_rate_limiter = UserRateLimiter(min_interval=60.0)
 
 class WBClient:   
     def __init__(self, token: APIToken) -> None:
