@@ -33,6 +33,15 @@ const router = createRouter({
 			}
 		},
 		{
+			path: '/dashboard/unity',
+			name: 'dashboard.unity',
+			component: () => import('../pages/Dashboard/UnityEconomy/index.vue'),
+			meta: {
+				title: "Unity-экономика",
+				requestAuth: true
+			}
+		},
+		{
 			path: '/billing/success',
 			name: 'billing.success',
 			component: () => import('../pages/Billing/Success/index.vue'),

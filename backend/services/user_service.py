@@ -153,3 +153,12 @@ async def delete_role_association(session: AsyncSession, target_role: UserRoleAs
         logger.error(f"Error deleting role association: {e}")
         # await session.rollback()
         return False
+    
+async def get_user_tax_rate(session: AsyncSession, user_id: UUID) -> float:
+    query = select(User.tax_rate).where(
+        User.id == user_id
+    )
+
+    result = await session.execute(query)
+
+    return result.scalar_one_or_none() or 0.2

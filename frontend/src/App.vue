@@ -15,7 +15,7 @@ const route = useRoute();
 
 const navItems = [
 	{ name: 'dashboard.home', label: 'Ключевые показатели' },
-	{ name: 'unit', label: 'Unit-экономика' },
+	{ name: 'dashboard.unity', label: 'Unit-экономика' },
 	{ name: 'ads', label: 'Внутренняя реклама' },
 	{ name: 'rnp', label: 'РнП' },
 	{ name: 'month', label: 'Показатели месяца' },

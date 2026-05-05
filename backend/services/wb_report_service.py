@@ -1,11 +1,12 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.product_cost_price_model import ProductCostPrice
 from models.wb_report import WbRealizationReport
 from utils.batcher import chunks
 from utils.date_parser import parse_dt
@@ -471,3 +472,27 @@ async def get_size_chart(
         }
         for row in rows
     ]
+
+
+async def get_reports_with_costs(session: AsyncSession, user_id: UUID, date_from: date, date_to: date) -> list[Tuple[WbRealizationReport, ProductCostPrice]]:
+    stmt = (
+        select(WbRealizationReport, ProductCostPrice)
+        .where(
+            WbRealizationReport.user_id == user_id,
+            WbRealizationReport.rr_dt >= date_from,
+            WbRealizationReport.rr_dt <= date_to
+        )
+        .join(
+            ProductCostPrice, 
+                and_(
+                WbRealizationReport.nm_id == ProductCostPrice.nm_id,
+                ProductCostPrice.user_id == user_id
+            )
+        )
+        .order_by(
+            WbRealizationReport.nm_id.asc()
+        )
+    )
+
+    result = await session.execute(stmt)
+    return [(row[0], row[1]) for row in result.all()]
