@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
@@ -141,5 +141,54 @@ async def get_unit_economy(
     # Создаем сервис и рассчитываем все метрики
     metrics_service = UnitEconomyMetricsService(tax_rate=tax_rate)
     result_df = metrics_service.calculate_all_metrics(df)
+    
+    # Формируем ответ с таблицей и сводными данными
+    return _format_response(result_df)
 
-    return response_success(report=result_df)
+
+def _format_response(df: pd.DataFrame) -> Dict[str, Any]:
+    """Форматирует DataFrame в ответ API с таблицей и сводными данными"""
+    
+    # Первая строка - это "ИТОГО", остальные - по артикулам
+    if len(df) == 0:
+        return response_success(data={})
+    
+    summary_row = df.iloc[0].to_dict()
+    articles_df = df.iloc[1:].copy()
+    
+    # Конвертируем таблицу в список словарей
+    table_data = articles_df.replace([np.nan], [None]).to_dict(orient='records')
+    
+    # Формируем сводные данные из первой строки
+    summary_data = {
+        'sales_with_spp': summary_row.get('sales_with_spp', 0),
+        'wb_commission_percent': summary_row.get('wb_commission_percent', 0),
+        'wb_commission_amount': summary_row.get('sales_with_spp', 0) * summary_row.get('wb_commission_percent', 0) / 100,
+        'to_pay_seller': summary_row.get('to_pay_seller', 0),
+        'logistics': summary_row.get('logistics_total', 0),
+        'storage': summary_row.get('storage', 0),
+        'other_deductions': summary_row.get('other_deductions', 0),
+        'fines': summary_row.get('fines', 0),
+        'paid_acceptance': summary_row.get('paid_acceptance', 0),
+        'total_to_pay': summary_row.get('total_to_pay', 0),
+        
+        'avg_sale_price': summary_row.get('avg_sale_price', 0),
+        'tax': summary_row.get('tax', 0),
+        'other_expenses': 0,  # Заглушка, пока нет данных
+        'drr': summary_row.get('drr', 0),
+        'cost_price': summary_row.get('cost_price_total', 0),
+        'marginality': summary_row.get('margin', 0),
+        'profitability': summary_row.get('profitability', 0),
+        'profit_per_unit': summary_row.get('profit_per_unit', 0),
+        'profit': summary_row.get('profit', 0),
+    }
+    
+    # Данные для графика по дням (нужно агрегировать исходные данные)
+    # Пока заглушка - нужно будет доработать при наличии daily_data
+    daily_data = []
+    
+    return response_success(data={
+        'summary': summary_data,
+        'table': table_data,
+        'daily_data': daily_data
+    })
