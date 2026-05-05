@@ -1,65 +1,41 @@
-```
-# Dependencies
-node_modules/
-
-# Build artifacts
-dist/
-build/
-target/
-
-# Python
-__pycache__/
+# Compiled Python files
 *.pyc
-*.pyo
-*.pyd
-.Python
-env/
+__pycache__/
+
+# Virtual environments
 venv/
 .venv/
-.venv.bak/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.pot
-*.pyc
-*.pyo
-*.pyd
-.MF
-tags
-TAGS
-id
-*.swp
-*~
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# Editors
+# Logs
+*.log
+
+# Coverage reports
+.coverage
+coverage/
+htmlcov/
+
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# OS
+# Build artifacts
+build/
+dist/
+target/
+*.out
+
+# Dependency caches
+node_modules/
+.mypy_cache/
+.pytest_cache/
+.gradle/
+
+# System files
 .DS_Store
 Thumbs.db
-
-# Coverage
-coverage/
-htmlcov/
-.coverage
-```
