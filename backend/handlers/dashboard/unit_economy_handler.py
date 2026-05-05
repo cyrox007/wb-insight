@@ -143,7 +143,22 @@ async def get_unit_economy(
     return response_success(report=result_df)
 
 def calculate_all_metrics(df: pd.DataFrame, tax_rate: float = 0.2) -> pd.DataFrame:
+    # Валидация входных данных
+    if df.empty:
+        return pd.DataFrame()
+    
+    required_columns = [
+        'nm_id', 'supplier_oper_name', 'doc_type_name', 'quantity',
+        'retail_price_with_disc_rub', 'retail_amount', 'delivery_amount',
+        'ppvz_kvw_prc_base', 'ppvz_sales_commission', 'ppvz_for_pay',
+        'delivery_rub', 'acquiring_fee', 'storage_fee', 'penalty',
+        'deduction', 'acceptance', 'product_cost', 'ppvz_vw_nds'
+    ]
 
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Отсутствуют необходимые колонки: {missing_columns}")
+    
     # Маски для продаж и возвратов
     is_sale = (
         (df['supplier_oper_name'] == 'Продажа') &
@@ -163,6 +178,7 @@ def calculate_all_metrics(df: pd.DataFrame, tax_rate: float = 0.2) -> pd.DataFra
             'quantity': 'sum',                     # Количество продаж
             'delivery_amount': 'sum',              # Количество доставок
             'ppvz_kvw_prc_base': 'mean',           # Размер КВВ без НДС (%)
+            'ppvz_sales_commission': 'sum',        # Комиссия с продаж
             'ppvz_sales_commission': 'sum',        # Вознаграждение с продаж
             'ppvz_for_pay': 'sum',                 # К перечислению
             'delivery_rub': 'sum',                 # Логистика
@@ -171,7 +187,8 @@ def calculate_all_metrics(df: pd.DataFrame, tax_rate: float = 0.2) -> pd.DataFra
             'penalty': 'sum',                      # Штрафы
             'deduction': 'sum',                    # Прочие удержания
             'acceptance': 'sum',                   # Платная приемка
-            'cost_total': 'sum'                  # Себестоимость (суммируем, потом поделим)
+            'cost_total': 'sum',                   # Себестоимость (суммируем, потом поделим)
+            'ppvz_vw_nds': 'sum'                   # НДС с вознаграждения
         }
     ).fillna(0)
 
@@ -183,7 +200,8 @@ def calculate_all_metrics(df: pd.DataFrame, tax_rate: float = 0.2) -> pd.DataFra
             'quantity': 'sum',                     # Количество возвратов
             'retail_amount': 'sum',                # Сумма возвратов
             'delivery_rub': 'sum',                 # Логистика возвратов
-            'ppvz_for_pay': 'sum'                  # Коррекции возвратов
+            'ppvz_for_pay': 'sum',                 # Коррекции возвратов
+            'delivery_amount': 'sum'               # Количество возвратных доставок
         }
     ).fillna(0)
 
@@ -202,6 +220,7 @@ def calculate_all_metrics(df: pd.DataFrame, tax_rate: float = 0.2) -> pd.DataFra
     result['returns_quantity'] = result['return_quantity']
     result['net_quantity'] = result['sales_quantity'] - result['returns_quantity']
     result['delivery_quantity'] = result['delivery_amount']
+    result['return_delivery_quantity'] = result['return_delivery_amount']
     result['return_delivery_quantity'] = result.get('return_delivery_amount', 0)
     result['net_delivery'] = result['delivery_quantity'] - result['return_delivery_quantity']
     result['buyout_percent'] = np.where(
@@ -256,8 +275,8 @@ def calculate_all_metrics(df: pd.DataFrame, tax_rate: float = 0.2) -> pd.DataFra
     # 💰 Себестоимость и расходы
     result['product_cost'] = result['cost_total']
     result['avg_product_cost'] = np.where(
-        result['sales_quantity'] > 0,
-        result['product_cost'] / result['sales_quantity'],
+        result['net_quantity'] > 0,
+        result['product_cost'] / result['net_quantity'],
         0
     )
     
@@ -271,7 +290,9 @@ def calculate_all_metrics(df: pd.DataFrame, tax_rate: float = 0.2) -> pd.DataFra
         result['deduction'] +              # Прочие удержания
         result['acceptance'] +             # Платная приемка
         result['tax'] +                    # Налог
-        result['advertising_cost']         # Реклама
+        result['advertising_cost'] +       # Реклама
+        result['ppvz_sales_commission'] +  # Комиссия WB с продаж
+        result['ppvz_vw_nds']              # НДС с вознаграждения WB
     )
     
     result['profit'] = result['sales_without_spp'] - result['total_costs']
