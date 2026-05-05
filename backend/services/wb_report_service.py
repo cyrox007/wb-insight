@@ -474,7 +474,12 @@ async def get_size_chart(
     ]
 
 
-async def get_reports_with_costs(session: AsyncSession, user_id: UUID, date_from: date, date_to: date) -> list[Tuple[WbRealizationReport, ProductCostPrice]]:
+async def get_reports_with_costs(session: AsyncSession, user_id: UUID, date_from: date, date_to: date) -> list[Tuple[WbRealizationReport, Optional[ProductCostPrice]]]:
+    """
+    Получает все отчеты за период с себестоимостью.
+    LEFT JOIN используется, чтобы получить ВСЕ записи отчетов, даже если себестоимость не указана.
+    """
+    from sqlalchemy.orm import outerjoin
     stmt = (
         select(WbRealizationReport, ProductCostPrice)
         .where(
@@ -482,15 +487,16 @@ async def get_reports_with_costs(session: AsyncSession, user_id: UUID, date_from
             WbRealizationReport.rr_dt >= date_from,
             WbRealizationReport.rr_dt <= date_to
         )
-        .join(
+        .outerjoin(
             ProductCostPrice, 
-                and_(
+            and_(
                 WbRealizationReport.nm_id == ProductCostPrice.nm_id,
                 ProductCostPrice.user_id == user_id
             )
         )
         .order_by(
-            WbRealizationReport.nm_id.asc()
+            WbRealizationReport.nm_id.asc(),
+            WbRealizationReport.rr_dt.asc()
         )
     )
 
