@@ -401,36 +401,44 @@ class UnitEconomyMetricsService:
             if col == 'margin':
                 total_revenue = df['sales_with_spp'].sum()
                 total_expenses = df['total_expenses'].sum()
-                summary_data[col] = ((total_revenue - total_expenses) / total_revenue * 100) if total_revenue else 0
+                summary_data[col] = ((total_revenue - total_expenses) / total_revenue * 100) if total_revenue else 0.0
             elif col == 'profitability':
                 total_profit = df['profit'].sum()
                 total_exp = df['total_expenses'].sum()
-                summary_data[col] = (total_profit / total_exp * 100) if total_exp else 0
+                summary_data[col] = (total_profit / total_exp * 100) if total_exp else 0.0
             elif col == 'buyout_percent':
                 total_sales_qty = df['sales_qty'].sum()
                 total_deliveries_qty = df['deliveries_qty'].sum()
-                summary_data[col] = (total_sales_qty / total_deliveries_qty * 100) if total_deliveries_qty else 0
+                summary_data[col] = (total_sales_qty / total_deliveries_qty * 100) if total_deliveries_qty else 0.0
             elif col == 'drr':
                 total_ad = df['ad_expenses'].sum()
                 total_rev = df['sales_with_spp'].sum()
-                summary_data[col] = (total_ad / total_rev * 100) if total_rev else 0
+                summary_data[col] = (total_ad / total_rev * 100) if total_rev else 0.0
             elif col in ['avg_sale_price', 'profit_per_unit', 'logistics_per_sale', 'logistics_per_unit']:
                 # Средние величины пересчитываем как Сумма / Сумма Qty
+                qty_denominator = 0.0
+                numerator = 0.0
                 if col == 'avg_sale_price':
-                    summary_data[col] = df['sales_with_spp'].sum() / df['sales_qty'].sum() if df['sales_qty'].sum() else 0
+                    qty_denominator = df['sales_qty'].sum()
+                    numerator = df['sales_with_spp'].sum()
                 elif col == 'profit_per_unit':
-                    summary_data[col] = df['profit'].sum() / df['sales_qty'].sum() if df['sales_qty'].sum() else 0
+                    qty_denominator = df['sales_qty'].sum()
+                    numerator = df['profit'].sum()
                 elif col == 'logistics_per_sale':
-                    summary_data[col] = df['logistics_total'].sum() / df['sales_qty'].sum() if df['sales_qty'].sum() else 0
+                    qty_denominator = df['sales_qty'].sum()
+                    numerator = df['logistics_total'].sum()
                 elif col == 'logistics_per_unit':
-                    summary_data[col] = df['logistics_total'].sum() / df['deliveries_qty'].sum() if df['deliveries_qty'].sum() else 0
+                    qty_denominator = df['deliveries_qty'].sum()
+                    numerator = df['logistics_total'].sum()
+                
+                summary_data[col] = (numerator / qty_denominator) if qty_denominator else 0.0
             else:
-                # Суммируем деньги и количества
-                summary_data[col] = df[col].sum()
+                # Суммируем деньги и количества, явно приводя к float
+                summary_data[col] = float(df[col].sum())
         
-        # Заполняем пустые строковые колонки
+        # Заполняем пустые строковые колонки пустой строкой вместо None для корректного типа
         for col in df.select_dtypes(include=['object', 'string']).columns:
-            if col != 'wb_article':
-                summary_data[col] = None
+            if col not in summary_data:
+                summary_data[col] = ""
                 
         return pd.DataFrame([summary_data])
