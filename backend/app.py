@@ -15,7 +15,7 @@ from handlers.dashboard.tariffs_handler import router as D_tariffs_router
 from handlers.dashboard.subscription_handler import router as D_subscription_router
 from handlers.dashboard.token_handler import router as D_tokens_router
 from handlers.dashboard.biling_handler import router as D_biling_handler_router
-from handlers.dashboard.unit_econimy_handler import router as D_unit_economy_router
+from handlers.dashboard.unit_economy_handler import router as D_unit_economy_router
 from handlers.control_panel.home import router as CP_home_router
 from handlers.control_panel.users import router as CP_users_router
 from handlers.control_panel.tariffs import router as CP_tariffs_router
