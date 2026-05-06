@@ -1,1 +1,1 @@
-Nothing needs to be added to .gitignore since the changes only include source code files (.vue and .js) which should not be ignored.
+Nothing should be ignored in this case, as the changes only involve source code files (.vue and .js) without any build artifacts, dependencies, or temporary files.
