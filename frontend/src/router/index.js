@@ -7,7 +7,7 @@ const router = createRouter({
 		{
 			path: '/',
 			name: 'home',
-			component: () => import('../pages/HomePage/HomePage.vue'),
+			component: () => import('../pages/Home/Home.vue'),
 			meta: {
 				title: "Главная",
 				requestGuest: true // Разрешить доступ только неавторизованным пользователям
@@ -16,7 +16,7 @@ const router = createRouter({
 		{
 			path: '/dashboard',
 			name: 'dashboard.home',
-			component: () => import('../pages/Dashboard/Main/DashboardMain.vue'),
+			component: () => import('../pages/DashboardMain/MainPage.vue'),
 			meta: {
 				title: "Главная",
 				requestAuth: true // Разрешить доступ только авторизованным пользователям
@@ -26,7 +26,7 @@ const router = createRouter({
 		{
 			path: '/dashboard/profile',
 			name: 'dashboard.profile',
-			component: () => import('../pages/Dashboard/Profile/ProfilePage.vue'),
+			component: () => import('../pages/DashboardProfile/Profile.vue'),
 			meta: {
 				title: 'Профиль пользователя',
 				requestAuth: true
@@ -35,7 +35,7 @@ const router = createRouter({
 		{
 			path: '/dashboard/unity',
 			name: 'dashboard.unity',
-			component: () => import('../pages/Dashboard/UnityEconomy/UnityEconomyPage.vue'),
+			component: () => import('../pages/DashboardUnityEconomy/UnitEconomy.vue'),
 			meta: {
 				title: "Unity-экономика",
 				requestAuth: true
@@ -44,7 +44,7 @@ const router = createRouter({
 		{
 			path: '/dashboard/ads',
 			name: 'dashboard.ads',
-			component: () => import('../pages/Dashboard/Ads/AdsPage.vue'),
+			component: () => import('../pages/DashboardAds/Ads.vue'),
 			meta: {
 				title: "Внутренняя реклама",
 				requestAuth: true
@@ -53,7 +53,7 @@ const router = createRouter({
 		{
 			path: '/billing/success',
 			name: 'billing.success',
-			component: () => import('../pages/Billing/Success/SuccessPage.vue'),
+			component: () => import('../pages/BillingSuccess/Success.vue'),
 			meta: {
 				title: "Успешная оплата",
 				requestAuth: true
@@ -62,7 +62,7 @@ const router = createRouter({
 		{
 			path: '/control-panel',
 			name: 'control-panel.index',
-			component: () => import('../pages/ControlPanel/Main/ControlPanelMain.vue'),
+			component: () => import('../pages/ControlPanelMain/MainPage.vue'),
 			meta: {
 				title: "Панель управления",
 				requestAuth: true // Разрешить доступ только авторизованным пользователям
@@ -72,7 +72,7 @@ const router = createRouter({
 				{
 					path: 'users',
 					name: 'control-panel.users',
-					component: () => import('../pages/ControlPanel/Users/UsersPage.vue'),
+					component: () => import('../pages/ControlPanelUsers/Users.vue'),
 					meta: {
 						title: "Пользователи",
 						requestAuth: true
@@ -81,7 +81,7 @@ const router = createRouter({
 				{
 					path: 'edit-user/:id',
 					name: 'control-panel.edit-user',
-					component: () => import('../pages/ControlPanel/Users/edit.vue'),
+					component: () => import('../pages/ControlPanelUsers/edit.vue'),
 					meta: {
 						title: "Редактировать пользователя",
 						requestAuth: true
@@ -90,7 +90,7 @@ const router = createRouter({
 				{
 					path: 'tariffs',
 					name: 'control-panel.tariffs',
-					component: () => import('../pages/ControlPanel/Tariffs/TariffsPage.vue'),
+					component: () => import('../pages/ControlPanelTariffs/Tariffs.vue'),
 					meta: {
 						title: "Тарифы",
 						requestAuth: true
@@ -99,7 +99,7 @@ const router = createRouter({
 				{
 					path: 'tariffs/:id/edit-tariff',
 					name: 'control-panel.edit-tariff',
-					component: () => import('../pages/ControlPanel/Tariffs/edit.vue'),
+					component: () => import('../pages/ControlPanelTariffs/edit.vue'),
 					meta: {
 						title: "Редактировать тариф",
 						requestAuth: true
@@ -110,7 +110,7 @@ const router = createRouter({
 		{
 			path: '/:pathMatch(.*)*',
 			name: 'not-found',
-			component: () => import('../pages/NotFoundPage/NotFoundPage.vue'),
+			component: () => import('../pages/NotFound/NotFound.vue'),
 			meta: {
 				title: "Страница не найдена"
 			}
