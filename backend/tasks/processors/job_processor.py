@@ -64,15 +64,16 @@ async def process_job(session: AsyncSession, job: SyncJob):
             await call_wb_api(session=session, token=token, job=job)
             state.last_success_at = now
             state.last_error = None
-
+            
             # Если задача успешно выполнена - помечаем её как выполненную
             job.status = "done"
             job.finished_at = now
+
         except Exception as e:
             error_msg = str(e)
             logger.error(f"[JOB {job.id}] Произошла ошибка во время вызова API: {error_msg}")
             state.last_error = error_msg
-
+            
             # Специальная обработка ошибок авторизации (401/403)
             if "401" in error_msg or "403" in error_msg or "Unauthorized" in error_msg:
                 logger.warning(f"[JOB {job.id}] Токен недействителен (401/403). Помечаем токен как неактивный.")
@@ -80,7 +81,7 @@ async def process_job(session: AsyncSession, job: SyncJob):
                 token.is_active = False
                 # Также можно добавить специальное сообщение об ошибке
                 state.last_error = f"Ошибка авторизации: токен недействителен или истек срок действия. Пожалуйста, обновите токен в настройках."
-
+            
             # Пробрасываем ошибку выше, чтобы job получил статус failed
             raise
             
