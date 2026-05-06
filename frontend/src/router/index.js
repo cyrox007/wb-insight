@@ -42,6 +42,15 @@ const router = createRouter({
 			}
 		},
 		{
+			path: '/dashboard/ads',
+			name: 'dashboard.ads',
+			component: () => import('../pages/Dashboard/Ads/index.vue'),
+			meta: {
+				title: "Внутренняя реклама",
+				requestAuth: true
+			}
+		},
+		{
 			path: '/billing/success',
 			name: 'billing.success',
 			component: () => import('../pages/Billing/Success/index.vue'),
