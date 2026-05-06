@@ -44,7 +44,7 @@ const router = createRouter({
 		{
 			path: '/dashboard/ads',
 			name: 'dashboard.ads',
-			component: () => import('../pages/Dashboard/Ads/index2.vue'),
+			component: () => import('../pages/Dashboard/Ads/index.vue'),
 			meta: {
 				title: "Внутренняя реклама",
 				requestAuth: true
