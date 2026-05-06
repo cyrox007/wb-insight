@@ -186,8 +186,10 @@ async def get_unit_economy(
     tax_rate = await get_user_tax_rate(db_session, UUID(current_user['sub']))
 
     # Создаем сервис и рассчитываем все метрики
+    # advertising_costs_map передается как None - расходы на рекламу будут взяты из БД
+    # при необходимости через get_or_sync_advertising_cost_by_nm_id
     metrics_service = UnitEconomyMetricsService(tax_rate=tax_rate)
-    result_df = metrics_service.calculate_all_metrics(df)
+    result_df = metrics_service.calculate_all_metrics(df, advertising_costs_map=None)
     
     # Формируем ответ с таблицей и сводными данными
     return _format_response(result_df)
