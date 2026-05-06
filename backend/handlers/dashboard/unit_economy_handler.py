@@ -8,12 +8,18 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
+from core.logger import setup_logger
 from core.middleware import auth_middle
 from services.user_service import get_user_tax_rate
 from services.wb_report_service import get_reports_with_costs
 from services.dashboard.unit_economy_service import UnitEconomyMetricsService
+from services.user_sync_state_service import get_user_sync_states
+from services.token_services import get_tokens_by_user_id
+from models.tokens_model import Marketplace
 from utils.responce_helps import response_error, response_success
 
+
+logger = setup_logger(__name__)
 
 router = APIRouter(prefix='/dashboard/unity', tags=['Unit'])
 
@@ -27,6 +33,36 @@ async def get_unit_economy(
     end_date = end_date if end_date is not None else datetime.now(timezone.utc).date()
     start_date = start_date if start_date is not None else end_date - timedelta(days=30)
     current_user = request.state.user
+    
+    # 🔥 ПРОВЕРКА ОШИБОК АВТОРИЗАЦИИ (401/403) перед попыткой загрузки данных
+    states = await get_user_sync_states(
+        session=db_session,
+        user_id=current_user['sub']
+    )
+    
+    # Собираем ошибки синхронизации
+    sync_errors = [s.last_error for s in states if s.last_error]
+    auth_errors = [e for e in sync_errors if "401" in e or "403" in e or "Unauthorized" in e or "авторизации" in e.lower()]
+    
+    if auth_errors:
+        logger.warning(f"User {current_user['sub']} has authorization errors in unit economy: {auth_errors}")
+        return response_error(
+            message="Ошибка авторизации: токен недействителен или истек срок действия. Пожалуйста, обновите токен в настройках.",
+            code="TOKEN_INVALID"
+        )
+    
+    # Проверяем наличие активных токенов
+    user_tokens = await get_tokens_by_user_id(db_session, current_user['sub'])
+    valid_wb_tokens = [
+        t for t in user_tokens 
+        if t.marketplace == Marketplace.WILDBERRIES and t.is_valid
+    ]
+    
+    if not valid_wb_tokens:
+        return response_error(
+            message="Нет действительных токенов для синхронизации. Пожалуйста, добавьте актуальный токен Wildberries.",
+            code="NO_VALID_TOKENS"
+        )
 
     reports_with_costs = await get_reports_with_costs(
         db_session, 
@@ -36,10 +72,21 @@ async def get_unit_economy(
     )
 
     if len(reports_with_costs) == 0:
-        return response_error(
-            code="NOT_DATA",
-            message="Данные еще не сихронизированы"
-        )
+        # Проверяем, была ли вообще синхронизация
+        has_any_success = any(s.last_success_at is not None for s in states)
+        
+        if not has_any_success:
+            # Если никогда не было успешной синхронизации - указываем на это
+            return response_error(
+                code="NOT_SYNCED",
+                message="Данные еще не синхронизированы. Проверьте статус токена и дождитесь завершения синхронизации."
+            )
+        else:
+            # Если синхронизация была, но данных за период нет
+            return response_error(
+                code="NOT_DATA",
+                message="Нет данных за выбранный период. Попробуйте изменить диапазон дат."
+            )
     
     report_data = []
     for report, cost in reports_with_costs:

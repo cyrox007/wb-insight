@@ -23,6 +23,8 @@ from services.wb_report_service import (
 )
 from services.cost_price_service import get_dashboard_unit_economy
 from services.user_sync_state_service import get_user_sync_states
+from services.token_services import get_tokens_by_user_id
+from models.tokens_model import Marketplace
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = setup_logger(__name__)
@@ -168,13 +170,51 @@ async def dashboard(
     )
 
     has_any_success = any(s.last_success_at is not None for s in states)
+    has_any_sync_attempt = any(s.last_sync_at is not None for s in states)
+    
+    # Собираем ошибки синхронизации
+    sync_errors = [s.last_error for s in states if s.last_error]
+    has_errors = bool(sync_errors)
+    
+    # Проверяем наличие активных токенов у пользователя
+    user_tokens = await get_tokens_by_user_id(db_session, current_user['sub'])
+    valid_wb_tokens = [
+        t for t in user_tokens 
+        if t.marketplace == Marketplace.WILDBERRIES and t.is_valid
+    ]
+    has_valid_tokens = len(valid_wb_tokens) > 0
+    
+    # 🔥 ПРОВЕРКА ОШИБОК АВТОРИЗАЦИИ (401/403) - имеет высший приоритет
+    # Даже если была успешная синхронизация в прошлом, но сейчас есть ошибка авторизации - показываем ошибку
+    auth_errors = [e for e in sync_errors if "401" in e or "403" in e or "Unauthorized" in e or "авторизации" in e.lower()]
+    if auth_errors:
+        logger.warning(f"User {current_user['sub']} has authorization errors: {auth_errors}")
+        return response_error(
+            message="Ошибка авторизации: токен недействителен или истек срок действия. Пожалуйста, обновите токен в настройках.",
+            code="TOKEN_INVALID"
+        )
+    
+    # Если нет ни одной успешной синхронизации и токены невалидны
+    if not has_any_success and not has_valid_tokens:
+        return response_error(
+            message="Нет действительных токенов для синхронизации. Пожалуйста, добавьте актуальный токен Wildberries.",
+            code="NO_VALID_TOKENS"
+        )
+    
+    # Проверяем, есть ли активные jobs в процессе выполнения
     is_sync_running = any(
         s.last_sync_at and (
             not s.last_success_at or s.last_sync_at > s.last_success_at
         )
         for s in states
     )
-    has_errors = any(s.last_error for s in states)
+    
+    # Если нет ни одной успешной синхронизации и есть другие ошибки
+    if not has_any_success and has_errors:
+        return response_error(
+            message=f"Ошибка синхронизации: {sync_errors[0]}",
+            code="SYNC_ERROR"
+        )
 
     if not has_any_success:
         return response_error(
@@ -189,12 +229,6 @@ async def dashboard(
             message="Идёт синхронизация данных",
             stats={},
             partial=True
-        )
-    
-    if has_errors and not has_any_success:
-        return response_error(
-            message="Ошибка синхронизации",
-            code="SYNC_ERROR"
         )
 
     # Получаем только основную статистику (быстро)

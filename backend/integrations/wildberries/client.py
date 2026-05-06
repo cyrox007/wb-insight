@@ -87,6 +87,10 @@ class WBClient:
             logger.info("No content (204) - empty report")
             return []
 
+        if response.status_code in [401, 403]:
+            logger.error(f"WB Authorization error: {response.status_code} {response.text}")
+            raise Exception(f"Unauthorized: WB error {response.status_code}. Токен недействителен или истек срок действия.")
+
         if response.status_code != 200:
             logger.error(f"WB error: {response.status_code} {response.text}")
             raise Exception(f"WB error: {response.status_code} {response.text}")
