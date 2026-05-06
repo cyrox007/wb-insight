@@ -138,3 +138,92 @@ class WBClient:
             endpoints.PRODUCTS,
             json_data=payload
         )
+
+    async def get_advert_campaigns(self, payload: dict = {}):
+        """
+        Получить список рекламных кампаний
+        
+        API endpoint: GET /api/advert/v2/adverts
+        https://dev.wildberries.ru/docs/openapi/promotion/#tag/Kampanii/paths/~1api~1advert~1v2~1adverts/get
+        
+        Параметры:
+        - ids: string - ID кампаний через запятую (макс. 50), например "12345,23456"
+        - statuses: string - Статусы кампаний через запятую (-1,4,7,8,9,11)
+          -1 — удалена, 4 — готова к запуску, 7 — завершена, 8 — отменена, 9 — активна, 11 — на паузе
+        - payment_type: string - Тип оплаты (cpm или cpc), опционально
+        
+        Возвращает:
+        {
+          "adverts": [
+            {
+              "id": 567456457,              # ID кампании (advertId)
+              "bid_type": "manual",         # unified | manual
+              "nm_settings": [...],         # Настройки товаров
+              "settings": {                 # Настройки кампании
+                "name": "...",              # Название кампании
+                "payment_type": "cpc",      # cpm | cpc
+                "placements": {...}         # Места размещения
+              },
+              "status": 9,                  # -1,4,7,8,9,11
+              "timestamps": {...}           # Временные метки
+            }
+          ]
+        }
+        """
+        return await self._request(
+            "GET",
+            endpoints.ADVERT_CAMPAIGNS,
+            params=payload
+        )
+
+    async def get_advert_stats(self, payload: dict = {}):
+        """
+        Получить полную статистику по рекламным кампаниям
+        
+        API endpoint: GET /adv/v3/fullstats
+        https://dev.wildberries.ru/docs/openapi/promotion/#tag/Statistika/paths/~1adv~1v3~1fullstats/get
+        
+        Параметры (передаются как query params, НЕ как JSON body!):
+        - ids: string (REQUIRED) - ID кампаний через запятую (макс. 50), например "22161678,28449281"
+        - beginDate: string (REQUIRED) - Дата начала периода в формате YYYY-MM-DD
+        - endDate: string (REQUIRED) - Дата окончания периода в формате YYYY-MM-DD
+        
+        Возвращает:
+        [
+          {
+            "advertId": 22161678,           # ID кампании
+            "views": 1000,                  # Просмотры
+            "clicks": 50,                   # Клики
+            "ctr": 5.0,                     # CTR (%)
+            "cpc": 1.5,                     # CPC (цена за клик, ₽)
+            "sum": 75.0,                    # Затраты (₽)
+            "atbs": 10,                     # Добавлено в корзину
+            "orders": 5,                    # Заказы
+            "cr": 10.0,                     # CR (%)
+            "shks": 5,                      # Количество штук в заказах
+            "sum_price": 15000.0,           # Сумма заказов (₽)
+            "days": [                       # Статистика по дням
+              {
+                "date": "2025-07-06",
+                "views": 100,
+                "clicks": 5,
+                ...
+              }
+            ],
+            "boosterStats": [               # Статистика по средней позиции
+              {
+                "avgPosition": 75.0
+              }
+            ]
+          }
+        ]
+        
+        Примечание: API требует сначала получить список кампаний через get_advert_campaigns(),
+        извлечь их ID и передать в этом методе.
+        """
+        # API v3 fullstats использует GET запрос с query параметрами, а не POST с JSON
+        return await self._request(
+            "GET",
+            endpoints.ADVERT_STATS,
+            params=payload
+        )

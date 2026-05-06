@@ -14,12 +14,13 @@ class UnitEconomyMetricsService:
     def __init__(self, tax_rate: float = 0.2):
         self.tax_rate = tax_rate
     
-    def calculate_all_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_all_metrics(self, df: pd.DataFrame, advertising_costs_map: dict[int, float] = None) -> pd.DataFrame:
         """
         Рассчитывает все метрики юнит-экономики на основе данных отчета WB
         
         Args:
             df: DataFrame с данными отчетов WB
+            advertising_costs_map: словарь {nm_id: сумма расходов на рекламу} (опционально)
             
         Returns:
             DataFrame с агрегированными метриками по артикулам
@@ -47,7 +48,7 @@ class UnitEconomyMetricsService:
         self._calculate_logistics_metrics(result)
         self._calculate_storage_metrics(result)
         self._calculate_penalty_metrics(result)
-        self._calculate_tax_and_advertising_metrics(result)
+        self._calculate_tax_and_advertising_metrics(result, advertising_costs_map)
         self._calculate_cost_metrics(result)
         self._calculate_profitability_metrics(result)
         
@@ -216,13 +217,22 @@ class UnitEconomyMetricsService:
         result['deduction'] = result['deduction']
         result['acceptance'] = result['acceptance']
     
-    def _calculate_tax_and_advertising_metrics(self, result: pd.DataFrame) -> None:
-        """Рассчитывает метрики налогов и рекламы"""
+    def _calculate_tax_and_advertising_metrics(self, result: pd.DataFrame, advertising_costs_map: dict[int, float] = None) -> None:
+        """
+        Рассчитывает метрики налогов и рекламы
+        
+        Args:
+            result: DataFrame с результатами
+            advertising_costs_map: словарь {nm_id: сумма расходов на рекламу}
+        """
         # Налог = Сумма продаж с СПП * Ставка налога
         result['tax'] = result['sales_with_spp'] * self.tax_rate
         
-        # Расходы на РК (пока заглушка)
-        result['advertising_cost'] = 0  # TODO: из рекламной статистики
+        # Расходы на РК из БД (если переданы)
+        if advertising_costs_map:
+            result['advertising_cost'] = result['nm_id'].map(advertising_costs_map).fillna(0)
+        else:
+            result['advertising_cost'] = 0
         
         # ДРР
         result['drr'] = np.where(
