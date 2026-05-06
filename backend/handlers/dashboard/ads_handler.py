@@ -9,6 +9,7 @@
 - Динамика продвижения (CTR, CPM, сумма)
 - Таблица по артикулам
 """
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from uuid import UUID

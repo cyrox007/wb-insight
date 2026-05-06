@@ -11,201 +11,256 @@
 			</div>
 		</div>
 
-		<!-- Динамика просмотров (график) -->
-		<div class="chart-section">
-			<h3 class="section-title">Динамика просмотров</h3>
-			<BaseCarts :is-loading="isLoading" :chart-data="dynamicsChart" :metrics="[
-				{ key: 'views', name: 'Просмотры', color: '#4caf50', visible: true, type: 'number' },
-				{ key: 'clicks', name: 'Клики', color: '#ff9800', visible: true, type: 'number' },
-				{ key: 'amount', name: 'Расходы, ₽', color: '#f44336', visible: true, type: 'rub' },
-			]" />
+		<!-- Состояние загрузки всей страницы -->
+		<div v-if="isLoading && !hasLoadedOnce" class="page-loader">
+			<div class="loading-spinner"></div>
+			<p class="loading-text">Загрузка данных рекламы...</p>
 		</div>
 
-		<!-- Рекламная воронка и Конверсии -->
-		<div class="stats-grid-2">
-			<!-- Рекламная воронка -->
-			<div class="stat-card funnel">
-				<h3 class="card-title">Рекламная воронка</h3>
-				<div class="funnel-rows">
-					<div class="funnel-row">
-						<span class="label">Просмотров</span>
-						<span class="value">{{ formatNumber(funnel.views) }}</span>
+		<!-- Пустое состояние -->
+		<div v-else-if="!hasData && hasLoadedOnce" class="empty-state">
+			<div class="empty-icon">📊</div>
+			<p class="empty-text">Нет данных для отображения</p>
+			<p class="empty-hint">Данные появятся после синхронизации рекламной статистики с Wildberries</p>
+		</div>
+
+		<!-- Основной контент -->
+		<div v-else>
+			<!-- Динамика просмотров (график) -->
+			<div class="chart-section">
+				<h3 class="section-title">Динамика просмотров</h3>
+				<BaseCarts :is-loading="isLoading" :chart-data="dynamicsChart" :metrics="[
+					{ key: 'views', name: 'Просмотры', color: '#4caf50', visible: true, type: 'number' },
+					{ key: 'clicks', name: 'Клики', color: '#ff9800', visible: true, type: 'number' },
+					{ key: 'amount', name: 'Расходы, ₽', color: '#f44336', visible: true, type: 'rub' },
+				]" />
+			</div>
+
+			<!-- Рекламная воронка и Конверсии -->
+			<div class="stats-grid-2">
+				<!-- Рекламная воронка -->
+				<div class="stat-card funnel">
+					<h3 class="card-title">Рекламная воронка</h3>
+					<!-- Загрузка -->
+					<div v-if="isLoading" class="card-loader">
+						<div class="loading-spinner-small"></div>
+						<p>Загрузка...</p>
 					</div>
-					<div class="funnel-row">
-						<span class="label">Переходов</span>
-						<span class="value">{{ formatNumber(funnel.clicks) }}</span>
+					<!-- Пустое состояние -->
+					<div v-else-if="!funnelHasData" class="card-empty">
+						<span>Нет данных</span>
 					</div>
-					<div class="funnel-row">
-						<span class="label">Добавлений в корзину</span>
-						<span class="value">{{ formatNumber(funnel.added_to_cart) }}</span>
+					<!-- Данные -->
+					<div v-else class="funnel-rows">
+						<div class="funnel-row">
+							<span class="label">Просмотров</span>
+							<span class="value">{{ formatNumber(funnel.views) }}</span>
+						</div>
+						<div class="funnel-row">
+							<span class="label">Переходов</span>
+							<span class="value">{{ formatNumber(funnel.clicks) }}</span>
+						</div>
+						<div class="funnel-row">
+							<span class="label">Добавлений в корзину</span>
+							<span class="value">{{ formatNumber(funnel.added_to_cart) }}</span>
+						</div>
+						<div class="funnel-row">
+							<span class="label">Заказов с помощью рекламы</span>
+							<span class="value">{{ formatNumber(funnel.ad_orders) }}</span>
+						</div>
+						<div class="funnel-row highlight">
+							<span class="label">На сумму</span>
+							<span class="value">{{ formatNumber(funnel.ad_orders_amount) }} ₽</span>
+						</div>
+						<div class="funnel-row">
+							<span class="label">Общих заказов</span>
+							<span class="value">{{ formatNumber(funnel.total_orders) }}</span>
+						</div>
+						<div class="funnel-row highlight">
+							<span class="label">На сумму</span>
+							<span class="value">{{ formatNumber(funnel.total_orders_amount) }} ₽</span>
+						</div>
 					</div>
-					<div class="funnel-row">
-						<span class="label">Заказов с помощью рекламы</span>
-						<span class="value">{{ formatNumber(funnel.ad_orders) }}</span>
+				</div>
+
+				<!-- Конверсии по воронке -->
+				<div class="stat-card conversions">
+					<h3 class="card-title">Конверсии по воронке</h3>
+					<!-- Загрузка -->
+					<div v-if="isLoading" class="card-loader">
+						<div class="loading-spinner-small"></div>
+						<p>Загрузка...</p>
 					</div>
-					<div class="funnel-row highlight">
-						<span class="label">На сумму</span>
-						<span class="value">{{ formatNumber(funnel.ad_orders_amount) }} ₽</span>
+					<!-- Пустое состояние -->
+					<div v-else-if="!conversionsHasData" class="card-empty">
+						<span>Нет данных</span>
 					</div>
-					<div class="funnel-row">
-						<span class="label">Общих заказов</span>
-						<span class="value">{{ formatNumber(funnel.total_orders) }}</span>
-					</div>
-					<div class="funnel-row highlight">
-						<span class="label">На сумму</span>
-						<span class="value">{{ formatNumber(funnel.total_orders_amount) }} ₽</span>
+					<!-- Данные -->
+					<div v-else class="conversion-rows">
+						<div class="conversion-row">
+							<span class="label">Расходы на рекламу</span>
+							<span class="value">{{ formatNumber(conversions.expenses) }} ₽</span>
+						</div>
+						<div class="conversion-row">
+							<span class="label">CTR</span>
+							<span class="value">{{ conversions.ctr }}%</span>
+						</div>
+						<div class="conversion-row">
+							<span class="label">CR в корзину</span>
+							<span class="value">{{ conversions.cr_to_cart }}%</span>
+						</div>
+						<div class="conversion-row">
+							<span class="label">Конверсия из перехода в заказ</span>
+							<span class="value">{{ conversions.conversion_click_to_order }}%</span>
+						</div>
+						<div class="conversion-row">
+							<span class="label">CPC</span>
+							<span class="value">{{ formatNumber(conversions.cpc) }} ₽</span>
+						</div>
+						<div class="conversion-row">
+							<span class="label">CPM</span>
+							<span class="value">{{ formatNumber(conversions.cpm) }} ₽</span>
+						</div>
+						<div class="conversion-row">
+							<span class="label">ДРР</span>
+							<span class="value">{{ conversions.drr }}%</span>
+						</div>
 					</div>
 				</div>
 			</div>
 
-			<!-- Конверсии по воронке -->
-			<div class="stat-card conversions">
-				<h3 class="card-title">Конверсии по воронке</h3>
-				<div class="conversion-rows">
-					<div class="conversion-row">
-						<span class="label">Расходы на рекламу</span>
-						<span class="value">{{ formatNumber(conversions.expenses) }} ₽</span>
+			<!-- Расчет стоимости привлечения -->
+			<div class="stat-card acquisition">
+				<h3 class="card-title">Расчет стоимости привлечения</h3>
+				<!-- Загрузка -->
+				<div v-if="isLoading" class="card-loader">
+					<div class="loading-spinner-small"></div>
+					<p>Загрузка...</p>
+				</div>
+				<!-- Пустое состояние -->
+				<div v-else-if="!acquisitionHasData" class="card-empty">
+					<span>Нет данных</span>
+				</div>
+				<!-- Данные -->
+				<div v-else class="acquisition-grid">
+					<div class="acquisition-item">
+						<span class="label">Средняя стоимость заказа</span>
+						<span class="value">{{ formatNumber(acquisition_cost.avg_order_value) }} ₽</span>
 					</div>
-					<div class="conversion-row">
-						<span class="label">CTR</span>
-						<span class="value">{{ conversions.ctr }}%</span>
+					<div class="acquisition-item">
+						<span class="label">Стоимость просмотра</span>
+						<span class="value">{{ formatNumber(acquisition_cost.cost_per_view) }} ₽</span>
 					</div>
-					<div class="conversion-row">
-						<span class="label">CR в корзину</span>
-						<span class="value">{{ conversions.cr_to_cart }}%</span>
+					<div class="acquisition-item">
+						<span class="label">Стоимость перехода</span>
+						<span class="value">{{ formatNumber(acquisition_cost.cost_per_click) }} ₽</span>
 					</div>
-					<div class="conversion-row">
-						<span class="label">Конверсия из перехода в заказ</span>
-						<span class="value">{{ conversions.conversion_click_to_order }}%</span>
+					<div class="acquisition-item">
+						<span class="label">Стоимость добавления в корзину</span>
+						<span class="value">{{ formatNumber(acquisition_cost.cost_per_cart) }} ₽</span>
 					</div>
-					<div class="conversion-row">
-						<span class="label">CPC</span>
-						<span class="value">{{ formatNumber(conversions.cpc) }} ₽</span>
+					<div class="acquisition-item highlight">
+						<span class="label">CPO (стоимость одного заказа)</span>
+						<span class="value">{{ formatNumber(acquisition_cost.cpo) }} ₽</span>
 					</div>
-					<div class="conversion-row">
-						<span class="label">CPM</span>
-						<span class="value">{{ formatNumber(conversions.cpm) }} ₽</span>
+					<div class="acquisition-item">
+						<span class="label">Норма ДРР</span>
+						<span class="value">{{ acquisition_cost.norm_drr }}%</span>
 					</div>
-					<div class="conversion-row">
-						<span class="label">ДРР</span>
-						<span class="value">{{ conversions.drr }}%</span>
+					<div class="acquisition-item highlight">
+						<span class="label">max Допустимый CPM</span>
+						<span class="value">{{ formatNumber(acquisition_cost.max_cpm) }} ₽</span>
 					</div>
 				</div>
 			</div>
-		</div>
 
-		<!-- Расчет стоимости привлечения -->
-		<div class="stat-card acquisition">
-			<h3 class="card-title">Расчет стоимости привлечения</h3>
-			<div class="acquisition-grid">
-				<div class="acquisition-item">
-					<span class="label">Средняя стоимость заказа</span>
-					<span class="value">{{ formatNumber(acquisition_cost.avg_order_value) }} ₽</span>
-				</div>
-				<div class="acquisition-item">
-					<span class="label">Стоимость просмотра</span>
-					<span class="value">{{ formatNumber(acquisition_cost.cost_per_view) }} ₽</span>
-				</div>
-				<div class="acquisition-item">
-					<span class="label">Стоимость перехода</span>
-					<span class="value">{{ formatNumber(acquisition_cost.cost_per_click) }} ₽</span>
-				</div>
-				<div class="acquisition-item">
-					<span class="label">Стоимость добавления в корзину</span>
-					<span class="value">{{ formatNumber(acquisition_cost.cost_per_cart) }} ₽</span>
-				</div>
-				<div class="acquisition-item highlight">
-					<span class="label">CPO (стоимость одного заказа)</span>
-					<span class="value">{{ formatNumber(acquisition_cost.cpo) }} ₽</span>
-				</div>
-				<div class="acquisition-item">
-					<span class="label">Норма ДРР</span>
-					<span class="value">{{ acquisition_cost.norm_drr }}%</span>
-				</div>
-				<div class="acquisition-item highlight">
-					<span class="label">max Допустимый CPM</span>
-					<span class="value">{{ formatNumber(acquisition_cost.max_cpm) }} ₽</span>
-				</div>
+			<!-- Динамика продвижения (CTR, CPM, сумма) -->
+			<div class="chart-section">
+				<h3 class="section-title">Динамика продвижения</h3>
+				<BaseCarts :is-loading="isLoading" :chart-data="promotionDynamics" :metrics="[
+					{ key: 'ctr', name: 'CTR, %', color: '#9c27b0', visible: true, type: 'percent' },
+					{ key: 'cpm', name: 'CPM, ₽', color: '#00bcd4', visible: true, type: 'rub' },
+					{ key: 'amount', name: 'Сумма, ₽', color: '#ff5722', visible: true, type: 'rub' },
+				]" />
 			</div>
-		</div>
 
-		<!-- Динамика продвижения (CTR, CPM, сумма) -->
-		<div class="chart-section">
-			<h3 class="section-title">Динамика продвижения</h3>
-			<BaseCarts :is-loading="isLoading" :chart-data="promotionDynamics" :metrics="[
-				{ key: 'ctr', name: 'CTR, %', color: '#9c27b0', visible: true, type: 'percent' },
-				{ key: 'cpm', name: 'CPM, ₽', color: '#00bcd4', visible: true, type: 'rub' },
-				{ key: 'amount', name: 'Сумма, ₽', color: '#ff5722', visible: true, type: 'rub' },
-			]" />
-		</div>
-
-		<!-- Таблица по артикулам -->
-		<div class="table-section">
-			<h3 class="section-title">Статистика по артикулам</h3>
-			<div class="table-wrapper">
-				<table class="ads-table">
-					<thead>
-						<tr>
-							<th>Фото</th>
-							<th>Артикул продавца</th>
-							<th>nmId</th>
-							<th>Просмотры</th>
-							<th>Клики</th>
-							<th>В корзину</th>
-							<th>Рекламные заказы</th>
-							<th>Затраты</th>
-							<th>Общие заказы</th>
-							<th>Сумма общих заказов</th>
-							<th>CTR</th>
-							<th>CR</th>
-							<th>Из корзины в заказ</th>
-							<th>Из перехода в заказ</th>
-							<th>CPC</th>
-							<th>Стоимость заказа в РК</th>
-							<th>ДРР от общих заказов</th>
-							<th>CPM</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr v-for="item in articlesTable" :key="item.nm_id">
-							<td class="photo-cell">
-								<div class="product-photo-placeholder">📷</div>
-							</td>
-							<td>{{ item.product_name }}</td>
-							<td>{{ item.nm_id }}</td>
-							<td>{{ formatNumber(item.views) }}</td>
-							<td>{{ formatNumber(item.clicks) }}</td>
-							<td>{{ formatNumber(item.added_to_cart) }}</td>
-							<td>{{ formatNumber(item.ad_orders) }}</td>
-							<td>{{ formatNumber(item.expenses) }} ₽</td>
-							<td>{{ formatNumber(item.total_orders) }}</td>
-							<td>{{ formatNumber(item.total_orders_amount) }} ₽</td>
-							<td>{{ item.ctr }}%</td>
-							<td>{{ item.cr }}%</td>
-							<td>{{ item.cart_to_order }}%</td>
-							<td>{{ item.click_to_order }}%</td>
-							<td>{{ formatNumber(item.cpc) }} ₽</td>
-							<td>{{ formatNumber(item.order_cost_in_ads) }} ₽</td>
-							<td>{{ item.drr_from_orders }}%</td>
-							<td>{{ formatNumber(item.cpm) }} ₽</td>
-						</tr>
-						<tr v-if="articlesTable.length === 0">
-							<td colspan="18" class="no-data">Нет данных</td>
-						</tr>
-					</tbody>
-				</table>
+			<!-- Таблица по артикулам -->
+			<div class="table-section">
+				<h3 class="section-title">Статистика по артикулам</h3>
+				<!-- Загрузка -->
+				<div v-if="isLoading" class="table-loader">
+					<div class="loading-spinner-small"></div>
+					<p>Загрузка таблицы...</p>
+				</div>
+				<!-- Пустое состояние -->
+				<div v-else-if="!articlesTable.length" class="table-empty">
+					<div class="empty-icon">📦</div>
+					<p class="empty-text">Нет данных по артикулам</p>
+				</div>
+				<!-- Данные -->
+				<div v-else class="table-wrapper">
+					<table class="ads-table">
+						<thead>
+							<tr>
+								<th>Фото</th>
+								<th>Артикул продавца</th>
+								<th>nmId</th>
+								<th>Просмотры</th>
+								<th>Клики</th>
+								<th>В корзину</th>
+								<th>Рекламные заказы</th>
+								<th>Затраты</th>
+								<th>Общие заказы</th>
+								<th>Сумма общих заказов</th>
+								<th>CTR</th>
+								<th>CR</th>
+								<th>Из корзины в заказ</th>
+								<th>Из перехода в заказ</th>
+								<th>CPC</th>
+								<th>Стоимость заказа в РК</th>
+								<th>ДРР от общих заказов</th>
+								<th>CPM</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-for="item in articlesTable" :key="item.nm_id">
+								<td class="photo-cell">
+									<div class="product-photo-placeholder">📷</div>
+								</td>
+								<td>{{ item.product_name }}</td>
+								<td>{{ item.nm_id }}</td>
+								<td>{{ formatNumber(item.views) }}</td>
+								<td>{{ formatNumber(item.clicks) }}</td>
+								<td>{{ formatNumber(item.added_to_cart) }}</td>
+								<td>{{ formatNumber(item.ad_orders) }}</td>
+								<td>{{ formatNumber(item.expenses) }} ₽</td>
+								<td>{{ formatNumber(item.total_orders) }}</td>
+								<td>{{ formatNumber(item.total_orders_amount) }} ₽</td>
+								<td>{{ item.ctr }}%</td>
+								<td>{{ item.cr }}%</td>
+								<td>{{ item.cart_to_order }}%</td>
+								<td>{{ item.click_to_order }}%</td>
+								<td>{{ formatNumber(item.cpc) }} ₽</td>
+								<td>{{ formatNumber(item.order_cost_in_ads) }} ₽</td>
+								<td>{{ item.drr_from_orders }}%</td>
+								<td>{{ formatNumber(item.cpm) }} ₽</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</div>
 	</div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import AdsService from '@/API/Dashboard/AdsService.js';
 import { notify } from '@/composables/notification';
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
 
 const isLoading = ref(false);
+const hasLoadedOnce = ref(false);
 
 // Данные
 const funnel = ref({});
@@ -218,6 +273,26 @@ const articlesTable = ref([]);
 // Даты
 const startDate = ref('');
 const endDate = ref('');
+
+// Проверка наличия данных для каждого блока
+const funnelHasData = computed(() => {
+	return funnel.value && Object.keys(funnel.value).length > 0;
+});
+
+const conversionsHasData = computed(() => {
+	return conversions.value && Object.keys(conversions.value).length > 0;
+});
+
+const acquisitionHasData = computed(() => {
+	return acquisition_cost.value && Object.keys(acquisition_cost.value).length > 0;
+});
+
+// Общая проверка наличия данных
+const hasData = computed(() => {
+	return funnelHasData.value || conversionsHasData.value || acquisitionHasData.value || 
+		   dynamicsChart.value.length > 0 || promotionDynamics.value.length > 0 || 
+		   articlesTable.value.length > 0;
+});
 
 // Форматирование чисел
 const formatNumber = (num) => {
@@ -245,6 +320,7 @@ const loadData = async () => {
 			if (result.status === "error") {
 				notify.error(result.error.message, 3000);
 				isLoading.value = false;
+				hasLoadedOnce.value = true;
 				return;
 			}
 			
@@ -254,10 +330,13 @@ const loadData = async () => {
 			dynamicsChart.value = result.data?.dynamics_chart || [];
 			promotionDynamics.value = result.data?.promotion_dynamics || [];
 			articlesTable.value = result.data?.articles_table || [];
+			
+			hasLoadedOnce.value = true;
 		}
 	} catch (error) {
 		console.error('Ошибка загрузки данных рекламы:', error);
 		notify.error('Ошибка загрузки данных рекламы', 3000);
+		hasLoadedOnce.value = true;
 	} finally {
 		isLoading.value = false;
 	}
