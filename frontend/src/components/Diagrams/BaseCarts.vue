@@ -17,6 +17,12 @@ const props = defineProps({
 });
 
 const hasData = computed(() => props.chartData.length > 0);
+
+// Функция для обновления видимости серий (вызывается при изменении чекбокса)
+const updateVisibleSeries = () => {
+	// Метрики реактивны, поэтому изменение metric.visible автоматически обновит отображение
+};
+
 const getMaxAbsValue = computed(() => {
 	const values = props.chartData.flatMap(item =>
 		props.metrics.map(metric => item[metric.key])
