@@ -324,3 +324,88 @@ erDiagram
    - Кэшировать агрегаты (например, дашборд за неделю) в Redis
 
 ---
+
+## 🧱 13. `notes` — Личные заметки пользователей (модуль Notes)
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID | Уникальный ID заметки |
+| `user_id` | UUID (FK → users.id) | Владелец заметки |
+| `title` | VARCHAR(500) | Заголовок заметки (nullable) |
+| `content_encrypted` | BYTEA | **Зашифрованный** текст заметки (AES-256-GCM) |
+| `content_type` | VARCHAR(20) | Тип контента: `text`, `voice`, `mixed` |
+| `media_attachments` | JSONB | Массив медиа-вложений: `[{"type": "image\|audio\|video", "url": "...", "size": bytes, "duration": sec}]` |
+| `voice_messages` | JSONB | Массив голосовых сообщений: `[{"url": "...", "duration": sec, "transcript": "...", "created_at": "..."}]` |
+| `tags` | VARCHAR[] | Массив тегов для быстрого поиска |
+| `is_favorite` | BOOLEAN | Избранное |
+| `is_shared` | BOOLEAN | Флаг "поделиться через мессенджер" |
+| `share_link_token` | VARCHAR(100) | Уникальный токен для общей ссылки |
+| `share_expires_at` | TIMESTAMPTZ | Срок действия ссылки |
+| `wb_account_id` | UUID (FK → wb_accounts.id) | Привязка к WB-кабинету (опционально) |
+| `nm_id` | BIGINT | Привязка к артикулу WB (опционально) |
+| `created_at` | TIMESTAMPTZ | Дата создания |
+| `updated_at` | TIMESTAMPTZ | Дата обновления |
+
+> 💡 **Возможности модуля Notes**:
+> - **Текст**: шифрование перед сохранением
+> - **Медиа**: изображения, видео, аудиофайлы (хранятся в S3)
+> - **Голосовые**: запись + автоматическая транскрибация
+> - **Шеринг**: отправка ссылок через Telegram, WhatsApp, email
+> - **Контекст WB**: привязка заметок к товарам (артикулам)
+
+Пример JSONB для `media_attachments`:
+```json
+[
+  {
+    "type": "image",
+    "url": "https://storage.wbinsight.com/notes/user-id/note-id/image-1.jpg",
+    "size": 245678,
+    "mime_type": "image/jpeg",
+    "uploaded_at": "2025-01-15T10:30:00Z"
+  },
+  {
+    "type": "audio",
+    "url": "https://storage.wbinsight.com/notes/user-id/note-id/voice-1.ogg",
+    "size": 123456,
+    "duration": 45.5,
+    "mime_type": "audio/ogg",
+    "uploaded_at": "2025-01-15T10:31:00Z"
+  }
+]
+```
+
+---
+
+## 🧱 14. `note_share_log` — История операций шеринга заметок
+
+| Поле | Тип | Описание |
+|------|-----|---------|
+| `id` | UUID | Уникальный ID записи |
+| `note_id` | UUID (FK → notes.id) | Заметка |
+| `shared_via` | VARCHAR(50) | Канал: `telegram`, `whatsapp`, `email`, `link` |
+| `recipient_identifier` | VARCHAR(255) | ID получателя или email/phone |
+| `shared_at` | TIMESTAMPTZ | Когда поделились |
+| `accessed_at` | TIMESTAMPTZ | Когда получили доступ |
+| `access_count` | INT | Количество переходов по ссылке |
+
+> 📊 Позволяет отслеживать популярность заметок и аудиторию.
+
+---
+
+## 🔗 Обновлённая схема связей
+
+```mermaid
+erDiagram
+    users ||--o{ subscriptions : has
+    users ||--o{ wb_accounts : owns
+    users ||--o{ notes : writes
+    users ||--o{ ai_chat_history : uses
+    wb_accounts ||--o{ cost_profiles : defines
+    wb_accounts ||--o{ wb_analytics_daily : contains
+    wb_accounts ||--o{ recommendations : generates
+    wb_accounts ||--o{ sync_jobs : runs
+    wb_accounts ||--o{ notes : "context (optional)"
+    notes ||--o{ note_share_log : shared_via
+```
+
+---
