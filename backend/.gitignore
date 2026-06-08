@@ -12,6 +12,7 @@ logs/
 # Env
 .env
 .env.*
+venv
 
 # Celery
 celerybeat-schedule
