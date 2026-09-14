@@ -22,11 +22,18 @@ def _conflict(error_type: str) -> HTTPException:
 
 
 def _forbidden(permission: Permission) -> HTTPException:
+    # Keep the existing API error types for frontend/backward compatibility,
+    # while exposing the concrete missing permission for diagnostics.
+    error_type = (
+        "super_admin_required"
+        if permission == Permission.ROLES_WRITE
+        else "admin_required"
+    )
     return HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
             "status": "error",
-            "error_type": "permission_required",
+            "error_type": error_type,
             "permission": permission.value,
         },
     )
