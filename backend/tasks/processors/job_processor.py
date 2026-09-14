@@ -9,6 +9,7 @@ from core.logger import setup_logger
 from integrations.wildberries.client import (
     WBAPIError,
     WBAuthError,
+    WBFeatureUnavailableError,
     WBPermissionError,
     WBRateLimitError,
 )
@@ -38,7 +39,13 @@ class PermanentSyncJobError(RuntimeError):
 def _is_retryable(exc: Exception) -> bool:
     if isinstance(
         exc,
-        (WBAuthError, WBPermissionError, PermanentSyncJobError, ValueError),
+        (
+            WBAuthError,
+            WBPermissionError,
+            WBFeatureUnavailableError,
+            PermanentSyncJobError,
+            ValueError,
+        ),
     ):
         return False
     if isinstance(exc, WBRateLimitError):
@@ -181,6 +188,22 @@ async def _record_failure(
         await fail_job(session, job, error_text, now=now)
         logger.warning(
             "[JOB %s] WB permission denied user=%s token=%s entity=%s",
+            job.id,
+            job.user_id,
+            job.token_id,
+            job.entity,
+        )
+        return
+
+    if isinstance(exc, WBFeatureUnavailableError):
+        if state is not None:
+            state.last_error = (
+                "Функция WB API недоступна для текущего тарифа/подписки кабинета "
+                f"при синхронизации '{job.entity}'."
+            )
+        await fail_job(session, job, error_text, now=now)
+        logger.warning(
+            "[JOB %s] WB feature unavailable user=%s token=%s entity=%s",
             job.id,
             job.user_id,
             job.token_id,
