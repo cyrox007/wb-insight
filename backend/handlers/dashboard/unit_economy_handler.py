@@ -11,12 +11,11 @@ from core.dependencies import get_db_session
 from core.middleware import auth_middle
 from services.dashboard.account_scope import (
     DashboardAccountUnavailableError,
-    resolve_dashboard_token_id,
+    resolve_dashboard_scope,
 )
 from services.dashboard.semantic_metrics import is_auth_sync_error
 from services.dashboard.unit_economy_service import UnitEconomyMetricsService
 from services.dashboard.unit_report_scope import get_reports_with_costs_scoped
-from services.marketplace_access_service import get_allowed_wb_tokens
 from services.user_service import get_user_tax_rate
 from services.user_sync_state_service import get_user_sync_states
 from utils.responce_helps import response_error, response_success
@@ -40,18 +39,15 @@ async def get_unit_economy(
 
     user_id = UUID(str(request.state.user["sub"]))
     try:
-        token_id = await resolve_dashboard_token_id(db_session, user_id, token_id)
+        scope = await resolve_dashboard_scope(db_session, user_id, token_id)
     except DashboardAccountUnavailableError as exc:
         return response_error(code="ACCOUNT_NOT_AVAILABLE", message=str(exc))
 
     states = await get_user_sync_states(session=db_session, user_id=user_id)
-    scoped_states = [
-        state for state in states if token_id is None or state.token_id == token_id
-    ]
+    scoped_states = [state for state in states if scope.contains(state.token_id)]
     sync_errors = [state.last_error for state in scoped_states if state.last_error]
-    allowed_tokens = await get_allowed_wb_tokens(db_session, user_id)
 
-    if not allowed_tokens and token_id is None:
+    if not scope.token_ids:
         if any(is_auth_sync_error(error) for error in sync_errors):
             return response_error(
                 message=(
@@ -62,8 +58,7 @@ async def get_unit_economy(
             )
         return response_error(
             message=(
-                "Нет действительных токенов для синхронизации. "
-                "Пожалуйста, добавьте актуальный токен Wildberries."
+                "Нет действительных кабинетов Wildberries, доступных на текущем тарифе."
             ),
             code="NO_VALID_TOKENS",
         )
@@ -73,7 +68,7 @@ async def get_unit_economy(
         user_id,
         start_date,
         end_date,
-        token_id,
+        scope,
     )
     if not reports_with_costs:
         has_success = any(state.last_success_at is not None for state in scoped_states)
@@ -118,15 +113,20 @@ async def get_unit_economy(
     tax_rate = await get_user_tax_rate(db_session, user_id)
     metrics_service = UnitEconomyMetricsService(tax_rate=tax_rate)
     result_df = metrics_service.calculate_all_metrics(pd.DataFrame(report_data))
-    response = _format_response(result_df)
-    if isinstance(response, dict):
-        response["selected_token_id"] = str(token_id) if token_id else None
-    return response
+    return _format_response(result_df, scope.selected_token_id)
 
 
-def _format_response(df: pd.DataFrame) -> Dict[str, Any]:
+def _format_response(
+    df: pd.DataFrame,
+    selected_token_id: UUID | None = None,
+) -> Dict[str, Any]:
     if len(df) == 0:
-        return response_success(data={})
+        return response_success(
+            data={},
+            selected_token_id=(
+                str(selected_token_id) if selected_token_id is not None else None
+            ),
+        )
 
     summary_row = df.iloc[0].to_dict()
     articles_df = df.iloc[1:].copy()
@@ -163,5 +163,7 @@ def _format_response(df: pd.DataFrame) -> Dict[str, Any]:
             "table": table_data,
             "daily_data": [],
         },
-        selected_token_id=None,
+        selected_token_id=(
+            str(selected_token_id) if selected_token_id is not None else None
+        ),
     )
