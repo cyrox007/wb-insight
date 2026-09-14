@@ -76,7 +76,6 @@ async def worker_loop(session: AsyncSession, limit: int = 10) -> int:
             fresh_job = await session.get(SyncJob, job_id)
             if fresh_job is None:
                 logger.error("Claimed sync job disappeared id=%s", job_id)
-                processed += 1
                 continue
 
             await _record_failure(session, fresh_job, exc)
