@@ -4,6 +4,7 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.access_control import Permission, permissions_for_roles
 from core.database import Database
 from core.logger import setup_logger
 from core.middleware import auth_middle
@@ -12,14 +13,38 @@ from models.users_model import User, UserRole, UserRoleAssociation
 
 logger = setup_logger(__name__)
 
-_ADMIN_ROLES = {UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value}
-
 
 def _conflict(error_type: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={"status": "error", "error_type": error_type},
     )
+
+
+def _forbidden(permission: Permission) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "status": "error",
+            "error_type": "permission_required",
+            "permission": permission.value,
+        },
+    )
+
+
+def _required_control_panel_permission(request: Request) -> Permission:
+    """Map a control-panel request to one fixed role-derived permission."""
+    path = request.url.path
+    is_read = request.method.upper() in {"GET", "HEAD"}
+
+    if path.startswith("/control-panel/users"):
+        return Permission.USERS_READ if is_read else Permission.USERS_WRITE
+    if path.startswith("/control-panel/roles"):
+        return Permission.ROLES_READ if is_read else Permission.ROLES_WRITE
+    if path.startswith("/control-panel/tariffs"):
+        return Permission.TARIFFS_READ if is_read else Permission.TARIFFS_WRITE
+
+    return Permission.CONTROL_PANEL_ACCESS
 
 
 async def _get_roles_for_user(db_session: AsyncSession, user_id: UUID) -> set[str]:
@@ -70,7 +95,7 @@ async def _guard_user_mutation(
     request: Request,
     db_session: AsyncSession,
     actor_user_id: UUID,
-    actor_roles: set[str],
+    actor_permissions: frozenset[Permission],
 ) -> None:
     method = request.method.upper()
     if method not in {"DELETE", "PUT", "PATCH"}:
@@ -103,26 +128,23 @@ async def _guard_user_mutation(
     if UserRole.SUPER_ADMIN.value not in target_roles:
         return
 
-    if UserRole.SUPER_ADMIN.value not in actor_roles:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"status": "error", "error_type": "super_admin_required"},
-        )
+    if Permission.ROLES_WRITE not in actor_permissions:
+        raise _forbidden(Permission.ROLES_WRITE)
 
     if await _count_super_admins(db_session) <= 1:
         raise _conflict("last_super_admin")
 
 
 async def _authorize_control_panel(request: Request, db_session: AsyncSession) -> None:
-    """Protect every current control-panel endpoint at the shared DB boundary."""
-    if not request.url.path.startswith('/control-panel'):
+    """Protect current control-panel endpoints using role-derived permissions."""
+    if not request.url.path.startswith("/control-panel"):
         return
 
     await auth_middle(request)
 
     payload = request.state.user
     try:
-        user_id = UUID(str(payload.get('sub')))
+        user_id = UUID(str(payload.get("sub")))
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -149,30 +171,21 @@ async def _authorize_control_panel(request: Request, db_session: AsyncSession) -
         )
 
     roles = {str(row.role) for row in rows if row.role}
+    permissions = permissions_for_roles(roles)
+    required_permission = _required_control_panel_permission(request)
+
     request.state.roles = roles
+    request.state.permissions = {permission.value for permission in permissions}
     request.state.user_id = user_id
 
-    role_mutation = (
-        request.url.path.startswith('/control-panel/roles')
-        and request.method.upper() in {'POST', 'PUT', 'PATCH', 'DELETE'}
-    )
+    if required_permission not in permissions:
+        raise _forbidden(required_permission)
 
-    if role_mutation:
-        if UserRole.SUPER_ADMIN.value not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"status": "error", "error_type": "super_admin_required"},
-            )
+    if required_permission == Permission.ROLES_WRITE:
         await _guard_role_mutation(request, db_session, user_id)
-        return
 
-    if not roles.intersection(_ADMIN_ROLES):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"status": "error", "error_type": "admin_required"},
-        )
-
-    await _guard_user_mutation(request, db_session, user_id, roles)
+    if required_permission == Permission.USERS_WRITE:
+        await _guard_user_mutation(request, db_session, user_id, permissions)
 
 
 async def get_db_session(request: Request) -> AsyncSession:  # type: ignore
