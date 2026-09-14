@@ -34,6 +34,10 @@ class WBAuthError(WBAPIError):
     pass
 
 
+class WBPermissionError(WBAPIError):
+    pass
+
+
 class WBRateLimitError(WBAPIError):
     pass
 
@@ -81,6 +85,8 @@ class WBClient:
             "content.cards_list": config.WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS,
             "statistics.orders": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
             "statistics.sales": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
+            "promotion.campaigns": config.WB_ADVERT_CAMPAIGNS_MIN_INTERVAL_SECONDS,
+            "promotion.fullstats": config.WB_ADVERT_STATS_MIN_INTERVAL_SECONDS,
         }.get(endpoint, config.WB_API_MIN_INTERVAL_SECONDS)
 
     @staticmethod
@@ -162,7 +168,7 @@ class WBClient:
             if response.status_code == 204:
                 return []
 
-            if response.status_code in {401, 403}:
+            if response.status_code == 401:
                 logger.warning(
                     "WB authorization rejected endpoint=%s status=%s",
                     endpoint,
@@ -170,6 +176,18 @@ class WBClient:
                 )
                 raise WBAuthError(
                     "Wildberries authorization rejected the marketplace credential",
+                    endpoint=endpoint,
+                    status_code=response.status_code,
+                )
+
+            if response.status_code == 403:
+                logger.warning(
+                    "WB permission denied endpoint=%s status=%s",
+                    endpoint,
+                    response.status_code,
+                )
+                raise WBPermissionError(
+                    "Wildberries credential lacks permission for this API category",
                     endpoint=endpoint,
                     status_code=response.status_code,
                 )
