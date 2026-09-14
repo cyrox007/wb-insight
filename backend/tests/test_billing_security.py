@@ -61,4 +61,4 @@ def test_profile_never_serializes_token_ciphertext():
     payload = _public_token(token)
 
     assert "VERY_SECRET_CIPHERTEXT" not in payload.values()
-    assert payload["encrypted_token"] == "••••••••"
+    assert "encrypted_token" not in payload
