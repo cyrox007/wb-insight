@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -138,7 +139,7 @@ async def persist_job_checkpoint(
     payload: dict,
 ) -> None:
     """Commit one fully persisted page together with its continuation cursor."""
-    job.payload = dict(payload)
+    job.payload = deepcopy(payload)
     job.lease_expires_at = _lease_deadline()
     await session.flush()
     await session.commit()
