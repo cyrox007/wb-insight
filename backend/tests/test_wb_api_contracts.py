@@ -137,6 +137,7 @@ def test_account_scoped_unique_keys_match_marketplace_rows():
 async def test_finance_processor_follows_rrd_id_until_204(monkeypatch):
     payloads = []
     saved_pages = []
+    checkpoints = []
 
     class FakeClient:
         responses = [
@@ -161,8 +162,13 @@ async def test_finance_processor_follows_rrd_id_until_204(monkeypatch):
     async def fake_save(_session, _user_id, _account_id, page):
         saved_pages.append(list(page))
 
+    async def fake_checkpoint(_session, job, payload):
+        job.payload = dict(payload)
+        checkpoints.append(dict(payload))
+
     monkeypatch.setattr(process_realization, "WBClient", FakeClient)
     monkeypatch.setattr(process_realization, "save_realization", fake_save)
+    monkeypatch.setattr(process_realization, "persist_job_checkpoint", fake_checkpoint)
 
     job = SimpleNamespace(
         payload={
@@ -178,6 +184,8 @@ async def test_finance_processor_follows_rrd_id_until_204(monkeypatch):
     await process_realization.process_realization(object(), job, account)
 
     assert [payload["rrdId"] for payload in payloads] == [0, 20, 30]
+    assert [payload["rrdId"] for payload in checkpoints] == [20, 30]
+    assert job.payload["rrdId"] == 30
     assert saved_pages == [
         [{"rrdId": 10}, {"rrdId": 20}],
         [{"rrdId": 30}],
@@ -188,6 +196,7 @@ async def test_finance_processor_follows_rrd_id_until_204(monkeypatch):
 async def test_stock_processor_paginates_by_offset(monkeypatch):
     payloads = []
     saved = []
+    checkpoints = []
 
     class FakeClient:
         responses = [
@@ -211,8 +220,13 @@ async def test_stock_processor_paginates_by_offset(monkeypatch):
     async def fake_save(_session, _user_id, _account_id, items):
         saved.extend(items)
 
+    async def fake_checkpoint(_session, job, payload):
+        job.payload = dict(payload)
+        checkpoints.append(dict(payload))
+
     monkeypatch.setattr(process_stock, "WBClient", FakeClient)
     monkeypatch.setattr(process_stock, "save_stocks", fake_save)
+    monkeypatch.setattr(process_stock, "persist_job_checkpoint", fake_checkpoint)
 
     job = SimpleNamespace(payload={"limit": 2, "offset": 0}, user_id=uuid4())
     account = SimpleNamespace(id=uuid4())
@@ -220,12 +234,15 @@ async def test_stock_processor_paginates_by_offset(monkeypatch):
     await process_stock.process_stock(object(), job, account)
 
     assert [payload["offset"] for payload in payloads] == [0, 2]
+    assert [payload["offset"] for payload in checkpoints] == [2, 3]
+    assert job.payload["offset"] == 3
     assert [item["nmId"] for item in saved] == [1, 2, 3]
 
 
 @pytest.mark.asyncio
 async def test_product_processor_places_cursor_fields_at_wb_expected_level(monkeypatch):
     payloads = []
+    checkpoints = []
 
     class FakeClient:
         responses = [
@@ -269,8 +286,13 @@ async def test_product_processor_places_cursor_fields_at_wb_expected_level(monke
     async def fake_save(*_args, **_kwargs):
         return None
 
+    async def fake_checkpoint(_session, job, payload):
+        job.payload = payload
+        checkpoints.append(dict(payload["settings"]["cursor"]))
+
     monkeypatch.setattr(process_products, "WBClient", FakeClient)
     monkeypatch.setattr(process_products, "save_products", fake_save)
+    monkeypatch.setattr(process_products, "persist_job_checkpoint", fake_checkpoint)
 
     job = SimpleNamespace(
         payload={
@@ -292,4 +314,6 @@ async def test_product_processor_places_cursor_fields_at_wb_expected_level(monke
         "updatedAt": "2026-09-14T10:00:00Z",
         "nmID": 1,
     }
+    assert checkpoints[-1]["updatedAt"] == "2026-09-14T11:00:00Z"
+    assert checkpoints[-1]["nmID"] == 2
     assert "data" not in payloads[1]["settings"]["cursor"]

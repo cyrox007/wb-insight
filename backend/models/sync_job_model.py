@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,12 +52,36 @@ class SyncJob(Database.Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+        index=True,
+    )
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+
     __table_args__ = (
         Index(
             "uq_job_active",
             "token_id",
             "entity",
             unique=True,
+            postgresql_where=(is_active == True),
+        ),
+        Index(
+            "ix_sync_jobs_pending_available",
+            "status",
+            "available_at",
             postgresql_where=(is_active == True),
         ),
     )
