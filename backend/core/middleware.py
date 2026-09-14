@@ -20,19 +20,15 @@ async def auth_middle(request: Request):
         )
 
     user_data = verify_token(token_value.strip())
-    if not user_data or not user_data.get("sub"):
+    if (
+        not user_data
+        or not user_data.get("sub")
+        or user_data.get("type") != "access"
+    ):
         logger.warning("Недопустимый access-токен в HTTP-запросе")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"status": "error", "error_type": "invalid_token"},
-        )
-
-    # Refresh tokens must never be accepted as API access credentials.
-    if user_data.get("type") == "refresh":
-        logger.warning("Refresh-токен использован как access-токен")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"status": "error", "error_type": "invalid_token_type"},
+            detail={"status": "error", "error_type": "invalid_access_token"},
         )
 
     request.state.user = user_data
