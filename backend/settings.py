@@ -108,6 +108,18 @@ class Config:
         os.getenv("WB_API_MAX_BACKOFF_SECONDS", "60.0")
     )
 
+    # Durable sync execution. The lease is intentionally longer than the
+    # Celery hard task limit (30 minutes) so another poller never reclaims a
+    # still-running job. A killed worker is recovered after lease expiry.
+    SYNC_JOB_LEASE_SECONDS = int(os.getenv("SYNC_JOB_LEASE_SECONDS", "2100"))
+    SYNC_JOB_MAX_ATTEMPTS = int(os.getenv("SYNC_JOB_MAX_ATTEMPTS", "3"))
+    SYNC_JOB_RETRY_BASE_SECONDS = int(
+        os.getenv("SYNC_JOB_RETRY_BASE_SECONDS", "60")
+    )
+    SYNC_JOB_RETRY_MAX_SECONDS = int(
+        os.getenv("SYNC_JOB_RETRY_MAX_SECONDS", "900")
+    )
+
     for setting_name, interval in {
         "WB_API_MIN_INTERVAL_SECONDS": WB_API_MIN_INTERVAL_SECONDS,
         "WB_FINANCE_MIN_INTERVAL_SECONDS": WB_FINANCE_MIN_INTERVAL_SECONDS,
@@ -124,6 +136,16 @@ class Config:
     if WB_API_MAX_BACKOFF_SECONDS < WB_API_BACKOFF_BASE_SECONDS:
         raise RuntimeError(
             "WB_API_MAX_BACKOFF_SECONDS must be >= WB_API_BACKOFF_BASE_SECONDS"
+        )
+    if SYNC_JOB_LEASE_SECONDS <= 0:
+        raise RuntimeError("SYNC_JOB_LEASE_SECONDS must be positive")
+    if SYNC_JOB_MAX_ATTEMPTS <= 0:
+        raise RuntimeError("SYNC_JOB_MAX_ATTEMPTS must be positive")
+    if SYNC_JOB_RETRY_BASE_SECONDS <= 0:
+        raise RuntimeError("SYNC_JOB_RETRY_BASE_SECONDS must be positive")
+    if SYNC_JOB_RETRY_MAX_SECONDS < SYNC_JOB_RETRY_BASE_SECONDS:
+        raise RuntimeError(
+            "SYNC_JOB_RETRY_MAX_SECONDS must be >= SYNC_JOB_RETRY_BASE_SECONDS"
         )
 
     CELERY_BROKER_URL = REDIS_URL
