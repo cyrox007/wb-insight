@@ -6,6 +6,7 @@ import AuthService from './API/AuthService.js';
 import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue';
 import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue';
 import DashboardAccountSelect from './components/DashboardAccountSelect.vue';
+import { useDashboardAccount } from './composables/dashboardAccount.js';
 
 const showHeader = ref(true)
 const showFooter = ref(true)
@@ -13,6 +14,7 @@ const showFooter = ref(true)
 const authStore = useAuthStore();
 const router = useRouter();
 const route = useRoute();
+const { selectedTokenId } = useDashboardAccount();
 
 const navItems = [
 	{ name: 'dashboard.home', label: 'Ключевые показатели' },
@@ -25,6 +27,7 @@ const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'));
 const showAccountFilter = computed(() => navItems.some(item => item.name === route.name));
+const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}`);
 const isAdmin = computed(() => {
 	return user.value?.roles?.some(
 		role => role === 'super_admin' || role === 'admin'
@@ -108,7 +111,7 @@ const logout = async () => {
 			</div>
 			<DashboardAccountSelect v-if="showAccountFilter" class="dashboard-account-select" />
 		</nav>
-		<RouterView />
+		<RouterView :key="dashboardViewKey" />
 	</main>
 
 	<footer class="footer" v-if="showFooter">
