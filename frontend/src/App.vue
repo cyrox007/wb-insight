@@ -14,7 +14,7 @@ const showFooter = ref(true)
 const authStore = useAuthStore();
 const router = useRouter();
 const route = useRoute();
-const { selectedTokenId } = useDashboardAccount();
+const { selectedTokenId, dashboardVersion } = useDashboardAccount();
 
 const navItems = [
 	{ name: 'dashboard.home', label: 'Ключевые показатели' },
@@ -27,7 +27,7 @@ const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'));
 const showAccountFilter = computed(() => navItems.some(item => item.name === route.name));
-const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}`);
+const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}:${dashboardVersion.value}`);
 const isAdmin = computed(() => {
 	return user.value?.roles?.some(
 		role => role === 'super_admin' || role === 'admin'
