@@ -6,6 +6,7 @@ from core.logger import setup_logger
 from integrations.wildberries.client import WBAPIError, WBClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
+from services.sync_job_service import persist_job_checkpoint
 from services.wb_stock_service import save_stocks
 
 
@@ -44,13 +45,16 @@ async def process_stock(session: AsyncSession, job: SyncJob, token: APIToken):
                 if not items:
                     break
 
-                await save_stocks(session, job.user_id, token.id, items)
                 page_size = len(items)
-                total_loaded += page_size
+                next_offset = offset + page_size
+                await save_stocks(session, job.user_id, token.id, items)
+                request_payload["offset"] = next_offset
+                await persist_job_checkpoint(session, job, request_payload)
 
+                total_loaded += page_size
+                offset = next_offset
                 if page_size < limit:
                     break
-                offset += page_size
 
         logger.info(
             "[STOCK] success token_id=%s items=%s",
