@@ -1,124 +1,96 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useAuthStore } from '@/stores/auth';
-import { notify } from '@/composables/notification';
-import DateTransform from '@/utils/date_transform';
+import { onMounted, ref } from 'vue'
+import { notify } from '@/composables/notification'
+import DateTransform from '@/utils/date_transform'
 
-import ProfileServices from '@/API/Dashboard/ProfileServices';
-import TariffService from '@/API/Dashboard/TariffService';
+import ProfileServices from '@/API/Dashboard/ProfileServices'
 
-import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue';
-import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue';
-import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue';
+import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue'
+import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue'
+import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue'
 
 const user = ref({})
 const subscription = ref(null)
 const isLoading = ref(true)
-
-const tokens = ref([]);
+const tokens = ref([])
 
 const showEditProfile = ref(false)
-const showAddTokenModal = ref(false);
-const showTariffModal = ref(false);
-
-const addBtnLoading = ref(false);
+const showAddTokenModal = ref(false)
+const showTariffModal = ref(false)
+const addBtnLoading = ref(false)
 
 onMounted(async () => {
 	try {
 		isLoading.value = true
-
 		const response = await ProfileServices.getProfile()
 
 		tokens.value = response.data.tokens
 		subscription.value = response.data.subscription
 		user.value = response.data.user
-
-	} catch (e) {
-		console.error(e)
+	} catch (error) {
+		console.error(error)
 		notify.error('Ошибка загрузки профиля')
 	} finally {
 		isLoading.value = false
 	}
 })
 
-function maskToken(token) {
-	if (token.length <= 8) return token
-	return token.substring(0, 4) + '••••••' + token.slice(-4)
-}
-
 const openAddTokenModal = async () => {
-	addBtnLoading.value = true;
-	const hasPermission = await checkPermissionsAddToken();
-
-	if (!hasPermission) {
-		notify.error('Достигнут лимит токенов для вашего тарифа');
-		addBtnLoading.value = false;
-		return;
+	addBtnLoading.value = true
+	try {
+		const response = await ProfileServices.checkTokenPermission(user.value.id)
+		if (response.data.status === 'error') {
+			notify.error(response.data.error.message)
+			return
+		}
+		showAddTokenModal.value = true
+	} catch (error) {
+		notify.error(error.response?.data?.error?.message || 'Не удалось проверить лимит кабинетов')
+	} finally {
+		addBtnLoading.value = false
 	}
-
-	showAddTokenModal.value = true;
-	addBtnLoading.value = false;
 }
 
 const handleTokenAdded = async () => {
-	const response = await ProfileServices.getProfile();
-	tokens.value = response.data.tokens;
-	showAddTokenModal.value = false;
-
-	notify.success('Токен успешно добавлен');
-}
-
-const checkPermissionsAddToken = async () => {
-	const response = await ProfileServices.checkTokenPermission(user.value.id, user.value.tariff?.id || null);
-	const result = response.data;
-	if (result.status === 'error') {
-		console.error(result.error.message);
-		notify.error(result.error.message)
-		return false;
-	}
-	console.log(response.data);
-
-	return true;
-}
-
-// Имитация действий
-function copyToken(token) {
-	navigator.clipboard.writeText(token).then(() => {
-		alert('Токен скопирован в буфер обмена')
-	}).catch(() => {
-		alert('Не удалось скопировать токен')
-	})
+	const response = await ProfileServices.getProfile()
+	tokens.value = response.data.tokens
+	showAddTokenModal.value = false
+	notify.success('Подключение Wildberries добавлено')
 }
 
 const deleteToken = async (id) => {
-	if (confirm('Удалить токен? Это действие нельзя отменить.')) {
-		const response = await ProfileServices.delete_user_token(id);
-		if (response.data.status === 'error') {
-			notify.error(
-				message = response.data.error.message
-			)
-		}
+	if (!confirm('Удалить подключение? Это действие нельзя отменить.')) return
 
-		notify.success(`Удаление токена ${id} успешно завершено`);
-		tokens.value = tokens.value.filter(t => t.id !== id)
+	try {
+		const response = await ProfileServices.delete_user_token(id)
+		if (response.data.status === 'error') {
+			notify.error(response.data.error.message)
+			return
+		}
+		tokens.value = tokens.value.filter(token => token.id !== id)
+		notify.success('Подключение удалено')
+	} catch (error) {
+		notify.error(error.response?.data?.error?.message || 'Не удалось удалить подключение')
 	}
 }
 
 const toPay = async (payment_id) => {
-	location.href = `/billing/success?payment_id=${payment_id}`;
+	location.href = `/billing/success?payment_id=${payment_id}`
 }
 
 const getStatusLabel = (status) => {
 	switch (status) {
 		case 'active': return 'Активна'
+		case 'demo': return 'Демо'
 		case 'expired': return 'Истекла'
 		case 'cancelled': return 'Отменена'
 		default: return 'Нет подписки'
 	}
 }
 
-const isExpired = (date) => {
-	return new Date(date) < new Date()
+const isTokenExpired = (token) => {
+	if (token.is_revoked || token.is_active === false || token.is_valid === false) return true
+	return Boolean(token.expires_at && new Date(token.expires_at) < new Date())
 }
 </script>
 
@@ -164,6 +136,7 @@ const isExpired = (date) => {
 				</button>
 			</div>
 		</div>
+
 		<div class="account-grid">
 			<div class="account-card">
 				<div class="card-title">Тип аккаунта</div>
@@ -175,7 +148,7 @@ const isExpired = (date) => {
 			<div class="account-card">
 				<div class="card-title">Налог</div>
 				<div class="card-value">
-					{{ (user.tax_rate * 100).toFixed(0) }}%
+					{{ ((user.tax_rate || 0) * 100).toFixed(0) }}%
 				</div>
 			</div>
 
@@ -193,41 +166,38 @@ const isExpired = (date) => {
 				</div>
 			</div>
 		</div>
+
 		<div class="tokens-section">
 			<div class="section-header">
-				<h3>Токены продавца Wildberries</h3>
-				<ButtonSuccess :loading="addBtnLoading" @click="openAddTokenModal" :text="'+ Добавить токен'" />
+				<h3>Подключения Wildberries</h3>
+				<ButtonSuccess :loading="addBtnLoading" @click="openAddTokenModal" :text="'+ Добавить кабинет'" />
 			</div>
 
 			<div v-if="tokens.length === 0" class="empty-state">
-				У вас пока нет токенов. Добавьте первый токен для доступа к данным Wildberries.
+				У вас пока нет подключённых кабинетов Wildberries.
 			</div>
 
 			<ul v-else class="tokens-list">
 				<li v-for="token in tokens" :key="token.id" class="token-item">
 					<div class="token-left">
 						<div class="token-main">
-							<span class="token-masked">{{ maskToken(token.encrypted_token) }}</span>
-
-							<span class="token-status" :class="{ expired: isExpired(token.expires_at) }">
-								{{ isExpired(token.expires_at) ? 'Истёк' : 'Активен' }}
+							<span class="token-masked">{{ token.label || 'Wildberries' }}</span>
+							<span class="token-label">
+								{{ token.marketplace?.toUpperCase() }} · {{ token.token_type || 'token' }}
+							</span>
+							<span class="token-status" :class="{ expired: isTokenExpired(token) }">
+								{{ isTokenExpired(token) ? 'Недоступен' : 'Активен' }}
 							</span>
 						</div>
 
 						<div class="token-dates">
-							<span>Создан: {{ DateTransform.formatDate(token.issued_at) }}</span>
-							<span>До: {{ DateTransform.formatDate(token.expires_at) }}</span>
+							<span>Добавлен: {{ DateTransform.formatDate(token.issued_at) }}</span>
+							<span v-if="token.expires_at">До: {{ DateTransform.formatDate(token.expires_at) }}</span>
 						</div>
 					</div>
+
 					<div class="token-actions">
-						<button @click="copyToken(token.encrypted_token)" class="btn-icon" title="Скопировать">
-							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-								stroke="currentColor" width="16" height="16">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-									d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-							</svg>
-						</button>
-						<button @click="deleteToken(token.id)" class="btn-icon delete-btn" title="Удалить">
+						<button @click="deleteToken(token.id)" class="btn-icon delete-btn" title="Удалить подключение">
 							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
 								stroke="currentColor" width="16" height="16">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -240,7 +210,6 @@ const isExpired = (date) => {
 		</div>
 	</div>
 
-	<!-- Модальные окна -->
 	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
 
 	<AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false"
@@ -456,7 +425,6 @@ const isExpired = (date) => {
 	margin-bottom: 12px;
 	border: 1px solid var(--border-color);
 	transition: var(--transition);
-	transition: 0.2s;
 }
 
 .token-item:hover {
@@ -488,6 +456,7 @@ const isExpired = (date) => {
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	flex-wrap: wrap;
 }
 
 .token-label {
@@ -497,10 +466,9 @@ const isExpired = (date) => {
 }
 
 .token-masked {
-	font-family: monospace;
 	font-size: 14px;
+	font-weight: 600;
 	color: var(--text-color);
-	letter-spacing: 1px;
 }
 
 .token-dates {
@@ -508,6 +476,7 @@ const isExpired = (date) => {
 	gap: 15px;
 	font-size: 12px;
 	color: #777;
+	flex-wrap: wrap;
 }
 
 .token-actions {
