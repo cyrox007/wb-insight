@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.product_cost_price_model import ProductCostPrice
 from models.wb_report import WbRealizationReport
+from services.dashboard.account_scope import DashboardAccountScope
 
 
 async def get_dashboard_unit_economy_scoped(
@@ -13,7 +14,7 @@ async def get_dashboard_unit_economy_scoped(
     user_id: UUID,
     start_date: date,
     end_date: date,
-    token_id: UUID | None = None,
+    scope: DashboardAccountScope,
 ) -> dict:
     conditions = [
         WbRealizationReport.user_id == user_id,
@@ -21,21 +22,15 @@ async def get_dashboard_unit_economy_scoped(
         WbRealizationReport.rr_dt <= end_date,
         WbRealizationReport.supplier_oper_name.in_(["Продажа", "Возврат"]),
     ]
-    if token_id is not None:
-        conditions.append(WbRealizationReport.token_id == token_id)
 
     base_query = select(
         func.coalesce(func.sum(WbRealizationReport.retail_amount), 0).label("revenue"),
         func.coalesce(func.sum(WbRealizationReport.ppvz_for_pay), 0).label("payout"),
-        func.coalesce(func.sum(WbRealizationReport.ppvz_sales_commission), 0).label(
-            "commission"
-        ),
-        func.coalesce(
-            func.sum(WbRealizationReport.delivery_rub + WbRealizationReport.return_rub),
-            0,
-        ).label("logistics"),
+        func.coalesce(func.sum(WbRealizationReport.ppvz_sales_commission), 0).label("commission"),
+        func.coalesce(func.sum(WbRealizationReport.delivery_rub + WbRealizationReport.return_rub), 0).label("logistics"),
         func.coalesce(func.sum(WbRealizationReport.penalty), 0).label("penalty"),
     ).where(*conditions)
+    base_query = scope.apply(base_query, WbRealizationReport.token_id)
     row = (await session.execute(base_query)).one()
 
     revenue = float(row.revenue or 0)
@@ -58,10 +53,9 @@ async def get_dashboard_unit_economy_scoped(
         .where(*conditions)
         .group_by(WbRealizationReport.nm_id, ProductCostPrice.cost_price)
     )
+    cost_query = scope.apply(cost_query, WbRealizationReport.token_id)
     cost_rows = (await session.execute(cost_query)).all()
-    total_cost = sum(
-        int(item.qty or 0) * float(item.cost_price or 0) for item in cost_rows
-    )
+    total_cost = sum(int(item.qty or 0) * float(item.cost_price or 0) for item in cost_rows)
 
     profit = payout - total_cost
     margin = profit / revenue * 100 if revenue > 0 else 0.0
@@ -80,6 +74,7 @@ async def get_dashboard_unit_economy_scoped(
         )
         .where(*conditions)
     )
+    coverage_query = scope.apply(coverage_query, WbRealizationReport.token_id)
     coverage = (await session.execute(coverage_query)).one()
     total_products = int(coverage.total or 0)
     with_cost = int(coverage.with_cost or 0)
