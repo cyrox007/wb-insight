@@ -12,6 +12,7 @@ from services.wb_operational_service import save_orders, save_sales
 
 
 logger = setup_logger(__name__, "wb_api_processor.log")
+OPERATIONAL_PAGE_LIMIT = 80000
 
 FetchPage = Callable[[dict[str, Any]], Awaitable[list[dict[str, Any]]]]
 SavePage = Callable[
@@ -54,15 +55,17 @@ async def _process_operational_feed(
         next_cursor = str(next_cursor_raw)
 
         if next_cursor < current_cursor:
-            raise RuntimeError(
-                f"WB {entity} lastChangeDate moved backwards"
-            )
+            raise RuntimeError(f"WB {entity} lastChangeDate moved backwards")
 
         payload["dateFrom"] = next_cursor
         payload["flag"] = 0
         await persist_job_checkpoint(session, job, payload)
 
         if next_cursor == current_cursor:
+            if len(rows) >= OPERATIONAL_PAGE_LIMIT:
+                raise RuntimeError(
+                    f"WB {entity} cursor stalled on a full page; refusing to skip data"
+                )
             logger.info(
                 "[%s] reached inclusive cursor boundary token_id=%s pages=%s",
                 entity.upper(),
