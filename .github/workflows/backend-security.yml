@@ -37,6 +37,7 @@ jobs:
         env:
           APP_ENV: development
           JWT_SECRET_KEY: ci-only-test-key
+          API_TOKEN_ENCRYPTION_KEY: ci-only-token-encryption-key
           ALLOW_FAKE_BILLING: 'false'
           PYTHONPATH: .
         run: pytest -q tests
