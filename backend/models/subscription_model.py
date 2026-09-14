@@ -62,18 +62,20 @@ class Subscription(Database.Base):
     yookassa_payment_id: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
-        comment="Legacy provider payment ID; to be generalized by billing migration",
+        comment="ID платежа в ЮKassa (null для демо-подписок)",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+        comment="Дата оформления подписки",
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
+        comment="Последнее обновление статуса или периода",
     )
 
     tariff: Mapped["TariffPlan"] = relationship("TariffPlan", back_populates="subscriptions")
