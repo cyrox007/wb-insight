@@ -110,7 +110,18 @@ async def process_job(session: AsyncSession, job: SyncJob) -> None:
     )
     state.last_sync_at = datetime.now(timezone.utc)
 
-    await call_wb_api(session=session, token=token, job=job)
+    try:
+        await call_wb_api(session=session, token=token, job=job)
+    except WBAuthError:
+        # Keep direct process_job semantics explicit. The worker rolls this
+        # transaction back on failure and records the same terminal state again
+        # durably via _record_failure.
+        token.is_active = False
+        state.last_error = (
+            "Ошибка авторизации: подключение недействительно или истекло. "
+            "Обновите кабинет Wildberries в настройках."
+        )
+        raise
 
     state.last_success_at = datetime.now(timezone.utc)
     state.last_error = None
