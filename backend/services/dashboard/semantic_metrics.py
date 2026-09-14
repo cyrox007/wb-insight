@@ -187,3 +187,35 @@ async def get_advertising_totals(
         orders_amount=float(row.orders_amount or 0),
         spend=float(row.spend or 0),
     )
+
+
+async def get_advertising_spend_by_nm(
+    session: AsyncSession,
+    user_id: UUID,
+    start_date: date,
+    end_date: date,
+    scope: DashboardAccountScope,
+) -> dict[int, float]:
+    """Return actual advertising spend grouped by WB article for Unit Economy."""
+    query = (
+        select(
+            WbAdvertisingStats.nm_id.label("nm_id"),
+            func.coalesce(func.sum(WbAdvertisingStats.amount), Decimal("0")).label(
+                "spend"
+            ),
+        )
+        .where(
+            WbAdvertisingStats.user_id == user_id,
+            WbAdvertisingStats.nm_id.is_not(None),
+            WbAdvertisingStats.date >= start_date,
+            WbAdvertisingStats.date <= end_date,
+        )
+        .group_by(WbAdvertisingStats.nm_id)
+    )
+    query = scope.apply(query, WbAdvertisingStats.token_id)
+    rows = (await session.execute(query)).all()
+    return {
+        int(row.nm_id): float(row.spend or 0)
+        for row in rows
+        if row.nm_id is not None
+    }
