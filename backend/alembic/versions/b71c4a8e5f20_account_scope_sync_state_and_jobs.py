@@ -25,11 +25,47 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column(
         "user_sync_states",
-        sa.Column("token_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column(
+            "token_id",
+            postgresql.UUID(as_uuid=True),
+            nullable=True,
+            comment="кабинет/credential, к которому относится состояние",
+        ),
     )
     op.add_column(
         "sync_jobs",
         sa.Column("token_id", postgresql.UUID(as_uuid=True), nullable=True),
+    )
+
+    # Keep model comments and migrated database metadata aligned. This makes
+    # `alembic check` useful for structural drift instead of stale comments.
+    op.alter_column(
+        "user_sync_states",
+        "entity",
+        existing_type=sa.String(length=50),
+        existing_comment="тип данных, которые ты синкаешь",
+        comment="тип синхронизируемых данных",
+    )
+    op.alter_column(
+        "user_sync_states",
+        "created_at",
+        existing_type=sa.DateTime(timezone=True),
+        existing_comment="когда создали запись состояния",
+        comment="когда создано состояние",
+    )
+    op.alter_column(
+        "user_sync_states",
+        "last_success_at",
+        existing_type=sa.DateTime(timezone=True),
+        existing_comment="последний успешный синк",
+        comment="последняя успешная синхронизация",
+    )
+    op.alter_column(
+        "user_sync_states",
+        "last_error",
+        existing_type=sa.Text(),
+        existing_comment="текст последней ошибки",
+        comment="последняя ошибка синхронизации",
     )
 
     # A legacy state represented all seller accounts of a user. Preserve its
@@ -133,6 +169,35 @@ def downgrade() -> None:
     )
     op.drop_column("sync_jobs", "token_id")
     op.drop_column("user_sync_states", "token_id")
+
+    op.alter_column(
+        "user_sync_states",
+        "entity",
+        existing_type=sa.String(length=50),
+        existing_comment="тип синхронизируемых данных",
+        comment="тип данных, которые ты синкаешь",
+    )
+    op.alter_column(
+        "user_sync_states",
+        "created_at",
+        existing_type=sa.DateTime(timezone=True),
+        existing_comment="когда создано состояние",
+        comment="когда создали запись состояния",
+    )
+    op.alter_column(
+        "user_sync_states",
+        "last_success_at",
+        existing_type=sa.DateTime(timezone=True),
+        existing_comment="последняя успешная синхронизация",
+        comment="последний успешный синк",
+    )
+    op.alter_column(
+        "user_sync_states",
+        "last_error",
+        existing_type=sa.Text(),
+        existing_comment="последняя ошибка синхронизации",
+        comment="текст последней ошибки",
+    )
 
     op.create_unique_constraint(
         "uq_sync_state",
