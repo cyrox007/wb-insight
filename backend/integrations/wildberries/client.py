@@ -65,8 +65,10 @@ class WBClient:
         if self._closed:
             return
         self._closed = True
-        await self._client.aclose()
-        await self._rate_limiter.aclose()
+        try:
+            await self._client.aclose()
+        finally:
+            await self._rate_limiter.aclose()
 
     def _get_token(self) -> str:
         """Decrypt the marketplace credential only immediately before a call."""
@@ -146,7 +148,6 @@ class WBClient:
                 await asyncio.sleep(delay)
                 continue
             finally:
-                # The raw credential should not be retained longer than necessary.
                 del token
 
             if response.status_code == 204:
@@ -233,7 +234,6 @@ class WBClient:
                     status_code=response.status_code,
                 ) from exc
 
-        # Defensive fallback; the loop always returns or raises above.
         raise WBAPIError(
             "Wildberries request failed",
             endpoint=endpoint,
