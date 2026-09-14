@@ -18,6 +18,7 @@ from models.wb_product import WbProduct
 from models.wb_stock import WbStock
 from models.wb_advertising_stats import WbAdvertisingStats
 from models.wb_operational import WbOrder, WbSale
+from models.wb_sales_funnel import WbSalesFunnelDaily
 from models.sync_job_model import SyncJob
 from models.user_sync_state_model import UserSyncState
 from models.product_cost_price_model import ProductCostPrice
