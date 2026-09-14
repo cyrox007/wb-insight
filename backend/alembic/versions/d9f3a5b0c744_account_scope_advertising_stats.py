@@ -21,6 +21,10 @@ def upgrade() -> None:
         "wb_advertising_stats",
         sa.Column("canceled", sa.Integer(), nullable=True),
     )
+    op.add_column(
+        "wb_advertising_stats",
+        sa.Column("currency", sa.String(length=16), nullable=True),
+    )
     op.execute("UPDATE wb_advertising_stats SET canceled = 0 WHERE canceled IS NULL")
     op.alter_column(
         "wb_advertising_stats",
@@ -95,4 +99,5 @@ def downgrade() -> None:
         existing_type=sa.Integer(),
         nullable=True,
     )
+    op.drop_column("wb_advertising_stats", "currency")
     op.drop_column("wb_advertising_stats", "canceled")
