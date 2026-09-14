@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -47,7 +46,6 @@ async def save_advertising_fullstats(
                 "shks": stmt.excluded.shks,
                 "orders_amount": stmt.excluded.orders_amount,
                 "avg_position": stmt.excluded.avg_position,
-                "created_at": datetime.now(timezone.utc),
             },
         )
         await session.execute(stmt)
