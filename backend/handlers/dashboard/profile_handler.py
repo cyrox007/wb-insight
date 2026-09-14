@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.access_control import permissions_for_roles
 from core.dependencies import get_db_session
 from core.middleware import auth_middle
 from services.marketplace_access_service import get_wb_account_quota
@@ -25,15 +26,12 @@ def _current_user_id(request: Request) -> UUID:
 
 
 def _public_token(token) -> dict:
-    """Serialize token metadata without exposing ciphertext or raw credentials."""
+    """Serialize marketplace credential metadata without any secret material."""
     return {
         "id": str(token.id),
         "label": token.label,
         "marketplace": token.marketplace.value,
         "token_type": token.token_type,
-        # Temporary compatibility for the legacy UI. This is deliberately a
-        # constant placeholder, never the encrypted or raw credential.
-        "encrypted_token": "••••••••",
         "issued_at": token.issued_at,
         "expires_at": token.expires_at,
         "is_active": token.is_active,
@@ -56,6 +54,10 @@ async def get_profile(
 
     subscription = await get_user_subscription(db_session, user_id)
     user_tokens = await get_tokens_by_user_id(db_session, user_id)
+    role_codes = [role.role for role in current_user.roles]
+    permission_codes = sorted(
+        permission.value for permission in permissions_for_roles(role_codes)
+    )
 
     return response_success(
         tokens=[_public_token(token) for token in user_tokens],
@@ -68,7 +70,8 @@ async def get_profile(
             "tax_rate": float(current_user.tax_rate or 0),
             "timezone": current_user.timezone,
             "is_active": current_user.is_active,
-            "roles": [role.role for role in current_user.roles],
+            "roles": role_codes,
+            "permissions": permission_codes,
             "created_at": current_user.created_at,
         },
         subscription=None if not subscription else {
