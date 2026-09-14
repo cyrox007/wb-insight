@@ -8,19 +8,26 @@ const $api = axios.create({
 let isRefreshing = false;
 let failedQueue = [];
 
+const ACCOUNT_SCOPED_ENDPOINTS = new Set([
+    '/dashboard/',
+    '/dashboard/charts',
+    '/dashboard/ads',
+    '/dashboard/ads/',
+    '/dashboard/unity',
+    '/dashboard/unity/',
+]);
+
 const clearLocalSession = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     localStorage.removeItem('redirectPath');
+    localStorage.removeItem('wb-dashboard-token-id');
 };
 
 const processQueue = (error = null) => {
     failedQueue.forEach(({ resolve, reject }) => {
-        if (error) {
-            reject(error);
-        } else {
-            resolve();
-        }
+        if (error) reject(error);
+        else resolve();
     });
     failedQueue = [];
 };
@@ -30,6 +37,17 @@ $api.interceptors.request.use((config) => {
     if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
     }
+
+    const requestPath = (config.url || '').split('?')[0];
+    const selectedTokenId = localStorage.getItem('wb-dashboard-token-id');
+    if (
+        selectedTokenId &&
+        ACCOUNT_SCOPED_ENDPOINTS.has(requestPath) &&
+        !config.params?.token_id
+    ) {
+        config.params = { ...(config.params || {}), token_id: selectedTokenId };
+    }
+
     return config;
 }, (error) => Promise.reject(error));
 
