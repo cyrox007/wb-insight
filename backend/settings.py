@@ -87,6 +87,31 @@ class Config:
     WB_API_BASE_URL = "https://statistics-api.wildberries.ru"
     WB_ADVERT_API_BASE_URL = "https://advert-api.wildberries.ru"
 
+    # Transport defaults are deliberately configurable instead of encoding
+    # marketplace endpoint quotas into business logic. Redis keys are scoped by
+    # credential + logical endpoint, so unrelated WB APIs do not block each other.
+    WB_API_MIN_INTERVAL_SECONDS = float(
+        os.getenv("WB_API_MIN_INTERVAL_SECONDS", "1.0")
+    )
+    WB_API_MAX_ATTEMPTS = int(os.getenv("WB_API_MAX_ATTEMPTS", "4"))
+    WB_API_BACKOFF_BASE_SECONDS = float(
+        os.getenv("WB_API_BACKOFF_BASE_SECONDS", "1.0")
+    )
+    WB_API_MAX_BACKOFF_SECONDS = float(
+        os.getenv("WB_API_MAX_BACKOFF_SECONDS", "60.0")
+    )
+
+    if WB_API_MIN_INTERVAL_SECONDS < 0:
+        raise RuntimeError("WB_API_MIN_INTERVAL_SECONDS cannot be negative")
+    if WB_API_MAX_ATTEMPTS <= 0:
+        raise RuntimeError("WB_API_MAX_ATTEMPTS must be positive")
+    if WB_API_BACKOFF_BASE_SECONDS <= 0:
+        raise RuntimeError("WB_API_BACKOFF_BASE_SECONDS must be positive")
+    if WB_API_MAX_BACKOFF_SECONDS < WB_API_BACKOFF_BASE_SECONDS:
+        raise RuntimeError(
+            "WB_API_MAX_BACKOFF_SECONDS must be >= WB_API_BACKOFF_BASE_SECONDS"
+        )
+
     CELERY_BROKER_URL = REDIS_URL
     CELERY_RESULT_BACKEND = REDIS_URL
 
