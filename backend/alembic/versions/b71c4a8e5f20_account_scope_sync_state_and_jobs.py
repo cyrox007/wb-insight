@@ -69,8 +69,8 @@ def upgrade() -> None:
     )
 
     # A legacy state represented all seller accounts of a user. Preserve its
-    # cursor for one deterministic active credential; missing credentials get
-    # fresh state rows from the scheduler after deployment.
+    # cursor for one deterministic, currently valid Wildberries credential;
+    # missing accounts get fresh state rows from the scheduler after deployment.
     op.execute(
         """
         UPDATE user_sync_states AS state
@@ -78,8 +78,10 @@ def upgrade() -> None:
             SELECT token.id
             FROM api_tokens AS token
             WHERE token.user_id = state.user_id
+              AND token.marketplace = 'WILDBERRIES'
               AND token.is_active = TRUE
               AND token.is_revoked = FALSE
+              AND token.expires_at > now()
             ORDER BY token.issued_at ASC, token.id ASC
             LIMIT 1
         )
