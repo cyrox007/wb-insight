@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 import models
+from core.session_security import SessionSecurityMiddleware
 from handlers.auth_handler import router as auth_router
 from handlers.control_panel.home import router as CP_home_router
 from handlers.control_panel.roles import router as CP_roles_router
@@ -77,6 +78,8 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
+    # Add the compatibility guard first so CORS remains the outer middleware.
+    app.add_middleware(SessionSecurityMiddleware)
     _setup_cors(app)
     _setup_static_files(app)
     _register_routers(app)
