@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from integrations.wildberries.client import WBAuthError
 from models.subscription_model import SubscriptionStatus
 from models.sync_job_model import SyncJob
 from models.tokens_model import Marketplace
@@ -149,6 +150,57 @@ async def test_worker_rejects_account_outside_tariff(monkeypatch):
 
     with pytest.raises(RuntimeError, match="текущем тарифе"):
         await job_processor.process_job(object(), job)
+
+
+@pytest.mark.asyncio
+async def test_worker_deactivates_account_on_typed_auth_error(monkeypatch):
+    user_id = uuid4()
+    token_id = uuid4()
+    job = SimpleNamespace(
+        id=uuid4(),
+        user_id=user_id,
+        token_id=token_id,
+        entity="stocks",
+    )
+    token = SimpleNamespace(
+        id=token_id,
+        user_id=user_id,
+        marketplace=Marketplace.WILDBERRIES,
+        is_valid=True,
+        is_active=True,
+    )
+    state = SimpleNamespace(
+        last_sync_at=None,
+        last_success_at=None,
+        last_error=None,
+    )
+
+    async def fake_get_token_by_id(_session, _token_id):
+        return token
+
+    async def fake_get_allowed_wb_tokens(_session, _user_id):
+        return [token]
+
+    async def fake_get_state(**_kwargs):
+        return state
+
+    async def fake_call_wb_api(**_kwargs):
+        raise WBAuthError(
+            "auth rejected",
+            endpoint="analytics.stocks_warehouses",
+            status_code=401,
+        )
+
+    monkeypatch.setattr(job_processor, "get_token_by_id", fake_get_token_by_id)
+    monkeypatch.setattr(job_processor, "get_allowed_wb_tokens", fake_get_allowed_wb_tokens)
+    monkeypatch.setattr(job_processor, "get_state", fake_get_state)
+    monkeypatch.setattr(job_processor, "call_wb_api", fake_call_wb_api)
+
+    with pytest.raises(WBAuthError):
+        await job_processor.process_job(object(), job)
+
+    assert token.is_active is False
+    assert "Обновите кабинет Wildberries" in state.last_error
 
 
 @pytest.mark.asyncio
