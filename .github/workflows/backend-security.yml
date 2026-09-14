@@ -33,9 +33,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Run security tests
+      - name: Run backend tests
         env:
           APP_ENV: development
           JWT_SECRET_KEY: ci-only-test-key
+          ALLOW_FAKE_BILLING: 'false'
           PYTHONPATH: .
-        run: pytest -q tests/test_auth_security.py
+        run: pytest -q tests
