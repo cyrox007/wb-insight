@@ -6,6 +6,7 @@ const accounts = ref([])
 const selectedTokenId = ref(
     typeof window !== 'undefined' ? (window.localStorage.getItem(STORAGE_KEY) || '') : ''
 )
+const dashboardVersion = ref(0)
 let loaded = false
 let loadingPromise = null
 
@@ -19,6 +20,10 @@ export function useDashboardAccount() {
                 window.localStorage.removeItem(STORAGE_KEY)
             }
         }
+    }
+
+    const refreshDashboard = () => {
+        dashboardVersion.value += 1
     }
 
     const loadAccounts = async () => {
@@ -61,8 +66,10 @@ export function useDashboardAccount() {
     return {
         accounts,
         selectedTokenId,
+        dashboardVersion,
         loadAccounts,
         setSelectedTokenId,
+        refreshDashboard,
         withAccount,
     }
 }
