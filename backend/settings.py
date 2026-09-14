@@ -28,12 +28,10 @@ class Config:
         protocol = self.SERVER_HTTP_PROTOCOL
         address = self.SERVER_ADDR
         port = self.SERVER_PORT
-
         if port in ["80", "443"]:
             return f"{protocol}{address}"
         return f"{protocol}{address}:{port}"
 
-    # Database
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = os.getenv("DB_PORT", "5432")
     DB_NAME = os.getenv("DB_NAME", "wb")
@@ -46,7 +44,6 @@ class Config:
         url = f"{driver}://{self.DB_USER}:{password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         return url.replace("%", "%%")
 
-    # Security secrets
     ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY")
     SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
@@ -78,14 +75,18 @@ class Config:
         raise RuntimeError("COOKIE_SECURE must be true when APP_ENV=production")
     COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") or None
 
-    # Redis
+    # Fake payments are a local-development tool only. A second explicit flag
+    # prevents accidental subscription activation when real acquiring is absent.
+    ALLOW_FAKE_BILLING = (
+        not IS_PRODUCTION
+        and os.getenv("ALLOW_FAKE_BILLING", "false").lower() == "true"
+    )
+
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-    # Wildberries API
     WB_API_BASE_URL = "https://statistics-api.wildberries.ru"
     WB_ADVERT_API_BASE_URL = "https://advert-api.wildberries.ru"
 
-    # Celery
     CELERY_BROKER_URL = REDIS_URL
     CELERY_RESULT_BACKEND = REDIS_URL
 
