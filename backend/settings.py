@@ -50,18 +50,19 @@ class Config:
     ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY")
     SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
-    if IS_PRODUCTION and not SECRET_KEY:
-        raise RuntimeError("JWT_SECRET_KEY is required when APP_ENV=production")
+    if not SECRET_KEY:
+        raise RuntimeError("JWT_SECRET_KEY is required")
     if IS_PRODUCTION and not ENCRYPTION_KEY:
         raise RuntimeError("API_TOKEN_ENCRYPTION_KEY is required when APP_ENV=production")
-
-    # Development-only fallback. Production is fail-closed above.
-    if not SECRET_KEY:
-        SECRET_KEY = "development-only-jwt-secret-change-me"
 
     ALGORITHM = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+
+    if ACCESS_TOKEN_EXPIRE_MINUTES <= 0:
+        raise RuntimeError("ACCESS_TOKEN_EXPIRE_MINUTES must be positive")
+    if REFRESH_TOKEN_EXPIRE_DAYS <= 0:
+        raise RuntimeError("REFRESH_TOKEN_EXPIRE_DAYS must be positive")
 
     REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
     COOKIE_SECURE = os.getenv(
@@ -73,6 +74,8 @@ class Config:
         raise RuntimeError("COOKIE_SAMESITE must be one of: lax, strict, none")
     if COOKIE_SAMESITE == "none" and not COOKIE_SECURE:
         raise RuntimeError("COOKIE_SECURE must be true when COOKIE_SAMESITE=none")
+    if IS_PRODUCTION and not COOKIE_SECURE:
+        raise RuntimeError("COOKIE_SECURE must be true when APP_ENV=production")
     COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") or None
 
     # Redis
