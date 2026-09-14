@@ -1,4 +1,4 @@
-"""align current WB finance and stock contracts
+"""align current WB finance, stock, and product contracts
 
 Revision ID: e4d7a2c9f301
 Revises: b71c4a8e5f20
@@ -55,8 +55,40 @@ def upgrade() -> None:
         ["token_id", "rrd_id"],
     )
 
+    # Existing product sync inserted a new row on every run. Keep the newest
+    # row per account/article before enforcing the canonical account identity.
+    op.execute(
+        """
+        DELETE FROM wb_product
+        WHERE id IN (
+            SELECT id
+            FROM (
+                SELECT
+                    id,
+                    row_number() OVER (
+                        PARTITION BY token_id, nm_id
+                        ORDER BY updated_at DESC, created_at DESC, id DESC
+                    ) AS rn
+                FROM wb_product
+            ) ranked
+            WHERE ranked.rn > 1
+        )
+        """
+    )
+    op.create_unique_constraint(
+        "uq_wb_product_account_nm",
+        "wb_product",
+        ["token_id", "nm_id"],
+    )
+
 
 def downgrade() -> None:
+    op.drop_constraint(
+        "uq_wb_product_account_nm",
+        "wb_product",
+        type_="unique",
+    )
+
     op.drop_constraint(
         "uq_wb_realization_token_rrd",
         "wb_realization_reports",
