@@ -9,6 +9,7 @@ from core.logger import setup_logger
 from integrations.wildberries.client import (
     WBAPIError,
     WBAuthError,
+    WBPermissionError,
     WBRateLimitError,
 )
 from models.sync_job_model import SyncJob
@@ -35,7 +36,10 @@ class PermanentSyncJobError(RuntimeError):
 
 
 def _is_retryable(exc: Exception) -> bool:
-    if isinstance(exc, (WBAuthError, PermanentSyncJobError, ValueError)):
+    if isinstance(
+        exc,
+        (WBAuthError, WBPermissionError, PermanentSyncJobError, ValueError),
+    ):
         return False
     if isinstance(exc, WBRateLimitError):
         return True
@@ -165,6 +169,22 @@ async def _record_failure(
             job.token_id,
             job.entity,
             exc.status_code,
+        )
+        return
+
+    if isinstance(exc, WBPermissionError):
+        if state is not None:
+            state.last_error = (
+                "У подключения нет доступа к категории WB API, необходимой "
+                f"для синхронизации '{job.entity}'."
+            )
+        await fail_job(session, job, error_text, now=now)
+        logger.warning(
+            "[JOB %s] WB permission denied user=%s token=%s entity=%s",
+            job.id,
+            job.user_id,
+            job.token_id,
+            job.entity,
         )
         return
 

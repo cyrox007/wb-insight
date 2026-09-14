@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from integrations.wildberries import client as wb_client_module
-from integrations.wildberries.client import WBAuthError, WBClient
+from integrations.wildberries.client import WBAuthError, WBClient, WBPermissionError
 
 
 class FakeRateLimiter:
@@ -107,6 +107,35 @@ async def test_auth_error_is_typed_and_not_retried():
     assert exc_info.value.status_code == 401
     assert exc_info.value.endpoint == "content.cards_list"
     assert "do-not-copy-response-body" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_permission_error_is_typed_and_does_not_look_like_auth_failure():
+    calls = 0
+
+    async def handler(_request: httpx.Request):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(403, text="promotion category is missing")
+
+    limiter = FakeRateLimiter()
+    client = WBClient(
+        make_token(),
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        rate_limiter=limiter,
+    )
+
+    with pytest.raises(WBPermissionError) as exc_info:
+        await client.get_advert_stats(
+            {"ids": "123", "beginDate": "2026-09-01", "endDate": "2026-09-14"}
+        )
+
+    await client.aclose()
+
+    assert calls == 1
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.endpoint == "promotion.fullstats"
+    assert "promotion category is missing" not in str(exc_info.value)
 
 
 @pytest.mark.asyncio

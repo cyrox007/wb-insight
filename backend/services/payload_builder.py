@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
+from settings import config
+
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 OPERATIONAL_BACKFILL_DAYS = 89
@@ -72,6 +74,20 @@ def _operational_payload(
     return {"dateFrom": date_from, "flag": 0}
 
 
+def _advertising_payload(
+    _last_sync_at: Optional[datetime],
+    _source_cursor: Optional[dict] = None,
+) -> dict:
+    end_date = datetime.now(timezone.utc).date()
+    begin_date = end_date - timedelta(days=config.WB_ADVERT_LOOKBACK_DAYS - 1)
+    return {
+        "beginDate": begin_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "campaign_ids": [],
+        "campaign_offset": 0,
+    }
+
+
 PAYLOAD_BUILDERS: dict[
     str,
     Callable[[Optional[datetime], Optional[dict]], dict],
@@ -81,6 +97,7 @@ PAYLOAD_BUILDERS: dict[
     "realization": _realization_payload,
     "orders": _operational_payload,
     "sales": _operational_payload,
+    "advertising": _advertising_payload,
 }
 
 
