@@ -153,3 +153,22 @@ async def test_transport_error_retries_then_succeeds():
 
     assert result == {"adverts": []}
     assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_limiter_closes_even_if_http_client_close_fails():
+    class FailingCloseClient:
+        async def aclose(self):
+            raise RuntimeError("http close failed")
+
+    limiter = FakeRateLimiter()
+    client = WBClient(
+        make_token(),
+        http_client=FailingCloseClient(),  # type: ignore[arg-type]
+        rate_limiter=limiter,
+    )
+
+    with pytest.raises(RuntimeError, match="http close failed"):
+        await client.aclose()
+
+    assert limiter.closed is True
