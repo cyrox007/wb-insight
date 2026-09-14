@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.product_cost_price_model import ProductCostPrice
 from models.wb_report import WbRealizationReport
+from services.dashboard.account_scope import DashboardAccountScope
 
 
 async def get_reports_with_costs_scoped(
@@ -14,16 +15,8 @@ async def get_reports_with_costs_scoped(
     user_id: UUID,
     date_from: date,
     date_to: date,
-    token_id: UUID | None = None,
+    scope: DashboardAccountScope,
 ) -> list[tuple[WbRealizationReport, Optional[ProductCostPrice]]]:
-    conditions = [
-        WbRealizationReport.user_id == user_id,
-        WbRealizationReport.rr_dt >= date_from,
-        WbRealizationReport.rr_dt <= date_to,
-    ]
-    if token_id is not None:
-        conditions.append(WbRealizationReport.token_id == token_id)
-
     stmt = (
         select(WbRealizationReport, ProductCostPrice)
         .outerjoin(
@@ -33,11 +26,16 @@ async def get_reports_with_costs_scoped(
                 ProductCostPrice.user_id == user_id,
             ),
         )
-        .where(*conditions)
+        .where(
+            WbRealizationReport.user_id == user_id,
+            WbRealizationReport.rr_dt >= date_from,
+            WbRealizationReport.rr_dt <= date_to,
+        )
         .order_by(
             WbRealizationReport.nm_id.asc(),
             WbRealizationReport.rr_dt.asc(),
         )
     )
+    stmt = scope.apply(stmt, WbRealizationReport.token_id)
     rows = (await session.execute(stmt)).all()
     return [(row[0], row[1]) for row in rows]
