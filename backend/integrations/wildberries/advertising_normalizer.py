@@ -58,6 +58,7 @@ def flatten_fullstats_v3(
         campaign_id = _int(campaign.get("advertId"), default=0)
         if campaign_id <= 0:
             continue
+        currency = str(campaign.get("currency") or "").strip().upper() or None
         booster_positions = _booster_positions(campaign)
 
         for day in campaign.get("days") or []:
@@ -81,6 +82,7 @@ def flatten_fullstats_v3(
                             "nm_id": nm_id,
                             "date": day_date,
                             "platform_type": platform_type,
+                            "currency": currency,
                             "product_name": (
                                 str(nm["name"]) if nm.get("name") is not None else None
                             ),
