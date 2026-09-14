@@ -4,6 +4,7 @@ from core.logger import setup_logger
 from integrations.wildberries.client import WBAPIError, WBClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
+from services.sync_job_service import persist_job_checkpoint
 from services.wb_products_service import save_products
 
 
@@ -40,29 +41,34 @@ async def process_products(session: AsyncSession, job: SyncJob, token: APIToken)
                         endpoint="content.cards_list",
                     )
 
-                await save_products(session, job.user_id, token.id, cards)
-                total_loaded += len(cards)
-
                 cursor_data = data.get("cursor") or {}
-                cursor_total = int(cursor_data.get("total") or 0)
                 cursor = payload.setdefault("settings", {}).setdefault("cursor", {})
                 cursor_limit = int(cursor.get("limit") or 100)
-
-                if cursor_total < cursor_limit:
-                    break
+                cursor_total = int(cursor_data.get("total") or 0)
 
                 updated_at = cursor_data.get("updatedAt")
                 nm_id = cursor_data.get("nmID")
-                if not updated_at or nm_id is None:
+                if cursor_total >= cursor_limit and (not updated_at or nm_id is None):
                     raise WBAPIError(
                         "Wildberries product cursor is incomplete",
                         endpoint="content.cards_list",
                     )
 
-                # WB expects continuation fields directly inside settings.cursor.
-                cursor["updatedAt"] = updated_at
-                cursor["nmID"] = nm_id
-                cursor.pop("data", None)
+                await save_products(session, job.user_id, token.id, cards)
+                total_loaded += len(cards)
+
+                # Persist the newest continuation cursor even for the final page.
+                # If the worker dies before marking the job done, the retry resumes
+                # after the last committed page rather than replaying from page one.
+                if updated_at and nm_id is not None:
+                    cursor["updatedAt"] = updated_at
+                    cursor["nmID"] = nm_id
+                    cursor.pop("data", None)
+
+                await persist_job_checkpoint(session, job, payload)
+
+                if cursor_total < cursor_limit:
+                    break
 
         logger.info(
             "[PRODUCTS] success token_id=%s total_products=%s",
