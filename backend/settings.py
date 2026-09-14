@@ -84,6 +84,7 @@ class Config:
 
     WB_API_BASE_URL = "https://statistics-api.wildberries.ru"
     WB_ADVERT_API_BASE_URL = "https://advert-api.wildberries.ru"
+    WB_SELLER_ANALYTICS_API_BASE_URL = "https://seller-analytics-api.wildberries.ru"
 
     # Generic fallback for WB methods without an explicit documented policy.
     WB_API_MIN_INTERVAL_SECONDS = float(
@@ -109,6 +110,11 @@ class Config:
         os.getenv("WB_ADVERT_STATS_MIN_INTERVAL_SECONDS", "20.0")
     )
     WB_ADVERT_LOOKBACK_DAYS = int(os.getenv("WB_ADVERT_LOOKBACK_DAYS", "31"))
+    WB_FUNNEL_MIN_INTERVAL_SECONDS = float(
+        os.getenv("WB_FUNNEL_MIN_INTERVAL_SECONDS", "20.0")
+    )
+    WB_FUNNEL_LOOKBACK_DAYS = int(os.getenv("WB_FUNNEL_LOOKBACK_DAYS", "7"))
+    WB_FUNNEL_NM_BATCH_SIZE = int(os.getenv("WB_FUNNEL_NM_BATCH_SIZE", "20"))
 
     WB_API_MAX_ATTEMPTS = int(os.getenv("WB_API_MAX_ATTEMPTS", "4"))
     WB_API_BACKOFF_BASE_SECONDS = float(
@@ -138,12 +144,17 @@ class Config:
         "WB_OPERATIONAL_MIN_INTERVAL_SECONDS": WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
         "WB_ADVERT_CAMPAIGNS_MIN_INTERVAL_SECONDS": WB_ADVERT_CAMPAIGNS_MIN_INTERVAL_SECONDS,
         "WB_ADVERT_STATS_MIN_INTERVAL_SECONDS": WB_ADVERT_STATS_MIN_INTERVAL_SECONDS,
+        "WB_FUNNEL_MIN_INTERVAL_SECONDS": WB_FUNNEL_MIN_INTERVAL_SECONDS,
     }.items():
         if interval < 0:
             raise RuntimeError(f"{setting_name} cannot be negative")
 
     if WB_ADVERT_LOOKBACK_DAYS < 1 or WB_ADVERT_LOOKBACK_DAYS > 31:
         raise RuntimeError("WB_ADVERT_LOOKBACK_DAYS must be between 1 and 31")
+    if WB_FUNNEL_LOOKBACK_DAYS < 1 or WB_FUNNEL_LOOKBACK_DAYS > 7:
+        raise RuntimeError("WB_FUNNEL_LOOKBACK_DAYS must be between 1 and 7")
+    if WB_FUNNEL_NM_BATCH_SIZE < 1 or WB_FUNNEL_NM_BATCH_SIZE > 20:
+        raise RuntimeError("WB_FUNNEL_NM_BATCH_SIZE must be between 1 and 20")
     if WB_API_MAX_ATTEMPTS <= 0:
         raise RuntimeError("WB_API_MAX_ATTEMPTS must be positive")
     if WB_API_BACKOFF_BASE_SECONDS <= 0:

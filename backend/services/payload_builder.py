@@ -88,6 +88,22 @@ def _advertising_payload(
     }
 
 
+def _sales_funnel_payload(
+    _last_sync_at: Optional[datetime],
+    _source_cursor: Optional[dict] = None,
+) -> dict:
+    end_date = datetime.now(timezone.utc).date()
+    start_date = end_date - timedelta(days=config.WB_FUNNEL_LOOKBACK_DAYS - 1)
+    return {
+        "selectedPeriod": {
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+        },
+        "nm_ids": [],
+        "nm_offset": 0,
+    }
+
+
 PAYLOAD_BUILDERS: dict[
     str,
     Callable[[Optional[datetime], Optional[dict]], dict],
@@ -98,6 +114,7 @@ PAYLOAD_BUILDERS: dict[
     "orders": _operational_payload,
     "sales": _operational_payload,
     "advertising": _advertising_payload,
+    "sales_funnel": _sales_funnel_payload,
 }
 
 

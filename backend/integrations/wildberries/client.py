@@ -38,6 +38,10 @@ class WBPermissionError(WBAPIError):
     pass
 
 
+class WBFeatureUnavailableError(WBAPIError):
+    pass
+
+
 class WBRateLimitError(WBAPIError):
     pass
 
@@ -82,6 +86,7 @@ class WBClient:
         return {
             "finance.sales_report_detailed": config.WB_FINANCE_MIN_INTERVAL_SECONDS,
             "analytics.stocks_warehouses": config.WB_STOCKS_MIN_INTERVAL_SECONDS,
+            "analytics.sales_funnel_history": config.WB_FUNNEL_MIN_INTERVAL_SECONDS,
             "content.cards_list": config.WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS,
             "statistics.orders": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
             "statistics.sales": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
@@ -176,6 +181,18 @@ class WBClient:
                 )
                 raise WBAuthError(
                     "Wildberries authorization rejected the marketplace credential",
+                    endpoint=endpoint,
+                    status_code=response.status_code,
+                )
+
+            if response.status_code == 402:
+                logger.warning(
+                    "WB feature unavailable endpoint=%s status=%s",
+                    endpoint,
+                    response.status_code,
+                )
+                raise WBFeatureUnavailableError(
+                    "Wildberries feature is unavailable for the current account plan",
                     endpoint=endpoint,
                     status_code=response.status_code,
                 )
@@ -332,4 +349,15 @@ class WBClient:
             endpoints.ADVERT_STATS,
             endpoint="promotion.fullstats",
             params=payload or {},
+        )
+
+    async def get_sales_funnel_history(
+        self,
+        payload: dict[str, Any] | None = None,
+    ):
+        return await self._request(
+            "POST",
+            f"{config.WB_SELLER_ANALYTICS_API_BASE_URL}/api/analytics/v3/sales-funnel/products/history",
+            endpoint="analytics.sales_funnel_history",
+            json_data=payload or {},
         )
