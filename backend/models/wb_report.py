@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, text
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -73,11 +73,10 @@ class WbRealizationReport(Database.Base):
         index=True
     )
 
-    # ID строки отчёта (уникальный идентификатор записи)
+    # ID строки отчёта (уникальный идентификатор записи внутри кабинета)
     rrd_id: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
-        unique=True,
         index=True
     )
 
@@ -477,6 +476,8 @@ class WbRealizationReport(Database.Base):
     )
 
     __table_args__ = (
+        UniqueConstraint('token_id', 'rrd_id', name='uq_wb_realization_token_rrd'),
+
         # Индекс для быстрого поиска по периоду и пользователю
         Index('idx_wb_realization_user_rrdt', 'user_id', 'rr_dt'),
 

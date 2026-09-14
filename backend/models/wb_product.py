@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Database
@@ -17,7 +17,6 @@ class WbProduct(Database.Base):
         default=uuid4
     )
 
-    # Привязка к пользователю
     user_id: Mapped[UUIDType] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey('users.id', ondelete='CASCADE'),
@@ -34,8 +33,7 @@ class WbProduct(Database.Base):
         comment="привязка к токену кабинета"
     )
 
-    # Основные поля
-    nm_id: Mapped[int] = mapped_column(  
+    nm_id: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         index=True,
@@ -48,24 +46,26 @@ class WbProduct(Database.Base):
         comment="Наименование товара"
     )
 
-    # системное
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=lambda: datetime.now(timezone.utc), 
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
         comment='Создано'
     )
-    
+
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), 
-        default=lambda: datetime.now(timezone.utc), 
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
         comment='Обновлено'
     )
 
+    __table_args__ = (
+        UniqueConstraint('token_id', 'nm_id', name='uq_wb_product_account_nm'),
+    )
+
     def __repr__(self):
-        return (f"<WbProductCard("
-                f"id={self.id}, "
-                f"user_id={self.user_id}, "
-                f"nm_id={self.nm_id}, "
-                ")>")
+        return (
+            f"<WbProductCard(id={self.id}, user_id={self.user_id}, "
+            f"nm_id={self.nm_id})>"
+        )
