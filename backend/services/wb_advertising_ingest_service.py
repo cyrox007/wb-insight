@@ -33,6 +33,7 @@ async def save_advertising_fullstats(
                 "platform_type",
             ],
             set_={
+                "currency": stmt.excluded.currency,
                 "product_name": stmt.excluded.product_name,
                 "views": stmt.excluded.views,
                 "clicks": stmt.excluded.clicks,
