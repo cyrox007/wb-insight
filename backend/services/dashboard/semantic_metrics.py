@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.sync_job_model import SyncJob
 from models.wb_advertising_stats import WbAdvertisingStats
 from models.wb_operational import WbOrder
 
@@ -66,6 +67,14 @@ def _moscow_period_utc(start_date: date, end_date: date) -> tuple[datetime, date
         end_date + timedelta(days=1), time.min, tzinfo=MOSCOW_TZ
     ).astimezone(timezone.utc)
     return start, end_exclusive
+
+
+async def has_active_sync_jobs(session: AsyncSession, user_id: UUID) -> bool:
+    query = select(func.count(SyncJob.id)).where(
+        SyncJob.user_id == user_id,
+        SyncJob.is_active.is_(True),
+    )
+    return bool((await session.execute(query)).scalar() or 0)
 
 
 async def get_order_totals(
