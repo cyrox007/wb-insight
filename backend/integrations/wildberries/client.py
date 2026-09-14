@@ -71,8 +71,15 @@ class WBClient:
             await self._rate_limiter.aclose()
 
     def _get_token(self) -> str:
-        """Decrypt the marketplace credential only immediately before a call."""
         return decrypt_token(self._encrypted_token, self._user_id)
+
+    @staticmethod
+    def _endpoint_interval(endpoint: str) -> float:
+        return {
+            "finance.sales_report_detailed": config.WB_FINANCE_MIN_INTERVAL_SECONDS,
+            "analytics.stocks_warehouses": config.WB_STOCKS_MIN_INTERVAL_SECONDS,
+            "content.cards_list": config.WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS,
+        }.get(endpoint, config.WB_API_MIN_INTERVAL_SECONDS)
 
     @staticmethod
     def _retry_after_seconds(response: httpx.Response) -> float | None:
@@ -118,7 +125,7 @@ class WBClient:
             await self._rate_limiter.acquire(
                 self._credential_id,
                 endpoint,
-                config.WB_API_MIN_INTERVAL_SECONDS,
+                self._endpoint_interval(endpoint),
             )
 
             token = self._get_token()
@@ -240,13 +247,9 @@ class WBClient:
         ) from last_transport_error
 
     async def get_realization(self, payload: dict[str, Any] | None = None):
-        payload = payload or {}
-        request_body: dict[str, Any] = {
-            "dateFrom": payload.get("date_from", ""),
-            "dateTo": payload.get("date_to", ""),
-        }
-        if "fields" in payload:
-            request_body["fields"] = payload["fields"]
+        request_body = dict(payload or {})
+        request_body.setdefault("limit", 100000)
+        request_body.setdefault("rrdId", 0)
 
         return await self._request(
             "POST",
@@ -256,7 +259,10 @@ class WBClient:
         )
 
     async def get_stock(self, payload: dict[str, Any] | None = None):
-        request_body = payload or {"limit": 250000, "offset": 0}
+        request_body = dict(payload or {})
+        request_body.setdefault("limit", 250000)
+        request_body.setdefault("offset", 0)
+
         return await self._request(
             "POST",
             endpoints.STOCKS_V2,
