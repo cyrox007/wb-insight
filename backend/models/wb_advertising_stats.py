@@ -36,6 +36,7 @@ class WbAdvertisingStats(Database.Base):
     nm_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     platform_type: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    currency: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     product_name: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     company: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
