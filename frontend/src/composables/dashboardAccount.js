@@ -10,6 +10,17 @@ let loaded = false
 let loadingPromise = null
 
 export function useDashboardAccount() {
+    const setSelectedTokenId = (value) => {
+        selectedTokenId.value = value || ''
+        if (typeof window !== 'undefined') {
+            if (selectedTokenId.value) {
+                window.localStorage.setItem(STORAGE_KEY, selectedTokenId.value)
+            } else {
+                window.localStorage.removeItem(STORAGE_KEY)
+            }
+        }
+    }
+
     const loadAccounts = async () => {
         if (loaded) return accounts.value
         if (loadingPromise) return loadingPromise
@@ -19,7 +30,10 @@ export function useDashboardAccount() {
                 const payload = response?.data || {}
                 const tokens = payload.tokens || payload.data?.tokens || []
                 accounts.value = tokens.filter(
-                    (token) => token.marketplace === 'wildberries' && token.is_valid
+                    (token) =>
+                        token.marketplace === 'wildberries' &&
+                        token.is_valid &&
+                        token.dashboard_available !== false
                 )
 
                 if (
@@ -36,17 +50,6 @@ export function useDashboardAccount() {
             })
 
         return loadingPromise
-    }
-
-    const setSelectedTokenId = (value) => {
-        selectedTokenId.value = value || ''
-        if (typeof window !== 'undefined') {
-            if (selectedTokenId.value) {
-                window.localStorage.setItem(STORAGE_KEY, selectedTokenId.value)
-            } else {
-                window.localStorage.removeItem(STORAGE_KEY)
-            }
-        }
     }
 
     const withAccount = (params = {}) => {
