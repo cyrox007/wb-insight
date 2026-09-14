@@ -1,11 +1,15 @@
 import os
-from typing import Optional
-from dotenv import load_dotenv
 from urllib.parse import quote_plus
+
+from dotenv import load_dotenv
+
 
 load_dotenv()
 
+
 class Config:
+    APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+    IS_PRODUCTION = APP_ENV == "production"
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
     PATH_TO_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -18,22 +22,17 @@ class Config:
     def get_allowed_origins(self) -> list[str]:
         origins = os.getenv("ALLOWED_ORIGINS", "")
         return [origin.strip() for origin in origins.split(",") if origin.strip()]
-    
+
     @property
-    def BASE_URL(self):
-        """
-        Возвращает базовый URL сервера.
-        Если порт стандартный (80 для HTTP, 443 для HTTPS), он не добавляется.
-        """
+    def BASE_URL(self) -> str:
         protocol = self.SERVER_HTTP_PROTOCOL
         address = self.SERVER_ADDR
         port = self.SERVER_PORT
 
-        # Исключаем порт, если он стандартный
         if port in ["80", "443"]:
             return f"{protocol}{address}"
         return f"{protocol}{address}:{port}"
-    
+
     # Database
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = os.getenv("DB_PORT", "5432")
@@ -41,30 +40,51 @@ class Config:
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 
-    def database_url(self, async_mode=False):
+    def database_url(self, async_mode: bool = False) -> str:
         driver = "postgresql+asyncpg" if async_mode else "postgresql"
         password = quote_plus(self.DB_PASSWORD)
         url = f"{driver}://{self.DB_USER}:{password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         return url.replace("%", "%%")
-    
-    # Безопасность
+
+    # Security secrets
     ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY")
-    
+    SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+
+    if IS_PRODUCTION and not SECRET_KEY:
+        raise RuntimeError("JWT_SECRET_KEY is required when APP_ENV=production")
+    if IS_PRODUCTION and not ENCRYPTION_KEY:
+        raise RuntimeError("API_TOKEN_ENCRYPTION_KEY is required when APP_ENV=production")
+
+    # Development-only fallback. Production is fail-closed above.
+    if not SECRET_KEY:
+        SECRET_KEY = "development-only-jwt-secret-change-me"
+
+    ALGORITHM = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+
+    REFRESH_COOKIE_NAME = os.getenv("REFRESH_COOKIE_NAME", "refresh_token")
+    COOKIE_SECURE = os.getenv(
+        "COOKIE_SECURE",
+        "true" if IS_PRODUCTION else "false",
+    ).lower() == "true"
+    COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
+    if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
+        raise RuntimeError("COOKIE_SAMESITE must be one of: lax, strict, none")
+    if COOKIE_SAMESITE == "none" and not COOKIE_SECURE:
+        raise RuntimeError("COOKIE_SECURE must be true when COOKIE_SAMESITE=none")
+    COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") or None
+
     # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     # Wildberries API
-    WB_API_BASE_URL: str = "https://statistics-api.wildberries.ru"
-    WB_ADVERT_API_BASE_URL: str = "https://advert-api.wildberries.ru"
-    
-    # Celery
-    CELERY_BROKER_URL: str = REDIS_URL
-    CELERY_RESULT_BACKEND: str = REDIS_URL
+    WB_API_BASE_URL = "https://statistics-api.wildberries.ru"
+    WB_ADVERT_API_BASE_URL = "https://advert-api.wildberries.ru"
 
-    # Настройки JWT
-    SECRET_KEY = os.getenv("JWT_SECRET_KEY") or 'your-secret-key-change-in-production'
-    ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = 30
-    REFRESH_TOKEN_EXPIRE_DAYS = 7
-    
+    # Celery
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = REDIS_URL
+
+
 config = Config()
