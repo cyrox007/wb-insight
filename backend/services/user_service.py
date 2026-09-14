@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import cast, List, Optional
+from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -13,6 +13,7 @@ from utils.hashed_password import hash_password
 
 logger = setup_logger(__name__)
 
+
 async def insert_user(session: AsyncSession, user_data: dict):
     if not user_data:
         logger.warning("Пустые данные пользователя")
@@ -22,7 +23,7 @@ async def insert_user(session: AsyncSession, user_data: dict):
         if not user_data.get(field):
             logger.warning(f"Отсутствует обязательное поле: {field}")
             return None
-    
+
     new_user = User(
         id=uuid4(),
         email=user_data['email'],
@@ -30,135 +31,144 @@ async def insert_user(session: AsyncSession, user_data: dict):
         full_name=user_data['full_name'],
         hashed_password=hash_password(user_data['password']),
         entity_type=user_data.get('entity_type', 'individual'),
-        inn=user_data['inn'],
-        kpp=user_data['kpp'],
-        legal_address=user_data['legal_address'],
-        timezone=user_data['timezone'],
+        inn=user_data.get('inn'),
+        kpp=user_data.get('kpp'),
+        legal_address=user_data.get('legal_address'),
+        timezone=user_data.get('timezone') or 'Europe/Moscow',
         created_at=datetime.now(timezone.utc),
         is_active=True,
-        is_staff=False
+        is_staff=False,
     )
 
-    session.add(new_user)
     try:
-        #await session.commit()
+        session.add(new_user)
+        await session.flush()
         await session.refresh(new_user)
         logger.info(f"Пользователь создан: {new_user.id}")
         return new_user
-
-    except Exception as e:
-        # await session.rollback()
-        logger.error(f'Ошибка при создании пользователя: {e}')
+    except Exception as exc:
+        logger.error(f'Ошибка при создании пользователя: {exc}')
         return None
-    
+
+
 async def get_user_by_uuid(session: AsyncSession, user_id: UUID) -> Optional[User]:
-    result = await session.execute(
-        select(User).where(User.id == user_id)
-    )
+    result = await session.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
+
 
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
-    result = await session.execute(
-        select(User).where(User.email == email)
-    )
+    result = await session.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
+
 
 async def get_user_by_phone(session: AsyncSession, phone: str) -> Optional[User]:
-    result = await session.execute(
-        select(User).where(User.phone == phone)
-    )
+    result = await session.execute(select(User).where(User.phone == phone))
     return result.scalar_one_or_none()
+
 
 async def get_user_by_inn(session: AsyncSession, inn: str) -> Optional[User]:
-    result = await session.execute(
-        select(User).where(User.inn == inn)
-    )
+    result = await session.execute(select(User).where(User.inn == inn))
     return result.scalar_one_or_none()
 
-async def get_user_count(session: AsyncSession) -> int:
-    query = select(func.count()).select_from(User)
-    result = await session.execute(query)
 
+async def get_user_count(session: AsyncSession) -> int:
+    result = await session.execute(select(func.count()).select_from(User))
     return result.scalar_one()
 
-async def get_user_list(session: AsyncSession, offset: int = 0, limit: int | None = 10) -> list[User]:
+
+async def get_user_list(
+    session: AsyncSession,
+    offset: int = 0,
+    limit: int | None = 10,
+) -> list[User]:
     query = select(User).options(selectinload(User.roles)).order_by(User.created_at.desc())
-        
     if limit is not None:
         query = query.offset(offset).limit(limit)
-    
-    result = await session.execute(query)
-    users: list[User] = list(result.scalars().unique().all())
-    return users
 
-async def update_user(session: AsyncSession, user: User, user_data: dict) -> Optional[User]:
+    result = await session.execute(query)
+    return list(result.scalars().unique().all())
+
+
+async def update_user(
+    session: AsyncSession,
+    user: User,
+    user_data: dict,
+) -> Optional[User]:
     try:
         for key, value in user_data.items():
             setattr(user, key, value)
-        # await session.commit()
+        await session.flush()
         await session.refresh(user)
         return user
-    except Exception as e:
-        logger.error(f"Error updating user: {e}")
-        # await session.rollback()
+    except Exception as exc:
+        logger.error(f"Error updating user: {exc}")
         return None
 
-async def delete_user(session: AsyncSession, user: User):
+
+async def delete_user(session: AsyncSession, user: User) -> bool:
     try:
         await session.delete(user)
-        # await session.commit()
+        await session.flush()
         return True
-    except Exception as e:
-        logger.error(f"Error deleting user: {e}")
-        # await session.rollback()
+    except Exception as exc:
+        logger.error(f"Error deleting user: {exc}")
         return False
-    
+
 
 async def get_user_role_association(session: AsyncSession, user_id: str):
     result = await session.execute(
         select(UserRoleAssociation).where(UserRoleAssociation.user_id == user_id)
     )
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
-async def get_user_role_association_by_code(session: AsyncSession, user_id: str, role_code: str) -> Optional[UserRoleAssociation]:
+
+async def get_user_role_association_by_code(
+    session: AsyncSession,
+    user_id: str,
+    role_code: str,
+) -> Optional[UserRoleAssociation]:
     result = await session.execute(
         select(UserRoleAssociation).where(
-            UserRoleAssociation.user_id == user_id, 
-            UserRoleAssociation.role == role_code
+            UserRoleAssociation.user_id == user_id,
+            UserRoleAssociation.role == role_code,
         )
     )
     return result.scalar_one_or_none()
 
-async def create_user_role_association(session: AsyncSession, user_id: str, role_code='user', assigned_by=''):
-    user_role_association = UserRoleAssociation(
-        user_id=user_id,
-        role=role_code,
-        assigned_by=assigned_by if assigned_by else None
-    )
+
+async def create_user_role_association(
+    session: AsyncSession,
+    user_id: str,
+    role_code: str = 'user',
+    assigned_by: str = '',
+) -> bool:
     try:
+        user_role_association = UserRoleAssociation(
+            user_id=user_id,
+            role=role_code,
+            assigned_by=assigned_by if assigned_by else None,
+        )
         session.add(user_role_association)
-        # await session.commit()
+        await session.flush()
         return True
-    except Exception as e:
-        logger.error(f"Error creating user role association: {e}")
-        # await session.rollback()
+    except Exception as exc:
+        logger.error(f"Error creating user role association: {exc}")
         return False
-    
-async def delete_role_association(session: AsyncSession, target_role: UserRoleAssociation):
+
+
+async def delete_role_association(
+    session: AsyncSession,
+    target_role: UserRoleAssociation,
+) -> bool:
     try:
         await session.delete(target_role)
-        # await session.commit()
+        await session.flush()
         return True
-    except Exception as e:
-        logger.error(f"Error deleting role association: {e}")
-        # await session.rollback()
+    except Exception as exc:
+        logger.error(f"Error deleting role association: {exc}")
         return False
-    
+
+
 async def get_user_tax_rate(session: AsyncSession, user_id: UUID) -> float:
-    query = select(User.tax_rate).where(
-        User.id == user_id
-    )
-
-    result = await session.execute(query)
-
+    result = await session.execute(select(User.tax_rate).where(User.id == user_id))
     return result.scalar_one_or_none() or 0.2

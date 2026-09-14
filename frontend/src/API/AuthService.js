@@ -8,6 +8,14 @@ export default class AuthService {
         })
     }
 
+    static async refresh() {
+        return await $api.post('/auth/refresh')
+    }
+
+    static async logout() {
+        return await $api.post('/auth/logout')
+    }
+
     static async checkEmail(email) {
         return await $api.post('/auth/check-email', {
             email: email

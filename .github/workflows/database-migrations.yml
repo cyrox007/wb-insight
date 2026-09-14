@@ -1,0 +1,71 @@
+name: Database migrations
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/database-migrations.yml'
+  push:
+    branches:
+      - main
+      - p0-production-safety
+      - p1-account-scoped-sync
+    paths:
+      - 'backend/**'
+      - '.github/workflows/database-migrations.yml'
+
+jobs:
+  alembic-upgrade:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wb_migration_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wb_migration_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: development
+      JWT_SECRET_KEY: migration-ci-only-key
+      API_TOKEN_ENCRYPTION_KEY: migration-ci-only-encryption-key
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_NAME: wb_migration_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Upgrade clean database to Alembic head
+        run: alembic upgrade head
+
+      - name: Show current revision
+        run: alembic current
+
+      - name: Verify database matches SQLAlchemy metadata
+        run: alembic check

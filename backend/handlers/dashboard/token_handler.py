@@ -1,55 +1,66 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
 from core.middleware import auth_middle
+from services.marketplace_access_service import get_wb_account_quota
 from services.token_services import insert_token
 from utils.responce_helps import response_error, response_success
 
+
 router = APIRouter(prefix='/dashboard', tags=['Tokens'])
+
 
 @router.post('/tokens', dependencies=[Depends(auth_middle)])
 async def create_token(
     request: Request,
-    db_session: AsyncSession = Depends(get_db_session)
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
 ):
-    data = await request.json()
-
-    user_id = UUID(request.state.user['sub'])
-
-    if not user_id:
+    user_id = UUID(str(request.state.user['sub']))
+    quota = await get_wb_account_quota(db_session, user_id)
+    if not quota["allowed"]:
+        response.status_code = status.HTTP_403_FORBIDDEN
         return response_error(
-            code="AUTH_ERROR",
-            message="Не удалось определить пользователя"
+            code=quota["code"] or "TOKEN_LIMIT_EXCEEDED",
+            message="Достигнут лимит кабинетов Wildberries для текущего тарифа",
+            limit=quota["limit"],
+            used=quota["used"],
         )
-    raw_token = data.get("token")
-    label = data.get("label")
 
+    data = await request.json()
+    raw_token = str(data.get("token") or "").strip()
     if not raw_token:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
             code="VALIDATION_ERROR",
-            message="Токен обязателен"
+            message="Токен обязателен",
         )
 
     token = await insert_token(
         session=db_session,
         user_id=user_id,
         raw_token=raw_token,
-        label=label or "Токен"
+        label=data.get("label") or "Wildberries",
+        token_type=data.get("token_type") or "personal",
     )
-
     if not token:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
             code="TOKEN_CREATE_ERROR",
-            message="Не удалось сохранить токен"
+            message="Не удалось сохранить токен",
         )
 
     return response_success(
         message="Токен добавлен",
         data={
             "id": str(token.id),
-            "label": token.label
-        }
+            "label": token.label,
+            "marketplace": token.marketplace.value,
+            "token_type": token.token_type,
+            "issued_at": token.issued_at,
+            "expires_at": token.expires_at,
+        },
     )

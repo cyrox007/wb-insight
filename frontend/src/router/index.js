@@ -9,8 +9,8 @@ const router = createRouter({
 			name: 'home',
 			component: () => import('../pages/HomePage/index.vue'),
 			meta: {
-				title: "Главная",
-				requestGuest: true // Разрешить доступ только неавторизованным пользователям
+				title: 'Главная',
+				requestGuest: true,
 			}
 		},
 		{
@@ -18,10 +18,10 @@ const router = createRouter({
 			name: 'dashboard.home',
 			component: () => import('../pages/Dashboard/Main/index.vue'),
 			meta: {
-				title: "Главная",
-				requestAuth: true // Разрешить доступ только авторизованным пользователям
+				title: 'Главная',
+				requestAuth: true,
 			},
-			children: []
+			children: [],
 		},
 		{
 			path: '/dashboard/profile',
@@ -29,7 +29,7 @@ const router = createRouter({
 			component: () => import('../pages/Dashboard/Profile/index.vue'),
 			meta: {
 				title: 'Профиль пользователя',
-				requestAuth: true
+				requestAuth: true,
 			}
 		},
 		{
@@ -37,8 +37,8 @@ const router = createRouter({
 			name: 'dashboard.unity',
 			component: () => import('../pages/Dashboard/UnityEconomy/index.vue'),
 			meta: {
-				title: "Unity-экономика",
-				requestAuth: true
+				title: 'Unity-экономика',
+				requestAuth: true,
 			}
 		},
 		{
@@ -46,8 +46,8 @@ const router = createRouter({
 			name: 'dashboard.ads',
 			component: () => import('../pages/Dashboard/Ads/AdsPage.vue'),
 			meta: {
-				title: "Внутренняя реклама",
-				requestAuth: true
+				title: 'Внутренняя реклама',
+				requestAuth: true,
 			}
 		},
 		{
@@ -55,8 +55,8 @@ const router = createRouter({
 			name: 'billing.success',
 			component: () => import('../pages/Billing/Success/index.vue'),
 			meta: {
-				title: "Успешная оплата",
-				requestAuth: true
+				title: 'Успешная оплата',
+				requestAuth: true,
 			}
 		},
 		{
@@ -64,9 +64,9 @@ const router = createRouter({
 			name: 'control-panel.index',
 			component: () => import('../pages/ControlPanel/Main/index.vue'),
 			meta: {
-				title: "Панель управления",
-				requestAuth: true // Разрешить доступ только авторизованным пользователям
-				//requestAdmin: true // Разрешить доступ только администраторам
+				title: 'Панель управления',
+				requestAuth: true,
+				requestAdmin: true,
 			},
 			children: [
 				{
@@ -74,8 +74,8 @@ const router = createRouter({
 					name: 'control-panel.users',
 					component: () => import('../pages/ControlPanel/Users/index.vue'),
 					meta: {
-						title: "Пользователи",
-						requestAuth: true
+						title: 'Пользователи',
+						requestAuth: true,
 					}
 				},
 				{
@@ -83,8 +83,8 @@ const router = createRouter({
 					name: 'control-panel.edit-user',
 					component: () => import('../pages/ControlPanel/Users/edit.vue'),
 					meta: {
-						title: "Редактировать пользователя",
-						requestAuth: true
+						title: 'Редактировать пользователя',
+						requestAuth: true,
 					}
 				},
 				{
@@ -92,8 +92,8 @@ const router = createRouter({
 					name: 'control-panel.tariffs',
 					component: () => import('../pages/ControlPanel/Tariffs/index.vue'),
 					meta: {
-						title: "Тарифы",
-						requestAuth: true
+						title: 'Тарифы',
+						requestAuth: true,
 					}
 				},
 				{
@@ -101,8 +101,8 @@ const router = createRouter({
 					name: 'control-panel.edit-tariff',
 					component: () => import('../pages/ControlPanel/Tariffs/edit.vue'),
 					meta: {
-						title: "Редактировать тариф",
-						requestAuth: true
+						title: 'Редактировать тариф',
+						requestAuth: true,
 					}
 				}
 			]
@@ -112,69 +112,59 @@ const router = createRouter({
 			name: 'not-found',
 			component: () => import('../pages/NotFoundPage/index.vue'),
 			meta: {
-				title: "Страница не найдена"
+				title: 'Страница не найдена',
 			}
 		}
 	],
 })
 
-const isAuthenticated = () => {
-	// Пример проверки токена в localStorage
+const getAuthenticatedUser = () => {
 	const token = localStorage.getItem('access_token')
-	const user = localStorage.getItem('user')
-	
-	if (token && user) {
-		try {
-			return JSON.stringify(user)
-		} catch {
-			return null
-		}
+	const rawUser = localStorage.getItem('user')
+
+	if (!token || !rawUser) {
+		return null
 	}
-	return null
+
+	try {
+		const user = JSON.parse(rawUser)
+		return user && typeof user === 'object' ? user : null
+	} catch {
+		return null
+	}
 }
 
-// Глобальный навигационный хук
+const isAdmin = (user) => {
+	return Array.isArray(user?.roles) && user.roles.some(
+		(role) => role === 'super_admin' || role === 'admin'
+	)
+}
+
 router.beforeEach((to, from, next) => {
-	// Устанавливаем заголовок страницы
 	if (to.meta.title) {
 		document.title = to.meta.title
 	}
-	
-	const user = isAuthenticated()
-	
-	// Проверка маршрутов для авторизованных пользователей
+
+	const user = getAuthenticatedUser()
+
 	if (to.meta.requestAuth && !user) {
-		// Если маршрут требует авторизации, а пользователь не авторизован
-		// Сохраняем URL, на который пытались перейти
 		if (to.path !== '/') {
 			localStorage.setItem('redirectPath', to.fullPath)
 		}
-		console.log("НЕАвторизован. Перенаправдяем на панель");
-		console.log(`${user}`);
 		next({ name: 'home' })
 		return
 	}
-	
-	// Проверка маршрутов для гостей (неавторизованных)
+
 	if (to.meta.requestGuest && user) {
-		// Если пользователь авторизован, но пытается попасть на страницу для гостей
-		// Перенаправляем на дашборд или главную страницу
-		console.log("Авторизован. Перенаправдяем на панель");
-		
 		next({ name: 'dashboard.home' })
 		return
 	}
-	
-	// Проверка прав администратора (если нужно)
-	if (to.meta.requestAdmin && user) {
-		// Здесь добавьте проверку на роль администратора
-		// if (!user.is_admin) {
-		//     next({ name: 'forbidden' })
-		//     return
-		// }
+
+	if (to.meta.requestAdmin && !isAdmin(user)) {
+		next({ name: 'dashboard.home' })
+		return
 	}
-	
-	// Если все проверки пройдены, разрешаем переход
+
 	next()
 })
 
