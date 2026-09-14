@@ -11,6 +11,17 @@ from core.logger import setup_logger
 logger = setup_logger(__name__, "wb_client.log")
 
 
+_COOLDOWN_MAX_TTL_SCRIPT = """
+local current = redis.call('PTTL', KEYS[1])
+local requested = tonumber(ARGV[1])
+if current < requested then
+    redis.call('PSETEX', KEYS[1], requested, '1')
+    return requested
+end
+return current
+"""
+
+
 class DistributedRateLimiter:
     """Coordinate WB request spacing across processes through Redis.
 
@@ -21,8 +32,17 @@ class DistributedRateLimiter:
     because the proactive limiter cannot be reached.
     """
 
-    def __init__(self, redis_url: str, prefix: str = "wb:rate-limit") -> None:
-        self._redis: Redis = redis_from_url(redis_url, decode_responses=True)
+    def __init__(
+        self,
+        redis_url: str,
+        prefix: str = "wb:rate-limit",
+        *,
+        redis_client: Redis | None = None,
+    ) -> None:
+        self._redis: Redis = redis_client or redis_from_url(
+            redis_url,
+            decode_responses=True,
+        )
         self._prefix = prefix
 
     def _key(self, credential_id: str, endpoint: str) -> str:
@@ -67,13 +87,19 @@ class DistributedRateLimiter:
         endpoint: str,
         seconds: float,
     ) -> None:
+        """Publish a cooldown without shortening a longer concurrent cooldown."""
         if seconds <= 0:
             return
 
         key = self._key(credential_id, endpoint)
         ttl_ms = max(1, math.ceil(seconds * 1000))
         try:
-            await self._redis.set(key, "1", px=ttl_ms)
+            await self._redis.eval(
+                _COOLDOWN_MAX_TTL_SCRIPT,
+                1,
+                key,
+                ttl_ms,
+            )
         except RedisError as exc:
             logger.warning(
                 "Unable to publish WB rate-limit cooldown to Redis: %s",
