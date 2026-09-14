@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from celery_app import celery_app
 from core.database_celery import get_session
 from core.logger import setup_logger
+from integrations.wildberries.client import WBAuthError
 from models.sync_job_model import SyncJob
 from models.tokens_model import Marketplace
 from services.marketplace_access_service import get_allowed_wb_tokens
@@ -70,28 +71,31 @@ async def process_job(session: AsyncSession, job: SyncJob) -> None:
         await call_wb_api(session=session, token=token, job=job)
         state.last_success_at = datetime.now(timezone.utc)
         state.last_error = None
-    except Exception as exc:
-        error_msg = str(exc)
-        logger.error(
-            "[JOB %s] WB API error user=%s token=%s entity=%s: %s",
+    except WBAuthError as exc:
+        token.is_active = False
+        state.last_error = (
+            "Ошибка авторизации: подключение недействительно или истекло. "
+            "Обновите кабинет Wildberries в настройках."
+        )
+        logger.warning(
+            "[JOB %s] WB authorization rejected user=%s token=%s entity=%s status=%s",
             job.id,
             job.user_id,
             token.id,
             job.entity,
-            error_msg,
+            exc.status_code,
         )
-        state.last_error = error_msg
-
-        if (
-            "401" in error_msg
-            or "403" in error_msg
-            or "Unauthorized" in error_msg
-        ):
-            token.is_active = False
-            state.last_error = (
-                "Ошибка авторизации: подключение недействительно или истекло. "
-                "Обновите кабинет Wildberries в настройках."
-            )
+        raise
+    except Exception as exc:
+        state.last_error = str(exc)[:1000]
+        logger.warning(
+            "[JOB %s] WB request failed user=%s token=%s entity=%s error=%s",
+            job.id,
+            job.user_id,
+            token.id,
+            job.entity,
+            type(exc).__name__,
+        )
         raise
 
 
