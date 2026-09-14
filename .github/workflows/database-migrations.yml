@@ -37,6 +37,16 @@ jobs:
       run:
         working-directory: backend
 
+    env:
+      APP_ENV: development
+      JWT_SECRET_KEY: migration-ci-only-key
+      API_TOKEN_ENCRYPTION_KEY: migration-ci-only-encryption-key
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_NAME: wb_migration_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
     steps:
       - uses: actions/checkout@v4
 
@@ -52,25 +62,10 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Upgrade clean database to Alembic head
-        env:
-          APP_ENV: development
-          JWT_SECRET_KEY: migration-ci-only-key
-          API_TOKEN_ENCRYPTION_KEY: migration-ci-only-encryption-key
-          DB_HOST: 127.0.0.1
-          DB_PORT: '5432'
-          DB_NAME: wb_migration_test
-          DB_USER: postgres
-          DB_PASSWORD: postgres
         run: alembic upgrade head
 
       - name: Show current revision
-        env:
-          APP_ENV: development
-          JWT_SECRET_KEY: migration-ci-only-key
-          API_TOKEN_ENCRYPTION_KEY: migration-ci-only-encryption-key
-          DB_HOST: 127.0.0.1
-          DB_PORT: '5432'
-          DB_NAME: wb_migration_test
-          DB_USER: postgres
-          DB_PASSWORD: postgres
         run: alembic current
+
+      - name: Verify database matches SQLAlchemy metadata
+        run: alembic check
