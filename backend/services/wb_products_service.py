@@ -1,36 +1,44 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.wb_product import WbProduct
+from utils.batcher import chunks
 
-async def save_products(session: AsyncSession, user_id: UUID, token_id: UUID, data: list[dict]):
-    # Фильтруем товары, у которых отсутствует nmId (артикул)
-    # Это необходимо, так как поле nm_id в БД обязательное (NOT NULL)
-    valid_items = []
-    skipped_count = 0
 
+async def save_products(
+    session: AsyncSession,
+    user_id: UUID,
+    token_id: UUID,
+    data: list[dict],
+) -> None:
+    values = []
     for item in data:
         nm_id = item.get("nmID")
-        if nm_id is None:
-            skipped_count += 1
+        title = item.get("title")
+        if nm_id is None or not title:
             continue
-        valid_items.append({
-            "user_id": user_id,
-            "token_id": token_id,
-            "nm_id": nm_id,
-            "title": item.get("title")
-        })
+        values.append(
+            {
+                "user_id": user_id,
+                "token_id": token_id,
+                "nm_id": nm_id,
+                "title": title,
+            }
+        )
 
-    if skipped_count > 0:
-        from core.logger import setup_logger
-        logger = setup_logger(__name__, "wb_api_processor.log")
-        logger.warning(f"[PRODUCTS] Skipped {skipped_count} items without nmId")
-
-    if not valid_items:
+    if not values:
         return
 
-    stmt = insert(WbProduct).values(valid_items)
-
-    await session.execute(stmt)
+    for batch in chunks(values, 500):
+        stmt = insert(WbProduct).values(batch)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_wb_product_account_nm",
+            set_={
+                "title": stmt.excluded.title,
+                "updated_at": datetime.now(timezone.utc),
+            },
+        )
+        await session.execute(stmt)
