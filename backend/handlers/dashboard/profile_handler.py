@@ -31,6 +31,9 @@ def _public_token(token) -> dict:
         "label": token.label,
         "marketplace": token.marketplace.value,
         "token_type": token.token_type,
+        # Temporary compatibility for the legacy UI. This is deliberately a
+        # constant placeholder, never the encrypted or raw credential.
+        "encrypted_token": "••••••••",
         "issued_at": token.issued_at,
         "expires_at": token.expires_at,
         "is_active": token.is_active,
@@ -171,7 +174,6 @@ async def delete_user_token(
     user_id = _current_user_id(request)
     token = await get_token_by_id(db_session, token_id)
 
-    # Return the same response for missing and foreign tokens to avoid an ID oracle.
     if token is None or token.user_id != user_id:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="TOKEN_NOT_FOUND", message="Токен не найден")
