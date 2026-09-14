@@ -5,14 +5,15 @@ from models.users_model import UserRole
 
 
 class Permission(str, Enum):
-    """Application permissions derived from system roles.
+    """Application permissions derived directly from system roles.
 
-    Permissions are intentionally code-defined. There is no permissions table
-    or role_permissions join table: roles are the source of truth and each role
-    has a fixed set of capabilities.
+    There is deliberately no permissions table and no role_permissions join
+    table. Roles are the source of truth and each role has a fixed capability
+    set defined in code.
     """
 
     CONTROL_PANEL_ACCESS = "control_panel:access"
+    SYSTEM_MANAGE = "system:manage"
     USERS_READ = "users:read"
     USERS_WRITE = "users:write"
     ROLES_READ = "roles:read"
@@ -37,7 +38,7 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
     ),
     # Preserve the current product policy: only admin and super_admin may open
     # the control panel. Other roles can receive dashboard-level permissions
-    # later without introducing new database entities.
+    # later without introducing database permission entities.
     UserRole.MANAGER: frozenset(),
     UserRole.SUPPORT: frozenset(),
     UserRole.ANALYST: frozenset(),
