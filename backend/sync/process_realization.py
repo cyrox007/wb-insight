@@ -6,7 +6,7 @@ from core.logger import setup_logger
 from integrations.wildberries.client import WBAPIError, WBClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
-from services.wb_report_service import save_realization
+from services.wb_finance_ingest_service import save_realization
 
 
 logger = setup_logger(__name__, "wb_api_processor.log")
