@@ -9,8 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.dependencies import get_db_session
 from core.logger import setup_logger
 from core.middleware import auth_middle
-from models.tokens_model import Marketplace
 from models.wb_advertising_stats import WbAdvertisingStats
+from services.dashboard.account_scope import (
+    DashboardAccountUnavailableError,
+    resolve_dashboard_token_id,
+)
 from services.dashboard.semantic_metrics import (
     AdvertisingTotals,
     OrderTotals,
@@ -19,9 +22,8 @@ from services.dashboard.semantic_metrics import (
     get_order_totals_by_nm,
     is_auth_sync_error,
 )
-from services.token_services import get_tokens_by_user_id
+from services.marketplace_access_service import get_allowed_wb_tokens
 from services.user_sync_state_service import get_user_sync_states
-from services.wb_advertising_service import get_advertising_stats_by_day
 from utils.responce_helps import response_error, response_success
 
 
@@ -29,10 +31,7 @@ logger = setup_logger(__name__)
 router = APIRouter(prefix="/dashboard/ads", tags=["Advertising"])
 
 
-def _get_funnel_data(
-    advertising: AdvertisingTotals,
-    orders: OrderTotals,
-) -> Dict[str, Any]:
+def _get_funnel_data(advertising: AdvertisingTotals, orders: OrderTotals) -> Dict[str, Any]:
     return {
         "views": advertising.views,
         "clicks": advertising.clicks,
@@ -45,18 +44,14 @@ def _get_funnel_data(
 
 
 def _get_conversion_data(advertising: AdvertisingTotals) -> Dict[str, Any]:
-    ctr = (
-        advertising.clicks / advertising.views * 100 if advertising.views else 0.0
-    )
+    ctr = advertising.clicks / advertising.views * 100 if advertising.views else 0.0
     cr_to_cart = (
         advertising.added_to_cart / advertising.clicks * 100
         if advertising.clicks
         else 0.0
     )
-    conversion_click_to_order = (
-        advertising.orders / advertising.clicks * 100
-        if advertising.clicks
-        else 0.0
+    click_to_order = (
+        advertising.orders / advertising.clicks * 100 if advertising.clicks else 0.0
     )
     cpc = advertising.spend / advertising.clicks if advertising.clicks else 0.0
     cpm = advertising.spend / advertising.views * 1000 if advertising.views else 0.0
@@ -69,7 +64,7 @@ def _get_conversion_data(advertising: AdvertisingTotals) -> Dict[str, Any]:
         "expenses": round(advertising.spend, 2),
         "ctr": round(ctr, 2),
         "cr_to_cart": round(cr_to_cart, 2),
-        "conversion_click_to_order": round(conversion_click_to_order, 2),
+        "conversion_click_to_order": round(click_to_order, 2),
         "cpc": round(cpc, 2),
         "cpm": round(cpm, 2),
         "drr": round(drr, 2),
@@ -82,17 +77,13 @@ def _get_acquisition_cost_data(
 ) -> Dict[str, Any]:
     avg_order_value = orders.amount / orders.count if orders.count else 0.0
     cost_per_view = advertising.spend / advertising.views if advertising.views else 0.0
-    cost_per_click = (
-        advertising.spend / advertising.clicks if advertising.clicks else 0.0
-    )
+    cost_per_click = advertising.spend / advertising.clicks if advertising.clicks else 0.0
     cost_per_cart = (
         advertising.spend / advertising.added_to_cart
         if advertising.added_to_cart
         else 0.0
     )
     cpo = advertising.spend / advertising.orders if advertising.orders else 0.0
-
-    # Business target remains configurable in a later planning package.
     norm_drr = 10.0
     max_cpm = avg_order_value * norm_drr / 100 if avg_order_value > 0 else 0.0
     return {
@@ -106,11 +97,57 @@ def _get_acquisition_cost_data(
     }
 
 
+def _with_token(query, token_id: UUID | None):
+    if token_id is not None:
+        return query.where(WbAdvertisingStats.token_id == token_id)
+    return query
+
+
+async def _get_dynamics_chart(
+    session: AsyncSession,
+    user_id: UUID,
+    start_date: date,
+    end_date: date,
+    token_id: UUID | None,
+) -> List[Dict[str, Any]]:
+    query = (
+        select(
+            WbAdvertisingStats.date.label("date"),
+            func.sum(WbAdvertisingStats.views).label("views"),
+            func.sum(WbAdvertisingStats.clicks).label("clicks"),
+            func.sum(WbAdvertisingStats.amount).label("amount"),
+            func.sum(WbAdvertisingStats.orders).label("orders"),
+            func.sum(WbAdvertisingStats.orders_amount).label("orders_amount"),
+        )
+        .where(
+            WbAdvertisingStats.user_id == user_id,
+            WbAdvertisingStats.date >= start_date,
+            WbAdvertisingStats.date <= end_date,
+        )
+        .group_by(WbAdvertisingStats.date)
+        .order_by(WbAdvertisingStats.date)
+    )
+    query = _with_token(query, token_id)
+    rows = (await session.execute(query)).all()
+    return [
+        {
+            "date": row.date.isoformat(),
+            "views": int(row.views or 0),
+            "clicks": int(row.clicks or 0),
+            "amount": float(row.amount or 0),
+            "orders": int(row.orders or 0),
+            "orders_amount": float(row.orders_amount or 0),
+        }
+        for row in rows
+    ]
+
+
 async def _get_promotion_dynamics(
     session: AsyncSession,
     user_id: UUID,
     start_date: date,
     end_date: date,
+    token_id: UUID | None,
 ) -> List[Dict[str, Any]]:
     query = (
         select(
@@ -127,7 +164,8 @@ async def _get_promotion_dynamics(
         .group_by(WbAdvertisingStats.date)
         .order_by(WbAdvertisingStats.date)
     )
-    rows = (await session.execute(query)).fetchall()
+    query = _with_token(query, token_id)
+    rows = (await session.execute(query)).all()
     data = []
     for row in rows:
         views = int(row.views or 0)
@@ -150,6 +188,7 @@ async def _get_articles_table(
     start_date: date,
     end_date: date,
     orders_by_nm: dict[int, OrderTotals],
+    token_id: UUID | None,
 ) -> List[Dict[str, Any]]:
     query = (
         select(
@@ -173,7 +212,8 @@ async def _get_articles_table(
         .group_by(WbAdvertisingStats.nm_id, WbAdvertisingStats.product_name)
         .order_by(func.sum(WbAdvertisingStats.amount).desc())
     )
-    rows = (await session.execute(query)).fetchall()
+    query = _with_token(query, token_id)
+    rows = (await session.execute(query)).all()
 
     data: list[dict[str, Any]] = []
     for row in rows:
@@ -189,12 +229,6 @@ async def _get_articles_table(
         cr = float(row.avg_cr or 0)
         cpc = float(row.avg_cpc or 0)
 
-        cart_to_order = ad_orders / atc * 100 if atc else 0.0
-        click_to_order = ad_orders / clicks * 100 if clicks else 0.0
-        order_cost_in_ads = spend / ad_orders if ad_orders else 0.0
-        drr_from_orders = spend / total_orders.amount * 100 if total_orders.amount else 0.0
-        cpm = spend / views * 1000 if views else 0.0
-
         data.append(
             {
                 "nm_id": nm_id,
@@ -209,12 +243,16 @@ async def _get_articles_table(
                 "expenses": round(spend, 2),
                 "ctr": round(ctr, 2),
                 "cr": round(cr, 2),
-                "cart_to_order": round(cart_to_order, 2),
-                "click_to_order": round(click_to_order, 2),
+                "cart_to_order": round(ad_orders / atc * 100, 2) if atc else 0.0,
+                "click_to_order": round(ad_orders / clicks * 100, 2) if clicks else 0.0,
                 "cpc": round(cpc, 2),
-                "order_cost_in_ads": round(order_cost_in_ads, 2),
-                "drr_from_orders": round(drr_from_orders, 2),
-                "cpm": round(cpm, 2),
+                "order_cost_in_ads": round(spend / ad_orders, 2) if ad_orders else 0.0,
+                "drr_from_orders": (
+                    round(spend / total_orders.amount * 100, 2)
+                    if total_orders.amount
+                    else 0.0
+                ),
+                "cpm": round(spend / views * 1000, 2) if views else 0.0,
             }
         )
     return data
@@ -226,23 +264,26 @@ async def get_advertising_stats(
     db_session: AsyncSession = Depends(get_db_session),
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    token_id: Optional[UUID] = None,
 ):
     end_date = end_date if end_date is not None else datetime.now(timezone.utc).date()
     start_date = start_date if start_date is not None else end_date - timedelta(days=29)
     if end_date < start_date:
         return response_error(message="Некорректный период", code="INVALID_PERIOD")
 
-    user_id = request.state.user["sub"]
-    states = await get_user_sync_states(session=db_session, user_id=user_id)
-    sync_errors = [state.last_error for state in states if state.last_error]
+    user_id = UUID(str(request.state.user["sub"]))
+    try:
+        token_id = await resolve_dashboard_token_id(db_session, user_id, token_id)
+    except DashboardAccountUnavailableError as exc:
+        return response_error(code="ACCOUNT_NOT_AVAILABLE", message=str(exc))
 
-    user_tokens = await get_tokens_by_user_id(db_session, user_id)
-    valid_wb_tokens = [
-        token
-        for token in user_tokens
-        if token.marketplace == Marketplace.WILDBERRIES and token.is_valid
+    states = await get_user_sync_states(session=db_session, user_id=user_id)
+    scoped_states = [
+        state for state in states if token_id is None or state.token_id == token_id
     ]
-    if not valid_wb_tokens:
+    sync_errors = [state.last_error for state in scoped_states if state.last_error]
+    allowed_tokens = await get_allowed_wb_tokens(db_session, user_id)
+    if not allowed_tokens and token_id is None:
         auth_errors = [error for error in sync_errors if is_auth_sync_error(error)]
         if auth_errors:
             return response_error(
@@ -260,22 +301,23 @@ async def get_advertising_stats(
             code="NO_VALID_TOKENS",
         )
 
-    # Keep one AsyncSession serialized; each query is executed one at a time.
     advertising = await get_advertising_totals(
-        db_session, user_id, start_date, end_date
+        db_session, user_id, start_date, end_date, token_id
     )
-    orders = await get_order_totals(db_session, user_id, start_date, end_date)
+    orders = await get_order_totals(
+        db_session, user_id, start_date, end_date, token_id
+    )
     orders_by_nm = await get_order_totals_by_nm(
-        db_session, user_id, start_date, end_date
+        db_session, user_id, start_date, end_date, token_id
     )
-    dynamics_chart = await get_advertising_stats_by_day(
-        db_session, user_id, start_date, end_date
+    dynamics_chart = await _get_dynamics_chart(
+        db_session, user_id, start_date, end_date, token_id
     )
     promotion_dynamics = await _get_promotion_dynamics(
-        db_session, user_id, start_date, end_date
+        db_session, user_id, start_date, end_date, token_id
     )
     articles_table = await _get_articles_table(
-        db_session, user_id, start_date, end_date, orders_by_nm
+        db_session, user_id, start_date, end_date, orders_by_nm, token_id
     )
 
     return response_success(
@@ -290,5 +332,6 @@ async def get_advertising_stats(
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
             },
+            "selected_token_id": str(token_id) if token_id else None,
         }
     )
