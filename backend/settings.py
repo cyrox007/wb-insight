@@ -75,8 +75,6 @@ class Config:
         raise RuntimeError("COOKIE_SECURE must be true when APP_ENV=production")
     COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN") or None
 
-    # Fake payments are a local-development tool only. A second explicit flag
-    # prevents accidental subscription activation when real acquiring is absent.
     ALLOW_FAKE_BILLING = (
         not IS_PRODUCTION
         and os.getenv("ALLOW_FAKE_BILLING", "false").lower() == "true"
@@ -87,12 +85,21 @@ class Config:
     WB_API_BASE_URL = "https://statistics-api.wildberries.ru"
     WB_ADVERT_API_BASE_URL = "https://advert-api.wildberries.ru"
 
-    # Transport defaults are deliberately configurable instead of encoding
-    # marketplace endpoint quotas into business logic. Redis keys are scoped by
-    # credential + logical endpoint, so unrelated WB APIs do not block each other.
+    # Generic fallback for WB methods without an explicit documented policy.
     WB_API_MIN_INTERVAL_SECONDS = float(
         os.getenv("WB_API_MIN_INTERVAL_SECONDS", "1.0")
     )
+    # Documented per-account intervals for the endpoints used by the sync engine.
+    WB_FINANCE_MIN_INTERVAL_SECONDS = float(
+        os.getenv("WB_FINANCE_MIN_INTERVAL_SECONDS", "60.0")
+    )
+    WB_STOCKS_MIN_INTERVAL_SECONDS = float(
+        os.getenv("WB_STOCKS_MIN_INTERVAL_SECONDS", "20.0")
+    )
+    WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS = float(
+        os.getenv("WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS", "0.6")
+    )
+
     WB_API_MAX_ATTEMPTS = int(os.getenv("WB_API_MAX_ATTEMPTS", "4"))
     WB_API_BACKOFF_BASE_SECONDS = float(
         os.getenv("WB_API_BACKOFF_BASE_SECONDS", "1.0")
@@ -101,8 +108,15 @@ class Config:
         os.getenv("WB_API_MAX_BACKOFF_SECONDS", "60.0")
     )
 
-    if WB_API_MIN_INTERVAL_SECONDS < 0:
-        raise RuntimeError("WB_API_MIN_INTERVAL_SECONDS cannot be negative")
+    for setting_name, interval in {
+        "WB_API_MIN_INTERVAL_SECONDS": WB_API_MIN_INTERVAL_SECONDS,
+        "WB_FINANCE_MIN_INTERVAL_SECONDS": WB_FINANCE_MIN_INTERVAL_SECONDS,
+        "WB_STOCKS_MIN_INTERVAL_SECONDS": WB_STOCKS_MIN_INTERVAL_SECONDS,
+        "WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS": WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS,
+    }.items():
+        if interval < 0:
+            raise RuntimeError(f"{setting_name} cannot be negative")
+
     if WB_API_MAX_ATTEMPTS <= 0:
         raise RuntimeError("WB_API_MAX_ATTEMPTS must be positive")
     if WB_API_BACKOFF_BASE_SECONDS <= 0:
