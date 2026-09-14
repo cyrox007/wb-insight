@@ -6,6 +6,7 @@ from core.logger import setup_logger
 from integrations.wildberries.client import WBAPIError, WBClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
+from services.sync_job_service import persist_job_checkpoint
 from services.wb_finance_ingest_service import save_realization
 
 
@@ -34,9 +35,6 @@ async def process_realization(session: AsyncSession, job: SyncJob, token: APITok
                 if not page:
                     break
 
-                await save_realization(session, job.user_id, token.id, page)
-                total_loaded += len(page)
-
                 last_rrd_id = page[-1].get("rrdId")
                 if not isinstance(last_rrd_id, int) or last_rrd_id <= 0:
                     raise WBAPIError(
@@ -50,7 +48,11 @@ async def process_realization(session: AsyncSession, job: SyncJob, token: APITok
                         "Wildberries finance cursor did not advance",
                         endpoint="finance.sales_report_detailed",
                     )
+
+                await save_realization(session, job.user_id, token.id, page)
                 request_payload["rrdId"] = last_rrd_id
+                await persist_job_checkpoint(session, job, request_payload)
+                total_loaded += len(page)
 
         logger.info(
             "[REALIZATION] success token_id=%s rows=%s",
