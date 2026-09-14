@@ -20,6 +20,7 @@ ALL_ENTITIES = [
     "products",
     "orders",
     "sales",
+    "advertising",
 ]
 
 
