@@ -1,243 +1,167 @@
-import pandas as pd
-import numpy as np
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, Optional
 from uuid import UUID
 
+import numpy as np
+import pandas as pd
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
-from core.logger import setup_logger
 from core.middleware import auth_middle
-from services.user_service import get_user_tax_rate
-from services.wb_report_service import get_reports_with_costs
+from services.dashboard.account_scope import (
+    DashboardAccountUnavailableError,
+    resolve_dashboard_token_id,
+)
+from services.dashboard.semantic_metrics import is_auth_sync_error
 from services.dashboard.unit_economy_service import UnitEconomyMetricsService
+from services.dashboard.unit_report_scope import get_reports_with_costs_scoped
+from services.marketplace_access_service import get_allowed_wb_tokens
+from services.user_service import get_user_tax_rate
 from services.user_sync_state_service import get_user_sync_states
-from services.token_services import get_tokens_by_user_id
-from models.tokens_model import Marketplace
 from utils.responce_helps import response_error, response_success
 
 
-logger = setup_logger(__name__)
+router = APIRouter(prefix="/dashboard/unity", tags=["Unit"])
 
-router = APIRouter(prefix='/dashboard/unity', tags=['Unit'])
 
-@router.get('/', dependencies=[Depends(auth_middle)])
+@router.get("/", dependencies=[Depends(auth_middle)])
 async def get_unit_economy(
-    request: Request, 
+    request: Request,
     db_session: AsyncSession = Depends(get_db_session),
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None
+    end_date: Optional[date] = None,
+    token_id: Optional[UUID] = None,
 ):
     end_date = end_date if end_date is not None else datetime.now(timezone.utc).date()
-    start_date = start_date if start_date is not None else end_date - timedelta(days=30)
-    current_user = request.state.user
-    
-    # 🔥 ПРОВЕРКА ОШИБОК АВТОРИЗАЦИИ (401/403) перед попыткой загрузки данных
-    states = await get_user_sync_states(
-        session=db_session,
-        user_id=current_user['sub']
-    )
-    
-    # Собираем ошибки синхронизации
-    sync_errors = [s.last_error for s in states if s.last_error]
-    auth_errors = [e for e in sync_errors if "401" in e or "403" in e or "Unauthorized" in e or "авторизации" in e.lower()]
-    
-    if auth_errors:
-        logger.warning(f"User {current_user['sub']} has authorization errors in unit economy: {auth_errors}")
-        return response_error(
-            message="Ошибка авторизации: токен недействителен или истек срок действия. Пожалуйста, обновите токен в настройках.",
-            code="TOKEN_INVALID"
-        )
-    
-    # Проверяем наличие активных токенов
-    user_tokens = await get_tokens_by_user_id(db_session, current_user['sub'])
-    valid_wb_tokens = [
-        t for t in user_tokens 
-        if t.marketplace == Marketplace.WILDBERRIES and t.is_valid
+    start_date = start_date if start_date is not None else end_date - timedelta(days=29)
+    if end_date < start_date:
+        return response_error(message="Некорректный период", code="INVALID_PERIOD")
+
+    user_id = UUID(str(request.state.user["sub"]))
+    try:
+        token_id = await resolve_dashboard_token_id(db_session, user_id, token_id)
+    except DashboardAccountUnavailableError as exc:
+        return response_error(code="ACCOUNT_NOT_AVAILABLE", message=str(exc))
+
+    states = await get_user_sync_states(session=db_session, user_id=user_id)
+    scoped_states = [
+        state for state in states if token_id is None or state.token_id == token_id
     ]
-    
-    if not valid_wb_tokens:
+    sync_errors = [state.last_error for state in scoped_states if state.last_error]
+    allowed_tokens = await get_allowed_wb_tokens(db_session, user_id)
+
+    if not allowed_tokens and token_id is None:
+        if any(is_auth_sync_error(error) for error in sync_errors):
+            return response_error(
+                message=(
+                    "Ошибка авторизации: подключение недействительно или истекло. "
+                    "Пожалуйста, обновите кабинет Wildberries в настройках."
+                ),
+                code="TOKEN_INVALID",
+            )
         return response_error(
-            message="Нет действительных токенов для синхронизации. Пожалуйста, добавьте актуальный токен Wildberries.",
-            code="NO_VALID_TOKENS"
+            message=(
+                "Нет действительных токенов для синхронизации. "
+                "Пожалуйста, добавьте актуальный токен Wildberries."
+            ),
+            code="NO_VALID_TOKENS",
         )
 
-    reports_with_costs = await get_reports_with_costs(
-        db_session, 
-        UUID(current_user['sub']), 
-        start_date, 
-        end_date
+    reports_with_costs = await get_reports_with_costs_scoped(
+        db_session,
+        user_id,
+        start_date,
+        end_date,
+        token_id,
     )
-
-    if len(reports_with_costs) == 0:
-        # Проверяем, была ли вообще синхронизация
-        has_any_success = any(s.last_success_at is not None for s in states)
-        
-        if not has_any_success:
-            # Если никогда не было успешной синхронизации - указываем на это
+    if not reports_with_costs:
+        has_success = any(state.last_success_at is not None for state in scoped_states)
+        if not has_success:
             return response_error(
                 code="NOT_SYNCED",
-                message="Данные еще не синхронизированы. Проверьте статус токена и дождитесь завершения синхронизации."
+                message=(
+                    "Данные еще не синхронизированы. Проверьте статус кабинета "
+                    "и дождитесь завершения синхронизации."
+                ),
             )
-        else:
-            # Если синхронизация была, но данных за период нет
-            return response_error(
-                code="NOT_DATA",
-                message="Нет данных за выбранный период. Попробуйте изменить диапазон дат."
-            )
-    
+        return response_error(
+            code="NOT_DATA",
+            message="Нет данных за выбранный период. Попробуйте изменить диапазон дат.",
+        )
+
     report_data = []
     for report, cost in reports_with_costs:
-        report_data.append({
-            
-            "rr_dt": report.rr_dt,              # Дата отчёта (ключевое поле для агрегации)
-            "order_dt": report.order_dt,            # Дата заказа
-            "sale_dt": report.sale_dt,            # Дата продажи (дублируется с rr_dt)
-            "date_from": report.date_from,   # Начало периода отчёта
-            "date_to": report.date_to,      # Конец периода отчёта
-            "create_dt": report.create_dt,  # Дата создания отчёта
-            #"operation_dt": report,      # Дата операции (добавить, если нет в модели)
+        report_data.append(
+            {
+                "nm_id": report.nm_id,
+                "supplier_oper_name": report.supplier_oper_name,
+                "doc_type_name": report.doc_type_name,
+                "quantity": report.quantity,
+                "retail_price_with_disc_rub": report.retail_price_with_disc_rub,
+                "retail_amount": report.retail_amount,
+                "delivery_amount": report.delivery_amount,
+                "ppvz_kvw_prc_base": report.ppvz_kvw_prc_base,
+                "ppvz_sales_commission": report.ppvz_sales_commission,
+                "ppvz_for_pay": report.ppvz_for_pay,
+                "delivery_rub": report.delivery_rub,
+                "acquiring_fee": report.acquiring_fee,
+                "storage_fee": report.storage_fee,
+                "penalty": report.penalty,
+                "deduction": report.deduction,
+                "acceptance": report.acceptance,
+                "ppvz_vw_nds": report.ppvz_vw_nds,
+                "product_cost": cost.cost_price if cost else 0,
+            }
+        )
 
-            # ========== Идентификаторы ==========
-            "nm_id": report.nm_id,                # nmID товара
-            "rrd_id": report.rrd_id,             # ID строки отчёта (уникальный)
-            "gi_id": report.gi_id,            # Номер поставки
-            "shk_id": report.shk_id,                # Штрих-код (shkId)
-            "srid": report.srid,  # SRID
-            "realization_report_id": report.realization_report_id,  # Номер отчёта
-
-            # ========== Типы операций и документов ==========
-            "supplier_oper_name": report.supplier_oper_name,  # Тип операции Обоснование оплаты (Продажа/Логистика/Возврат)
-            "doc_type_name": report.doc_type_name,     # Тип документа
-
-            # ========== Товарные данные ==========
-            "subject_name": report.subject_name,            # Предмет (категория)
-            "brand_name": report.brand_name,                # Бренд
-            "sa_name": report.sa_name,        # Артикул продавца
-            "ts_name": report.ts_name,                  # Размер
-            "barcode": report.barcode,                  # Баркод (строковый)
-            "office_name": report.office_name,               # Склад хранения
-            "gi_box_type_name": report.gi_box_type_name,    # Тип коробов (Микс и т.д.)
-            "ppvz_office_name": report.ppvz_office_name,  # Офис доставки
-            "ppvz_office_id": report.ppvz_office_id,      # ID офиса доставки
-            "kiz": report.kiz,              # Код маркировки (КИЗ)
-            "declaration_number": report.declaration_number,  # ГТД
-
-            # ========== Финансовые данные (количество и цены) ==========
-            "quantity": report.quantity,             # Количество единиц
-            "delivery_amount": report.delivery_amount,  # Кол-во доставок
-            "return_amount": report.return_amount,   # Кол-во возвратов
-            "retail_price": report.retail_price,     # Розничная цена
-            "retail_amount": report.retail_amount,      # Сумма продажи/возврата
-            "retail_price_with_disc_rub": report.retail_price_with_disc_rub,  # Цена со скидкой
-            "sale_percent": report.sale_percent,  # Скидка согласованная (%)
-            "commission_percent": report.commission_percent,  # % комиссии WB
-            "product_discount_for_report": report.product_discount_for_report,  # Дисконт на товар
-            "ppvz_spp_prc": report.ppvz_spp_prc,  # Скидка покупателя (SPP)
-
-            # ========== KVV и комиссии ==========
-            "ppvz_kvw_prc_base": report.ppvz_kvw_prc_base,  # Базовый размер КВВ
-            "ppvz_kvw_prc": report.ppvz_kvw_prc,     # Итоговый КВВ
-            "sup_rating_prc_up": report.sup_rating_prc_up,  # Корректировка за рейтинг
-            "is_kgvp_v2": report.is_kgvp_v2,   # Корректировка за акцию
-            "ppvz_sales_commission": report.ppvz_sales_commission,  # Комиссия с продаж
-            "ppvz_vw": report.ppvz_vw,      # Вознаграждение WB
-            "ppvz_vw_nds": report.ppvz_vw_nds,    # НДС с вознаграждения
-
-            # ========== Логистика ==========
-            "delivery_rub": report.delivery_rub,   # Стоимость доставки
-            "return_rub": report.return_rub,      # Стоимость возврата (если есть)
-            "rebill_logistic_cost": report.rebill_logistic_cost,  # Компенсация логистики
-            "rebill_logistic_org": report.rebill_logistic_org,  # Организатор перевозки
-            "storage_fee": report.storage_fee,     # Плата за хранение
-            "acceptance": report.acceptance,  # Платная приёмка
-
-            # ========== Платежи и удержания ==========
-            "ppvz_for_pay": report.ppvz_for_pay,  # Сумма к перечислению
-            "ppvz_reward": report.ppvz_reward,  # Компенсация выдачи/возврата
-            "penalty": report.penalty,                    # Штрафы
-            "additional_payment": report.additional_payment,        # Доплаты
-            "deduction": report.deduction,        # Прочие удержания
-            "acquiring_fee": report.acquiring_fee,  # Эквайринг
-            "acquiring_bank": report.acquiring_bank,       # Банк эквайера
-
-            # ========== Промо и маркетинг ==========
-            "supplier_promo": report.supplier_promo,           # Промокод
-            "order_uid": report.order_uid,  # UUID заказа
-
-            # ========== Информация о партнере ==========
-            "ppvz_supplier_id": report.ppvz_supplier_id,   # ID партнёра
-            "ppvz_supplier_name": report.ppvz_supplier_name,        # Название партнёра
-            "ppvz_inn": report.ppvz_inn,             # ИНН партнёра
-
-            # ========== Мета отчёта ==========
-            "currency_name": report.currency_name,       # Валюта (RUB и т.д.)
-            "report_type": report.report_type,            # Тип отчёта
-            "trbx_id": report.trbx_id,                    # Месяц (или другой идентификатор)
-
-            "product_cost": cost.cost_price if cost else 0 # Себестоимость товара
-        })
-
-    df = pd.DataFrame(report_data)
-
-    # Получаем налоговую ставку пользователя
-    tax_rate = await get_user_tax_rate(db_session, UUID(current_user['sub']))
-
-    # Создаем сервис и рассчитываем все метрики
-    # advertising_costs_map передается как None - расходы на рекламу будут взяты из БД
-    # при необходимости через get_or_sync_advertising_cost_by_nm_id
+    tax_rate = await get_user_tax_rate(db_session, user_id)
     metrics_service = UnitEconomyMetricsService(tax_rate=tax_rate)
-    result_df = metrics_service.calculate_all_metrics(df, advertising_costs_map=None)
-    
-    # Формируем ответ с таблицей и сводными данными
-    return _format_response(result_df)
+    result_df = metrics_service.calculate_all_metrics(pd.DataFrame(report_data))
+    response = _format_response(result_df)
+    if isinstance(response, dict):
+        response["selected_token_id"] = str(token_id) if token_id else None
+    return response
 
 
 def _format_response(df: pd.DataFrame) -> Dict[str, Any]:
-    """Форматирует DataFrame в ответ API с таблицей и сводными данными"""
-    
-    # Первая строка - это "ИТОГО", остальные - по артикулам
     if len(df) == 0:
         return response_success(data={})
-    
+
     summary_row = df.iloc[0].to_dict()
     articles_df = df.iloc[1:].copy()
-    
-    # Конвертируем таблицу в список словарей
-    table_data = articles_df.replace([np.nan], [None]).to_dict(orient='records')
-    
-    # Формируем сводные данные из первой строки
+    table_data = articles_df.replace([np.nan], [None]).to_dict(orient="records")
+
     summary_data = {
-        'sales_with_spp': summary_row.get('sales_with_spp', 0),
-        'wb_commission_percent': summary_row.get('wb_commission_percent', 0),
-        'wb_commission_amount': summary_row.get('sales_with_spp', 0) * summary_row.get('wb_commission_percent', 0) / 100,
-        'to_pay_seller': summary_row.get('to_pay_seller', 0),
-        'logistics': summary_row.get('logistics_total', 0),
-        'storage': summary_row.get('storage', 0),
-        'other_deductions': summary_row.get('other_deductions', 0),
-        'fines': summary_row.get('fines', 0),
-        'paid_acceptance': summary_row.get('paid_acceptance', 0),
-        'total_to_pay': summary_row.get('total_to_pay', 0),
-        
-        'avg_sale_price': summary_row.get('avg_sale_price', 0),
-        'tax': summary_row.get('tax', 0),
-        'other_expenses': 0,  # Заглушка, пока нет данных
-        'drr': summary_row.get('drr', 0),
-        'cost_price': summary_row.get('cost_price_total', 0),
-        'marginality': summary_row.get('margin', 0),
-        'profitability': summary_row.get('profitability', 0),
-        'profit_per_unit': summary_row.get('profit_per_unit', 0),
-        'profit': summary_row.get('profit', 0),
+        "sales_with_spp": summary_row.get("sales_with_spp", 0),
+        "wb_commission_percent": summary_row.get("wb_commission_percent", 0),
+        "wb_commission_amount": (
+            summary_row.get("sales_with_spp", 0)
+            * summary_row.get("wb_commission_percent", 0)
+            / 100
+        ),
+        "to_pay_seller": summary_row.get("to_pay_seller", 0),
+        "logistics": summary_row.get("logistics_total", 0),
+        "storage": summary_row.get("storage", 0),
+        "other_deductions": summary_row.get("other_deductions", 0),
+        "fines": summary_row.get("fines", 0),
+        "paid_acceptance": summary_row.get("paid_acceptance", 0),
+        "total_to_pay": summary_row.get("total_to_pay", 0),
+        "avg_sale_price": summary_row.get("avg_sale_price", 0),
+        "tax": summary_row.get("tax", 0),
+        "other_expenses": 0,
+        "drr": summary_row.get("drr", 0),
+        "cost_price": summary_row.get("cost_price_total", 0),
+        "marginality": summary_row.get("margin", 0),
+        "profitability": summary_row.get("profitability", 0),
+        "profit_per_unit": summary_row.get("profit_per_unit", 0),
+        "profit": summary_row.get("profit", 0),
     }
-    
-    # Данные для графика по дням (нужно агрегировать исходные данные)
-    # Пока заглушка - нужно будет доработать при наличии daily_data
-    daily_data = []
-    
-    return response_success(data={
-        'summary': summary_data,
-        'table': table_data,
-        'daily_data': daily_data
-    })
+    return response_success(
+        data={
+            "summary": summary_data,
+            "table": table_data,
+            "daily_data": [],
+        },
+        selected_token_id=None,
+    )
