@@ -1,0 +1,84 @@
+import asyncio
+import math
+
+from redis.asyncio import Redis
+from redis.asyncio import from_url as redis_from_url
+from redis.exceptions import RedisError
+
+from core.logger import setup_logger
+
+
+logger = setup_logger(__name__, "wb_client.log")
+
+
+class DistributedRateLimiter:
+    """Coordinate WB request spacing across processes through Redis.
+
+    The limiter is intentionally keyed by an internal credential id plus a
+    logical endpoint name. Raw/encrypted marketplace credentials never become
+    Redis keys. If Redis is unavailable we fail open: Celery itself also uses
+    Redis, but direct HTTP flows should not become permanently unavailable just
+    because the proactive limiter cannot be reached.
+    """
+
+    def __init__(self, redis_url: str, prefix: str = "wb:rate-limit") -> None:
+        self._redis: Redis = redis_from_url(redis_url, decode_responses=True)
+        self._prefix = prefix
+
+    def _key(self, credential_id: str, endpoint: str) -> str:
+        safe_endpoint = endpoint.replace(" ", "_")
+        return f"{self._prefix}:{credential_id}:{safe_endpoint}"
+
+    async def acquire(
+        self,
+        credential_id: str,
+        endpoint: str,
+        min_interval_seconds: float,
+    ) -> None:
+        if min_interval_seconds <= 0:
+            return
+
+        key = self._key(credential_id, endpoint)
+        ttl_ms = max(1, math.ceil(min_interval_seconds * 1000))
+
+        while True:
+            try:
+                acquired = await self._redis.set(key, "1", nx=True, px=ttl_ms)
+                if acquired:
+                    return
+
+                remaining_ms = await self._redis.pttl(key)
+            except RedisError as exc:
+                logger.warning(
+                    "WB distributed rate limiter unavailable; proceeding without proactive throttle: %s",
+                    type(exc).__name__,
+                )
+                return
+
+            if remaining_ms <= 0:
+                await asyncio.sleep(0)
+                continue
+
+            await asyncio.sleep(max(remaining_ms / 1000.0, 0.01))
+
+    async def cooldown(
+        self,
+        credential_id: str,
+        endpoint: str,
+        seconds: float,
+    ) -> None:
+        if seconds <= 0:
+            return
+
+        key = self._key(credential_id, endpoint)
+        ttl_ms = max(1, math.ceil(seconds * 1000))
+        try:
+            await self._redis.set(key, "1", px=ttl_ms)
+        except RedisError as exc:
+            logger.warning(
+                "Unable to publish WB rate-limit cooldown to Redis: %s",
+                type(exc).__name__,
+            )
+
+    async def aclose(self) -> None:
+        await self._redis.aclose()
