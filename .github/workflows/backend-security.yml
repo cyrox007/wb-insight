@@ -37,4 +37,5 @@ jobs:
         env:
           APP_ENV: development
           JWT_SECRET_KEY: ci-only-test-key
+          PYTHONPATH: .
         run: pytest -q tests/test_auth_security.py
