@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from './stores/auth';
+import AuthService from './API/AuthService.js';
 import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue';
 import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue';
 
@@ -30,8 +31,8 @@ const isAuthenticated = computed(() => authStore.isAuthSatus);
 const user = computed(() => authStore.getUser);
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'));
 const isAdmin = computed(() => {
-	return user.value.roles?.some(
-		role => role === 'super_admin' || role === 'administrator'
+	return user.value?.roles?.some(
+		role => role === 'super_admin' || role === 'admin'
 	)
 })
 
@@ -39,10 +40,18 @@ const isAdmin = computed(() => {
 const showLogin = ref(false)
 const showRegister = ref(false)
 
-const logout = () => {
-	localStorage.clear();
-	router.push('/');
-	authStore.logout()
+const logout = async () => {
+	try {
+		await AuthService.logout();
+	} catch (error) {
+		console.warn('Не удалось завершить серверную сессию:', error);
+	} finally {
+		localStorage.removeItem('access_token');
+		localStorage.removeItem('user');
+		localStorage.removeItem('redirectPath');
+		authStore.logout();
+		await router.push('/');
+	}
 }
 
 </script>
