@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
+from sync.process_advertising import process_advertising
 from sync.process_operational import process_orders, process_sales
 from sync.process_products import process_products
 from sync.process_realization import process_realization
@@ -14,6 +15,7 @@ HANDLERS = {
     "products": process_products,
     "orders": process_orders,
     "sales": process_sales,
+    "advertising": process_advertising,
 }
 
 
