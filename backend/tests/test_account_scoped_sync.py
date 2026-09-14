@@ -229,6 +229,7 @@ async def test_scheduler_creates_token_scoped_job_from_last_success(monkeypatch)
         created_at=now - timedelta(days=2),
         last_sync_at=now - timedelta(hours=2),
         last_success_at=last_success,
+        source_cursor=None,
     )
     token_a = SimpleNamespace(id=token_a_id)
     token_b = SimpleNamespace(id=token_b_id)
@@ -248,8 +249,9 @@ async def test_scheduler_creates_token_scoped_job_from_last_success(monkeypatch)
         assert requested_user_id == user_id
         return [token_a, token_b]
 
-    def fake_build_payload(entity, cursor):
+    def fake_build_payload(entity, cursor, source_cursor=None):
         captured["payload_cursor"] = cursor
+        captured["source_cursor"] = source_cursor
         return {"entity": entity, "cursor": "from-success"}
 
     async def fake_create_sync_job(**kwargs):
@@ -271,6 +273,7 @@ async def test_scheduler_creates_token_scoped_job_from_last_success(monkeypatch)
     assert jobs_created == 1
     assert session.committed is True
     assert captured["payload_cursor"] == last_success
+    assert captured["source_cursor"] is None
     assert captured["job"]["user_id"] == user_id
     assert captured["job"]["token_id"] == token_a_id
     assert captured["job"]["entity"] == "stocks"

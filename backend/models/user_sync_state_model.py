@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,6 +57,7 @@ class UserSyncState(Database.Base):
         nullable=True,
         comment="последняя успешная синхронизация",
     )
+    source_cursor: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     last_error: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,

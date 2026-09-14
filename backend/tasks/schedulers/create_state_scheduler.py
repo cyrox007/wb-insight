@@ -18,8 +18,8 @@ ALL_ENTITIES = [
     "stocks",
     "realization",
     "products",
-    # "orders",
-    # "sales",
+    "orders",
+    "sales",
 ]
 
 

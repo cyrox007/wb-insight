@@ -50,12 +50,7 @@ def _sync_interval(subscription) -> timedelta | None:
 
 
 async def function_sheduler(session: AsyncSession) -> int:
-    """Schedule all due account-scoped states.
-
-    Pagination state lives only for this invocation. Every invocation starts
-    from the beginning of the stable keyset, so Celery restarts cannot skip a
-    portion of the state table.
-    """
+    """Schedule all due account-scoped states."""
     logger.info("[SCHEDULER] start")
     last_created_at = None
     last_id: UUID | None = None
@@ -95,11 +90,10 @@ async def function_sheduler(session: AsyncSession) -> int:
             if state.token_id not in allowed_token_ids:
                 continue
 
-            # Incremental API windows must start from the last successful sync,
-            # not from a failed attempt, otherwise failed periods can be lost.
             payload = build_payload_for_entity(
                 state.entity,
                 state.last_success_at,
+                state.source_cursor,
             )
             created = await create_sync_job(
                 session=session,

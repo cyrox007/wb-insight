@@ -70,8 +70,6 @@ async def worker_loop(session: AsyncSession, limit: int = 10) -> int:
             await complete_job(session, job)
             await session.commit()
         except Exception as exc:
-            # A persistence error can leave the current SQLAlchemy transaction
-            # unusable. Roll it back before recording durable retry/failure state.
             await session.rollback()
             fresh_job = await session.get(SyncJob, job_id)
             if fresh_job is None:
@@ -113,15 +111,17 @@ async def process_job(session: AsyncSession, job: SyncJob) -> None:
     try:
         await call_wb_api(session=session, token=token, job=job)
     except WBAuthError:
-        # Keep direct process_job semantics explicit. The worker rolls this
-        # transaction back on failure and records the same terminal state again
-        # durably via _record_failure.
         token.is_active = False
         state.last_error = (
             "Ошибка авторизации: подключение недействительно или истекло. "
             "Обновите кабинет Wildberries в настройках."
         )
         raise
+
+    if job.entity in {"orders", "sales"}:
+        source_cursor = (job.payload or {}).get("dateFrom")
+        if source_cursor:
+            state.source_cursor = {"dateFrom": str(source_cursor)}
 
     state.last_success_at = datetime.now(timezone.utc)
     state.last_error = None

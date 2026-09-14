@@ -79,6 +79,8 @@ class WBClient:
             "finance.sales_report_detailed": config.WB_FINANCE_MIN_INTERVAL_SECONDS,
             "analytics.stocks_warehouses": config.WB_STOCKS_MIN_INTERVAL_SECONDS,
             "content.cards_list": config.WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS,
+            "statistics.orders": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
+            "statistics.sales": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
         }.get(endpoint, config.WB_API_MIN_INTERVAL_SECONDS)
 
     @staticmethod
@@ -276,6 +278,26 @@ class WBClient:
             endpoints.PRODUCTS,
             endpoint="content.cards_list",
             json_data=payload or {},
+        )
+
+    async def get_orders(self, payload: dict[str, Any] | None = None):
+        params = dict(payload or {})
+        params.setdefault("flag", 0)
+        return await self._request(
+            "GET",
+            f"{config.WB_API_BASE_URL}/api/v1/supplier/orders",
+            endpoint="statistics.orders",
+            params=params,
+        )
+
+    async def get_sales(self, payload: dict[str, Any] | None = None):
+        params = dict(payload or {})
+        params.setdefault("flag", 0)
+        return await self._request(
+            "GET",
+            f"{config.WB_API_BASE_URL}/api/v1/supplier/sales",
+            endpoint="statistics.sales",
+            params=params,
         )
 
     async def get_advert_campaigns(self, payload: dict[str, Any] | None = None):

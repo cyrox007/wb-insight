@@ -4,3 +4,4 @@ from .wb_report import WbRealizationReport
 from .wb_stock import WbStock
 from .user_sync_state_model import UserSyncState
 from .wb_advertising_stats import WbAdvertisingStats
+from .wb_operational import WbOrder, WbSale
