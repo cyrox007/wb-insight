@@ -91,6 +91,7 @@ class WBClient:
             "analytics.paid_storage.status": config.WB_STORAGE_STATUS_MIN_INTERVAL_SECONDS,
             "analytics.paid_storage.download": config.WB_STORAGE_DOWNLOAD_MIN_INTERVAL_SECONDS,
             "content.cards_list": config.WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS,
+            "prices.list_goods": config.WB_PRICES_MIN_INTERVAL_SECONDS,
             "statistics.orders": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
             "statistics.sales": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
             "promotion.campaigns": config.WB_ADVERT_CAMPAIGNS_MIN_INTERVAL_SECONDS,
@@ -316,6 +317,17 @@ class WBClient:
             endpoints.PRODUCTS,
             endpoint="content.cards_list",
             json_data=payload or {},
+        )
+
+    async def get_prices(self, payload: dict[str, Any] | None = None):
+        params = dict(payload or {})
+        params.setdefault("limit", 1000)
+        params.setdefault("offset", 0)
+        return await self._request(
+            "GET",
+            endpoints.PRICES_LIST,
+            endpoint="prices.list_goods",
+            params=params,
         )
 
     async def get_orders(self, payload: dict[str, Any] | None = None):
