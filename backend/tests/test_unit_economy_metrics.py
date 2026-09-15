@@ -72,8 +72,6 @@ def test_unit_economy_summary_uses_current_columns_and_weighted_ratios():
     assert summary["total_costs"] == pytest.approx(1032.0)
     assert summary["profit"] == pytest.approx(468.0)
 
-    # Percentages/averages must be recomputed from aggregate numerators and
-    # denominators, not summed across SKU rows.
     assert summary["buyout_percent"] == pytest.approx(100.0)
     assert summary["ppvz_kvw_prc_base"] == pytest.approx(10.0)
     assert summary["drr"] == pytest.approx(11.11, abs=0.01)
@@ -115,3 +113,36 @@ def test_unit_economy_response_maps_internal_metrics_to_frontend_contract():
     assert first["cost_price_total"] == pytest.approx(400.0)
     assert first["total_expenses"] == pytest.approx(755.0)
     assert first["avg_sale_price"] == pytest.approx(500.0)
+
+
+def test_manual_expenses_match_spreadsheet_period_semantics_without_fake_allocation():
+    service = UnitEconomyMetricsService(tax_rate=0.10)
+    result = service.calculate_all_metrics(
+        _sample_report_rows(),
+        advertising_costs_map={101: 100.0, 202: 50.0},
+        manual_expenses_map={101: 30.0},
+        manual_expenses_total=80.0,
+    )
+
+    summary = result.iloc[0]
+    first = result[result["nm_id"] == 101].iloc[0]
+    second = result[result["nm_id"] == 202].iloc[0]
+
+    # 30 RUB is explicitly assigned to SKU 101. The remaining 50 RUB is an
+    # account-level expense: it reduces only the total P&L and is not invented
+    # as a per-SKU allocation.
+    assert first["other_expenses"] == pytest.approx(30.0)
+    assert second["other_expenses"] == pytest.approx(0.0)
+    assert first["total_costs"] == pytest.approx(785.0)
+    assert summary["other_expenses"] == pytest.approx(80.0)
+    assert summary["total_costs"] == pytest.approx(1112.0)
+    assert summary["profit"] == pytest.approx(388.0)
+    assert summary["margin"] == pytest.approx(25.87, abs=0.01)
+    assert summary["roi"] == pytest.approx(34.89, abs=0.01)
+
+    response = _format_response(result)
+    assert response["data"]["summary"]["other_expenses"] == pytest.approx(80.0)
+    row_101 = next(
+        row for row in response["data"]["table"] if row["wb_article"] == 101
+    )
+    assert row_101["other_expenses"] == pytest.approx(30.0)
