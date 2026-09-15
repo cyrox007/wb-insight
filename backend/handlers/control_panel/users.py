@@ -12,6 +12,7 @@ from services.account_lifecycle_service import (
     deactivate_account,
     list_lifecycle_events,
     reactivate_account,
+    record_lifecycle_event,
     revoke_user_sessions,
 )
 from services.user_service import (
@@ -27,6 +28,13 @@ router = APIRouter(
     tags=['Control Panel'],
     dependencies=[Depends(require_admin)],
 )
+
+SUPPORT_EVENT_TYPES = frozenset({
+    'support_access_review',
+    'support_payment_review',
+    'support_refund_requested',
+    'support_refund_completed',
+})
 
 
 def _user_to_dict(user) -> dict:
@@ -228,4 +236,65 @@ async def get_lifecycle_events(
             }
             for event in events
         ]
+    )
+
+
+@router.post('/{user_uuid}/lifecycle-events')
+async def add_support_lifecycle_event(
+    user_uuid: UUID,
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Record a bounded support action without direct production DB edits.
+
+    This endpoint deliberately does not perform a provider refund or alter a
+    payment. It creates durable evidence around a support/provider action whose
+    actual monetary execution remains subject to the approved payment policy.
+    """
+    target_user = await get_user_by_uuid(db_session, user_uuid)
+    if not target_user:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(message='User not found', code="USER_NOT_FOUND")
+
+    body = await request.json()
+    event_type = str(body.get('event_type') or '').strip()
+    reason = str(body.get('reason') or '').strip()
+    reference_id = str(body.get('reference_id') or '').strip() or None
+
+    if event_type not in SUPPORT_EVENT_TYPES:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='INVALID_SUPPORT_EVENT_TYPE',
+            message='Недопустимый тип support-события',
+        )
+    if not reason or len(reason) > 1000:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='VALIDATION_ERROR',
+            message='Причина обязательна и должна быть не длиннее 1000 символов',
+        )
+    if reference_id is not None and len(reference_id) > 128:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='VALIDATION_ERROR',
+            message='reference_id должен быть не длиннее 128 символов',
+        )
+
+    event = await record_lifecycle_event(
+        db_session,
+        user_id=user_uuid,
+        actor_user_id=UUID(str(request.state.user_id)),
+        event_type=event_type,
+        reason=reason,
+        reference_id=reference_id,
+        event_data={'source': 'control_panel'},
+    )
+    return response_success(
+        event={
+            'id': str(event.id),
+            'event_type': event.event_type,
+            'reference_id': event.reference_id,
+            'created_at': event.created_at,
+        }
     )
