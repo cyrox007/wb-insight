@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.authorization import require_admin
 from core.dependencies import get_db_session
+from models.users_model import UserRole
 from services.account_lifecycle_service import (
     deactivate_account,
     list_lifecycle_events,
@@ -54,6 +55,23 @@ def _user_to_dict(user) -> dict:
         for role in user.roles
     ]
     return user_dict
+
+
+def _can_manage_sensitive_target(request: Request, target_user) -> bool:
+    """Only a super-admin may perform access mutations on another super-admin."""
+    target_roles = {str(role.role) for role in target_user.roles if role.role}
+    if UserRole.SUPER_ADMIN.value not in target_roles:
+        return True
+    actor_roles = {str(role) for role in getattr(request.state, 'roles', set())}
+    return UserRole.SUPER_ADMIN.value in actor_roles
+
+
+def _reject_sensitive_target(response: Response) -> dict:
+    response.status_code = status.HTTP_403_FORBIDDEN
+    return response_error(
+        code='SUPER_ADMIN_REQUIRED',
+        message='Действие над аккаунтом super_admin доступно только super_admin',
+    )
 
 
 @router.get('/')
@@ -177,6 +195,8 @@ async def reactivate_user(
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(message='User not found', code="USER_NOT_FOUND")
+    if not _can_manage_sensitive_target(request, target_user):
+        return _reject_sensitive_target(response)
 
     body = await request.json()
     changed = await reactivate_account(
@@ -202,6 +222,9 @@ async def revoke_sessions(
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(message='User not found', code="USER_NOT_FOUND")
+    if not _can_manage_sensitive_target(request, target_user):
+        return _reject_sensitive_target(response)
+
     body = await request.json()
     await revoke_user_sessions(
         db_session,
