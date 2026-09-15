@@ -15,7 +15,10 @@
 - Compose model;
 - реальный nginx container routing для `/auth`, `/dashboard`, `/billing`, `/legal`, `/control-panel`, `/health`;
 - encrypted PostgreSQL backup/restore roundtrip;
-- consistency canonical product version.
+- consistency canonical product version;
+- acceptance-tools positive/negative contracts.
+
+Изменение `VERSION` запускает backend security и database migrations, поэтому release-candidate metadata не обходит эти gates.
 
 CI smoke не доказывает доступность WB/Сбер из production environment и не доказывает корректность денежных показателей на реальном кабинете.
 
@@ -50,6 +53,8 @@ Core checks:
 python3 ops/release_smoke.py --base-url https://staging.example.com --public-only
 ```
 
+Sanitized output core smoke сохраняется как evidence kind `core_smoke`.
+
 ## 3. Disposable registration smoke
 
 Для beta/RC в disposable staging environment:
@@ -74,6 +79,8 @@ python3 ops/release_smoke.py --base-url https://staging.example.com --public-onl
 - затем полный Celery sync: orders/sales, products/stocks, prices, ads, funnel, paid storage, finance;
 - отсутствие необъяснённых auth/permission/rate-limit ошибок.
 
+Для RC sanitized результат полного sync сохраняется как evidence kind `wb_full_sync`.
+
 ## 5. Data-accuracy acceptance
 
 До beta выбираются фиксированные периоды реального seller account и сравниваются WB Insight, официальные WB-источники и, где применимо, исходная spreadsheet-модель.
@@ -91,7 +98,9 @@ python3 ops/release_smoke.py --base-url https://staging.example.com --public-onl
 - inventory/prices;
 - unit-economy ratios.
 
-Для каждого существенного расхождения сохраняется причина или bug reference. Необъяснённое денежное расхождение блокирует повышение release stage.
+Канонический runner: `ops/data_accuracy_acceptance.py`. Policy: `ops/acceptance/wb_v1_metric_policy.json`. Подробности: `DATA_ACCURACY_ACCEPTANCE.md`.
+
+Для каждого существенного расхождения сохраняется причина или bug reference. Необъяснённое денежное расхождение блокирует повышение release stage. Green JSON output сохраняется как evidence kind `data_accuracy`.
 
 ## 6. Сбер acquiring smoke
 
@@ -112,6 +121,8 @@ python3 ops/release_smoke.py
 - decline/cancel/retry;
 - сверка с merchant back office.
 
+Для RC sanitized proof сохраняется как evidence kind `sber_payment`.
+
 ## 7. Operations smoke
 
 Перед RC дополнительно подтверждаются:
@@ -123,6 +134,8 @@ python3 ops/release_smoke.py
 - isolated restore drill успешен;
 - фактические RPO/RTO записаны;
 - deploy/rollback procedure проверена.
+
+Результаты входят в evidence kinds `operations`, `backup_restore` и `deployment`.
 
 ## Полный WB Web v1 RC checklist
 
@@ -152,17 +165,8 @@ python3 ops/release_smoke.py
 
 ## Release evidence
 
-Для beta/RC/stable прогона сохраняются:
+После фактического прогона evidence связывается с exact commit/version командой `ops/release_evidence.py`; contract описан в `RELEASE_EVIDENCE.md`.
 
-- exact commit SHA и version;
-- environment;
-- UTC timestamp;
-- CI results;
-- sanitized `release_smoke.py` result;
-- data-accuracy reconciliation result;
-- WB sync evidence;
-- Sber back-office evidence;
-- backup/restore and deploy/rollback evidence;
-- известные blockers/accepted exceptions.
+Для beta обязательны как минимум `ci`, `core_smoke`, `data_accuracy`. RC и stable требуют расширенный набор согласно manifest contract.
 
-Release evidence не должно содержать пароли, session values, marketplace access data или merchant credentials.
+Release evidence не должно содержать пароли, session values, marketplace access data, merchant credentials или raw customer PII.

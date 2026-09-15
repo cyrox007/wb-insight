@@ -3,12 +3,14 @@ name: Backend security
 on:
   pull_request:
     paths:
+      - 'VERSION'
       - 'backend/**'
       - '.github/workflows/backend-security.yml'
   push:
     branches:
       - main
     paths:
+      - 'VERSION'
       - 'backend/**'
       - '.github/workflows/backend-security.yml'
 

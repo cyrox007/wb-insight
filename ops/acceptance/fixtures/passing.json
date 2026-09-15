@@ -1,0 +1,17 @@
+{
+  "dataset_id": "ci-passing",
+  "seller_alias": "fixture-seller",
+  "periods": [
+    {
+      "label": "2026-08",
+      "start_date": "2026-08-01",
+      "end_date": "2026-08-31",
+      "metrics": [
+        {"metric": "ordered_units", "source": "fixture", "expected": 120, "actual": 120},
+        {"metric": "revenue", "source": "fixture", "expected": "10000.00", "actual": "10000.01"},
+        {"metric": "profit", "source": "fixture", "expected": "2500.00", "actual": "2500.02"},
+        {"metric": "marginality", "source": "fixture", "expected": "25.00", "actual": "25.01"}
+      ]
+    }
+  ]
+}

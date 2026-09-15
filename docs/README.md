@@ -11,6 +11,7 @@
 - [`USER_GUIDE.md`](USER_GUIDE.md) — путь пользователя от регистрации до аналитики и оплаты.
 - [`FEATURES.md`](FEATURES.md) — функции продукта и назначение каждого раздела.
 - [`DATA_AND_METRICS.md`](DATA_AND_METRICS.md) — источники данных, смысл ключевых показателей и правила сверки.
+- [`DATA_ACCURACY_ACCEPTANCE.md`](DATA_ACCURACY_ACCEPTANCE.md) — обязательная сверка аналитики перед beta.
 
 ## Для разработчика
 
@@ -38,6 +39,7 @@
 - [`RELEASE_ROADMAP.md`](RELEASE_ROADMAP.md) — дорожная карта до `1.0.0`.
 - [`RELEASE_READINESS.md`](RELEASE_READINESS.md) — текущий статус blockers/gates.
 - [`RELEASE_SMOKE.md`](RELEASE_SMOKE.md) — CI, production-like и external integration smoke.
+- [`RELEASE_EVIDENCE.md`](RELEASE_EVIDENCE.md) — manifest доказательств beta/RC/stable для exact commit.
 - [`VERSIONING.md`](VERSIONING.md) — SemVer и правила `alpha -> beta -> rc -> stable`.
 - [`VERSION_HISTORY.md`](VERSION_HISTORY.md) — подробная история развития.
 - [`../CHANGELOG.md`](../CHANGELOG.md) — пользовательские release notes.
@@ -49,5 +51,6 @@
 3. Секреты, реальные WB tokens, merchant credentials и персональные данные в документацию не попадают.
 4. Изменение публичного поведения, конфигурации, схемы данных, release process или security contract должно сопровождаться обновлением соответствующего документа.
 5. Старые файлы `README-FOR-*` считаются историческими материалами и не являются source of truth.
+6. Acceptance tooling не считается доказательством прохождения acceptance: beta/RC/stable требуют evidence, полученный на соответствующей среде и exact commit.
 
 Дата полной ревизии: 15 сентября 2026 года.

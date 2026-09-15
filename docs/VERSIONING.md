@@ -4,7 +4,7 @@ WB Insight использует Semantic Versioning:
 
 `MAJOR.MINOR.PATCH[-PRERELEASE]`
 
-Примеры: `0.9.0-alpha.6`, `0.9.0-beta.1`, `1.0.0-rc.1`, `1.0.0`.
+Примеры: `0.9.0-alpha.7`, `0.9.0-beta.1`, `1.0.0-rc.1`, `1.0.0`.
 
 ## Номера версии
 
@@ -24,18 +24,19 @@ Backward-compatible исправления опубликованной capabili
 
 ### alpha
 
-Активная разработка и hardening. Могут оставаться code-side, external, operational или legal blockers.
+Активная разработка и hardening. Могут оставаться code-side, external, operational или legal blockers. Наличие acceptance tooling само по себе не повышает stage.
 
 ### beta
 
 Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускается только когда одновременно:
 
-- P29 dependency/security hardening слит с полностью зелёным CI;
+- P29 dependency/security hardening и P30 acceptance tooling слиты с green CI;
 - известных необработанных code-side release blockers нет;
 - production-like HTTPS environment воспроизводимо разворачивается из репозитория;
 - core end-to-end smoke реально пройден;
-- выполнена приёмочная сверка ключевой аналитики с реальными WB-источниками;
+- выполнена приёмочная сверка ключевой аналитики на реальном WB seller account;
 - нет необъяснённых существенных денежных расхождений;
+- сформирован полный beta release-evidence manifest для exact commit;
 - оставшиеся blockers явно относятся к production activation/external onboarding или задачам, допустимым до RC.
 
 ### rc
@@ -49,7 +50,7 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 - off-host encrypted backup и подтверждённый restore drill;
 - утверждённые non-draft legal documents;
 - закрытый account lifecycle или утверждённые безопасные support procedures;
-- полный release smoke и сохранённый evidence.
+- полный RC release-evidence manifest.
 
 ### stable
 
@@ -57,18 +58,19 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` после P28 находится на **`0.9.0-alpha.5`**.
+`main` после P29 находится на **`0.9.0-alpha.6`**.
 
-P29 — кандидат **`0.9.0-alpha.6`** в ветке `codex/p29-dependency-security-beta-readiness`. P29 закрывает frontend/backend dependency audits, package hygiene и полную ревизию документации.
+P30 — кандидат **`0.9.0-alpha.7`** в ветке `codex/p30-beta-readiness-data-accuracy`. Он добавляет reproducible data-accuracy acceptance и release-evidence contracts, но не считается фактическим прохождением production-like acceptance.
 
 Каноническая последовательность:
 
 1. `0.9.0-alpha.6` — dependency/security + documentation baseline;
-2. `0.9.0-beta.1` — feature freeze + production-like + data-accuracy acceptance;
-3. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops/account-lifecycle blockers;
-4. `1.0.0` — публичный WB Insight Web v1 Stable.
+2. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
+3. `0.9.0-beta.1` — feature freeze + реальный production-like + data-accuracy acceptance;
+4. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops/account-lifecycle blockers;
+5. `1.0.0` — публичный WB Insight Web v1 Stable.
 
-Stage нельзя повышать только из-за количества commits или номера P-задачи. Gates определяются `docs/RELEASE_ROADMAP.md` и `docs/RELEASE_READINESS.md`.
+Stage нельзя повышать только из-за количества commits, номера P-задачи или наличия скрипта проверки. Gates определяются `docs/RELEASE_ROADMAP.md` и `docs/RELEASE_READINESS.md`.
 
 ## Source of truth
 
@@ -82,6 +84,10 @@ Stage нельзя повышать только из-за количества 
 Backend runtime читает `VERSION`; health endpoints показывают deployed version.
 
 `package-lock.json` — dependency-resolution metadata, а не source of truth версии продукта.
+
+## Release evidence
+
+Начиная с P30 повышение stage требует manifest, созданный `ops/release_evidence.py`. Manifest связывает version, exact commit, environment и SHA-256 acceptance artifacts. Требуемые типы artifacts задокументированы в `docs/RELEASE_EVIDENCE.md`.
 
 ## Git tags
 
