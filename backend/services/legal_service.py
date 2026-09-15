@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import hmac
+import os
 from typing import Iterable
 from uuid import UUID
 
@@ -161,7 +162,8 @@ def validate_consent_payload(
 def _evidence_hmac(value: str | None) -> str | None:
     if not value:
         return None
-    key = (config.LEGAL_EVIDENCE_HMAC_KEY or config.SECRET_KEY or "").encode("utf-8")
+    configured_key = os.getenv("LEGAL_EVIDENCE_HMAC_KEY", "").strip()
+    key = (configured_key or config.SECRET_KEY or "").encode("utf-8")
     if not key:
         return None
     return hmac.new(key, value.encode("utf-8"), hashlib.sha256).hexdigest()
