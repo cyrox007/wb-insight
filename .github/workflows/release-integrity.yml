@@ -1,0 +1,62 @@
+name: Release integrity
+
+on:
+  pull_request:
+    paths:
+      - VERSION
+      - CHANGELOG.md
+      - backend/app.py
+      - backend/Dockerfile
+      - frontend/package.json
+      - frontend/package-lock.json
+      - frontend/Dockerfile
+      - frontend/nginx.conf
+      - compose.production.yml
+      - .env.production.example
+      - .dockerignore
+      - .github/workflows/release-integrity.yml
+  push:
+    branches: [main]
+    paths:
+      - VERSION
+      - CHANGELOG.md
+      - backend/app.py
+      - backend/Dockerfile
+      - frontend/package.json
+      - frontend/package-lock.json
+      - frontend/Dockerfile
+      - frontend/nginx.conf
+      - compose.production.yml
+      - .env.production.example
+      - .dockerignore
+      - .github/workflows/release-integrity.yml
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify canonical version metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(tr -d '\r\n' < VERSION)"
+          frontend="$(node -p "require('./frontend/package.json').version")"
+          test "$expected" = "$frontend"
+          grep -F "## [$expected]" CHANGELOG.md
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker build -f backend/Dockerfile -t wb-insight-backend:ci .
+      - name: Build frontend image
+        run: docker build -f frontend/Dockerfile -t wb-insight-frontend:ci .
+      - name: Validate Compose model
+        run: |
+          cp .env.production.example .env.production
+          docker compose --env-file .env.production -f compose.production.yml config >/dev/null
