@@ -1,9 +1,9 @@
 <template>
     <div class="account-tools">
-        <label class="account-filter">
-            <span class="account-filter__label">Кабинет WB</span>
-            <select class="account-filter__select" :value="selectedTokenId" @change="onChange">
-                <option value="">Все кабинеты</option>
+        <label class="field account-filter">
+            <span class="field__label">Кабинет</span>
+            <select class="field__control" :value="selectedTokenId" @change="onChange">
+                <option value="">Все кабинеты WB</option>
                 <option v-for="account in accounts" :key="account.id" :value="account.id">
                     {{ account.label || 'Wildberries' }} · {{ account.id.slice(0, 8) }}
                 </option>
@@ -15,29 +15,32 @@
             class="plan-editor"
             @submit.prevent="savePlan"
         >
-            <label class="plan-editor__field">
-                <span class="account-filter__label">План месяца, ₽</span>
-                <input
-                    v-model="planTarget"
-                    class="plan-editor__input"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    placeholder="Например, 500000"
-                    :disabled="isSaving"
-                />
+            <label class="field plan-editor__field">
+                <span class="field__label">План месяца</span>
+                <div class="money-input">
+                    <input
+                        v-model="planTarget"
+                        class="field__control field__control--number"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="500000"
+                        :disabled="isSaving"
+                    />
+                    <span>₽</span>
+                </div>
             </label>
-            <button class="plan-editor__button" type="submit" :disabled="isSaving || !planTarget">
+            <button class="control-button control-button--primary" type="submit" :disabled="isSaving || !planTarget">
                 Сохранить
             </button>
-            <button class="plan-editor__reset" type="button" :disabled="isSaving" @click="removePlan">
+            <button class="control-button" type="button" :disabled="isSaving" @click="removePlan">
                 Сбросить
             </button>
         </form>
 
-        <div v-else-if="route.name === 'dashboard.home'" class="plan-editor__hint">
-            Выберите конкретный кабинет, чтобы задать месячный план.
-        </div>
+        <p v-else-if="route.name === 'dashboard.home'" class="plan-hint">
+            Выберите один кабинет, чтобы задать месячный план.
+        </p>
     </div>
 </template>
 
@@ -108,105 +111,124 @@ const removePlan = async () => {
     }
 }
 
-onMounted(async () => {
-    await loadAccounts()
-})
+onMounted(loadAccounts)
 </script>
 
 <style scoped>
 .account-tools {
     display: flex;
     align-items: flex-end;
-    gap: 12px;
+    justify-content: flex-end;
+    gap: 8px;
     flex-wrap: wrap;
 }
 
-.account-filter,
-.plan-editor__field {
+.field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-width: 210px;
+    gap: 5px;
 }
 
-.account-filter__label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-color);
-    opacity: 0.72;
-}
-
-.account-filter__select,
-.plan-editor__input {
-    min-height: 38px;
-    padding: 8px 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    background: var(--light-bg);
-    color: var(--text-color);
-    font: inherit;
-}
-
-.account-filter__select:focus,
-.plan-editor__input:focus {
-    outline: none;
-    border-color: var(--secondary-color);
+.account-filter {
+    min-width: 205px;
 }
 
 .plan-editor {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
+    gap: 6px;
 }
 
 .plan-editor__field {
-    min-width: 175px;
+    min-width: 165px;
 }
 
-.plan-editor__button,
-.plan-editor__reset {
-    min-height: 38px;
-    padding: 8px 12px;
-    border-radius: 6px;
+.field__label {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.01em;
+}
+
+.field__control {
+    min-height: 36px;
+    padding: 7px 10px;
     border: 1px solid var(--border-color);
-    cursor: pointer;
-    font: inherit;
-}
-
-.plan-editor__button {
-    background: var(--secondary-color);
-    color: white;
-    border-color: var(--secondary-color);
-}
-
-.plan-editor__reset {
-    background: transparent;
+    border-radius: 8px;
+    background: var(--light-bg);
     color: var(--text-color);
 }
 
-.plan-editor__button:disabled,
-.plan-editor__reset:disabled {
-    opacity: 0.55;
+.field__control:hover {
+    border-color: var(--border-strong);
+}
+
+.money-input {
+    position: relative;
+}
+
+.money-input .field__control {
+    width: 100%;
+    padding-right: 28px;
+}
+
+.money-input span {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    color: var(--text-subtle);
+    pointer-events: none;
+}
+
+.control-button {
+    min-height: 36px;
+    padding: 7px 11px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.control-button:hover:not(:disabled) {
+    border-color: var(--border-strong);
+    background: var(--hover-bg);
+    color: var(--text-color);
+}
+
+.control-button--primary {
+    border-color: rgba(124, 58, 237, 0.5);
+    background: rgba(124, 58, 237, 0.18);
+    color: #ddd6fe;
+}
+
+.control-button:disabled {
+    opacity: 0.45;
     cursor: default;
 }
 
-.plan-editor__hint {
-    max-width: 240px;
-    font-size: 12px;
+.plan-hint {
+    max-width: 230px;
+    color: var(--text-subtle);
+    font-size: 11px;
     line-height: 1.35;
-    color: var(--text-color);
-    opacity: 0.65;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {
     .account-tools,
     .plan-editor {
         width: 100%;
+        justify-content: flex-start;
     }
+}
 
+@media (max-width: 600px) {
     .account-filter,
     .plan-editor__field {
         flex: 1 1 100%;
+        min-width: 0;
     }
 
     .plan-editor {

@@ -1,1106 +1,729 @@
 <template>
-	<div class="dashboard-container">
-		<!-- Сайдбар -->
-		<aside class="dashboard-sidebar">
-			<WarehouseChart :data="warehouseData" :is-loading="isLoading" />
-			<DonutChart :data="categoryData" :is-loading="isLoading" />
-		</aside>
-		<!-- Основное содержимое дашборда -->
-		<div class="main-dashboard-content">
-			<!-- Dashboard Header -->
-			<div class="dashboard-header">
-				<div class="search-container">
-					<input type="text" class="search-input" placeholder="Выберите артикул..." v-model="searchQuery">
-				</div>
-				<div class="date-range">
-					<span>Дата от</span>
-					<input type="text" class="date-input" placeholder="1 октября" v-model="startDate">
-					<span>до</span>
-					<input type="text" class="date-input" placeholder="19 октября" v-model="endDate">
-				</div>
-			</div>
+  <section class="overview-page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Wildberries · аналитика кабинета</p>
+        <h1>Обзор бизнеса</h1>
+        <p class="page-subtitle">Главные показатели, динамика и точки, которые требуют внимания.</p>
+      </div>
 
-			<!-- Stats Grid -->
-			<div class="stats-grid">
-				<!-- Заказано на сумму -->
-				<div class="stat-card primary">
-					<div class="stat-title">Заказано на сумму</div>
-					<div class="stat-value primary">
-						{{ stats.ordered_amount?.value != null ? formatNumber(stats.ordered_amount.value) + ' ₽' : '—'
-						}}
-					</div>
-					<div class="stat-change">
-						{{ stats.ordered_amount?.change_percent != null
-							? formatChange(stats.ordered_amount.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
+      <form class="period-filter" @submit.prevent="applyPeriod">
+        <label class="period-field">
+          <span>С</span>
+          <input v-model="startDate" type="date" :max="endDate" />
+        </label>
+        <label class="period-field">
+          <span>По</span>
+          <input v-model="endDate" type="date" :min="startDate" />
+        </label>
+        <button class="apply-button" type="submit" :disabled="isLoading || !periodIsValid">
+          {{ isLoading ? 'Обновляем…' : 'Применить' }}
+        </button>
+      </form>
+    </header>
 
-				<!-- Единиц (заказано) -->
-				<div class="stat-card primary">
-					<div class="stat-title">Единиц</div>
-					<div class="stat-value primary">
-						{{ stats.ordered_units?.value != null ? formatNumber(stats.ordered_units.value) : '—' }}
-					</div>
-					<div class="stat-change">
-						{{ stats.ordered_units?.change_percent != null
-							? formatChange(stats.ordered_units.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
+    <div v-if="errorMessage" class="status-banner status-banner--error" role="alert">
+      <strong>Не удалось загрузить аналитику.</strong>
+      <span>{{ errorMessage }}</span>
+      <button type="button" @click="loadDashboard">Повторить</button>
+    </div>
 
-				<!-- Выручка -->
-				<div class="stat-card success">
-					<div class="stat-title">Выручка</div>
-					<div class="stat-value success">
-						{{ stats.revenue?.value != null ? formatNumber(stats.revenue.value) + ' ₽' : '—' }}
-					</div>
-					<div class="stat-change">
-						{{ stats.revenue?.change_percent != null
-							? formatChange(stats.revenue.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
+    <div v-else-if="isSyncing" class="status-banner" role="status">
+      <strong>Данные синхронизируются с Wildberries.</strong>
+      <span>Показатели появятся автоматически после завершения синхронизации.</span>
+    </div>
 
-				<!-- Продано единиц -->
-				<div class="stat-card success">
-					<div class="stat-title">Единиц</div>
-					<div class="stat-value success">
-						{{ stats.sold_units?.value != null ? formatNumber(stats.sold_units.value) : '—' }}
-					</div>
-					<div class="stat-change">
-						{{ stats.sold_units?.change_percent != null
-							? formatChange(stats.sold_units.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
+    <div v-if="!errorMessage" class="kpi-grid" aria-label="Ключевые показатели">
+      <article v-for="item in primaryKpis" :key="item.key" class="kpi-card">
+        <div class="kpi-card__topline">
+          <span>{{ item.label }}</span>
+          <span v-if="item.change !== null" class="change-badge" :class="changeClass(item.change)">
+            {{ formatChange(item.change) }}
+          </span>
+        </div>
+        <div class="kpi-card__value">{{ formatMetric(item.value, item.format) }}</div>
+        <p>{{ item.caption }}</p>
+      </article>
+    </div>
 
-				<!-- К выплате -->
-				<div class="stat-card accent">
-					<div class="stat-title">К выплате</div>
-					<div class="stat-value accent">
-						{{ stats.to_pay?.value != null ? formatNumber(stats.to_pay.value) + ' ₽' : '—' }}
-					</div>
-					<div class="stat-change">
-						{{ stats.to_pay?.change_percent != null
-							? formatChange(stats.to_pay.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
+    <section v-if="!errorMessage" class="section-card plan-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Текущий месяц</p>
+          <h2>План и темп</h2>
+        </div>
+        <div class="quality-pills" aria-label="Качество экономики">
+          <span>Маржа <strong>{{ formatMetric(stats.marginality?.value, 'percent') }}</strong></span>
+          <span>Рентабельность <strong>{{ formatMetric(stats.profitability?.value, 'percent') }}</strong></span>
+          <span>ДРР <strong>{{ formatMetric(stats.ddr?.value, 'percent') }}</strong></span>
+        </div>
+      </div>
 
-				<!-- Прибыль -->
-				<div class="stat-card accent">
-					<div class="stat-title">Прибыль</div>
-					<div class="stat-value accent">
-						{{ stats.profit?.value != null ? formatNumber(stats.profit.value) + ' ₽' : '—' }}
-					</div>
-					<div class="stat-change">
-						{{ stats.profit?.change_percent != null
-							? formatChange(stats.profit.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
+      <div class="plan-grid">
+        <div class="plan-metric">
+          <span>Факт</span>
+          <strong>{{ formatMetric(stats.fact_current_month?.value, 'money') }}</strong>
+        </div>
+        <div class="plan-metric">
+          <span>План</span>
+          <strong>{{ formatMetric(stats.plan_current_month?.value, 'money') }}</strong>
+        </div>
+        <div class="plan-metric">
+          <span>Выполнено</span>
+          <strong>{{ formatMetric(stats.done?.value, 'percent') }}</strong>
+        </div>
+        <div class="plan-metric">
+          <span>Прогноз выручки</span>
+          <strong>{{ formatMetric(stats.forecast?.value, 'money') }}</strong>
+        </div>
+        <div class="plan-metric plan-metric--accent">
+          <span>Нужно выручки в день</span>
+          <strong>{{ formatMetric(stats.required_revenue_per_day?.value, 'money') }}</strong>
+        </div>
+        <div class="plan-metric plan-metric--accent">
+          <span>Нужно заказов в день</span>
+          <strong>{{ formatMetric(stats.required_orders_per_day?.value, 'number') }}</strong>
+        </div>
+      </div>
+    </section>
 
-				<!-- Процент выкупа -->
-				<div class="stat-card warning">
-					<div class="stat-title">Процент выкупа</div>
-					<div class="stat-value warning">
-						{{ stats.buyout_rate?.value != null ? formatNumber(stats.buyout_rate.value) + '%' : '—' }}
-					</div>
-					<div class="stat-change">
-						{{ stats.buyout_rate?.change_percent != null
-							? formatChange(stats.buyout_rate.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
+    <section v-if="!errorMessage" class="analytics-grid">
+      <article class="section-card chart-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Динамика</p>
+            <h2>Продажи и прибыль</h2>
+          </div>
+        </div>
+        <BaseCarts
+          :is-loading="isLoading || isChartsLoading"
+          :chart-data="chartData"
+          :metrics="[
+            { key: 'orders', name: 'Заказы, ₽', color: '#a78bfa', visible: true, type: 'rub' },
+            { key: 'buyouts', name: 'Выкупы, ₽', color: '#34d399', visible: true, type: 'rub' },
+            { key: 'profit', name: 'Прибыль, ₽', color: '#fb7185', visible: true, type: 'rub' },
+          ]"
+        />
+      </article>
 
-				<!-- Средняя цена -->
-				<div class="stat-card warning">
-					<div class="stat-title">Средняя цена</div>
-					<div class="stat-value warning">
-						{{ stats.avg_price?.value != null ? formatNumber(stats.avg_price.value) + ' ₽' : '—' }}
-					</div>
-					<div class="stat-change">
-						{{ stats.avg_price?.change_percent != null
-							? formatChange(stats.avg_price.change_percent) + ' за период'
-							: 'Данные не синхронизированы' }}
-					</div>
-				</div>
-			</div>
+      <article class="section-card chart-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Воронка</p>
+            <h2>Интерес к товарам</h2>
+          </div>
+        </div>
+        <BaseCarts
+          :is-loading="isLoading || isChartsLoading"
+          :chart-data="chartData"
+          :metrics="[
+            { key: 'views', name: 'Просмотры', color: '#60a5fa', visible: true, type: 'number' },
+            { key: 'clicks', name: 'Клики', color: '#fbbf24', visible: true, type: 'number' },
+            { key: 'cart', name: 'В корзину', color: '#c084fc', visible: true, type: 'number' },
+          ]"
+        />
+      </article>
+    </section>
 
-			<!-- Chart Container -->
-			<BaseCarts :is-loading="isLoading" :chart-data="chartData" :metrics="[
-				{ key: 'orders', name: 'Заказы, руб', color: '#ff9800', visible: true, type: 'rub' },
-				{ key: 'buyouts', name: 'Выкупы, руб', color: '#4caf50', visible: true, type: 'rub' },
-				{ key: 'avg_price', name: 'Средняя цена, руб', color: '#2196f3', visible: true, type: 'rub' },
-				{ key: 'profit', name: 'Прибыль, руб', color: '#f44336', visible: true, type: 'rub' },
-			]" />
-			<BaseCarts :is-loading="isLoading" :chart-data="chartData" :metrics="[
-				{ key: 'views', name: 'Просмотры', color: '#ffeb3b', visible: true, type: 'number' },
-				{ key: 'clicks', name: 'Клики', color: '#ff9800', visible: true, type: 'number' },
-				{ key: 'cart', name: 'В корзину', color: '#3f51b5', visible: true, type: 'number' },
-			]" />
-			<BaseCarts :is-loading="isLoading" :chart-data="chartData" :metrics="[
-				{ key: 'margin', name: 'Маржинальность', color: '#9c27b0', visible: true, type: 'percent' },
-				{ key: 'cr', name: 'CR', color: '#00bcd4', visible: true, type: 'percent' },
-				{ key: 'ctr', name: 'CTR', color: '#8bc34a', visible: true, type: 'percent' },
-				{ key: 'drr', name: 'ДРР', color: '#607d8b', visible: true, type: 'percent' }
-			]" />
+    <section v-if="!errorMessage" class="context-grid">
+      <article class="section-card compact-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Остатки</p>
+            <h2>По складам</h2>
+          </div>
+        </div>
+        <WarehouseChart :data="warehouseData" :is-loading="isLoading || isChartsLoading" />
+      </article>
 
-			<!-- Основные показатели по кабинету -->
-			<BaseStats :is-loading="isLoading" :stats="baseStats" />
+      <article class="section-card compact-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Ассортимент</p>
+            <h2>Категории</h2>
+          </div>
+        </div>
+        <DonutChart :data="categoryData" :is-loading="isLoading || isChartsLoading" />
+      </article>
+    </section>
 
-			<!-- ABC Analysis -->
-			<AbcAnalysis :items="abcAnalysis" :isLoading="isLoading" :hasData="abcAnalysis.length > 0"
-				@view="openProductModal" @edit="editProduct" @delete="confirmDelete" />
-
-			<!-- Additional Info (может быть скрыто/показано) -->
-			<div class="additional-info" v-if="showMoreInfo">
-				<div class="info-section">
-					<h3 class="info-title"><i class="fas fa-chart-pie"></i> Дополнительная аналитика</h3>
-					<div class="info-grid">
-						<div class="info-card">
-							<div class="info-card-title">Средний чек</div>
-							<div class="info-card-value">2 450 ₽</div>
-							<div class="info-card-change success">+12%</div>
-						</div>
-						<div class="info-card">
-							<div class="info-card-title">Конверсия</div>
-							<div class="info-card-value">4.2%</div>
-							<div class="info-card-change warning">-0.3%</div>
-						</div>
-						<div class="info-card">
-							<div class="info-card-title">Возвраты</div>
-							<div class="info-card-value">2.8%</div>
-							<div class="info-card-change success">-0.5%</div>
-						</div>
-						<div class="info-card">
-							<div class="info-card-title">LTV</div>
-							<div class="info-card-value">15 200 ₽</div>
-							<div class="info-card-change success">+8%</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<aside class="dashboard-sidebar">
-			<div class="stat-card">
-				<div class="stat-title">Маржинальность</div>
-				<div class="stat-value primary">
-					{{ stats.marginality?.value != null
-						? formatNumber(stats.marginality.value) + ' %'
-						: '—' }}
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-title">Рентабельность</div>
-				<div class="stat-value primary">
-					{{ stats.profitability?.value != null ? formatNumber(stats.profitability.value) + ' %' : '—'
-					}}
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-title">ДДР</div>
-				<div class="stat-value primary">
-					{{ stats.ddr?.value != null
-						? formatNumber(stats.ddr.value) + ' %'
-						: '—' }}
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-title">Факт на текущий месяц</div>
-				<div class="stat-value primary">
-					{{ stats.fact_current_month?.value != null
-						? formatNumber(stats.fact_current_month.value) + ' ₽'
-						: '—' }}
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-title">План на текущий месяц</div>
-				<div class="stat-value primary">
-					{{ stats.plan_current_month?.value != null
-						? formatNumber(stats.plan_current_month.value) + ' ₽'
-						: '—' }}
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-title">Выполнено</div>
-				<div class="stat-value primary">
-					{{ stats.done?.value != null
-						? formatNumber(stats.done.value) + ' %'
-						: '—' }}
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-title">Прогноз</div>
-				<div class="stat-value primary">
-					{{ stats.forecast?.value != null
-						? formatNumber(stats.forecast.value) + ' %'
-						: '—' }}
-				</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-title">Рекоменжуется заказов в день</div>
-				<div class="stat-value primary">
-					{{ stats.recommended_orders_per_day?.value != null
-						? formatNumber(stats.recommended_orders_per_day.value) + ' ₽'
-						: '—' }}
-				</div>
-			</div>
-		</aside>
-	</div>
+    <section v-if="!errorMessage" class="abc-section">
+      <div class="section-heading section-heading--outside">
+        <div>
+          <p class="eyebrow">Товары</p>
+          <h2>Что формирует результат</h2>
+        </div>
+        <span class="section-note">ABC-анализ за выбранный период</span>
+      </div>
+      <AbcAnalysis
+        :items="abcAnalysis"
+        :is-loading="isLoading || isChartsLoading"
+        :has-data="abcAnalysis.length > 0"
+      />
+    </section>
+  </section>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
-import { notify } from '@/composables/notification';
-import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
-import WarehouseChart from '@/components/Diagrams/WarehouseChart.vue';
-import BaseStats from '@/components/Widgets/BaseStats.vue';
-import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue';
-import DonutChart from '@/components/Diagrams/DonutChart.vue';
+import { notify } from '@/composables/notification'
+import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
+import WarehouseChart from '@/components/Diagrams/WarehouseChart.vue'
+import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue'
+import DonutChart from '@/components/Diagrams/DonutChart.vue'
 
-const isLoading = ref(false);
+const stats = ref({})
+const chartData = ref([])
+const abcAnalysis = ref([])
+const warehouseData = ref([])
+const categoryData = ref([])
 
-const stats = ref({}); // основные показатели по кабинету
-const chartData = ref([]); // основные данные для диаграмм
-const baseStats = ref({}); // основные показатели по кабинету
-const abcAnalysis = ref([]); // ABC Analysis data
-const warehouseData = ref([]) // Данные склада
-const categoryData = ref([]); // Данные по категориям
+const isLoading = ref(false)
+const isChartsLoading = ref(false)
+const isSyncing = ref(false)
+const errorMessage = ref('')
 
-// Навигация и поиск
-const searchQuery = ref('')
-const startDate = ref('1 октября')
-const endDate = ref('19 октября')
-
-// Реактивные данные
-const showMoreInfo = ref(false)
-const selectedChartType = ref('sales')
-const selectedProductId = ref(null)
-const filterStartDate = ref('')
-const filterEndDate = ref('')
-
-// Products data
-const products = ref([])
-
-// Size chart data
-/* const sizeChart = ref([]) */
-
-// Filters
-/* const filters = ref([
-	{ key: 'orders', label: 'Заказы, руб', checked: true, count: 125 },
-	{ key: 'revenue', label: 'Выкупы, руб', checked: true, count: 98 },
-	{ key: 'avgPrice', label: 'Средняя цена', checked: true, count: 45 },
-	{ key: 'profit', label: 'Прибыль, руб', checked: true, count: 76 },
-	{ key: 'margin', label: 'Маржинальность', checked: true, count: 32 }
-]) */
-
-// Selected products for display
-const selectedProducts = ref([])
-
-/* 
-// Methods
-const toggleMoreInfo = () => {
-	showMoreInfo.value = !showMoreInfo.value
+const formatDateInput = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-const selectProduct = (product) => {
-	selectedProductId.value = product.id
-	console.log('Selected product:', product)
-	// Add your logic here
+const today = new Date()
+const initialStart = new Date(today)
+initialStart.setDate(initialStart.getDate() - 29)
+
+const startDate = ref(formatDateInput(initialStart))
+const endDate = ref(formatDateInput(today))
+
+const periodIsValid = computed(() => Boolean(startDate.value && endDate.value && startDate.value <= endDate.value))
+
+const primaryKpis = computed(() => [
+  {
+    key: 'ordered_amount',
+    label: 'Заказано',
+    value: stats.value.ordered_amount?.value,
+    change: stats.value.ordered_amount?.change_percent ?? null,
+    format: 'money',
+    caption: `${formatMetric(stats.value.ordered_units?.value, 'number')} ед. заказано`,
+  },
+  {
+    key: 'revenue',
+    label: 'Выручка',
+    value: stats.value.revenue?.value,
+    change: stats.value.revenue?.change_percent ?? null,
+    format: 'money',
+    caption: `${formatMetric(stats.value.sold_units?.value, 'number')} ед. продано`,
+  },
+  {
+    key: 'profit',
+    label: 'Прибыль',
+    value: stats.value.profit?.value,
+    change: stats.value.profit?.change_percent ?? null,
+    format: 'money',
+    caption: 'После себестоимости и учтённых расходов',
+  },
+  {
+    key: 'to_pay',
+    label: 'К выплате',
+    value: stats.value.to_pay?.value,
+    change: stats.value.to_pay?.change_percent ?? null,
+    format: 'money',
+    caption: 'По финансовому отчёту WB',
+  },
+  {
+    key: 'buyout_rate',
+    label: 'Выкуп',
+    value: stats.value.buyout_rate?.value,
+    change: stats.value.buyout_rate?.change_percent ?? null,
+    format: 'percent',
+    caption: 'Продажи относительно заказов',
+  },
+  {
+    key: 'avg_price',
+    label: 'Средняя цена заказа',
+    value: stats.value.avg_price?.value,
+    change: stats.value.avg_price?.change_percent ?? null,
+    format: 'money',
+    caption: 'Средняя сумма на заказанную единицу',
+  },
+])
+
+function formatNumber(value, maximumFractionDigits = 2) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
+  return new Intl.NumberFormat('ru-RU', {
+    maximumFractionDigits,
+  }).format(Number(value))
 }
 
-const toggleFilter = (key) => {
-	const filter = filters.value.find(f => f.key === key)
-	if (filter) {
-		filter.checked = !filter.checked
-	}
+function formatMetric(value, format = 'number') {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
+  if (format === 'money') return `${formatNumber(value)} ₽`
+  if (format === 'percent') return `${formatNumber(value, 1)}%`
+  return formatNumber(value)
 }
 
-const applyDateFilter = () => {
-	console.log('Applying date filter:', filterStartDate.value, filterEndDate.value)
-	// Add your filter logic here
+function formatChange(change) {
+  const value = Number(change)
+  if (!Number.isFinite(value)) return '—'
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${formatNumber(value, 1)}%`
 }
 
-const viewProduct = (item) => {
-	console.log('View product:', item)
-	// Navigate to product details
+function changeClass(change) {
+  const value = Number(change)
+  if (value > 0) return 'change-badge--positive'
+  if (value < 0) return 'change-badge--negative'
+  return 'change-badge--neutral'
 }
 
-const editProduct = (item) => {
-	console.log('Edit product:', item)
-	// Open edit modal
+function extractError(result, fallback = 'Попробуйте обновить страницу.') {
+  return result?.error?.message || result?.message || fallback
 }
 
-const deleteProduct = (item) => {
-	if (confirm(`Удалить товар ${item.sellerSku}?`)) {
-		console.log('Delete product:', item)
-		// Delete logic
-	}
+async function loadCharts() {
+  isChartsLoading.value = true
+  try {
+    const response = await DashboardService.get_dashboard_charts({
+      start_date: startDate.value,
+      end_date: endDate.value,
+    })
+    const result = response.data
+    if (result?.status === 'error') return
+
+    chartData.value = result.chartData || []
+    warehouseData.value = result.warehouseData || []
+    categoryData.value = result.categoryData || []
+    abcAnalysis.value = result.abcAnalysis || []
+  } catch (error) {
+    console.error('Ошибка загрузки графиков:', error)
+  } finally {
+    isChartsLoading.value = false
+  }
 }
 
-const exportData = () => {
-	console.log('Exporting data...')
-	// Export logic
+async function loadDashboard() {
+  if (!periodIsValid.value) {
+    errorMessage.value = 'Проверьте выбранный диапазон дат.'
+    return
+  }
+
+  isLoading.value = true
+  errorMessage.value = ''
+  isSyncing.value = false
+  try {
+    const response = await DashboardService.get_dashboard_data({
+      start_date: startDate.value,
+      end_date: endDate.value,
+    })
+    const result = response.data
+
+    if (result?.status === 'error') {
+      stats.value = {}
+      errorMessage.value = extractError(result)
+      return
+    }
+
+    stats.value = result.stats || {}
+    isSyncing.value = result.is_synced === false || result.is_syncing === true
+
+    if (isSyncing.value) {
+      chartData.value = []
+      warehouseData.value = []
+      categoryData.value = []
+      abcAnalysis.value = []
+      return
+    }
+
+    await loadCharts()
+  } catch (error) {
+    const message = error.response?.data?.error?.message || 'Сервис временно недоступен. Попробуйте ещё раз.'
+    errorMessage.value = message
+    notify.error(message, 3000)
+  } finally {
+    isLoading.value = false
+  }
 }
 
-const generateReport = () => {
-	console.log('Generating report...')
-	// Report generation logic
+async function applyPeriod() {
+  await loadDashboard()
 }
 
-const addProduct = () => {
-	console.log('Adding new product...')
-	// Add product logic
-}
-
-const refreshData = () => {
-	console.log('Refreshing data...')
-	// Refresh logic
-}
-
-// Computed properties
-const filteredProducts = computed(() => {
-	return products.value.filter(product =>
-		filters.value.some(filter => filter.checked)
-	)
-}) */
-
-const formatNumber = (num) => {
-	return new Intl.NumberFormat('ru-RU', {
-		minimumFractionDigits: num % 1 === 0 ? 0 : 2,
-		maximumFractionDigits: 2
-	}).format(num);
-};
-
-// Вспомогательная функция для форматирования процентов
-const formatChange = (change) => {
-	if (change > 0) return `+${change}%`;
-	if (change < 0) return `${change}%`;
-	return '0%';
-};
-
-// Lifecycle hooks
-onMounted(async () => {
-	// Set default dates for filter
-	isLoading.value = true;
-
-	const today = new Date()
-	const lastMonth = new Date()
-	lastMonth.setMonth(today.getMonth() - 1)
-
-	filterStartDate.value = lastMonth.toISOString().split('T')[0]
-	filterEndDate.value = today.toISOString().split('T')[0]
-
-	// Fetch basic data (fast)
-	const response = await DashboardService.get_dashboard_data();
-	if (response.status === 200) {
-		const result = response.data;
-
-		if (result.status === "error") {
-			notify.error(result.error.message, 3000);
-			isLoading.value = false;
-			return;
-		}
-
-		if (result.is_synced == false) {
-			notify.warning("🔄 Данные синхронизируются с Wildberries. Обновление займёт некоторое время. Пожалуйста, подождите и перезагрузите страницу", 3000)
-		}
-
-		stats.value = result.stats;
-		baseStats.value = result.baseStats;
-		isLoading.value = false;
-		// Загружаем тяжёлые данные графиков отдельно (не блокируя интерфейс)
-		loadChartsData();
-
-		isLoading.value = false;
-	}
-})
-
-// Функция для загрузки данных графиков (асинхронно, после отображения основных данных)
-const loadChartsData = async () => {
-	try {
-		const chartsResponse = await DashboardService.get_dashboard_charts({
-			start_date: filterStartDate.value,
-			end_date: filterEndDate.value
-		});
-
-		if (chartsResponse.status === 200) {
-			const chartsResult = chartsResponse.data;
-
-			if (chartsResult.status !== "error") {
-				chartData.value = chartsResult.chartData || [];
-				warehouseData.value = chartsResult.warehouseData || [];
-				categoryData.value = chartsResult.categoryData || [];
-				abcAnalysis.value = chartsResult.abcAnalysis || [];
-				// sizeChart.value = chartsResult.sizeChart || [];
-			}
-		}
-	} catch (error) {
-		console.error('Ошибка загрузки данных графиков:', error);
-		// Не показываем ошибку пользователю, так как основные данные уже отображены
-	}
-};
+onMounted(loadDashboard)
 </script>
 
 <style scoped>
-/* Основная структура */
-.dashboard-container {
-	display: grid;
-	grid-template-columns: 280px 1fr 280px;
-	gap: 20px;
-	padding: 20px;
-	min-height: 100vh;
-}
-
-.main-dashboard-content {
-	display: flex;
-	flex-direction: column;
-	gap: 20px;
+.overview-page {
+  width: min(100% - 32px, var(--content-width));
+  margin: 0 auto;
+  padding: 22px 0 48px;
 }
 
-/* Dashboard Header */
-.dashboard-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 20px;
-	padding: 20px;
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	box-shadow: var(--shadow);
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
 }
-
-/* Search Bar */
-.search-container {
-	display: flex;
-	align-items: center;
-	background-color: var(--light-bg);
-	border-radius: 6px;
-	padding: 8px 12px;
-	width: 250px;
-}
-
-.search-input {
-	flex: 1;
-	background: transparent;
-	border: none;
-	color: var(--text-color);
-	padding: 4px 8px;
-	font-size: 14px;
-}
-
-.search-input:focus {
-	outline: none;
-}
-
-.date-range {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	font-size: 14px;
-}
-
-.date-input {
-	background-color: var(--light-bg);
-	border: none;
-	color: var(--text-color);
-	padding: 6px 10px;
-	border-radius: 4px;
-	font-size: 14px;
-}
-
-.date-input:focus {
-	outline: none;
-}
-
-/* Stats Grid */
-.stats-grid {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(250px, 1fr));
-	grid-template-rows: repeat(2, auto);
-	grid-auto-flow: column;
-	gap: 20px;
-	margin-bottom: 20px;
-}
-
-@media screen and (max-width: 1700px) {
-	.stats-grid {
-		grid-template-columns: repeat(3, minmax(250px, 1fr));
-		grid-template-rows: repeat(3, auto);
-	}
-}
-
-@media screen and (max-width: 1440px) {
-	.stats-grid {
-		grid-template-columns: repeat(2, minmax(250px, 1fr));
-		grid-template-rows: repeat(4, auto);
-		grid-auto-flow: row;
-	}
-}
-
-@media (max-width: 768px) {
-	.stats-grid {
-		grid-template-columns: repeat(2, 1fr);
-	}
-}
-
-.stat-card {
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	padding: 20px;
-	box-shadow: var(--shadow);
-	transition: var(--transition);
-	border-left: 4px solid var(--secondary-color);
-}
-
-.stat-card.primary {
-	border-left-color: var(--secondary-color);
-}
-
-.stat-card.success {
-	border-left-color: var(--success-color);
-}
-
-.stat-card.warning {
-	border-left-color: var(--warning-color);
-}
-
-.stat-card.accent {
-	border-left-color: var(--accent-color);
-}
-
-.stat-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
-}
-
-.stat-title {
-	font-size: 14px;
-	color: #aaa;
-	margin-bottom: 10px;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-}
-
-.stat-value {
-	font-size: 24px;
-	font-weight: bold;
-	margin-bottom: 5px;
-}
-
-.stat-value.primary {
-	color: var(--secondary-color);
-}
-
-.stat-value.success {
-	color: var(--success-color);
-}
-
-.stat-value.warning {
-	color: var(--warning-color);
+
+.page-header h1 {
+  margin-top: 3px;
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
 }
 
-.stat-value.accent {
-	color: var(--accent-color);
+.eyebrow {
+  color: #a78bfa;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.stat-change {
-	font-size: 12px;
-	color: #777;
-	display: flex;
-	align-items: center;
-	gap: 5px;
+.page-subtitle {
+  max-width: 620px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
-/* Additional Info */
-.additional-info {
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	padding: 20px;
-	box-shadow: var(--shadow);
-	margin-top: 20px;
+.period-filter {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--card-bg);
 }
 
-.info-section {
-	margin-bottom: 20px;
+.period-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.info-title {
-	font-size: 18px;
-	font-weight: 600;
-	margin-bottom: 15px;
-	color: var(--text-color);
-	display: flex;
-	align-items: center;
-	gap: 10px;
+.period-field span {
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-.info-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-	gap: 15px;
+.period-field input {
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--light-bg);
+  color: var(--text-color);
 }
 
-.info-card {
-	background-color: var(--medium-bg);
-	border-radius: 6px;
-	padding: 15px;
-	text-align: center;
+.apply-button {
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid var(--secondary-color);
+  border-radius: 8px;
+  background: var(--secondary-color);
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
 }
 
-.info-card-title {
-	font-size: 14px;
-	color: #aaa;
-	margin-bottom: 10px;
+.apply-button:hover:not(:disabled) {
+  background: var(--secondary-hover);
 }
 
-.info-card-value {
-	font-size: 20px;
-	font-weight: 600;
-	margin-bottom: 8px;
+.apply-button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
-.info-card-change {
-	font-size: 12px;
-	padding: 3px 8px;
-	border-radius: 12px;
-	display: inline-block;
+.status-banner {
+  margin-bottom: 16px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: var(--radius);
+  background: rgba(96, 165, 250, 0.08);
+  color: #bfdbfe;
+  font-size: 13px;
 }
 
-.info-card-change.success {
-	background-color: rgba(46, 204, 113, 0.2);
-	color: var(--success-color);
+.status-banner span {
+  color: var(--text-muted);
 }
 
-.info-card-change.warning {
-	background-color: rgba(243, 156, 18, 0.2);
-	color: var(--warning-color);
+.status-banner button {
+  margin-left: auto;
+  padding: 6px 9px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
-/* Sidebar */
-.dashboard-sidebar {
-	background-color: var(--medium-bg);
-	border-radius: 8px;
-	padding: 20px;
-	height: fit-content;
-	position: sticky;
-	top: 20px;
-	display: flex;
-	flex-direction: column;
-	gap: 15px;
+.status-banner--error {
+  border-color: rgba(251, 113, 133, 0.3);
+  background: rgba(251, 113, 133, 0.08);
+  color: #fda4af;
 }
 
-.sidebar-section {
-	margin-bottom: 30px;
-	padding-bottom: 20px;
-	border-bottom: 1px solid var(--border-color);
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.sidebar-section:last-child {
-	border-bottom: none;
-	margin-bottom: 0;
-	padding-bottom: 0;
+.kpi-card,
+.section-card {
+  border: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(29, 40, 55, 0.96), rgba(24, 33, 46, 0.96));
+  box-shadow: var(--shadow-sm);
 }
 
-.sidebar-title {
-	font-size: 16px;
-	font-weight: 600;
-	margin-bottom: 15px;
-	color: var(--text-color);
-	display: flex;
-	align-items: center;
-	gap: 8px;
+.kpi-card {
+  min-height: 132px;
+  padding: 15px;
+  border-radius: var(--radius);
 }
 
-.sidebar-title i {
-	color: var(--secondary-color);
+.kpi-card__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
 }
 
-/* Product List */
-.product-list {
-	list-style: none;
-	max-height: 300px;
-	overflow-y: auto;
+.kpi-card__value {
+  margin-top: 14px;
+  font-size: clamp(21px, 2vw, 27px);
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: -0.025em;
 }
 
-.product-item {
-	display: flex;
-	align-items: center;
-	padding: 12px;
-	margin-bottom: 8px;
-	background-color: var(--card-bg);
-	border-radius: 6px;
-	cursor: pointer;
-	transition: var(--transition);
-	border: 1px solid transparent;
+.kpi-card p {
+  margin-top: 11px;
+  color: var(--text-subtle);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
-.product-item:hover {
-	background-color: var(--hover-bg);
-	border-color: var(--secondary-color);
+.change-badge {
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
 }
 
-.product-item.active {
-	border-color: var(--secondary-color);
-	background-color: rgba(52, 152, 219, 0.1);
+.change-badge--positive {
+  background: rgba(52, 211, 153, 0.1);
+  color: #6ee7b7;
 }
 
-.product-image {
-	width: 40px;
-	height: 40px;
-	border-radius: 4px;
-	margin-right: 10px;
-	background-color: var(--light-bg);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 12px;
-	font-weight: bold;
-	color: var(--text-color);
+.change-badge--negative {
+  background: rgba(251, 113, 133, 0.1);
+  color: #fda4af;
 }
 
-.product-info {
-	flex: 1;
-	min-width: 0;
+.change-badge--neutral {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
 }
 
-.product-name {
-	font-size: 14px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	margin-bottom: 4px;
+.section-card {
+  border-radius: var(--radius-lg);
+  padding: 18px;
 }
 
-.product-stats {
-	display: flex;
-	gap: 10px;
-	font-size: 11px;
+.plan-card {
+  margin-top: 12px;
 }
 
-.stat-badge {
-	padding: 2px 6px;
-	border-radius: 10px;
-	font-weight: 500;
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
 }
 
-.stat-badge.sales {
-	background-color: rgba(52, 152, 219, 0.2);
-	color: var(--secondary-color);
+.section-heading h2 {
+  margin-top: 2px;
+  font-size: 17px;
+  font-weight: 720;
+  letter-spacing: -0.015em;
 }
 
-.stat-badge.profit {
-	background-color: rgba(46, 204, 113, 0.2);
-	color: var(--success-color);
+.quality-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
-/* Size Chart */
-.size-chart-container {
-	max-height: 300px;
-	overflow-y: auto;
+.quality-pills span {
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-subtle);
+  font-size: 11px;
 }
 
-.size-table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: 13px;
+.quality-pills strong {
+  margin-left: 4px;
+  color: var(--text-color);
 }
 
-.size-table th,
-.size-table td {
-	padding: 8px 10px;
-	text-align: left;
-	border-bottom: 1px solid var(--border-color);
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
 }
 
-.size-table th {
-	background-color: var(--light-bg);
-	font-weight: 600;
-	font-size: 12px;
-	color: #aaa;
+.plan-metric {
+  min-height: 78px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.48);
 }
 
-.size-table tr:last-child td {
-	border-bottom: none;
+.plan-metric span {
+  color: var(--text-subtle);
+  font-size: 10px;
 }
 
-.size-table tbody tr:hover {
-	background-color: var(--hover-bg);
+.plan-metric strong {
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
-.size-badge,
-.transit-badge,
-.available-badge {
-	padding: 2px 8px;
-	border-radius: 12px;
-	font-size: 11px;
-	font-weight: 600;
+.plan-metric--accent {
+  background: rgba(124, 58, 237, 0.09);
 }
 
-.size-badge {
-	background-color: var(--info-color);
-	color: white;
+.analytics-grid,
+.context-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
 }
 
-.transit-badge {
-	background-color: var(--warning-color);
-	color: white;
+.chart-card {
+  min-width: 0;
 }
 
-.available-badge {
-	background-color: var(--success-color);
-	color: white;
+.compact-card {
+  min-width: 0;
+  min-height: 300px;
 }
 
-/* Filters */
-.filter-group {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	margin-bottom: 20px;
+.abc-section {
+  margin-top: 18px;
 }
 
-.filter-item {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	cursor: pointer;
-	padding: 8px;
-	border-radius: 4px;
-	transition: var(--transition);
+.section-heading--outside {
+  margin: 0 2px 10px;
 }
 
-.filter-item:hover {
-	background-color: var(--hover-bg);
+.section-note {
+  color: var(--text-subtle);
+  font-size: 11px;
 }
 
-.filter-checkbox {
-	width: 18px;
-	height: 18px;
-	border: 2px solid var(--border-color);
-	border-radius: 4px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	cursor: pointer;
-	transition: var(--transition);
+@media (max-width: 1220px) {
+  .kpi-grid,
+  .plan-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
-.filter-checkbox.checked {
-	background-color: var(--secondary-color);
-	border-color: var(--secondary-color);
-}
-
-.filter-checkbox.checked::after {
-	content: '✓';
-	color: white;
-	font-size: 12px;
-	font-weight: bold;
-}
-
-.filter-label {
-	font-size: 14px;
-	flex: 1;
-}
-
-.filter-count {
-	font-size: 12px;
-	color: #777;
-	background-color: var(--light-bg);
-	padding: 2px 6px;
-	border-radius: 10px;
-}
-
-/* Date Filter */
-.date-filter {
-	background-color: var(--card-bg);
-	border-radius: 6px;
-	padding: 15px;
-	margin-top: 15px;
-}
-
-.filter-subtitle {
-	font-size: 14px;
-	font-weight: 600;
-	margin-bottom: 10px;
-	color: var(--text-color);
-}
-
-.date-inputs {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin-bottom: 15px;
-}
-
-.date-input-group {
-	display: flex;
-	flex-direction: column;
-	gap: 5px;
-}
-
-.date-input-group label {
-	font-size: 12px;
-	color: #aaa;
-}
-
-.date-picker {
-	background-color: var(--light-bg);
-	border: 1px solid var(--border-color);
-	color: var(--text-color);
-	padding: 8px;
-	border-radius: 4px;
-	font-size: 14px;
-}
-
-.date-picker:focus {
-	outline: none;
-	border-color: var(--secondary-color);
-}
-
-.apply-filter-btn {
-	width: 100%;
-	padding: 8px;
-	font-size: 13px;
-}
-
-/* Quick Actions */
-.quick-actions {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-
-.quick-action-btn {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	padding: 12px 15px;
-	background-color: var(--card-bg);
-	border: 1px solid var(--border-color);
-	border-radius: 6px;
-	color: var(--text-color);
-	cursor: pointer;
-	transition: var(--transition);
-	text-align: left;
-}
-
-.quick-action-btn:hover {
-	background-color: var(--hover-bg);
-	border-color: var(--secondary-color);
-	transform: translateX(4px);
-}
-
-.quick-action-btn i {
-	color: var(--secondary-color);
-	font-size: 16px;
-	width: 20px;
-}
+@media (max-width: 860px) {
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
 
-.quick-action-btn span {
-	font-size: 14px;
-	flex: 1;
-}
+  .period-filter {
+    width: 100%;
+  }
 
-/* Badges */
-.badge {
-	padding: 4px 8px;
-	border-radius: 12px;
-	font-size: 12px;
-	font-weight: 500;
-	display: inline-block;
-}
+  .period-field {
+    flex: 1;
+  }
 
-.badge-success {
-	background-color: rgba(46, 204, 113, 0.2);
-	color: var(--success-color);
-}
+  .period-field input {
+    width: 100%;
+  }
 
-.badge-warning {
-	background-color: rgba(243, 156, 18, 0.2);
-	color: var(--warning-color);
-}
+  .analytics-grid,
+  .context-grid {
+    grid-template-columns: 1fr;
+  }
 
-/* Avatar */
-.avatar {
-	width: 30px;
-	height: 30px;
-	border-radius: 50%;
-	background-color: var(--light-bg);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 14px;
-	font-weight: bold;
-	margin-right: 8px;
-	color: var(--text-color);
-}
+  .quality-pills {
+    justify-content: flex-start;
+  }
 
-.product-identifier {
-	display: flex;
-	align-items: center;
+  .section-heading {
+    flex-direction: column;
+  }
 }
 
-/* Responsive Design */
-@media (max-width: 1200px) {
-	.dashboard-container {
-		grid-template-columns: 1fr;
-	}
+@media (max-width: 620px) {
+  .overview-page {
+    width: min(100% - 20px, var(--content-width));
+    padding-top: 16px;
+  }
 
-	.dashboard-sidebar {
-		position: static;
-	}
-
-	.stats-grid {
-		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-	}
-}
+  .period-filter {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 
-@media (max-width: 768px) {
-	.dashboard-header {
-		flex-direction: column;
-		gap: 15px;
-		text-align: center;
-	}
+  .apply-button {
+    grid-column: 1 / -1;
+  }
 
-	.chart-area {
-		height: 250px;
-	}
+  .kpi-grid,
+  .plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 
-	.abc-header {
-		flex-direction: column;
-		align-items: flex-start;
-	}
+  .kpi-card {
+    min-height: 120px;
+  }
 
-	.abc-stats {
-		width: 100%;
-		justify-content: space-between;
-	}
+  .status-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 
-	.product-images {
-		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-	}
+  .status-banner button {
+    margin-left: 0;
+  }
 }
-
-@media (max-width: 480px) {
-	.dashboard-container {
-		padding: 10px;
-	}
-
-	.stats-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.product-images {
-		grid-template-columns: 1fr;
-	}
 
-	.abc-stat {
-		min-width: calc(50% - 8px);
-	}
+@media (max-width: 390px) {
+  .kpi-grid,
+  .plan-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
