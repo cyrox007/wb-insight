@@ -24,11 +24,12 @@ class FakeRateLimiter:
         self.closed = True
 
 
-def make_token():
+def make_token(token_type="base"):
     return SimpleNamespace(
         id=uuid4(),
         user_id=uuid4(),
         encrypted_token="encrypted-placeholder",
+        token_type=token_type,
     )
 
 
@@ -38,6 +39,7 @@ def transport_settings(monkeypatch):
     monkeypatch.setattr(wb_client_module.config, "WB_API_MAX_ATTEMPTS", 3)
     monkeypatch.setattr(wb_client_module.config, "WB_API_BACKOFF_BASE_SECONDS", 0.01)
     monkeypatch.setattr(wb_client_module.config, "WB_API_MAX_BACKOFF_SECONDS", 5.0)
+    monkeypatch.setattr(wb_client_module.config, "WB_SERVICE_SECRET", None)
     monkeypatch.setattr(wb_client_module, "decrypt_token", lambda *_args: "raw-secret")
 
     async def no_sleep(_seconds):
@@ -80,6 +82,46 @@ async def test_429_retry_after_sets_shared_cooldown_and_retries():
     ]
     assert http_client.is_closed is True
     assert limiter.closed is True
+
+
+@pytest.mark.asyncio
+async def test_service_token_requests_include_x_client_secret(monkeypatch):
+    async def handler(request: httpx.Request):
+        assert request.headers["Authorization"] == "Bearer raw-secret"
+        assert request.headers["X-Client-Secret"] == "catalog-service-secret"
+        return httpx.Response(200, json={"cards": []})
+
+    monkeypatch.setattr(
+        wb_client_module.config,
+        "WB_SERVICE_SECRET",
+        "catalog-service-secret",
+    )
+    limiter = FakeRateLimiter()
+    async with WBClient(
+        make_token("service"),
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        rate_limiter=limiter,
+    ) as client:
+        result = await client.get_products({"settings": {}})
+
+    assert result == {"cards": []}
+
+
+@pytest.mark.asyncio
+async def test_service_token_fails_closed_without_service_secret():
+    limiter = FakeRateLimiter()
+    client = WBClient(
+        make_token("service"),
+        http_client=httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _request: httpx.Response(200))
+        ),
+        rate_limiter=limiter,
+    )
+
+    with pytest.raises(WBAuthError, match="service secret"):
+        await client.get_products({"settings": {}})
+
+    await client.aclose()
 
 
 @pytest.mark.asyncio
