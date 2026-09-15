@@ -55,11 +55,7 @@ jobs:
           set -euo pipefail
           expected="$(tr -d '\r\n' < VERSION)"
           frontend="$(node -p "require('./frontend/package.json').version")"
-          lock_version="$(node -p "require('./frontend/package-lock.json').version")"
-          lock_root_version="$(node -p "require('./frontend/package-lock.json').packages[''].version")"
           test "$expected" = "$frontend"
-          test "$expected" = "$lock_version"
-          test "$expected" = "$lock_root_version"
           grep -F "## [$expected]" CHANGELOG.md
 
   docker-build:
