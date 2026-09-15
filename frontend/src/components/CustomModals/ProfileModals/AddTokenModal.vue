@@ -46,11 +46,22 @@
 					неактивный токен подключить нельзя.
 				</p>
 			</div>
+
+			<LegalConsentChecklist
+				v-model="legalConsents"
+				context="marketplace_credential"
+				@valid="legalValid = $event"
+			/>
 		</template>
 
 		<template #footer>
 			<ButtonCancel @click="close" :disabled="loading" />
-			<ButtonSuccess text="Добавить кабинет" :loading="loading" @click="submit" />
+			<ButtonSuccess
+				text="Добавить кабинет"
+				:loading="loading"
+				:disabled="!legalValid || loading"
+				@click="submit"
+			/>
 		</template>
 	</Modal>
 </template>
@@ -64,6 +75,7 @@ import TextInput from '@/components/UI/TextInput.vue'
 import TextareaInput from '@/components/UI/TextareaInput.vue'
 import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue'
 import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue'
+import LegalConsentChecklist from '@/components/LegalConsentChecklist.vue'
 
 import ProfileServices from '@/API/Dashboard/ProfileServices'
 
@@ -77,12 +89,16 @@ const token = ref('')
 const label = ref('')
 const loading = ref(false)
 const errorMessage = ref(null)
+const legalConsents = ref([])
+const legalValid = ref(false)
 
 const close = () => {
 	if (loading.value) return
 	errorMessage.value = null
 	token.value = ''
 	label.value = ''
+	legalConsents.value = []
+	legalValid.value = false
 	emit('close')
 }
 
@@ -93,6 +109,10 @@ const validate = () => {
 
 	if (token.value.length < 20) {
 		return 'Токен слишком короткий'
+	}
+
+	if (!legalValid.value) {
+		return 'Примите актуальные условия подключения кабинета'
 	}
 
 	return null
@@ -112,7 +132,8 @@ const submit = async () => {
 
 		const response = await ProfileServices.add_user_token({
 			token: token.value.trim(),
-			label: label.value.trim()
+			label: label.value.trim(),
+			legal_consents: legalConsents.value
 		})
 
 		const result = response.data
