@@ -48,7 +48,7 @@ async def create_token(
             label=data.get("label") or "Wildberries",
         )
     except WBTokenValidationError as exc:
-        response.status_code = status.HTTP_400_BAD_REQUEST
+        response.status_code = exc.status_code
         return response_error(
             code=exc.code,
             message=str(exc),
