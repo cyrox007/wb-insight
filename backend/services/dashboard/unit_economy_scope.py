@@ -1,12 +1,28 @@
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.product_cost_price_model import ProductCostPrice
+from models.product_cost_price_history import ProductCostPriceHistory
 from models.wb_report import WbRealizationReport
 from services.dashboard.account_scope import DashboardAccountScope
+from services.manual_expense_service import get_manual_expense_totals
+
+
+def _effective_cost_scalar(user_id: UUID):
+    return (
+        select(ProductCostPriceHistory.cost_price)
+        .where(
+            ProductCostPriceHistory.user_id == user_id,
+            ProductCostPriceHistory.nm_id == WbRealizationReport.nm_id,
+            ProductCostPriceHistory.effective_from <= WbRealizationReport.rr_dt,
+        )
+        .order_by(ProductCostPriceHistory.effective_from.desc())
+        .limit(1)
+        .correlate(WbRealizationReport)
+        .scalar_subquery()
+    )
 
 
 async def get_dashboard_unit_economy_scoped(
@@ -39,41 +55,41 @@ async def get_dashboard_unit_economy_scoped(
     logistics = float(row.logistics or 0)
     penalty = float(row.penalty or 0)
 
-    cost_query = (
-        select(
-            WbRealizationReport.nm_id,
-            func.coalesce(func.sum(WbRealizationReport.quantity), 0).label("qty"),
-            ProductCostPrice.cost_price,
-        )
-        .outerjoin(
-            ProductCostPrice,
-            (ProductCostPrice.nm_id == WbRealizationReport.nm_id)
-            & (ProductCostPrice.user_id == user_id),
-        )
-        .where(*conditions)
-        .group_by(WbRealizationReport.nm_id, ProductCostPrice.cost_price)
+    effective_cost = func.coalesce(_effective_cost_scalar(user_id), 0)
+    signed_qty = case(
+        (WbRealizationReport.supplier_oper_name == "Возврат", -WbRealizationReport.quantity),
+        else_=WbRealizationReport.quantity,
     )
+    cost_query = select(
+        func.coalesce(func.sum(signed_qty * effective_cost), 0).label("total_cost")
+    ).where(*conditions)
     cost_query = scope.apply(cost_query, WbRealizationReport.token_id)
-    cost_rows = (await session.execute(cost_query)).all()
-    total_cost = sum(int(item.qty or 0) * float(item.cost_price or 0) for item in cost_rows)
+    total_cost = float((await session.execute(cost_query)).scalar_one() or 0)
 
-    profit = payout - total_cost
+    other_expenses, _ = await get_manual_expense_totals(
+        session,
+        user_id,
+        start_date,
+        end_date,
+        scope,
+    )
+    profit = payout - total_cost - other_expenses
     margin = profit / revenue * 100 if revenue > 0 else 0.0
     drr = (commission + logistics + penalty) / revenue * 100 if revenue > 0 else 0.0
 
-    coverage_query = (
-        select(
-            func.count(func.distinct(WbRealizationReport.nm_id)).label("total"),
-            func.count(func.distinct(ProductCostPrice.nm_id)).label("with_cost"),
-        )
-        .select_from(WbRealizationReport)
-        .outerjoin(
-            ProductCostPrice,
-            (ProductCostPrice.nm_id == WbRealizationReport.nm_id)
-            & (ProductCostPrice.user_id == user_id),
-        )
-        .where(*conditions)
+    cost_exists = exists().where(
+        ProductCostPriceHistory.user_id == user_id,
+        ProductCostPriceHistory.nm_id == WbRealizationReport.nm_id,
+        ProductCostPriceHistory.effective_from <= end_date,
     )
+    coverage_query = select(
+        func.count(func.distinct(WbRealizationReport.nm_id)).label("total"),
+        func.count(
+            func.distinct(
+                case((cost_exists, WbRealizationReport.nm_id), else_=None)
+            )
+        ).label("with_cost"),
+    ).where(*conditions)
     coverage_query = scope.apply(coverage_query, WbRealizationReport.token_id)
     coverage = (await session.execute(coverage_query)).one()
     total_products = int(coverage.total or 0)
@@ -82,6 +98,7 @@ async def get_dashboard_unit_economy_scoped(
     return {
         "total_revenue": round(revenue, 2),
         "total_cost": round(total_cost, 2),
+        "other_expenses": round(other_expenses, 2),
         "total_profit": round(profit, 2),
         "avg_margin_percent": round(margin, 2),
         "avg_drr_percent": round(drr, 2),
