@@ -29,6 +29,10 @@ def make_wb_token(payload: dict) -> str:
     return f"{encode({'alg': 'none', 'typ': 'JWT'})}.{encode(payload)}.signature"
 
 
+def permission_mask(*bits: int) -> int:
+    return sum(1 << bit for bit in bits)
+
+
 def test_non_expiring_marketplace_credential_is_valid_until_revoked():
     credential = APIToken(
         user_id=uuid4(),
@@ -63,7 +67,7 @@ async def test_wb_insert_persists_seller_id_as_external_account_id(monkeypatch):
             "acc": 1,
             "exp": int((now + timedelta(days=30)).timestamp()),
             "sid": 987654,
-            "s": 31,
+            "s": permission_mask(1, 2, 3, 5, 6, 13, 30),
             "t": False,
         }
     )
@@ -73,6 +77,13 @@ async def test_wb_insert_persists_seller_id_as_external_account_id(monkeypatch):
         "encrypt_token",
         lambda raw, user_id: f"encrypted:{user_id}:{len(raw)}",
     )
+
+    live_checks = []
+
+    async def fake_live_check(raw, metadata, *, service_secret=None):
+        live_checks.append((raw, metadata.token_type, service_secret))
+
+    monkeypatch.setattr(token_services, "validate_wb_token_live", fake_live_check)
 
     user_id = uuid4()
     credential = await token_services.insert_token(
@@ -89,3 +100,4 @@ async def test_wb_insert_persists_seller_id_as_external_account_id(monkeypatch):
     assert credential.expires_at is not None
     assert session.added == [credential]
     assert session.flushed is True
+    assert live_checks == [(raw_token, "base", None)]
