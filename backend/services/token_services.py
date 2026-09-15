@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timezone
 from typing import Optional, Sequence
 from uuid import UUID
@@ -10,9 +9,12 @@ from core.logger import setup_logger
 from integrations.wildberries.token_metadata import (
     WBTokenValidationError,
     decode_wb_token,
+    validate_analytics_permissions,
     validate_cloud_service_token,
 )
+from integrations.wildberries.token_validation import validate_wb_token_live
 from models.tokens_model import APIToken, Marketplace
+from settings import config
 from utils.token_crypto import encrypt_token
 
 
@@ -46,7 +48,14 @@ async def insert_token(
     metadata = decode_wb_token(raw_token)
     validate_cloud_service_token(
         metadata,
-        service_id=os.getenv("WB_SERVICE_ID") or None,
+        service_id=config.WB_SERVICE_ID,
+        service_secret_configured=bool(config.WB_SERVICE_SECRET),
+    )
+    validate_analytics_permissions(metadata)
+    await validate_wb_token_live(
+        raw_token,
+        metadata,
+        service_secret=config.WB_SERVICE_SECRET,
     )
 
     token = APIToken(

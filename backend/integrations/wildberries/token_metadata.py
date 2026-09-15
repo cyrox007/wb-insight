@@ -8,9 +8,16 @@ from typing import Any
 class WBTokenValidationError(ValueError):
     """User-safe validation error for Wildberries credential metadata."""
 
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        status_code: int = 400,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
@@ -30,6 +37,19 @@ _TOKEN_TYPES = {
     3: "personal",
     4: "service",
 }
+
+# Current WB Insight read-only product surface. These bit positions are defined
+# by WB in the JWT `s` permissions mask. Keep this list aligned with actual
+# sync handlers before adding another WB API category to the product.
+WB_ANALYTICS_REQUIRED_PERMISSIONS: tuple[tuple[int, str], ...] = (
+    (1, "Контент"),
+    (2, "Аналитика"),
+    (3, "Цены и скидки"),
+    (5, "Статистика"),
+    (6, "Продвижение"),
+    (13, "Финансы"),
+)
+WB_READ_ONLY_PERMISSION_BIT = 30
 
 
 def _malformed(message: str = "Некорректный формат токена Wildberries") -> WBTokenValidationError:
@@ -58,17 +78,20 @@ def _as_int(value: Any, field: str) -> int:
         raise _malformed(f"Некорректное поле {field} в токене Wildberries") from exc
 
 
+def _has_permission(mask: int, bit: int) -> bool:
+    return bool(mask & (1 << bit))
+
+
 def decode_wb_token(
     raw_token: str,
     *,
     now: datetime | None = None,
 ) -> WBTokenMetadata:
     """
-    Decode WB JWT metadata without trusting it as authentication proof.
+    Decode documented WB JWT metadata without treating it as proof of validity.
 
-    Wildberries validates the token cryptographically when it is used against
-    the marketplace API. Here we only read documented claims so the application
-    can enforce cloud-service token policy before storing the credential.
+    The decoded claims are used for local policy checks. A live `/ping` request
+    must still verify that the token has not been revoked and is accepted by WB.
     """
 
     token = raw_token.strip()
@@ -144,22 +167,55 @@ def decode_wb_token(
     )
 
 
+def validate_analytics_permissions(metadata: WBTokenMetadata) -> None:
+    """Require the least-privilege categories used by the current product."""
+
+    mask = metadata.permissions_mask
+    if mask is None:
+        raise WBTokenValidationError(
+            "WB_TOKEN_PERMISSIONS_MISSING",
+            "Токен Wildberries не содержит информацию о категориях доступа.",
+        )
+
+    missing = [
+        name
+        for bit, name in WB_ANALYTICS_REQUIRED_PERMISSIONS
+        if not _has_permission(mask, bit)
+    ]
+    if missing:
+        raise WBTokenValidationError(
+            "WB_TOKEN_PERMISSIONS_MISSING",
+            (
+                "Для полной аналитики не хватает категорий WB API: "
+                + ", ".join(missing)
+                + ". Создайте новый токен с этими категориями."
+            ),
+        )
+
+    if not _has_permission(mask, WB_READ_ONLY_PERMISSION_BIT):
+        raise WBTokenValidationError(
+            "WB_TOKEN_MUST_BE_READ_ONLY",
+            (
+                "Для WB Insight нужен токен с уровнем доступа «Только чтение». "
+                "Токены с правом изменения данных не принимаются."
+            ),
+        )
+
+
 def validate_cloud_service_token(
     metadata: WBTokenMetadata,
     *,
     service_id: str | None,
+    service_secret_configured: bool = False,
 ) -> None:
-    """Enforce the WB token types permitted for this production cloud service."""
-
-    if metadata.token_type == "base":
-        return
+    """Enforce current WB partner-service token and service-secret policy."""
 
     if metadata.token_type == "personal":
         raise WBTokenValidationError(
             "WB_PERSONAL_TOKEN_NOT_ALLOWED",
             (
                 "Персональный токен нельзя использовать в облачном сервисе. "
-                "Создайте базовый токен Wildberries."
+                "Создайте базовый или сервисный токен Wildberries."
             ),
         )
 
@@ -168,29 +224,29 @@ def validate_cloud_service_token(
             "WB_TEST_TOKEN_NOT_SUPPORTED",
             (
                 "Тестовый токен Wildberries предназначен для тестового контура "
-                "и не поддерживается этой интеграцией."
+                "и не поддерживается production-интеграцией."
             ),
         )
 
-    if metadata.token_type == "service":
-        expected_service_id = (service_id or "").strip()
-        if not expected_service_id:
-            raise WBTokenValidationError(
-                "WB_SERVICE_ID_NOT_CONFIGURED",
-                (
-                    "Сервисный токен можно подключить после настройки WB_SERVICE_ID. "
-                    "До этого используйте базовый токен Wildberries."
-                ),
-            )
+    if metadata.token_type not in {"base", "service"}:
+        raise WBTokenValidationError(
+            "WB_TOKEN_UNSUPPORTED_TYPE",
+            "Неподдерживаемый тип токена Wildberries",
+        )
 
-        if metadata.service_id != expected_service_id:
-            raise WBTokenValidationError(
-                "WB_SERVICE_TOKEN_MISMATCH",
-                "Сервисный токен выпущен для другого сервиса Wildberries.",
-            )
-        return
+    expected_service_id = (service_id or "").strip()
+    if not expected_service_id or not service_secret_configured:
+        raise WBTokenValidationError(
+            "WB_SERVICE_CREDENTIALS_NOT_CONFIGURED",
+            (
+                "Подключение кабинетов Wildberries временно недоступно: "
+                "на сервере не настроены реквизиты партнёрского сервиса WB."
+            ),
+            status_code=503,
+        )
 
-    raise WBTokenValidationError(
-        "WB_TOKEN_UNSUPPORTED_TYPE",
-        "Неподдерживаемый тип токена Wildberries",
-    )
+    if metadata.token_type == "service" and metadata.service_id != expected_service_id:
+        raise WBTokenValidationError(
+            "WB_SERVICE_TOKEN_MISMATCH",
+            "Сервисный токен выпущен для другого сервиса Wildberries.",
+        )
