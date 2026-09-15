@@ -208,17 +208,14 @@ def validate_cloud_service_token(
     service_id: str | None,
     service_secret_configured: bool = False,
 ) -> None:
-    """Enforce the WB token types permitted for this production cloud service."""
-
-    if metadata.token_type == "base":
-        return
+    """Enforce current WB partner-service token and service-secret policy."""
 
     if metadata.token_type == "personal":
         raise WBTokenValidationError(
             "WB_PERSONAL_TOKEN_NOT_ALLOWED",
             (
                 "Персональный токен нельзя использовать в облачном сервисе. "
-                "Создайте базовый токен Wildberries."
+                "Создайте базовый или сервисный токен Wildberries."
             ),
         )
 
@@ -227,39 +224,29 @@ def validate_cloud_service_token(
             "WB_TEST_TOKEN_NOT_SUPPORTED",
             (
                 "Тестовый токен Wildberries предназначен для тестового контура "
-                "и не поддерживается этой интеграцией."
+                "и не поддерживается production-интеграцией."
             ),
         )
 
-    if metadata.token_type == "service":
-        expected_service_id = (service_id or "").strip()
-        if not expected_service_id:
-            raise WBTokenValidationError(
-                "WB_SERVICE_ID_NOT_CONFIGURED",
-                (
-                    "Сервисный токен можно подключить после регистрации WB Insight "
-                    "в Каталоге решений Wildberries. До этого используйте базовый токен."
-                ),
-            )
+    if metadata.token_type not in {"base", "service"}:
+        raise WBTokenValidationError(
+            "WB_TOKEN_UNSUPPORTED_TYPE",
+            "Неподдерживаемый тип токена Wildberries",
+        )
 
-        if metadata.service_id != expected_service_id:
-            raise WBTokenValidationError(
-                "WB_SERVICE_TOKEN_MISMATCH",
-                "Сервисный токен выпущен для другого сервиса Wildberries.",
-            )
+    expected_service_id = (service_id or "").strip()
+    if not expected_service_id or not service_secret_configured:
+        raise WBTokenValidationError(
+            "WB_SERVICE_CREDENTIALS_NOT_CONFIGURED",
+            (
+                "Подключение кабинетов Wildberries временно недоступно: "
+                "на сервере не настроены реквизиты партнёрского сервиса WB."
+            ),
+            status_code=503,
+        )
 
-        if not service_secret_configured:
-            raise WBTokenValidationError(
-                "WB_SERVICE_SECRET_NOT_CONFIGURED",
-                (
-                    "Подключение сервисных токенов временно недоступно: "
-                    "на сервере не настроен сервисный секрет Wildberries."
-                ),
-                status_code=503,
-            )
-        return
-
-    raise WBTokenValidationError(
-        "WB_TOKEN_UNSUPPORTED_TYPE",
-        "Неподдерживаемый тип токена Wildberries",
-    )
+    if metadata.token_type == "service" and metadata.service_id != expected_service_id:
+        raise WBTokenValidationError(
+            "WB_SERVICE_TOKEN_MISMATCH",
+            "Сервисный токен выпущен для другого сервиса Wildberries.",
+        )
