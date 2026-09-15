@@ -28,6 +28,7 @@ from models.product_cost_price_model import ProductCostPrice
 from models.product_cost_price_history import ProductCostPriceHistory
 from models.manual_expense import ManualExpense
 from models.monthly_revenue_plan import MonthlyRevenuePlan
+from models.legal_consent import LegalConsent
 
 
 config = context.config
