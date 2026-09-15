@@ -1,0 +1,28 @@
+{
+  "policy_version": "1.0",
+  "currency": "RUB",
+  "notes": "Default acceptance tolerances for WB Web v1. Per-run overrides must be explicit in the acceptance input and are preserved in evidence.",
+  "metrics": {
+    "ordered_amount": {"category": "orders", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "ordered_units": {"category": "orders", "unit": "count", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0"},
+    "sales_amount": {"category": "sales", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "sales_units": {"category": "sales", "unit": "count", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0"},
+    "returns_amount": {"category": "sales", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "revenue": {"category": "finance", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "wb_commission": {"category": "finance", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "logistics": {"category": "finance", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "paid_storage": {"category": "finance", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "advertising_spend": {"category": "advertising", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "cogs": {"category": "seller_inputs", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "seller_expenses": {"category": "seller_inputs", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "taxes": {"category": "seller_inputs", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "profit": {"category": "unit_economics", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "to_pay": {"category": "finance", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.02"},
+    "stock_units": {"category": "inventory", "unit": "count", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0"},
+    "current_price": {"category": "prices", "unit": "RUB", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.01"},
+    "buyout_rate": {"category": "ratios", "unit": "percent", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.01"},
+    "marginality": {"category": "ratios", "unit": "percent", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.01"},
+    "profitability": {"category": "ratios", "unit": "percent", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.01"},
+    "drr": {"category": "ratios", "unit": "percent", "required": true, "tolerance_mode": "absolute", "absolute_tolerance": "0.01"}
+  }
+}
