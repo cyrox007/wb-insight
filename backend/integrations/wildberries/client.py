@@ -59,6 +59,7 @@ class WBClient:
         self._encrypted_token = token.encrypted_token
         self._user_id = str(token.user_id)
         self._credential_id = str(token.id)
+        self._token_type = getattr(token, "token_type", None)
         self._client = http_client or httpx.AsyncClient(timeout=60.0)
         self._rate_limiter = rate_limiter or DistributedRateLimiter(config.REDIS_URL)
         self._closed = False
@@ -80,6 +81,18 @@ class WBClient:
 
     def _get_token(self) -> str:
         return decrypt_token(self._encrypted_token, self._user_id)
+
+    def _auth_headers(self, raw_token: str) -> dict[str, str]:
+        headers = {"Authorization": f"Bearer {raw_token}"}
+        if self._token_type == "service":
+            service_secret = config.WB_SERVICE_SECRET
+            if not service_secret:
+                raise WBAuthError(
+                    "Wildberries service secret is not configured",
+                    endpoint="authorization",
+                )
+            headers["X-Client-Secret"] = service_secret
+        return headers
 
     @staticmethod
     def _endpoint_interval(endpoint: str) -> float:
@@ -150,7 +163,7 @@ class WBClient:
                 response = await self._client.request(
                     method=method,
                     url=url,
-                    headers={"Authorization": f"Bearer {token}"},
+                    headers=self._auth_headers(token),
                     params=params,
                     json=json_data,
                 )
