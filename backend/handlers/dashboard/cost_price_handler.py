@@ -2,6 +2,7 @@ import csv
 import io
 from datetime import date, timedelta
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy import delete
@@ -23,6 +24,10 @@ from utils.responce_helps import response_error, response_success
 router = APIRouter(prefix="/cost-prices", tags=["cost_prices"])
 
 
+def _user_id(request: Request) -> UUID:
+    return UUID(str(request.state.user["sub"]))
+
+
 @router.get("/unit-economy", dependencies=[Depends(auth_middle)])
 async def get_unit_economy(
     request: Request,
@@ -36,7 +41,7 @@ async def get_unit_economy(
     if end_date < start_date:
         return response_error(message="Некорректный период", code="INVALID_PERIOD")
 
-    user_id = request.state.user["sub"]
+    user_id = _user_id(request)
     if nm_id:
         metrics = await calculate_unit_economy(
             session=db_session,
@@ -74,7 +79,7 @@ async def get_products_with_costs(
 
     products, total_count = await get_product_list_with_costs(
         session=db_session,
-        user_id=request.state.user["sub"],
+        user_id=_user_id(request),
         start_date=start_date,
         end_date=end_date,
         limit=max(1, min(limit, 500)),
@@ -128,7 +133,7 @@ async def upload_cost_prices(
 
         count = await upsert_cost_prices(
             session=db_session,
-            user_id=request.state.user["sub"],
+            user_id=_user_id(request),
             items=items,
         )
         return response_success(
@@ -152,7 +157,7 @@ async def batch_update_cost_prices(
     try:
         count = await upsert_cost_prices(
             session=db_session,
-            user_id=request.state.user["sub"],
+            user_id=_user_id(request),
             items=items,
         )
     except (TypeError, ValueError) as exc:
@@ -170,7 +175,7 @@ async def delete_cost_price(
     nm_id: int,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    user_id = request.state.user["sub"]
+    user_id = _user_id(request)
     snapshot_result = await db_session.execute(
         delete(ProductCostPrice)
         .where(ProductCostPrice.user_id == user_id, ProductCostPrice.nm_id == nm_id)
