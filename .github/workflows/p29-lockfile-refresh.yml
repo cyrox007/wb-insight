@@ -1,48 +1,13 @@
-name: P29 lockfile refresh
+name: P29 lockfile refresh (disabled)
 
 on:
-  push:
-    branches:
-      - codex/p29-dependency-security-beta-readiness
-    paths:
-      - frontend/package.json
-      - .github/workflows/p29-lockfile-refresh.yml
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  refresh-lockfile:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: codex/p29-dependency-security-beta-readiness
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.12.0'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Refresh lockfile within declared semver ranges
-        working-directory: frontend
-        run: npm update --package-lock-only
-
-      - name: Report audit after refresh
-        working-directory: frontend
-        run: npm audit || true
-
-      - name: Commit regenerated lockfile
-        shell: bash
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- frontend/package-lock.json; then
-            echo 'package-lock.json already current'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add frontend/package-lock.json
-          git commit -m 'P29: regenerate frontend lockfile after security updates'
-          git push origin HEAD:codex/p29-dependency-security-beta-readiness
+      - run: echo 'Temporary P29 lockfile regeneration workflow is disabled; package-lock.json is committed and normal CI is authoritative.'
