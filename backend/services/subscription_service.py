@@ -141,7 +141,6 @@ async def cancel_subscription(
     }:
         return False
     subscription.status = SubscriptionStatus.CANCELLED
-    subscription.auto_renew = False
     subscription.updated_at = datetime.now(timezone.utc)
     await session.flush()
     return True
