@@ -20,7 +20,13 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column(
         "users",
-        sa.Column("session_version", sa.Integer(), server_default="1", nullable=False),
+        sa.Column(
+            "session_version",
+            sa.Integer(),
+            server_default="1",
+            nullable=False,
+            comment="Версия security session; increment отзывает ранее выданные JWT",
+        ),
     )
     op.add_column("users", sa.Column("deactivated_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("users", sa.Column("deactivation_reason", sa.Text(), nullable=True))
@@ -28,7 +34,13 @@ def upgrade() -> None:
 
     op.add_column(
         "subscriptions",
-        sa.Column("cancel_at_period_end", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column(
+            "cancel_at_period_end",
+            sa.Boolean(),
+            server_default=sa.false(),
+            nullable=False,
+            comment="Не продлевать подписку после уже оплаченного периода",
+        ),
     )
     op.add_column(
         "subscriptions",
