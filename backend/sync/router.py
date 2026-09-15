@@ -1,8 +1,14 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from integrations.registry import get_marketplace_adapter
+from integrations.wildberries.adapter import WildberriesAdapter
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
+
+
+# Temporary compatibility surface for existing WB contract tests and any
+# internal imports. The source of truth is WildberriesAdapter.handlers.
+HANDLERS = WildberriesAdapter.handlers
 
 
 async def call_marketplace_api(
