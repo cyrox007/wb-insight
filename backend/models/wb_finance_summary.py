@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,7 +21,7 @@ class WbFinanceReportSummary(Database.Base):
     token_id: Mapped[UUIDType] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("api_tokens.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    report_id: Mapped[int] = mapped_column(nullable=False)
+    report_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     seller_finance_name: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     date_from: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     date_to: Mapped[date] = mapped_column(Date, nullable=False, index=True)
