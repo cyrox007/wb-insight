@@ -22,6 +22,7 @@ ALL_ENTITIES = [
     "sales",
     "advertising",
     "sales_funnel",
+    "paid_storage",
 ]
 
 

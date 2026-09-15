@@ -133,6 +133,10 @@ async def process_job(session: AsyncSession, job: SyncJob) -> None:
         source_cursor = (job.payload or {}).get("dateFrom")
         if source_cursor:
             state.source_cursor = {"dateFrom": str(source_cursor)}
+    elif job.entity == "paid_storage":
+        completed_through = (job.payload or {}).get("completedThrough")
+        if completed_through:
+            state.source_cursor = {"completedThrough": str(completed_through)}
 
     state.last_success_at = datetime.now(timezone.utc)
     state.last_error = None
