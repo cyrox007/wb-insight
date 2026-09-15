@@ -76,5 +76,4 @@ class WbFinanceBalanceCurrent(Database.Base):
 
     __table_args__ = (
         UniqueConstraint("token_id", name="uq_wb_finance_balance_account"),
-        Index("ix_wb_finance_balance_user", "user_id"),
     )
