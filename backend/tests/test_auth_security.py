@@ -1,13 +1,15 @@
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
 from core.dependencies import _authorize_control_panel
 from core.middleware import auth_middle
+from core.session_cookie import clear_refresh_cookie, set_refresh_cookie
 from core.session_security import SessionSecurityMiddleware
+from settings import config
 from utils.jwt import create_access_token, create_refresh_token
 
 
@@ -169,3 +171,53 @@ def test_legacy_get_refresh_is_disabled():
 
     assert response.status_code == 405
     assert response.json()["error"]["code"] == "METHOD_NOT_ALLOWED"
+
+
+def test_refresh_cookie_uses_production_scope_and_security_flags(monkeypatch):
+    monkeypatch.setattr(config, "REFRESH_COOKIE_NAME", "refresh_token")
+    monkeypatch.setattr(config, "REFRESH_TOKEN_EXPIRE_DAYS", 7)
+    monkeypatch.setattr(config, "COOKIE_SECURE", True)
+    monkeypatch.setattr(config, "COOKIE_SAMESITE", "strict")
+    monkeypatch.setattr(config, "COOKIE_DOMAIN", ".example.com")
+
+    response = Response()
+    set_refresh_cookie(response, "refresh-secret")
+    header = response.headers["set-cookie"].lower()
+
+    assert "refresh_token=refresh-secret" in header
+    assert "httponly" in header
+    assert "secure" in header
+    assert "samesite=strict" in header
+    assert "path=/" in header
+    assert "domain=.example.com" in header
+    assert "max-age=604800" in header
+
+
+def test_refresh_cookie_clear_uses_same_root_scope(monkeypatch):
+    monkeypatch.setattr(config, "REFRESH_COOKIE_NAME", "refresh_token")
+    monkeypatch.setattr(config, "COOKIE_SECURE", True)
+    monkeypatch.setattr(config, "COOKIE_SAMESITE", "lax")
+    monkeypatch.setattr(config, "COOKIE_DOMAIN", ".example.com")
+
+    response = Response()
+    clear_refresh_cookie(response)
+    header = response.headers["set-cookie"].lower()
+
+    assert "refresh_token=" in header
+    assert "max-age=0" in header
+    assert "path=/" in header
+    assert "domain=.example.com" in header
+    assert "secure" in header
+    assert "httponly" in header
+
+
+def test_application_has_only_post_refresh_route():
+    from app import app
+
+    refresh_methods = set()
+    for route in app.routes:
+        if getattr(route, "path", None) == "/auth/refresh":
+            refresh_methods.update(getattr(route, "methods", set()) or set())
+
+    assert "POST" in refresh_methods
+    assert "GET" not in refresh_methods
