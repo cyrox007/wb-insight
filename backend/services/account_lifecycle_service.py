@@ -6,11 +6,11 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.lifecycle_config import lifecycle_config as config
 from models.account_lifecycle import AccountLifecycleEvent, PasswordResetToken
 from models.subscription_model import Subscription, SubscriptionStatus
 from models.tokens_model import APIToken
 from models.users_model import User
-from settings import config
 from utils.hashed_password import hash_password
 
 
