@@ -137,6 +137,8 @@ P30 делает приёмку воспроизводимой, но сам по
 P31 закрывает запланированные code-side lifecycle gaps:
 
 - email password recovery с одноразовыми hashed reset tokens и anti-enumeration response;
+- raw reset secret передаётся через URL fragment `#token=...`, поэтому HTTP/nginx access logs не получают его в request URI;
+- production recovery fail-closed требует HTTPS reset URL и `SMTP_STARTTLS=true`, TLS использует системную проверку сертификата;
 - durable `session_version` для немедленного отзыва access/refresh JWT;
 - paid subscription cancel-at-period-end без обрыва оплаченного доступа;
 - demo исключён из paid cancellation semantics;
@@ -145,9 +147,11 @@ P31 закрывает запланированные code-side lifecycle gaps:
 - admin reactivation не восстанавливает старые marketplace credentials;
 - lifecycle/support действия сохраняются в append-only audit events;
 - support review/refund evidence доступно через allowlisted control-panel API без ручной правки production DB;
-- поздний подтверждённый Sber payment для inactive account остаётся финансовым фактом, но не активирует subscription автоматически;
-- добавлены recovery/security UI, SMTP fail-closed config и regression tests;
-- Alembic revision: `c8e5f1a2b934` после `b7d4e6f8a921`.
+- late Sber callback и account deactivation сериализованы блокировкой строки пользователя: подтверждённый payment остаётся финансовым фактом, но inactive account не получает subscription из race-condition;
+- обычный `admin` не может выполнять reactivation/revoke-sessions над `super_admin`; security-sensitive lifecycle mutation такого аккаунта требует `super_admin`;
+- `/account/*` включён в production same-origin nginx gateway и проверяется container smoke-тестом;
+- добавлены recovery/security UI и regression tests lifecycle/session/payment/RBAC/transport invariants;
+- Alembic revision `c8e5f1a2b934` после `b7d4e6f8a921`; model registry и migration comments синхронизированы с ORM для чистого `alembic check`.
 
 P31 не вводит автоматический hard purge и не объявляет юридически утверждённый retention/refund процесс: это остаётся внешним legal/operator gate.
 
