@@ -74,11 +74,9 @@ def upgrade() -> None:
     op.create_index(op.f("ix_wb_finance_balance_current_user_id"), "wb_finance_balance_current", ["user_id"], unique=False)
     op.create_index(op.f("ix_wb_finance_balance_current_token_id"), "wb_finance_balance_current", ["token_id"], unique=False)
     op.create_index(op.f("ix_wb_finance_balance_current_observed_at"), "wb_finance_balance_current", ["observed_at"], unique=False)
-    op.create_index("ix_wb_finance_balance_user", "wb_finance_balance_current", ["user_id"], unique=False)
 
 
 def downgrade() -> None:
-    op.drop_index("ix_wb_finance_balance_user", table_name="wb_finance_balance_current")
     op.drop_index(op.f("ix_wb_finance_balance_current_observed_at"), table_name="wb_finance_balance_current")
     op.drop_index(op.f("ix_wb_finance_balance_current_token_id"), table_name="wb_finance_balance_current")
     op.drop_index(op.f("ix_wb_finance_balance_current_user_id"), table_name="wb_finance_balance_current")
