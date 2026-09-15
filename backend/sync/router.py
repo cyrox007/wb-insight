@@ -1,36 +1,24 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from integrations.registry import get_marketplace_adapter
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
-from sync.process_advertising import process_advertising
-from sync.process_finance_summary import process_finance_summary
-from sync.process_operational import process_orders, process_sales
-from sync.process_paid_storage import process_paid_storage
-from sync.process_prices import process_prices
-from sync.process_products import process_products
-from sync.process_realization import process_realization
-from sync.process_sales_funnel import process_sales_funnel
-from sync.process_stock import process_stock
 
 
-HANDLERS = {
-    "realization": process_realization,
-    "finance_summary": process_finance_summary,
-    "stocks": process_stock,
-    "products": process_products,
-    "prices": process_prices,
-    "orders": process_orders,
-    "sales": process_sales,
-    "advertising": process_advertising,
-    "sales_funnel": process_sales_funnel,
-    "paid_storage": process_paid_storage,
-}
+async def call_marketplace_api(
+    session: AsyncSession,
+    job: SyncJob,
+    token: APIToken,
+) -> None:
+    """Dispatch a sync job to the adapter for the job's marketplace account."""
+    adapter = get_marketplace_adapter(token.marketplace)
+    await adapter.sync_entity(session, job, token)
 
 
-async def call_wb_api(session: AsyncSession, job: SyncJob, token: APIToken):
-    handler = HANDLERS.get(job.entity)
-
-    if not handler:
-        raise ValueError(f"Unknown entity: {job.entity}")
-
-    await handler(session, job, token)
+async def call_wb_api(
+    session: AsyncSession,
+    job: SyncJob,
+    token: APIToken,
+) -> None:
+    """Compatibility wrapper for existing worker/tests while orchestration migrates."""
+    await call_marketplace_api(session=session, job=job, token=token)
