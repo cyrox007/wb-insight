@@ -42,6 +42,8 @@ class LifecycleConfig:
             )
         if production and not self.PASSWORD_RESET_BASE_URL.startswith("https://"):
             raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use https://")
+        if production and not self.SMTP_STARTTLS:
+            raise RuntimeError("Production password recovery requires SMTP_STARTTLS=true")
         if bool(self.SMTP_USERNAME) != bool(self.SMTP_PASSWORD):
             raise RuntimeError("SMTP_USERNAME and SMTP_PASSWORD must be configured together")
 
