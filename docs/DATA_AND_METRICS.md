@@ -137,6 +137,19 @@ UI/API должны различать как минимум:
 
 Для расхождения фиксируются: показатель, период, WB source, WB Insight result, абсолютная/относительная разница, причина и решение. Необъяснённое существенное денежное расхождение блокирует повышение release stage.
 
+P30 формализует эту сверку:
+
+- policy: `ops/acceptance/wb_v1_metric_policy.json`;
+- runner: `ops/data_accuracy_acceptance.py`;
+- инструкция: `docs/DATA_ACCURACY_ACCEPTANCE.md`;
+- результат входит в release evidence как `data_accuracy`.
+
+Versioned tolerance policy является частью acceptance contract. Её нельзя ослаблять только ради прохождения релиза без объяснения и review.
+
+## Spreadsheet как reference
+
+Исходная таблица используется как coverage/business reference для областей, из которых вырос WB Insight. Она не имеет приоритета над официальным WB source и текущей исправленной semantic-моделью backend. Если старая Excel-формула и production semantic definition расходятся, причина и выбранный источник истины документируются в acceptance evidence.
+
 ## Изменение формул
 
 Любое изменение бизнес-формулы должно включать:
