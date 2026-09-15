@@ -45,148 +45,108 @@
 
 **Mainline:** PR #20–#22.
 
-- orders;
-- sales/returns;
-- Promotion API advertising;
-- product funnel;
-- retention/rolling refresh semantics.
+Orders, sales/returns, Promotion API advertising, product funnel и retention/rolling refresh semantics.
 
 ## 0.7.0-alpha.1 — P8–P13: semantic/business layer
 
 **Mainline:** PR #23–#28.
 
-- unified metric semantics;
-- multi-account dashboard scope;
-- corrected Unit Economy;
-- monthly revenue plans;
-- paid storage;
-- historical COGS;
-- seller manual expenses.
+Unified metrics, multi-account scope, corrected Unit Economy, monthly plans, paid storage, historical COGS и manual expenses.
 
 ## 0.8.0-alpha.1 — P14–P18: feature-complete WB analytics alpha
 
 **Mainline:** PR #29–#33.
 
-- единый Dashboard UX;
-- seller settings;
-- Inventory Risk/Replenishment;
-- Price Monitoring;
-- Finance/Reconciliation;
-- удаление demo/hardcoded KPI из аналитических экранов.
+Dashboard UX, seller settings, Inventory Risk/Replenishment, Price Monitoring и Finance/Reconciliation без demo KPI.
 
 ## 0.9.0-alpha.1 — P19–P24: release-hardening baseline
 
 **Mainline:** PR #34–#39.  
 **Commit после P24:** `ff0d278c32f0a770dc0cdbc0cf0ab9d98c2377ca`.
 
-- WB credential compliance по JWT metadata;
-- marketplace adapter core;
-- credential identity foundation;
-- production WB token policy и live validation;
-- release-readiness/health baseline;
-- Sber acquiring с idempotency и server-side payment confirmation.
+WB credential compliance, marketplace adapter/credential foundation, production WB token policy/live validation, health/readiness и Sber acquiring.
 
 ## 0.9.0-alpha.2 — P25: version governance и deployment
 
 **PR:** #40  
 **Merge:** `8cad1f098ae63c813ed36aad2c462d196484153a`.
 
-- root `VERSION` стал source of truth;
-- formal SemVer/stage gates;
-- backend/frontend Docker images;
-- production Compose topology;
-- same-origin nginx gateway;
-- deployment/upgrade/rollback runbook;
-- release-integrity CI.
+Root `VERSION`, SemVer gates, production Docker/Compose, same-origin nginx, deploy/upgrade/rollback и release-integrity CI.
 
 ## 0.9.0-alpha.3 — P26: operations hardening
 
 **PR:** #41  
 **Merge:** `76ee8651298fff99b8bf6a11921dcbfbf0916c46`.
 
-- operational health snapshot;
-- stale/failed sync and lease checks;
-- credential/service-secret expiry monitoring;
-- HTTP/5xx telemetry;
-- Celery operations monitor and alert webhook;
-- encrypted PostgreSQL backup/restore/drill;
-- CI backup/restore roundtrip;
-- canonical secure refresh-cookie helper;
-- удалён legacy GET refresh.
+Operational monitoring, credential expiry signals, HTTP/5xx telemetry, Celery alerting, encrypted PostgreSQL backup/restore/drill и secure refresh-cookie contract.
 
 ## 0.9.0-alpha.4 — P27: legal consent foundation
 
 **PR:** #42  
 **Merge:** `591b3919eb80403a7e4225382d996dca63b8c039`.
 
-- versioned legal-document registry;
-- public legal requirements/documents API;
-- immutable consent evidence;
-- backend enforcement регистрации, billing и marketplace connection;
-- public legal pages;
-- закрыт legacy credential-add bypass.
-
-Тексты остаются draft до внешнего legal approval.
+Versioned legal registry, public legal API/pages, immutable consent evidence и backend enforcement регистрации, billing и marketplace connection. Тексты остаются draft до внешнего legal approval.
 
 ## 0.9.0-alpha.5 — P28: browser-session hardening и release smoke
 
 **PR:** #43  
 **Merge:** `351cbcd7129c69959e138918b1d621a6475af210`.
 
-- access JWT перенесён из persistent browser storage в memory;
-- session после reload восстанавливается через HttpOnly refresh cookie;
-- refresh возвращает safe user snapshot;
-- concurrent 401 используют единый refresh flow;
-- frontend CI запрещает persistent access token;
-- production API fallback стал same-origin;
-- nginx gateway дополнен `/billing` и `/legal`;
-- release-integrity реально проверяет container routing;
-- `ops/release_smoke.py` формализует production-like smoke;
-- добавлены backend session-restore regression tests.
-
-P28 закрыл последний запланированный session hardening blocker, но во время CI выявились dependency vulnerabilities, поэтому beta не была назначена автоматически.
+Access JWT перенесён в память, session restore выполняется через HttpOnly refresh-cookie, concurrent refresh дедуплицирован, production API стал same-origin, nginx routing проверяется в CI, добавлен `ops/release_smoke.py`.
 
 ## 0.9.0-alpha.6 — P29: dependency security и документационная ревизия
 
 **PR:** #44  
-**Статус:** текущий кандидат; версия становится mainline только после green CI и merge.
+**Merge:** `6a4e754738617085a22e540a84b5c8ee5e0854d1`.
 
-Изменения кандидата:
+- frontend dependency tree очищен по реальному `npm audit`;
+- удалён runtime package `node`, обновлён Axios и закреплены безопасные transitive versions;
+- frontend CI постоянно проверяет production и full dependency tree;
+- backend получил `pip-audit`;
+- уязвимая цепочка `python-jose -> ecdsa` удалена, HS256 JWT переведён на PyJWT;
+- FastAPI/Starlette, cryptography и python-dotenv обновлены до исправленных версий;
+- итоговый production Python audit не нашёл известных vulnerabilities;
+- route regression tests переведены на публичный OpenAPI contract;
+- gateway smoke получил bounded backend readiness;
+- документация проекта полностью перестроена в канонический `docs/`-портал.
 
-- frontend dependency tree обновлён после фактического `npm audit`;
-- Axios поднят в исправленную release line;
-- удалена ошибочная runtime dependency `node` из browser manifest;
-- безопасные transitive versions закреплены через overrides;
-- постоянный CI gate: production + full-tree `npm audit`;
-- backend CI дополнен `pip-audit` production requirements;
-- временный lockfile self-write flow отключён и возвращён в read-only режим;
-- документация полностью реструктурирована: overview, requirements, install, configuration, architecture, features, user/admin/developer/security guides, metrics, troubleshooting, roadmap/readiness/version history.
+`alpha.6` является первым baseline после P28, где frontend и backend dependency audits входят в обязательный CI gate.
 
-Цель `alpha.6`: последний чистый alpha code/documentation baseline перед production-like beta validation.
+## 0.9.0-alpha.7 — P30: beta acceptance tooling
+
+**Ветка:** `codex/p30-beta-readiness-data-accuracy`  
+**Статус:** текущий кандидат; становится mainline только после green CI и merge.
+
+Что входит в P30:
+
+- versioned policy ключевых метрик WB Web v1 и их tolerances;
+- deterministic `Decimal` comparator для expected/actual;
+- machine-readable JSON и Markdown data-accuracy report;
+- SHA-256 привязка отчёта к acceptance input и policy;
+- positive/negative CI fixtures;
+- release-evidence manifest, связывающий stage, exact commit, version, environment и hashes artifacts;
+- отдельные evidence contracts для beta/RC/stable;
+- CI self-test, который проверяет как успешный, так и заведомо провальный acceptance;
+- `VERSION` теперь триггерит backend security и database-migration gates, чтобы каждый release candidate проходил полный контур.
+
+Почему это всё ещё alpha: tooling создаёт доказуемый процесс, но не заменяет реальный production-like deployment и сверку на настоящем seller account. `0.9.0-beta.1` назначается только после фактического прохождения этих gates.
 
 ## Следующая стадия — 0.9.0-beta.1
 
 Допускается только после:
 
-- merge P29 с green CI;
+- merge P30 с green CI;
 - feature freeze WB Web v1;
-- production-like HTTPS deployment;
+- production-like HTTPS deployment из repo;
 - core release smoke;
-- data-accuracy acceptance на реальном WB seller account;
-- отсутствия необъяснённых существенных денежных расхождений.
+- disposable registration/demo/legal evidence;
+- data-accuracy acceptance на реальном WB seller account и фиксированных периодах;
+- отсутствия необъяснённых существенных денежных расхождений;
+- сохранённого beta release-evidence manifest для exact commit.
 
 ## 1.0.0-rc.1
 
-Требует фактического закрытия внешних/операционных gates:
-
-- WB partner/service credentials и real seller smoke;
-- Sber merchant onboarding и payment smoke;
-- production DNS/TLS/deployment;
-- monitoring/alerts/logging;
-- off-host backup + restore drill;
-- non-draft legal documents;
-- account lifecycle/support procedures;
-- полный release evidence.
+Требует фактического закрытия внешних/операционных gates: WB partner/service credentials и real seller full sync, Sber merchant payment smoke, production DNS/TLS, monitoring/logging, off-host backup/restore drill, non-draft legal documents и account lifecycle.
 
 ## 1.0.0 — WB Insight Web v1 Stable
 
