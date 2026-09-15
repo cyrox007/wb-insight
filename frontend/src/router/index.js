@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { pinia } from '@/stores/pinia'
 
 
 const router = createRouter({
@@ -161,22 +163,6 @@ const router = createRouter({
 	],
 })
 
-const getAuthenticatedUser = () => {
-	const token = localStorage.getItem('access_token')
-	const rawUser = localStorage.getItem('user')
-
-	if (!token || !rawUser) {
-		return null
-	}
-
-	try {
-		const user = JSON.parse(rawUser)
-		return user && typeof user === 'object' ? user : null
-	} catch {
-		return null
-	}
-}
-
 const isAdmin = (user) => {
 	return Array.isArray(user?.roles) && user.roles.some(
 		(role) => role === 'super_admin' || role === 'admin'
@@ -188,7 +174,8 @@ router.beforeEach((to, from, next) => {
 		document.title = to.meta.title
 	}
 
-	const user = getAuthenticatedUser()
+	const authStore = useAuthStore(pinia)
+	const user = authStore.isAuthenticated ? authStore.user : null
 
 	if (to.meta.requestAuth && !user) {
 		if (to.path !== '/') {
