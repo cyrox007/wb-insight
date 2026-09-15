@@ -153,27 +153,32 @@ const selectTariff = async () => {
 			<div v-if="currentSubscription?.is_active" class="subscription-lifecycle">
 				<div>
 					<strong>{{ currentSubscription.tariff_name || 'Текущая подписка' }}</strong>
-					<p v-if="currentSubscription.cancel_at_period_end">
+					<p v-if="currentSubscription.status === 'demo'">
+						Демо-доступ действует до {{ formatDate(currentSubscription.end_date) }}. Автопродление к demo не применяется.
+					</p>
+					<p v-else-if="currentSubscription.cancel_at_period_end">
 						Автопродление отключено. Доступ действует до {{ formatDate(currentSubscription.end_date) }}.
 					</p>
 					<p v-else>
-						Текущий период действует до {{ formatDate(currentSubscription.end_date) }}.
+						Текущий оплаченный период действует до {{ formatDate(currentSubscription.end_date) }}.
 					</p>
 				</div>
-				<button
-					v-if="currentSubscription.cancel_at_period_end"
-					type="button"
-					class="lifecycle-button"
-					:disabled="loadingCancellation"
-					@click="undoCancellation"
-				>Вернуть продление</button>
-				<button
-					v-else
-					type="button"
-					class="lifecycle-button danger"
-					:disabled="loadingCancellation"
-					@click="cancelSubscription"
-				>Отменить продление</button>
+				<template v-if="currentSubscription.status === 'active'">
+					<button
+						v-if="currentSubscription.cancel_at_period_end"
+						type="button"
+						class="lifecycle-button"
+						:disabled="loadingCancellation"
+						@click="undoCancellation"
+					>Вернуть продление</button>
+					<button
+						v-else
+						type="button"
+						class="lifecycle-button danger"
+						:disabled="loadingCancellation"
+						@click="cancelSubscription"
+					>Отменить продление</button>
+				</template>
 			</div>
 
 			<div class="tariffs-grid">
