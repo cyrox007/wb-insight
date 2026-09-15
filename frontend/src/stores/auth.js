@@ -42,6 +42,11 @@ export const useAuthStore = defineStore('auth', {
 			}
 		},
 		login(payload) {
+			// Compatibility with the profile screen: an object without an access
+			// token is a UI identity update, never a new authenticated session.
+			if (payload && !payload.access_token && !payload.user) {
+				return this.updateUser(payload)
+			}
 			const applied = this.applySession(payload)
 			this.initialized = true
 			return applied
