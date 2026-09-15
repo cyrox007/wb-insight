@@ -164,6 +164,13 @@ async def deactivate_account(
         )
         .values(used_at=now)
     )
+
+    # Persist/lock the inactive user row before touching credentials and
+    # subscriptions. Paid callback finalization locks the same user row before
+    # granting access, so the two flows serialize: either the callback commits
+    # first and is then cancelled below, or it waits and observes is_active=False.
+    await session.flush()
+
     await session.execute(
         update(APIToken)
         .where(APIToken.user_id == user.id)
