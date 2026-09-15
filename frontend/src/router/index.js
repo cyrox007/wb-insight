@@ -18,7 +18,7 @@ const router = createRouter({
 			name: 'dashboard.home',
 			component: () => import('../pages/Dashboard/Main/index.vue'),
 			meta: {
-				title: 'Главная',
+				title: 'Обзор · WB Insight',
 				requestAuth: true,
 			},
 			children: [],
@@ -28,7 +28,7 @@ const router = createRouter({
 			name: 'dashboard.profile',
 			component: () => import('../pages/Dashboard/Profile/index.vue'),
 			meta: {
-				title: 'Профиль пользователя',
+				title: 'Настройки продавца · WB Insight',
 				requestAuth: true,
 			}
 		},
@@ -37,7 +37,7 @@ const router = createRouter({
 			name: 'dashboard.unity',
 			component: () => import('../pages/Dashboard/UnityEconomy/index.vue'),
 			meta: {
-				title: 'Unity-экономика',
+				title: 'Юнит-экономика · WB Insight',
 				requestAuth: true,
 			}
 		},
@@ -46,7 +46,7 @@ const router = createRouter({
 			name: 'dashboard.ads',
 			component: () => import('../pages/Dashboard/Ads/AdsPage.vue'),
 			meta: {
-				title: 'Внутренняя реклама',
+				title: 'Реклама · WB Insight',
 				requestAuth: true,
 			}
 		},
