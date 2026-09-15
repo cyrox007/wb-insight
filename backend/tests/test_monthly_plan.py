@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -72,7 +73,7 @@ def test_plan_target_already_reached_requires_zero_daily_run_rate():
 
 def test_plan_input_is_normalized_and_validated():
     assert _parse_plan_month("2026-09-17") == date(2026, 9, 1)
-    assert _parse_revenue_target("123456.789") == pytest.approx(123456.79)
+    assert _parse_revenue_target("123456.789") == Decimal("123456.79")
 
     with pytest.raises(ValueError):
         _parse_revenue_target(0)
