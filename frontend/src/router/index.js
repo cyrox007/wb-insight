@@ -32,6 +32,14 @@ const router = createRouter({
 			redirect: '/legal/privacy',
 		},
 		{
+			path: '/reset-password',
+			name: 'auth.reset-password',
+			component: () => import('../pages/Auth/ResetPassword.vue'),
+			meta: {
+				title: 'Восстановление доступа · WB Insight',
+			}
+		},
+		{
 			path: '/dashboard',
 			name: 'dashboard.home',
 			component: () => import('../pages/Dashboard/Main/index.vue'),
