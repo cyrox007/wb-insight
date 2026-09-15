@@ -6,7 +6,10 @@ from handlers import health_handler
 
 @pytest.mark.asyncio
 async def test_liveness_does_not_depend_on_external_services():
-    assert await health_handler.liveness() == {"status": "ok"}
+    assert await health_handler.liveness() == {
+        "status": "ok",
+        "version": health_handler.APP_VERSION,
+    }
 
 
 @pytest.mark.asyncio
@@ -26,6 +29,7 @@ async def test_readiness_is_ok_when_database_and_redis_are_available(monkeypatch
     assert response.status_code == status.HTTP_200_OK
     assert payload == {
         "status": "ok",
+        "version": health_handler.APP_VERSION,
         "checks": {"database": "ok", "redis": "ok"},
     }
 
@@ -47,5 +51,6 @@ async def test_readiness_returns_503_when_dependency_is_unavailable(monkeypatch)
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert payload == {
         "status": "degraded",
+        "version": health_handler.APP_VERSION,
         "checks": {"database": "ok", "redis": "error"},
     }
