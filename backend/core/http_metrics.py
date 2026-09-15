@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from core.logger import setup_logger
+from core.ops_config import ops_config
 from settings import config
 
 
@@ -29,6 +30,9 @@ def http_metric_keys(bucket: str) -> tuple[str, str]:
 
 
 async def record_http_status(status_code: int, *, now: datetime | None = None) -> None:
+    if not ops_config.HTTP_METRICS_ENABLED:
+        return
+
     total_key, errors_key = http_metric_keys(_bucket(now))
     try:
         pipe = _metrics_redis.pipeline(transaction=False)
@@ -48,6 +52,9 @@ async def read_http_counters(
     *,
     now: datetime | None = None,
 ) -> tuple[int, int]:
+    if not ops_config.HTTP_METRICS_ENABLED:
+        return 0, 0
+
     current = now or datetime.now(timezone.utc)
     keys: list[str] = []
     for offset in range(window_minutes):
