@@ -145,11 +145,16 @@ async def registration(
     """Регистрация нового пользователя и выдача demo-подписки."""
     data = await request.json()
     reg_data = data.get("registrationData") or {}
+    legal_context = (
+        "registration_legal"
+        if reg_data.get("entity_type") == "legal_entity"
+        else "registration"
+    )
 
     try:
         legal_documents = validate_consent_payload(
             reg_data.get("legal_consents"),
-            context="registration",
+            context=legal_context,
         )
     except LegalConsentError as exc:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -174,7 +179,7 @@ async def registration(
         db_session,
         user_id=user.id,
         documents=legal_documents,
-        context="registration",
+        context=legal_context,
         client_ip=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
         context_reference=str(user.id),
