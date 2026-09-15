@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,6 +38,8 @@ STATIC_DIRECTORIES = {
     "static": "/static",
     "uploads": "/uploads",
 }
+VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
+APP_VERSION = VERSION_FILE.read_text(encoding="utf-8").strip()
 
 
 def _setup_cors(app: FastAPI) -> None:
@@ -88,7 +91,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="WB Insight API",
         description="Seller analytics API for WB Insight",
-        version="1.0.0",
+        version=APP_VERSION,
     )
 
     # Middleware order: CORS stays outermost; audit never logs request bodies.
