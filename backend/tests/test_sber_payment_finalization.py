@@ -42,6 +42,10 @@ async def test_deposited_payment_activates_subscription_once(monkeypatch):
         assert payment_id == payment.id
         return subscription_by_payment["value"]
 
+    async def user_active(_session, user_id):
+        assert user_id == payment.user_id
+        return True
+
     async def deactivate(_session, user_id):
         assert user_id == payment.user_id
         calls["deactivate"] += 1
@@ -60,6 +64,7 @@ async def test_deposited_payment_activates_subscription_once(monkeypatch):
 
     monkeypatch.setattr(payment_service, "get_payment_for_update", get_locked)
     monkeypatch.setattr(payment_service, "get_subscription_by_payment_id", get_subscription)
+    monkeypatch.setattr(payment_service, "is_payment_user_active", user_active)
     monkeypatch.setattr(payment_service, "deactivate_active_subscriptions", deactivate)
     monkeypatch.setattr(payment_service, "create_subscription", create)
     monkeypatch.setattr(payment_service, "record_payment_event", record)
@@ -90,6 +95,62 @@ async def test_deposited_payment_activates_subscription_once(monkeypatch):
     assert calls["deactivate"] == 1
     assert calls["create"] == 1
     assert calls["event"] == 2
+
+
+@pytest.mark.asyncio
+async def test_deposited_payment_does_not_reactivate_inactive_account(monkeypatch):
+    payment = make_payment()
+    calls = {"deactivate": 0, "create": 0, "events": []}
+
+    async def get_locked(_session, _payment_id):
+        return payment
+
+    async def no_subscription(_session, _payment_id):
+        return None
+
+    async def user_inactive(_session, user_id):
+        assert user_id == payment.user_id
+        return False
+
+    async def deactivate(*_args, **_kwargs):
+        calls["deactivate"] += 1
+
+    async def create(*_args, **_kwargs):
+        calls["create"] += 1
+
+    async def record(_session, **kwargs):
+        calls["events"].append(kwargs)
+        return SimpleNamespace(**kwargs)
+
+    monkeypatch.setattr(payment_service, "get_payment_for_update", get_locked)
+    monkeypatch.setattr(payment_service, "get_subscription_by_payment_id", no_subscription)
+    monkeypatch.setattr(payment_service, "is_payment_user_active", user_inactive)
+    monkeypatch.setattr(payment_service, "deactivate_active_subscriptions", deactivate)
+    monkeypatch.setattr(payment_service, "create_subscription", create)
+    monkeypatch.setattr(payment_service, "record_payment_event", record)
+
+    bank_status = SberOrderStatus(
+        order_status=2,
+        payment_state="DEPOSITED",
+        raw={"orderStatus": 2, "paymentState": "DEPOSITED"},
+    )
+    result, subscription = await payment_service.apply_sber_status(
+        FakeSession(),  # type: ignore[arg-type]
+        payment_id=payment.id,
+        status=bank_status,
+        event_type="callback_verified",
+    )
+
+    assert result.status == PaymentStatus.SUCCEEDED
+    assert result.confirmed_at is not None
+    assert subscription is None
+    assert calls["deactivate"] == 0
+    assert calls["create"] == 0
+    assert [event["event_type"] for event in calls["events"]] == [
+        "callback_verified",
+        "subscription_activation_skipped",
+    ]
+    assert calls["events"][-1]["provider_data"] == {"reason": "inactive_account"}
 
 
 @pytest.mark.asyncio
