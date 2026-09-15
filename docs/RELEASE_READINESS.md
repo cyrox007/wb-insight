@@ -33,31 +33,38 @@ Ozon, AI-аналитик и мобильные приложения не явл
 
 Подробности: `docs/WB_ACCESS_TOKEN_REQUIREMENTS.md`.
 
-### 2. Реальный acquiring — CODE + EXTERNAL BLOCKER
+### 2. Реальный acquiring — EXTERNAL/SMOKE BLOCKER
 
-Статус: **не готово**.
+Статус кода: **реализовано в P24**.
 
-Сейчас production billing намеренно отвечает `BILLING_NOT_CONFIGURED`. Fake provider разрешён только в development.
+Sber acquiring flow включает:
 
-Для релиза нужно:
+- server-to-server `register.do`;
+- redirect на банковский `formUrl`;
+- уникальный `Idempotency-Key` на платёжную попытку;
+- server-side `getOrderStatusExtended.do`;
+- callback как trigger, а не источник истины;
+- активацию подписки только после `orderStatus=2` и `paymentState=DEPOSITED`;
+- row lock + уникальный `subscription.payment_id` против двойной активации;
+- append-only `payment_events` без merchant credentials и неизвестных чувствительных полей;
+- sandbox/prod separation и fail-fast при sandbox URL в production.
 
-- договор/merchant credentials Сбер acquiring;
+До release всё ещё нужны внешние действия:
+
+- договор/merchant account Сбер internet acquiring;
 - sandbox/test credentials;
-- production credentials;
-- server-to-server создание платежа;
-- redirect/payment URL;
-- server-side проверка статуса платежа;
-- подписанный/проверенный callback или webhook;
-- idempotency обработки callback;
-- активация/смена подписки только после подтверждённого `SUCCEEDED`;
-- корректная обработка failed/cancelled/expired;
-- журнал provider events без хранения чувствительных платёжных данных.
+- production credentials и production gateway URL;
+- HTTPS return/fail/callback URLs;
+- sandbox smoke: success / decline / cancel / retry / duplicate callback;
+- минимальный production payment smoke и сверка в merchant back office.
+
+Подробности: `docs/SBER_ACQUIRING.md`.
 
 ### 3. Production deployment — CODE/OPS BLOCKER
 
 Статус: **не готово**.
 
-В репозитории нет воспроизводимого production deployment. Нужны:
+В репозитории пока нет полностью воспроизводимого production deployment. Нужны:
 
 - контейнер backend;
 - контейнер frontend/static build;
@@ -70,7 +77,7 @@ Ozon, AI-аналитик и мобильные приложения не явл
 
 ### 4. Health, monitoring и alerts — IN PROGRESS
 
-P23 добавляет:
+P23 добавил:
 
 - `GET /health/live` — liveness без внешних зависимостей;
 - `GET /health/ready` — readiness PostgreSQL + Redis.
@@ -113,18 +120,9 @@ P23 добавляет:
 - правила возвратов/отмены подписки;
 - согласие с документами при регистрации и/или оплате с версией документа и timestamp.
 
-### 7. Production documentation — CODE BLOCKER
+### 7. Production documentation — MOSTLY READY
 
-Статус: **не готово**.
-
-`README.md` и `SETUP.md` содержат устаревшие утверждения и старую ручную схему БД. До релиза:
-
-- README должен описывать только реально существующий функционал;
-- убрать утверждения, что AI/mobile уже реализованы;
-- обновить WB access-token contract;
-- `SETUP.md` должен использовать Alembic как единственный source of truth схемы;
-- описать обязательные production env vars и startup order;
-- описать worker/scheduler и smoke checks.
+P23/P24 привели README/SETUP к текущей архитектуре, зафиксировали WB credential contract и Sber acquiring contract. Перед RC останется синхронизировать документацию с выбранной production infrastructure из P25/P26.
 
 ## P1 — важно сразу после базового release hardening
 
@@ -173,23 +171,24 @@ AI-аналитик, прогнозы и native mobile apps не должны ф
 - [ ] получены и установлены WB partner credentials;
 - [ ] Base/Service token smoke проходит на реальном seller account;
 - [ ] все sync entities проходят end-to-end без необъяснённых 401/403;
-- [ ] подключён реальный Sber acquiring;
-- [ ] payment success подтверждается только server-side;
+- [ ] получены production merchant credentials Сбера;
+- [ ] Sber sandbox + production smoke подтверждены;
+- [x] payment success в коде подтверждается только server-side;
 - [ ] production deployment воспроизводим из репозитория;
 - [ ] HTTPS и production CORS настроены;
 - [ ] `/health/live` и `/health/ready` используются инфраструктурой;
 - [ ] error monitoring и critical alerts работают;
 - [ ] backup и restore drill подтверждены;
 - [ ] legal documents опубликованы и consent фиксируется;
-- [ ] README/SETUP соответствуют фактическому продукту;
+- [ ] README/SETUP соответствуют production infrastructure;
 - [ ] smoke suite пройдена на production-like environment;
 - [ ] секреты/токены не присутствуют в git, frontend bundle или логах.
 
 ## Очерёдность закрытия
 
 1. P22 — WB credential contract — **done**.
-2. P23 — release readiness / health / documentation — **in progress**.
-3. P24 — Sber acquiring production integration.
+2. P23 — release readiness / health / documentation — **done**.
+3. P24 — Sber acquiring code integration — **done после green CI; merchant onboarding остаётся внешним blocker**.
 4. P25 — production container/deployment baseline.
 5. P26 — monitoring, sync/token expiry alerts, backup runbook.
 6. P27 — legal routes + consent persistence.
