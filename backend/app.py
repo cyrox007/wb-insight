@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 import models
 from core.audit import AuditMiddleware
 from core.session_security import SessionSecurityMiddleware
+from core.version import APP_VERSION
 from handlers.auth_handler import router as auth_router
 from handlers.control_panel.home import router as CP_home_router
 from handlers.control_panel.roles import router as CP_roles_router
@@ -88,7 +89,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="WB Insight API",
         description="Seller analytics API for WB Insight",
-        version="1.0.0",
+        version=APP_VERSION,
     )
 
     # Middleware order: CORS stays outermost; audit never logs request bodies.
