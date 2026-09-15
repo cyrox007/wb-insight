@@ -19,6 +19,7 @@ from services.dashboard.semantic_metrics import (
 )
 from services.dashboard.unit_economy_metrics import UnitEconomyMetricsService
 from services.dashboard.unit_report_scope import get_reports_with_costs_scoped
+from services.manual_expense_service import get_manual_expense_totals
 from services.user_service import get_user_tax_rate
 from services.user_sync_state_service import get_user_sync_states
 from utils.responce_helps import response_error, response_success
@@ -118,11 +119,20 @@ async def get_unit_economy(
         end_date,
         scope,
     )
+    manual_expenses_total, manual_expenses_map = await get_manual_expense_totals(
+        db_session,
+        user_id,
+        start_date,
+        end_date,
+        scope,
+    )
     tax_rate = await get_user_tax_rate(db_session, user_id)
     metrics_service = UnitEconomyMetricsService(tax_rate=tax_rate)
     result_df = metrics_service.calculate_all_metrics(
         pd.DataFrame(report_data),
         advertising_costs_map=advertising_costs_map,
+        manual_expenses_map=manual_expenses_map,
+        manual_expenses_total=manual_expenses_total,
     )
     return _format_response(result_df, scope.selected_token_id)
 
@@ -162,10 +172,9 @@ def _serialize_table_row(row: dict[str, Any]) -> dict[str, Any]:
         "other_deductions": _clean_number(row.get("deduction")),
         "tax": _clean_number(row.get("tax")),
         "ad_expenses": _clean_number(row.get("advertising_cost")),
+        "other_expenses": _clean_number(row.get("other_expenses")),
         "drr": _clean_number(row.get("drr")),
         "paid_acceptance": _clean_number(row.get("acceptance")),
-        # WB finance's ppvz_for_pay is the authoritative seller payout in the
-        # current model; retain total_to_pay as a compatibility alias.
         "total_to_pay": payout,
         "cost_price_total": _clean_number(row.get("product_cost")),
         "total_expenses": _clean_number(row.get("total_costs")),
@@ -204,7 +213,7 @@ def _format_response(
         "total_to_pay": summary["total_to_pay"],
         "avg_sale_price": summary["avg_sale_price"],
         "tax": summary["tax"],
-        "other_expenses": 0,
+        "other_expenses": summary["other_expenses"],
         "drr": summary["drr"],
         "cost_price": summary["cost_price_total"],
         "marginality": summary["margin"],
