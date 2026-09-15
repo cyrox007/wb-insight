@@ -194,7 +194,7 @@ async def build_operational_snapshot(
         ),
         "wb_service_secret": _wb_service_secret_check(
             current,
-            ops_config.CREDENTIAL_EXPIRY_WARNING_DAYS,
+            ops_config.WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS,
         ),
         "http_5xx": http_5xx,
     }
