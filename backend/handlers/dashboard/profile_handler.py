@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.access_control import permissions_for_roles
 from core.dependencies import get_db_session
 from core.middleware import auth_middle
+from integrations.wildberries.token_metadata import WBTokenValidationError
 from models.users_model import EntityType
 from services.marketplace_access_service import (
     get_allowed_wb_tokens,
@@ -36,6 +37,7 @@ def _public_token(token, *, dashboard_available: bool | None = None) -> dict:
         "label": token.label,
         "marketplace": token.marketplace.value,
         "token_type": token.token_type,
+        "external_account_id": getattr(token, "external_account_id", None),
         "issued_at": token.issued_at,
         "expires_at": token.expires_at,
         "is_active": token.is_active,
@@ -209,6 +211,7 @@ async def add_token(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
+    """Legacy WB connection endpoint kept for backward compatibility."""
     user_id = _current_user_id(request)
     quota = await get_wb_account_quota(db_session, user_id)
     if not quota["allowed"]:
@@ -226,14 +229,18 @@ async def add_token(
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code="VALIDATION_ERROR", message="Токен обязателен")
 
-    token = await insert_token(
-        session=db_session,
-        user_id=user_id,
-        raw_token=raw_token,
-        marketplace_code="wb",
-        token_type=data.get("token_type") or "personal",
-        label=data.get("label") or "Wildberries",
-    )
+    try:
+        token = await insert_token(
+            session=db_session,
+            user_id=user_id,
+            raw_token=raw_token,
+            marketplace_code="wb",
+            label=data.get("label") or "Wildberries",
+        )
+    except WBTokenValidationError as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code=exc.code, message=str(exc))
+
     if token is None:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(

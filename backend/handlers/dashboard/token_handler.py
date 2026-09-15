@@ -68,6 +68,7 @@ async def create_token(
             "label": token.label,
             "marketplace": token.marketplace.value,
             "token_type": token.token_type,
+            "external_account_id": token.external_account_id,
             "issued_at": token.issued_at,
             "expires_at": token.expires_at,
         },
