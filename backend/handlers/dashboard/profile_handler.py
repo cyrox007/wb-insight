@@ -1,3 +1,4 @@
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -6,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.access_control import permissions_for_roles
 from core.dependencies import get_db_session
 from core.middleware import auth_middle
+from models.users_model import EntityType
 from services.marketplace_access_service import (
     get_allowed_wb_tokens,
     get_wb_account_quota,
@@ -45,6 +47,26 @@ def _public_token(token, *, dashboard_available: bool | None = None) -> dict:
     return data
 
 
+def _public_user(user) -> dict:
+    role_codes = [role.role for role in user.roles]
+    permission_codes = sorted(
+        permission.value for permission in permissions_for_roles(role_codes)
+    )
+    return {
+        "id": str(user.id),
+        "full_name": user.full_name,
+        "email": user.email,
+        "phone": user.phone,
+        "entity_type": user.entity_type,
+        "tax_rate": float(user.tax_rate or 0),
+        "timezone": user.timezone,
+        "is_active": user.is_active,
+        "roles": role_codes,
+        "permissions": permission_codes,
+        "created_at": user.created_at,
+    }
+
+
 @router.get("/", dependencies=[Depends(auth_middle)])
 async def get_profile(
     request: Request,
@@ -60,29 +82,13 @@ async def get_profile(
     subscription = await get_user_subscription(db_session, user_id)
     user_tokens = await get_tokens_by_user_id(db_session, user_id)
     allowed_ids = {token.id for token in await get_allowed_wb_tokens(db_session, user_id)}
-    role_codes = [role.role for role in current_user.roles]
-    permission_codes = sorted(
-        permission.value for permission in permissions_for_roles(role_codes)
-    )
 
     return response_success(
         tokens=[
             _public_token(token, dashboard_available=token.id in allowed_ids)
             for token in user_tokens
         ],
-        user={
-            "id": str(current_user.id),
-            "full_name": current_user.full_name,
-            "email": current_user.email,
-            "phone": current_user.phone,
-            "entity_type": current_user.entity_type,
-            "tax_rate": float(current_user.tax_rate or 0),
-            "timezone": current_user.timezone,
-            "is_active": current_user.is_active,
-            "roles": role_codes,
-            "permissions": permission_codes,
-            "created_at": current_user.created_at,
-        },
+        user=_public_user(current_user),
         subscription=None if not subscription else {
             "tariff_name": subscription.tariff.name,
             "status": subscription.status.value,
@@ -90,6 +96,71 @@ async def get_profile(
             "end_date": subscription.current_period_end,
             "is_active": subscription.is_active,
         },
+    )
+
+
+@router.put("/", dependencies=[Depends(auth_middle)])
+async def update_profile(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Update seller-controlled analytics settings used by dashboard formulas."""
+    user_id = _current_user_id(request)
+    current_user = await get_user_by_uuid(db_session, user_id)
+    if current_user is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response_error(code="UNAUTHORIZED", message="Неавторизован")
+
+    payload = await request.json()
+
+    full_name = str(payload.get("full_name", current_user.full_name) or "").strip()
+    if not full_name or len(full_name) > 255:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="VALIDATION_ERROR",
+            message="Укажите имя или название компании",
+        )
+
+    entity_type = str(payload.get("entity_type", current_user.entity_type) or "").strip()
+    allowed_entity_types = {item.value for item in EntityType}
+    if entity_type not in allowed_entity_types:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="VALIDATION_ERROR",
+            message="Некорректный тип продавца",
+        )
+
+    try:
+        tax_rate = float(payload.get("tax_rate", current_user.tax_rate or 0))
+    except (TypeError, ValueError):
+        tax_rate = -1
+    if tax_rate < 0 or tax_rate > 1:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="VALIDATION_ERROR",
+            message="Налоговая ставка должна быть от 0 до 100%",
+        )
+
+    timezone_name = str(payload.get("timezone", current_user.timezone) or "").strip()
+    try:
+        ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="VALIDATION_ERROR",
+            message="Некорректный часовой пояс",
+        )
+
+    current_user.full_name = full_name
+    current_user.entity_type = entity_type
+    current_user.tax_rate = tax_rate
+    current_user.timezone = timezone_name
+    await db_session.flush()
+
+    return response_success(
+        user=_public_user(current_user),
+        message="Настройки продавца сохранены",
     )
 
 
