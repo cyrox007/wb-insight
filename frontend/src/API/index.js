@@ -16,6 +16,8 @@ const ACCOUNT_SCOPED_ENDPOINTS = new Set([
     '/dashboard/ads/',
     '/dashboard/unity',
     '/dashboard/unity/',
+    '/dashboard/stocks',
+    '/dashboard/stocks/',
 ]);
 
 const clearLocalSession = () => {
