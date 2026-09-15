@@ -99,6 +99,22 @@ jobs:
           done
           grep -F '<div id="app"></div>' /tmp/wb-ci-index.html
 
+          gateway_ready=false
+          for attempt in $(seq 1 30); do
+            body="$(curl -fsS http://127.0.0.1:18080/health/live 2>/dev/null || true)"
+            if test "$body" = 'backend:/health/live'; then
+              gateway_ready=true
+              break
+            fi
+            sleep 1
+          done
+          if test "$gateway_ready" != true; then
+            echo 'Backend mock did not become reachable through nginx gateway' >&2
+            docker logs wb-ci-backend >&2 || true
+            docker logs wb-ci-frontend >&2 || true
+            exit 1
+          fi
+
           for route in health/live auth/refresh billing/sber/callback legal/documents/terms dashboard/ control-panel/operations/health; do
             body="$(curl -fsS "http://127.0.0.1:18080/${route}")"
             test "$body" = "backend:/${route}"

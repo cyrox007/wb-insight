@@ -1,127 +1,71 @@
 # WB Insight
 
-Current version: **0.9.0-alpha.2**.
+**Текущая release-линия:** `0.9.0-alpha.6` candidate (P29). Каноническая версия всегда находится в корневом `VERSION`.
 
-WB Insight — web-сервис аналитики для продавцов Wildberries. Проект собирает данные через официальный WB API, связывает операционные, маркетинговые и финансовые факты и рассчитывает показатели, которые продавец использует для управления прибылью.
+WB Insight — web-сервис управленческой аналитики для продавцов Wildberries. Он собирает данные из официальных WB API, добавляет данные продавца (себестоимость, собственные расходы, налоговые параметры, план) и рассчитывает единый набор показателей для управления прибылью, рекламой, запасами, ценами и выплатами.
 
-Версионная политика: [`docs/VERSIONING.md`](docs/VERSIONING.md). Подробная история: [`CHANGELOG.md`](CHANGELOG.md).
+## Документация
 
-## Текущий release scope
+Полный индекс: [`docs/README.md`](docs/README.md).
 
-Первый стабильный релиз — **WB Insight Web v1 (`1.0.0`)**. В него входят:
+Основные документы:
 
-- регистрация, авторизация и refresh-session;
-- роли и административная панель;
-- тарифы, demo-подписка и лимиты WB-кабинетов;
-- безопасное подключение WB-кабинетов;
-- автоматическая синхронизация через Celery/Redis;
-- заказы и продажи;
-- товары и остатки;
-- цены и скидки;
-- реклама;
-- воронка продаж;
-- платное хранение;
-- финансовая детализация и reconciliation;
-- себестоимость с историей;
-- ручные расходы;
-- план выручки;
-- обзор KPI, финансы, остатки, цены, реклама и unit-экономика.
+- [Обзор проекта](docs/PROJECT_OVERVIEW.md)
+- [Системные требования](docs/SYSTEM_REQUIREMENTS.md)
+- [Установка и запуск](docs/INSTALLATION.md)
+- [Конфигурация](docs/CONFIGURATION.md)
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Функции](docs/FEATURES.md)
+- [Руководство пользователя](docs/USER_GUIDE.md)
+- [Данные и метрики](docs/DATA_AND_METRICS.md)
+- [Руководство администратора](docs/ADMIN_GUIDE.md)
+- [Разработка](docs/DEVELOPMENT.md)
+- [Безопасность](docs/SECURITY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Operations](docs/OPERATIONS.md)
+- [Production deployment](docs/PRODUCTION_DEPLOYMENT.md)
+- [Дорожная карта до 1.0.0](docs/RELEASE_ROADMAP.md)
+- [Release readiness](docs/RELEASE_READINESS.md)
+- [История версий](docs/VERSION_HISTORY.md)
+- [CHANGELOG](CHANGELOG.md)
 
-Ozon, AI-аналитик и native mobile apps находятся за пределами WB Web v1 и не должны считаться доступными production-функциями до отдельного релиза.
+## WB Web v1
 
-## Wildberries access model
+Первый стабильный релиз `1.0.0` ориентирован на Wildberries и включает:
 
-WB Insight — облачный партнёрский сервис. Production backend принимает только допустимые для cloud-flow seller credentials и проверяет их до сохранения.
+- регистрацию, безопасную сессию и роли;
+- тарифы/demo/лимиты;
+- подключение WB-кабинетов;
+- автоматическую account-scoped синхронизацию;
+- Overview, Unit Economy, Finance/Reconciliation, Inventory, Prices и Ads;
+- funnel и paid storage data;
+- historical COGS, seller expenses и revenue plan;
+- versioned legal consent;
+- Сбер acquiring code path;
+- production deployment, monitoring и backup/restore baseline.
 
-Текущие требования:
+Ozon, AI-аналитик, native mobile и WB OAuth onboarding не входят в `1.0.0`.
 
-- Base token — до подключения через Каталог решений;
-- Service token — для сервиса, зарегистрированного/авторизованного в WB;
-- Personal token не принимается;
-- Test token не принимается в production;
-- seller token должен быть **Только чтение**;
-- обязательные категории: Контент, Аналитика, Цены и скидки, Статистика, Продвижение, Финансы;
-- `exp`, `sid`, `acc`, `for` и permission mask читаются из JWT;
-- перед сохранением выполняется live `/ping` в WB;
-- запросы с Base и Service tokens подписываются `X-Client-Secret` партнёрского сервиса;
-- `WB_SERVICE_ID` и `WB_SERVICE_SECRET` обязательны в production.
+## Стек
 
-Подробно: [`docs/WB_ACCESS_TOKEN_REQUIREMENTS.md`](docs/WB_ACCESS_TOKEN_REQUIREMENTS.md).
+Backend: Python 3.12, FastAPI, SQLAlchemy 2, PostgreSQL 16, Alembic, Celery, Redis, httpx.
 
-## Архитектура
+Frontend: Vue 3, Pinia, Vue Router, Axios, Vite, nginx.
 
-### Backend
+Production baseline: Docker/Compose с отдельными migration/API/worker/beat/frontend процессами.
 
-- Python 3.12;
-- FastAPI;
-- SQLAlchemy 2 / asyncpg;
-- PostgreSQL;
-- Celery;
-- Redis;
-- Alembic;
-- httpx.
+## Быстрый локальный запуск
 
-### Frontend
-
-- Vue 3;
-- Pinia;
-- Vue Router;
-- Axios;
-- Vite;
-- nginx production runtime.
-
-### Sync
-
-Синхронизация account-scoped: каждая задача привязана к конкретному marketplace credential. Durable jobs используют lease/retry semantics. Marketplace-specific код отделён через `MarketplaceAdapter`; Wildberries реализован первым адаптером, Ozon будет подключаться к той же orchestration-схеме.
-
-## Безопасность
-
-- marketplace secrets хранятся только в зашифрованном виде;
-- refresh token — HttpOnly cookie;
-- production требует `JWT_SECRET_KEY` и `API_TOKEN_ENCRYPTION_KEY`;
-- fake billing отключён в production;
-- WB production access fail-closed без partner service credentials;
-- audit middleware не логирует request body с секретами;
-- CORS задаётся allowlist через `ALLOWED_ORIGINS`.
-
-Browser access JWT пока хранится в `localStorage`; его перенос в in-memory session относится к release hardening и отслеживается в `docs/RELEASE_READINESS.md`.
-
-## Health
-
-- `GET /health/live` — liveness процесса + deployed version;
-- `GET /health/ready` — readiness PostgreSQL + Redis + deployed version.
-
-## Billing
-
-Backend поддерживает Sber internet acquiring через server-to-server `register.do` и `getOrderStatusExtended.do`.
-
-Критические свойства flow:
-
-- одна платёжная попытка имеет `Idempotency-Key`;
-- frontend получает `formUrl` и переходит на платёжную форму Сбера;
-- redirect/callback сам по себе не активирует тариф;
-- backend повторно проверяет статус у Сбера;
-- подписка активируется только после подтверждённого `orderStatus=2` + `paymentState=DEPOSITED`;
-- payment связан с подпиской и защищён от повторной активации;
-- события провайдера сохраняются без merchant credentials и неизвестных чувствительных полей.
-
-Acquiring выключен по умолчанию и включается только после выдачи merchant credentials. Подробно: [`docs/SBER_ACQUIRING.md`](docs/SBER_ACQUIRING.md).
-
-Fake payments существуют только для локальной разработки и должны включаться явно через `ALLOW_FAKE_BILLING=true` при `APP_ENV != production`.
-
-## Запуск разработки
-
-Backend environment создаётся из `backend/default.env`. Схема БД управляется только Alembic:
+Backend:
 
 ```bash
 cd backend
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements-dev.txt
 alembic upgrade head
-pytest -q tests
 uvicorn app:app --reload --host 0.0.0.0 --port 9000
 ```
-
-Celery worker и scheduler запускаются отдельными процессами согласно текущей конфигурации `celery_app.py`.
 
 Frontend:
 
@@ -131,48 +75,19 @@ npm ci
 npm run dev
 ```
 
-## Production baseline
+Полная инструкция: [`docs/INSTALLATION.md`](docs/INSTALLATION.md).
 
-P25 добавляет воспроизводимый container deployment:
+## CI / release discipline
 
-```bash
-cp .env.production.example .env.production
-# заполнить реальные production values
+Release PR должен иметь green на одном последнем head:
 
-docker compose --env-file .env.production -f compose.production.yml build
-docker compose --env-file .env.production -f compose.production.yml up -d
-```
+- backend tests + dependency audit;
+- frontend npm audits + production build + session storage guard;
+- Alembic upgrade/check;
+- release integrity: version consistency, Docker/Compose, nginx gateway smoke и backup/restore roundtrip.
 
-Стек разделяет migration, API, Celery worker, Celery beat, frontend/nginx, PostgreSQL и Redis. HTTPS должен завершаться внешним reverse proxy/load balancer. Полный runbook: [`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md).
+Переход `alpha -> beta -> rc -> stable` определяется release gates, а не количеством commits. См. [`docs/VERSIONING.md`](docs/VERSIONING.md) и [`docs/RELEASE_ROADMAP.md`](docs/RELEASE_ROADMAP.md).
 
-## CI
+## Текущий фокус
 
-Pull requests проверяются четырьмя контурами:
-
-- backend tests/security;
-- frontend build;
-- чистый PostgreSQL → `alembic upgrade head` → `alembic check`;
-- release integrity: canonical version, Docker image builds и Compose validation.
-
-## Release readiness
-
-Актуальный список блокеров и Definition of Done: [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md).
-
-Ключевые внешние блокеры первого публичного релиза:
-
-1. получить `WB_SERVICE_ID` + `WB_SERVICE_SECRET` и лимиты сервиса у Wildberries;
-2. получить test/production merchant credentials Сбер acquiring и провести bank smoke;
-3. подготовить production domain/TLS и юридические документы сервиса.
-
-После P25 основные code/ops блоки до beta/RC:
-
-1. monitoring/alerts и backup/restore;
-2. legal pages + consent persistence;
-3. browser session hardening и release smoke suite.
-
-## Roadmap после WB Web v1
-
-- Ozon Seller API через общий marketplace adapter;
-- Wildberries Service token / OAuth 2.0 onboarding через Каталог решений;
-- AI-аналитик и рекомендации;
-- mobile clients — только после стабилизации web API и product-market fit.
+P29 закрывает dependency/security hardening и полную ревизию документации. Следующий этап — production-like validation, сверка аналитики с реальными данными WB и закрытие account lifecycle gaps перед beta/RC.

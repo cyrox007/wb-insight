@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 
 from settings import config
 
@@ -32,5 +33,5 @@ def verify_token(token: str) -> Optional[dict]:
     """Верификация JWT токена."""
     try:
         return jwt.decode(token, config.SECRET_KEY, algorithms=[config.ALGORITHM])
-    except JWTError:
+    except InvalidTokenError:
         return None

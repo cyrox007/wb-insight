@@ -1,227 +1,150 @@
-# WB Insight — Operations Runbook
+# WB Insight — operations runbook
 
-Версия документа: P26 / `0.9.0-alpha.3` candidate.
+Документ описывает эксплуатационный baseline WB Web v1: health, monitoring, alerts, backup/restore и incident triage. Он дополняет `PRODUCTION_DEPLOYMENT.md`.
 
-Этот runbook описывает минимальный эксплуатационный контур WB Web v1: operational monitoring, alerting, PostgreSQL backup и restore drill. Он дополняет `docs/PRODUCTION_DEPLOYMENT.md` и не заменяет provider-specific runbook инфраструктуры, где будет размещён production.
-
-## 1. Operational monitoring
-
-### Публичные health endpoints
+## Health
 
 - `GET /health/live` — процесс приложения жив; внешние зависимости не проверяются.
-- `GET /health/ready` — PostgreSQL и Redis доступны; при деградации возвращается HTTP 503.
+- `GET /health/ready` — PostgreSQL и Redis готовы; при деградации возвращается non-ready status.
 
-Эти endpoints предназначены для load balancer / orchestrator / uptime monitoring.
+Внешний uptime monitor должен проверять `/health/ready` через production HTTPS endpoint.
 
-### Super-admin operations snapshot
+## Super-admin operations health
 
-`GET /control-panel/operations/health`
-
-Endpoint защищён `require_super_admin` и возвращает только агрегированные operational signals. Seller token values, payment credentials, user PII, request bodies и raw provider errors туда не включаются.
+`GET /control-panel/operations/health` возвращает агрегированные operational signals без seller secrets/PII.
 
 Проверяются:
 
-- terminal failed sync jobs за заданное lookback-окно;
+- recent failed sync jobs;
 - processing jobs с истёкшим lease;
-- sync states без успешной синхронизации дольше SLA;
-- активные marketplace credentials, срок которых уже истёк;
-- credentials, которые истекут в warning window;
-- срок ротации `WB_SERVICE_SECRET` без вывода самого секрета;
-- HTTP 5xx rate за короткое окно.
+- stale sync states;
+- expired/expiring marketplace connections;
+- WB service-secret rotation deadline;
+- HTTP request/5xx telemetry.
 
-Общий статус:
+Общие состояния: `ok`, `warning`, `degraded`.
 
-- `ok` — критических и warning сигналов нет;
-- `warning` — есть предупреждение, например credential/service secret скоро истечёт;
-- `degraded` — есть critical/error condition.
+## HTTP telemetry
 
-### HTTP telemetry
+При `OPS_HTTP_METRICS_ENABLED=true` middleware хранит в Redis minute-bucket counters общего числа responses и HTTP 5xx. Path/query/body/user/account/secret в эти counters не записываются.
 
-При `OPS_HTTP_METRICS_ENABLED=true` middleware пишет в Redis только minute-bucket counters:
+Telemetry fail-open: её отказ не должен ломать пользовательский request path.
 
-- общее число HTTP responses;
-- число HTTP 5xx.
+## Operations monitor и alerts
 
-Path, query string, body, user ID, marketplace account и token не сохраняются в этих counters.
+Celery Beat периодически запускает operations monitor.
 
-Если Redis telemetry недоступна, обработка пользовательского request не падает: metrics path fail-open.
+При проблеме:
 
-### Scheduled alert check
+1. создаётся structured warning;
+2. при `OPS_ALERT_WEBHOOK_URL` отправляется агрегированный HTTPS webhook;
+3. одинаковые alerts дедуплицируются на заданное окно.
 
-Celery Beat запускает `tasks.processors.operations_monitor.run` с интервалом `OPS_ALERT_CHECK_INTERVAL_SECONDS`.
+Стартовые defaults:
 
-При `warning/degraded`:
+- stale sync — 180 минут;
+- failed-job lookback — 60 минут;
+- seller credential warning — 14 дней;
+- service-secret rotation warning — 30 дней;
+- 5xx window — 5 минут;
+- threshold — 5% при минимум 20 requests;
+- monitor interval — 15 минут;
+- повтор одинакового alert — не чаще раза в час.
 
-1. snapshot пишется как structured warning в operations log;
-2. при настроенном `OPS_ALERT_WEBHOOK_URL` отправляется агрегированный JSON webhook;
-3. одинаковые alerts дедуплицируются в Redis на `OPS_ALERT_REPEAT_SECONDS`.
+Это начальные значения. До RC они должны быть проверены на production-like traffic.
 
-Webhook обязан использовать HTTPS и принадлежать доверенной monitoring-системе. В webhook не передаются raw exception bodies и secrets.
+## WB service-secret rotation
 
-### Рекомендуемые production thresholds для первого релиза
+Для monitoring задаётся timezone-aware deadline `OPS_WB_SERVICE_SECRET_EXPIRES_AT`. Сам secret никогда не попадает в monitoring payload.
 
-- stale sync: `OPS_SYNC_STALE_MINUTES=180`;
-- failed-job lookback: `60` минут;
-- seller credential warning: `14` дней;
-- WB service-secret rotation warning: `30` дней;
-- 5xx window: `5` минут;
-- critical 5xx rate: `>=5%` при минимум `20` requests;
-- operations check: каждые `15` минут;
-- повтор одинакового alert: не чаще одного раза в час.
+Поведение:
 
-Эти значения являются стартовыми operational defaults. После появления production traffic их нужно пересмотреть по фактической частоте sync и нагрузке.
+- secret без deadline — warning;
+- некорректный deadline — critical/degraded;
+- deadline внутри warning window — warning;
+- deadline прошёл — critical/degraded.
 
-## 2. WB service secret rotation
+После rotation одновременно обновляются secret store и metadata deadline.
 
-`WB_SERVICE_SECRET` является production credential сервиса и никогда не должен попадать в git, frontend bundle, logs или monitoring payload.
+## Backup policy
 
-Для контроля ротации задаётся только дата/время истечения или внутреннего rotation deadline:
+До RC используются цели:
 
-```text
-OPS_WB_SERVICE_SECRET_EXPIRES_AT=2026-12-01T00:00:00+03:00
-OPS_WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS=30
-```
+- полный backup минимум раз в 24 часа;
+- retention минимум 14 дней;
+- RPO target <=24h;
+- RTO target <=4h;
+- минимум одна encrypted copy вне production host.
 
-Требуется timezone-aware ISO-8601 значение.
+Это цели, пока production-like restore drill не подтвердит фактические значения.
 
-Поведение monitoring:
+### Создание backup
 
-- service secret не настроен — `not_applicable` вне production; production backend и так fail-closed;
-- secret есть, deadline не указан — warning;
-- deadline некорректен — critical;
-- до deadline <= `OPS_WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS` — warning;
-- deadline прошёл — critical.
+`ops/postgres_backup.sh`:
 
-После rotation дата должна быть обновлена одновременно с secret management record.
+- выполняет custom-format `pg_dump`;
+- шифрует artifact AES-256-CBC + PBKDF2;
+- удаляет plaintext dump;
+- создаёт SHA-256 checksum;
+- применяет retention cleanup.
 
-## 3. PostgreSQL backup policy
+Нужны DB environment и `BACKUP_ENCRYPTION_PASSPHRASE_FILE`. Passphrase file хранится отдельно от repository и backup directory.
 
-### Базовая политика WB Web v1
+После успешного локального backup encrypted artifact + checksum должны копироваться off-host/object storage.
 
-До RC принимаем следующие operational targets:
+## Restore
 
-- backup frequency: минимум один полный backup каждые 24 часа;
-- retention: минимум 14 дней;
-- RPO target: <=24 часа;
-- RTO target: <=4 часа;
-- минимум одна копия должна находиться вне production host;
-- backup должен быть зашифрован до отправки во внешнее хранилище;
-- restore drill обязателен до `1.0.0-rc.1` и повторяется после существенных изменений схемы/backup process.
+`ops/postgres_restore.sh <backup.dump.enc>` является destructive operation и требует явного `RESTORE_CONFIRM=YES`.
 
-RPO/RTO становятся подтверждёнными только после реального restore drill с замером времени. До этого это цели, а не гарантии.
+Перед восстановлением проверяется checksum, temporary plaintext защищается `umask 077` и удаляется после завершения. После restore проверяется `alembic_version`.
 
-### Backup script
+Production restore выполняется при остановленном write traffic и по утверждённой incident procedure.
 
-`ops/postgres_backup.sh`
+## Restore drill
 
-Требует PostgreSQL client tools и OpenSSL.
+`ops/postgres_restore_drill.sh <backup.dump.enc>` восстанавливает backup в отдельную временную DB и не затрагивает production database.
 
-Обязательные environment variables:
+Release evidence должно содержать:
 
-```text
-DB_HOST
-DB_PORT
-DB_NAME
-DB_USER
-DB_PASSWORD
-BACKUP_ENCRYPTION_PASSPHRASE_FILE
-```
+- время drill;
+- идентификатор/дату backup artifact;
+- восстановленную Alembic revision;
+- факт наличия public tables;
+- duration;
+- success/failure.
 
-Опционально:
+## Incident triage
 
-```text
-BACKUP_DIR=/var/backups/wb-insight
-BACKUP_RETENTION_DAYS=14
-```
+### PostgreSQL/Redis not ready
+Проверить provider/container, network, credentials и storage capacity. Не маскировать downstream outage бесконечным restart API.
 
-Скрипт:
+### Failed/stale sync
+Проверить operations snapshot и worker logs, затем классифицировать auth/permission/rate-limit/network/provider error. Не отзывать marketplace connection из-за любого 4xx/5xx.
 
-1. создаёт `pg_dump --format=custom`;
-2. шифрует dump через AES-256-CBC + PBKDF2;
-3. удаляет plaintext dump;
-4. создаёт SHA-256 checksum для encrypted artifact;
-5. удаляет backup artifacts старше retention policy.
+### Expired lease
+Worker recovery должен вернуть job в retry либо terminal failed по retry budget. Массовые expired leases указывают на starvation/crash/слишком короткий lease.
 
-Passphrase хранится в отдельном secret file и не должна находиться в backup directory, git или `.env.production`.
+### Credential expiry
+Пользователь должен обновить подключение до срока истечения. Access data нельзя переносить в support ticket/log.
 
-### Off-host copy
+### 5xx spike
+Сопоставить окно с deployment events, readiness, DB/Redis и structured application logs.
 
-Скрипт намеренно не привязан к конкретному cloud/provider storage. После успешного backup encrypted `.dump.enc` и соответствующий `.sha256` должны быть отправлены в отдельное object/off-host storage средствами выбранной production infrastructure.
+### Payment incident
+Проверять server-side provider state, idempotency и связь payment/subscription. Клиентский screenshot не является доказательством статуса.
 
-Успешный локальный backup без off-host copy не закрывает release requirement.
+## RC operational gate
 
-## 4. Restore
+До `1.0.0-rc.1` требуется фактическое подтверждение:
 
-### Destructive restore
+- alert destination подключён и test signal доставлен;
+- external uptime работает;
+- centralized logs/error triage доступны;
+- ежедневный backup schedule включён;
+- encrypted backups уходят off-host;
+- production-like restore drill успешен;
+- фактические RPO/RTO зафиксированы;
+- service-secret rotation deadline определён;
+- deploy/rollback drill выполнен.
 
-`ops/postgres_restore.sh <backup.dump.enc>`
-
-По умолчанию скрипт отказывается работать. Для destructive restore требуется явное:
-
-```text
-RESTORE_CONFIRM=YES
-```
-
-Перед restore:
-
-- проверяется SHA-256;
-- artifact расшифровывается во временный файл с `umask 077`;
-- plaintext удаляется через trap;
-- после restore проверяется доступность `alembic_version`.
-
-Production restore выполняется только после остановки write traffic/API/worker/beat и создания дополнительного pre-restore snapshot, если это возможно.
-
-## 5. Restore drill
-
-`ops/postgres_restore_drill.sh <backup.dump.enc>`
-
-Drill не затрагивает production database:
-
-1. проверяет checksum;
-2. расшифровывает artifact;
-3. создаёт отдельную временную БД;
-4. выполняет `pg_restore`;
-5. читает `alembic_version`;
-6. проверяет наличие public tables;
-7. удаляет drill database.
-
-Успешный drill должен быть зафиксирован в release evidence минимум с:
-
-- временем запуска/окончания;
-- именем/датой backup artifact;
-- восстановленной Alembic revision;
-- количеством восстановленных public tables;
-- фактическим restore duration;
-- результатом `success/failure`.
-
-Сам факт существования скрипта не считается выполненным restore drill.
-
-## 6. Incident triage
-
-При `degraded` сначала определить класс проблемы:
-
-**Database/Redis readiness** — проверить managed service/containers, network/DNS, credentials, storage capacity. Не перезапускать бесконечно API, если downstream остаётся недоступен.
-
-**Failed/stale sync** — проверить operations snapshot, затем Celery logs и конкретный provider category/HTTP class. Не деактивировать seller credential по произвольному 403/feature-level error: текущий sync engine уже разделяет auth/permission/feature errors.
-
-**Expired processing lease** — worker recovery должен вернуть job в retry либо terminal failed по retry budget. Массовые expired leases — сигнал worker starvation/crashes.
-
-**Credential expiry** — связаться с владельцем кабинета до фактического истечения. Seller credential values не передавать в support tickets/logs.
-
-**WB service secret rotation** — подготовить новый secret, обновить secret store/env и rotation deadline, выполнить controlled restart и smoke всех WB categories.
-
-**5xx spike** — сопоставить окно с application logs, readiness, DB/Redis и deployment events. HTTP telemetry сама не хранит request content.
-
-## 7. Что блокирует RC
-
-P26 закрывает кодовый baseline monitoring/backup, но для перехода в RC всё ещё нужны реальные эксплуатационные доказательства:
-
-- monitoring webhook/alert destination настроен и проверен;
-- uptime monitor проверяет `/health/ready` извне;
-- ежедневный backup schedule реально включён;
-- encrypted backups копируются off-host;
-- выполнен успешный restore drill;
-- RPO/RTO подтверждены фактическим drill;
-- зафиксирован реальный WB service secret rotation deadline.
-
-Эти пункты отслеживаются в `docs/RELEASE_READINESS.md`.
+Статус gate ведётся в `RELEASE_READINESS.md`.
