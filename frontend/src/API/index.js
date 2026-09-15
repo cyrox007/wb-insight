@@ -11,6 +11,7 @@ let failedQueue = [];
 const ACCOUNT_SCOPED_ENDPOINTS = new Set([
     '/dashboard/',
     '/dashboard/charts',
+    '/dashboard/plan',
     '/dashboard/ads',
     '/dashboard/ads/',
     '/dashboard/unity',

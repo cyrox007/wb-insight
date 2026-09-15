@@ -123,6 +123,7 @@ def test_ads_semantics_keep_attributed_and_total_orders_separate():
 async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatch):
     current_start = date(2026, 9, 1)
     current_end = date(2026, 9, 10)
+    today = date(2026, 9, 14)
     user_id = uuid4()
     token_id = uuid4()
     scope = account_scope.DashboardAccountScope(
@@ -184,6 +185,19 @@ async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatc
             spend=100,
         )
 
+    async def fake_plan(*args, **kwargs):
+        resolved = kwargs.get("scope")
+        if resolved is None and len(args) >= 4:
+            resolved = args[3]
+        seen_scopes.append(resolved)
+        assert resolved is scope
+        return SimpleNamespace(
+            revenue_target=3000.0,
+            configured_accounts=1,
+            total_accounts=1,
+            complete=True,
+        )
+
     monkeypatch.setattr(main_handler, "get_base_report_stats", fake_base)
     monkeypatch.setattr(main_handler, "get_sales_report_stats", fake_sales)
     monkeypatch.setattr(main_handler, "get_returns_report_stats", fake_returns)
@@ -192,6 +206,7 @@ async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatc
     )
     monkeypatch.setattr(main_handler, "get_order_totals", fake_orders)
     monkeypatch.setattr(main_handler, "get_advertising_totals", fake_ads)
+    monkeypatch.setattr(main_handler, "get_monthly_plan_summary", fake_plan)
 
     result = await main_handler._calculate_stats(
         session=object(),
@@ -199,6 +214,7 @@ async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatc
         start_date=current_start,
         end_date=current_end,
         scope=scope,
+        today=today,
     )
 
     assert result["stats"]["ordered_units"]["value"] == 10
@@ -209,5 +225,8 @@ async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatc
     assert result["base_stats"]["clicks"] == 100
     assert result["base_stats"]["clicksPercentage"] == 10
     assert result["base_stats"]["addToCartPercentage"] == 30
+    assert result["stats"]["fact_current_month"]["value"] == 700
+    assert result["stats"]["plan_current_month"]["value"] == 3000
+    assert result["stats"]["plan_current_month"]["complete"] is True
     assert seen_scopes
     assert all(item is scope for item in seen_scopes)

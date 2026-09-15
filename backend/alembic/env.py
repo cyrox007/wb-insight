@@ -22,6 +22,7 @@ from models.wb_sales_funnel import WbSalesFunnelDaily
 from models.sync_job_model import SyncJob
 from models.user_sync_state_model import UserSyncState
 from models.product_cost_price_model import ProductCostPrice
+from models.monthly_revenue_plan import MonthlyRevenuePlan
 
 
 config = context.config
