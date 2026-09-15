@@ -150,7 +150,7 @@ class WBClient:
                 response = await self._client.request(
                     method=method,
                     url=url,
-                    headers={"Authorization": token},
+                    headers={"Authorization": f"Bearer {token}"},
                     params=params,
                     json=json_data,
                 )
