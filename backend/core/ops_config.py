@@ -9,6 +9,7 @@ class OpsConfig:
     CREDENTIAL_EXPIRY_WARNING_DAYS = int(
         os.getenv("OPS_CREDENTIAL_EXPIRY_WARNING_DAYS", "14")
     )
+    HTTP_METRICS_ENABLED = os.getenv("OPS_HTTP_METRICS_ENABLED", "false").lower() == "true"
     HTTP_ERROR_WINDOW_MINUTES = int(
         os.getenv("OPS_HTTP_ERROR_WINDOW_MINUTES", "5")
     )
@@ -19,6 +20,7 @@ class OpsConfig:
     ALERT_CHECK_INTERVAL_SECONDS = int(
         os.getenv("OPS_ALERT_CHECK_INTERVAL_SECONDS", "900")
     )
+    ALERT_REPEAT_SECONDS = int(os.getenv("OPS_ALERT_REPEAT_SECONDS", "3600"))
     ALERT_WEBHOOK_URL = os.getenv("OPS_ALERT_WEBHOOK_URL", "").strip() or None
     ALERT_WEBHOOK_TIMEOUT_SECONDS = float(
         os.getenv("OPS_ALERT_WEBHOOK_TIMEOUT_SECONDS", "5")
@@ -38,6 +40,10 @@ class OpsConfig:
         raise RuntimeError("OPS_HTTP_MIN_REQUESTS must be positive")
     if ALERT_CHECK_INTERVAL_SECONDS < 60:
         raise RuntimeError("OPS_ALERT_CHECK_INTERVAL_SECONDS must be at least 60")
+    if ALERT_REPEAT_SECONDS < ALERT_CHECK_INTERVAL_SECONDS:
+        raise RuntimeError(
+            "OPS_ALERT_REPEAT_SECONDS must be >= OPS_ALERT_CHECK_INTERVAL_SECONDS"
+        )
     if ALERT_WEBHOOK_TIMEOUT_SECONDS <= 0:
         raise RuntimeError("OPS_ALERT_WEBHOOK_TIMEOUT_SECONDS must be positive")
 
