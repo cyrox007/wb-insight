@@ -180,7 +180,7 @@ jobs:
             exit 1
           fi
 
-          for route in health/live auth/refresh billing/sber/callback legal/documents/terms dashboard/ control-panel/operations/health; do
+          for route in health/live auth/refresh account/deactivate billing/sber/callback legal/documents/terms dashboard/ control-panel/operations/health; do
             body="$(curl -fsS "http://127.0.0.1:18080/${route}")"
             test "$body" = "backend:/${route}"
           done
