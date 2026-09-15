@@ -17,6 +17,9 @@ on:
       - ops/**
       - docs/OPERATIONS.md
       - docs/RELEASE_SMOKE.md
+      - docs/RELEASE_EVIDENCE.md
+      - docs/DATA_ACCURACY_ACCEPTANCE.md
+      - docs/RELEASE_ROADMAP.md
       - docs/VERSIONING.md
       - docs/VERSION_HISTORY.md
       - docs/RELEASE_READINESS.md
@@ -38,6 +41,9 @@ on:
       - ops/**
       - docs/OPERATIONS.md
       - docs/RELEASE_SMOKE.md
+      - docs/RELEASE_EVIDENCE.md
+      - docs/DATA_ACCURACY_ACCEPTANCE.md
+      - docs/RELEASE_ROADMAP.md
       - docs/VERSIONING.md
       - docs/VERSION_HISTORY.md
       - docs/RELEASE_READINESS.md
@@ -63,6 +69,65 @@ jobs:
         run: |
           python3 -m py_compile ops/release_smoke.py
           python3 ops/release_smoke.py --help >/dev/null
+
+  acceptance-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate acceptance tools syntax
+        run: |
+          python3 -m py_compile \
+            ops/acceptance/data_accuracy.py \
+            ops/data_accuracy_acceptance.py \
+            ops/release_evidence.py
+          python3 ops/data_accuracy_acceptance.py --help >/dev/null
+          python3 ops/release_evidence.py --help >/dev/null
+      - name: Verify data accuracy pass and fail contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ops/data_accuracy_acceptance.py \
+            --input ops/acceptance/fixtures/passing.json \
+            --output-json /tmp/data-accuracy.json \
+            --output-md /tmp/data-accuracy.md
+          grep -F '"status": "pass"' /tmp/data-accuracy.json
+          test -s /tmp/data-accuracy.md
+
+          if python3 ops/data_accuracy_acceptance.py \
+            --input ops/acceptance/fixtures/failing.json \
+            --output-json /tmp/data-accuracy-failing.json; then
+            echo 'Failing acceptance fixture unexpectedly passed' >&2
+            exit 1
+          fi
+          grep -F '"status": "fail"' /tmp/data-accuracy-failing.json
+      - name: Verify beta evidence manifest contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'ci-green' > /tmp/ci.txt
+          printf '%s\n' 'core-smoke-green' > /tmp/core-smoke.txt
+          cp /tmp/data-accuracy.json /tmp/data-accuracy-evidence.json
+
+          python3 ops/release_evidence.py \
+            --stage beta \
+            --environment ci-fixture \
+            --commit ci-fixture-sha \
+            --artifact ci=/tmp/ci.txt \
+            --artifact core_smoke=/tmp/core-smoke.txt \
+            --artifact data_accuracy=/tmp/data-accuracy-evidence.json \
+            --output /tmp/release-evidence.json
+          grep -F '"status": "complete"' /tmp/release-evidence.json
+
+          if python3 ops/release_evidence.py \
+            --stage beta \
+            --environment ci-fixture \
+            --commit ci-fixture-sha \
+            --artifact ci=/tmp/ci.txt \
+            --output /tmp/release-evidence-incomplete.json; then
+            echo 'Incomplete beta evidence unexpectedly passed' >&2
+            exit 1
+          fi
+          grep -F '"status": "incomplete"' /tmp/release-evidence-incomplete.json
 
   docker-build:
     runs-on: ubuntu-latest
