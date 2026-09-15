@@ -87,6 +87,9 @@ class WBClient:
             "finance.sales_report_detailed": config.WB_FINANCE_MIN_INTERVAL_SECONDS,
             "analytics.stocks_warehouses": config.WB_STOCKS_MIN_INTERVAL_SECONDS,
             "analytics.sales_funnel_history": config.WB_FUNNEL_MIN_INTERVAL_SECONDS,
+            "analytics.paid_storage.create": config.WB_STORAGE_CREATE_MIN_INTERVAL_SECONDS,
+            "analytics.paid_storage.status": config.WB_STORAGE_STATUS_MIN_INTERVAL_SECONDS,
+            "analytics.paid_storage.download": config.WB_STORAGE_DOWNLOAD_MIN_INTERVAL_SECONDS,
             "content.cards_list": config.WB_CONTENT_CARDS_MIN_INTERVAL_SECONDS,
             "statistics.orders": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
             "statistics.sales": config.WB_OPERATIONAL_MIN_INTERVAL_SECONDS,
@@ -360,4 +363,26 @@ class WBClient:
             f"{config.WB_SELLER_ANALYTICS_API_BASE_URL}/api/analytics/v3/sales-funnel/products/history",
             endpoint="analytics.sales_funnel_history",
             json_data=payload or {},
+        )
+
+    async def create_paid_storage_report(self, payload: dict[str, Any]):
+        return await self._request(
+            "GET",
+            f"{config.WB_SELLER_ANALYTICS_API_BASE_URL}/api/v1/paid_storage",
+            endpoint="analytics.paid_storage.create",
+            params=payload,
+        )
+
+    async def get_paid_storage_report_status(self, task_id: str):
+        return await self._request(
+            "GET",
+            f"{config.WB_SELLER_ANALYTICS_API_BASE_URL}/api/v1/paid_storage/tasks/{task_id}/status",
+            endpoint="analytics.paid_storage.status",
+        )
+
+    async def download_paid_storage_report(self, task_id: str):
+        return await self._request(
+            "GET",
+            f"{config.WB_SELLER_ANALYTICS_API_BASE_URL}/api/v1/paid_storage/tasks/{task_id}/download",
+            endpoint="analytics.paid_storage.download",
         )
