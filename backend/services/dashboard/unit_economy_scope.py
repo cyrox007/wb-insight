@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.product_cost_price_history import ProductCostPriceHistory
 from models.wb_report import WbRealizationReport
 from services.dashboard.account_scope import DashboardAccountScope
+from services.manual_expense_service import get_manual_expense_totals
 
 
 def _effective_cost_scalar(user_id: UUID):
@@ -65,7 +66,14 @@ async def get_dashboard_unit_economy_scoped(
     cost_query = scope.apply(cost_query, WbRealizationReport.token_id)
     total_cost = float((await session.execute(cost_query)).scalar_one() or 0)
 
-    profit = payout - total_cost
+    other_expenses, _ = await get_manual_expense_totals(
+        session,
+        user_id,
+        start_date,
+        end_date,
+        scope,
+    )
+    profit = payout - total_cost - other_expenses
     margin = profit / revenue * 100 if revenue > 0 else 0.0
     drr = (commission + logistics + penalty) / revenue * 100 if revenue > 0 else 0.0
 
@@ -90,6 +98,7 @@ async def get_dashboard_unit_economy_scoped(
     return {
         "total_revenue": round(revenue, 2),
         "total_cost": round(total_cost, 2),
+        "other_expenses": round(other_expenses, 2),
         "total_profit": round(profit, 2),
         "avg_margin_percent": round(margin, 2),
         "avg_drr_percent": round(drr, 2),
