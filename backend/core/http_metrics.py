@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as redis
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -41,6 +41,26 @@ async def record_http_status(status_code: int, *, now: datetime | None = None) -
     except Exception:
         # Metrics must never turn an otherwise healthy request into a failure.
         logger.exception("Unable to persist HTTP operational metric")
+
+
+async def read_http_counters(
+    window_minutes: int,
+    *,
+    now: datetime | None = None,
+) -> tuple[int, int]:
+    current = now or datetime.now(timezone.utc)
+    keys: list[str] = []
+    for offset in range(window_minutes):
+        bucket = _bucket(current - timedelta(minutes=offset))
+        keys.extend(http_metric_keys(bucket))
+
+    values = await _metrics_redis.mget(keys)
+    total = 0
+    errors = 0
+    for index in range(0, len(values), 2):
+        total += int(values[index] or 0)
+        errors += int(values[index + 1] or 0)
+    return total, errors
 
 
 class HTTPMetricsMiddleware(BaseHTTPMiddleware):
