@@ -40,6 +40,13 @@ class Subscription(Database.Base):
         nullable=False,
         index=True,
     )
+    payment_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("payments.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        comment="Confirmed payment that activated this subscription",
+    )
     status: Mapped[SubscriptionStatus] = mapped_column(
         PgEnum(
             SubscriptionStatus,

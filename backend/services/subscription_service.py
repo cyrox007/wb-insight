@@ -14,11 +14,14 @@ async def create_subscription(
     session: AsyncSession,
     user_id: UUID,
     tariff_id: UUID,
+    *,
+    payment_id: UUID | None = None,
 ) -> Subscription:
     now = datetime.now(timezone.utc)
     subscription = Subscription(
         user_id=user_id,
         tariff_id=tariff_id,
+        payment_id=payment_id,
         status=SubscriptionStatus.ACTIVE,
         current_period_start=now,
         current_period_end=now + timedelta(days=30),
@@ -42,6 +45,7 @@ async def create_demo_subscription(
     subscription = Subscription(
         user_id=user_id,
         tariff_id=demo_tariff.id,
+        payment_id=None,
         status=SubscriptionStatus.DEMO,
         current_period_start=now,
         current_period_end=now + timedelta(days=7),
@@ -69,6 +73,37 @@ async def get_active_subscription(
         )
         .order_by(Subscription.current_period_end.desc())
         .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_active_subscription_by_user_id(
+    session: AsyncSession,
+    user_id: UUID,
+) -> Optional[Subscription]:
+    """Explicit alias used by newer code; legacy callers use get_active_subscription."""
+    return await get_active_subscription(session, user_id)
+
+
+async def get_subscription_by_user_id(
+    session: AsyncSession,
+    user_id: UUID,
+) -> Optional[Subscription]:
+    result = await session.execute(
+        select(Subscription)
+        .where(Subscription.user_id == user_id)
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_subscription_by_payment_id(
+    session: AsyncSession,
+    payment_id: UUID,
+) -> Optional[Subscription]:
+    result = await session.execute(
+        select(Subscription).where(Subscription.payment_id == payment_id)
     )
     return result.scalar_one_or_none()
 
@@ -106,6 +141,7 @@ async def cancel_subscription(
     }:
         return False
     subscription.status = SubscriptionStatus.CANCELLED
+    subscription.updated_at = datetime.now(timezone.utc)
     await session.flush()
     return True
 

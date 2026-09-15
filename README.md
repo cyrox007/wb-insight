@@ -88,7 +88,19 @@ Browser access JWT пока хранится в `localStorage`; его пере�
 
 ## Billing
 
-Production acquiring **ещё не подключён**. До интеграции Сбер acquiring endpoint оплаты в production намеренно отвечает `BILLING_NOT_CONFIGURED`.
+Backend поддерживает Sber internet acquiring через server-to-server `register.do` и `getOrderStatusExtended.do`.
+
+Критические свойства flow:
+
+- одна платёжная попытка имеет `Idempotency-Key`;
+- frontend получает `formUrl` и переходит на платёжную форму Сбера;
+- redirect/callback сам по себе не активирует тариф;
+- backend повторно проверяет статус у Сбера;
+- подписка активируется только после подтверждённого `orderStatus=2` + `paymentState=DEPOSITED`;
+- payment связан с подпиской и защищён от повторной активации;
+- события провайдера сохраняются без merchant credentials и неизвестных чувствительных полей.
+
+Acquiring выключен по умолчанию и включается только после выдачи merchant credentials. Подробно: [`docs/SBER_ACQUIRING.md`](docs/SBER_ACQUIRING.md).
 
 Fake payments существуют только для локальной разработки и должны включаться явно через `ALLOW_FAKE_BILLING=true` при `APP_ENV != production`.
 
@@ -129,16 +141,15 @@ Pull requests проверяются тремя обязательными ко�
 Ключевые внешние блокеры первого публичного релиза:
 
 1. получить `WB_SERVICE_ID` + `WB_SERVICE_SECRET` и лимиты сервиса у Wildberries;
-2. получить test/production credentials Сбер acquiring;
+2. получить test/production merchant credentials Сбер acquiring и провести bank smoke;
 3. подготовить production domain/TLS и юридические документы сервиса.
 
-Ключевые code/ops блокеры:
+Ключевые code/ops блокеры после P24:
 
-1. реальный Sber payment provider;
-2. воспроизводимый production deployment;
-3. monitoring/alerts и backup/restore;
-4. legal pages + consent persistence;
-5. browser session hardening и release smoke suite.
+1. воспроизводимый production deployment;
+2. monitoring/alerts и backup/restore;
+3. legal pages + consent persistence;
+4. browser session hardening и release smoke suite.
 
 ## Roadmap после WB Web v1
 
