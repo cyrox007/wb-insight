@@ -90,8 +90,8 @@ def test_finance_payload_backfills_reports_and_details():
     details = build_payload_for_entity("realization", None)
     reports = build_payload_for_entity("finance_summary", None)
 
-    today = date.today()
-    assert (today - date.fromisoformat(details["dateFrom"])).days == 119
+    detail_end = date.fromisoformat(details["dateTo"])
+    assert (detail_end - date.fromisoformat(details["dateFrom"])).days == 119
     assert details["period"] == "daily"
     assert reports["dateFrom"] == "2025-01-01"
     assert reports["period"] == "weekly"
