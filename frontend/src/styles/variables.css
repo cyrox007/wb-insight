@@ -1,17 +1,32 @@
 :root {
-  --primary-color: #2c3e50;
-  --secondary-color: #3498db;
-  --accent-color: #e74c3c;
-  --dark-bg: #1a1a1a;
-  --medium-bg: #2d2d2d;
-  --light-bg: #3a3a3a;
-  --text-color: #ffffff;
-  --border-color: #444;
-  --success-color: #2ecc71;
-  --warning-color: #f39c12;
-  --info-color: #9b59b6;
-  --card-bg: #252525;
-  --hover-bg: #333333;
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --transition: all 0.3s ease;
+  --primary-color: #111827;
+  --secondary-color: #7c3aed;
+  --secondary-hover: #6d28d9;
+  --accent-color: #ec4899;
+
+  --dark-bg: #0f141c;
+  --medium-bg: #151c27;
+  --light-bg: #1c2634;
+  --card-bg: #18212e;
+  --card-bg-elevated: #1d2837;
+  --hover-bg: #222f40;
+
+  --text-color: #e8edf5;
+  --text-muted: #94a3b8;
+  --text-subtle: #6f7f93;
+  --border-color: #2b394b;
+  --border-strong: #3b4d63;
+
+  --success-color: #34d399;
+  --warning-color: #fbbf24;
+  --danger-color: #fb7185;
+  --info-color: #60a5fa;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.16);
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --content-width: 1440px;
+  --transition: 160ms ease;
 }
