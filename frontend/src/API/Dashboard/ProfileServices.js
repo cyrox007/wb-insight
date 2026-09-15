@@ -5,6 +5,10 @@ export default class ProfileServices {
         return await $api.get('/dashboard/profile/');
     }
 
+    static async updateProfile(data) {
+        return await $api.put('/dashboard/profile/', data);
+    }
+
     static async checkTokenPermission(user_id, tariff_id) {
         return await $api.get(`/dashboard/profile/check-token-permission/${user_id}`, {
             params: {
@@ -24,6 +28,7 @@ export default class ProfileServices {
     static async delete_user_token(id) {
         return await $api.delete(`/dashboard/profile/token/${id}`)
     }
+
     static async add_user_token(data) {
         return await $api.post(`/dashboard/tokens`, data);
     }
