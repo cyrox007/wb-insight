@@ -9,6 +9,7 @@ from core.audit import AuditMiddleware
 from core.http_metrics import HTTPMetricsMiddleware
 from core.session_security import SessionSecurityMiddleware
 from core.version import APP_VERSION
+from handlers.account_lifecycle_handler import account_router, auth_router as account_auth_router
 from handlers.auth_handler import router as auth_router
 from handlers.control_panel.home import router as CP_home_router
 from handlers.control_panel.operations import router as CP_operations_router
@@ -66,6 +67,8 @@ def _register_routers(app: FastAPI) -> None:
         legal_router,
         user_router,
         auth_router,
+        account_auth_router,
+        account_router,
         session_router,
         D_main_router,
         D_user_profile_router,
