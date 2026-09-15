@@ -2,7 +2,7 @@ import asyncio
 import smtplib
 from email.message import EmailMessage
 
-from settings import config
+from core.lifecycle_config import lifecycle_config as config
 
 
 def _send_message(message: EmailMessage) -> None:
