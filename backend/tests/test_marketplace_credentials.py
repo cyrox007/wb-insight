@@ -77,6 +77,8 @@ async def test_wb_insert_persists_seller_id_as_external_account_id(monkeypatch):
         "encrypt_token",
         lambda raw, user_id: f"encrypted:{user_id}:{len(raw)}",
     )
+    monkeypatch.setattr(token_services.config, "WB_SERVICE_ID", "test-service")
+    monkeypatch.setattr(token_services.config, "WB_SERVICE_SECRET", "test-secret")
 
     live_checks = []
 
@@ -100,4 +102,4 @@ async def test_wb_insert_persists_seller_id_as_external_account_id(monkeypatch):
     assert credential.expires_at is not None
     assert session.added == [credential]
     assert session.flushed is True
-    assert live_checks == [(raw_token, "base", None)]
+    assert live_checks == [(raw_token, "base", "test-secret")]
