@@ -62,7 +62,8 @@ Webhook обязан использовать HTTPS и принадлежать 
 
 - stale sync: `OPS_SYNC_STALE_MINUTES=180`;
 - failed-job lookback: `60` минут;
-- credential warning: `14` дней;
+- seller credential warning: `14` дней;
+- WB service-secret rotation warning: `30` дней;
 - 5xx window: `5` минут;
 - critical 5xx rate: `>=5%` при минимум `20` requests;
 - operations check: каждые `15` минут;
@@ -78,6 +79,7 @@ Webhook обязан использовать HTTPS и принадлежать 
 
 ```text
 OPS_WB_SERVICE_SECRET_EXPIRES_AT=2026-12-01T00:00:00+03:00
+OPS_WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS=30
 ```
 
 Требуется timezone-aware ISO-8601 значение.
@@ -87,7 +89,7 @@ OPS_WB_SERVICE_SECRET_EXPIRES_AT=2026-12-01T00:00:00+03:00
 - service secret не настроен — `not_applicable` вне production; production backend и так fail-closed;
 - secret есть, deadline не указан — warning;
 - deadline некорректен — critical;
-- до deadline <= `OPS_CREDENTIAL_EXPIRY_WARNING_DAYS` — warning;
+- до deadline <= `OPS_WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS` — warning;
 - deadline прошёл — critical.
 
 После rotation дата должна быть обновлена одновременно с secret management record.
