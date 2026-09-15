@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlparse
 
 
 class OpsConfig:
@@ -8,6 +9,9 @@ class OpsConfig:
     )
     CREDENTIAL_EXPIRY_WARNING_DAYS = int(
         os.getenv("OPS_CREDENTIAL_EXPIRY_WARNING_DAYS", "14")
+    )
+    WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS = int(
+        os.getenv("OPS_WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS", "30")
     )
     WB_SERVICE_SECRET_EXPIRES_AT = (
         os.getenv("OPS_WB_SERVICE_SECRET_EXPIRES_AT", "").strip() or None
@@ -35,6 +39,10 @@ class OpsConfig:
         raise RuntimeError("OPS_FAILED_JOB_LOOKBACK_MINUTES must be positive")
     if CREDENTIAL_EXPIRY_WARNING_DAYS <= 0:
         raise RuntimeError("OPS_CREDENTIAL_EXPIRY_WARNING_DAYS must be positive")
+    if WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS <= 0:
+        raise RuntimeError(
+            "OPS_WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS must be positive"
+        )
     if HTTP_ERROR_WINDOW_MINUTES <= 0 or HTTP_ERROR_WINDOW_MINUTES > 60:
         raise RuntimeError("OPS_HTTP_ERROR_WINDOW_MINUTES must be between 1 and 60")
     if not 0 <= HTTP_5XX_RATE_THRESHOLD <= 1:
@@ -49,6 +57,10 @@ class OpsConfig:
         )
     if ALERT_WEBHOOK_TIMEOUT_SECONDS <= 0:
         raise RuntimeError("OPS_ALERT_WEBHOOK_TIMEOUT_SECONDS must be positive")
+    if ALERT_WEBHOOK_URL:
+        parsed = urlparse(ALERT_WEBHOOK_URL)
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise RuntimeError("OPS_ALERT_WEBHOOK_URL must be an absolute HTTPS URL")
 
 
 ops_config = OpsConfig()
