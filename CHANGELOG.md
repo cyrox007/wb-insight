@@ -1,248 +1,272 @@
-# Changelog
+# История изменений WB Insight
 
-All notable product milestones are documented here. Versions before the introduction of the release policy on 2026-09-15 are reconstructed from the complete `main` history and merged pull requests; they describe product maturity and do not imply that a Git tag existed at that date.
+Здесь фиксируются значимые продуктовые вехи проекта. Версии, предшествующие введению формальной release-policy 15 сентября 2026 года, реконструированы по полной истории `main` и слитым pull request. Они описывают фактический уровень зрелости продукта и не означают, что в тот момент существовал Git tag с таким номером.
+
+Подробная история с объяснением каждого перехода находится в `docs/VERSION_HISTORY.md`, правила дальнейшего версионирования — в `docs/VERSIONING.md`.
+
+## [0.9.0-alpha.3] — 2026-09-15
+
+P26 — эксплуатационный hardening: monitoring, alerts, backup/restore и проверяемые operational assets.
+
+- добавлен super-admin operational snapshot без seller secrets и PII;
+- контролируются failed sync jobs, истёкшие processing leases и stale sync states;
+- добавлены предупреждения по истекающим marketplace credentials;
+- добавлен контроль срока ротации `WB_SERVICE_SECRET` без раскрытия секрета;
+- реализованы Redis minute-bucket counters для HTTP 5xx rate;
+- добавлен периодический Celery operations monitor;
+- добавлен deduplicated alert webhook для агрегированных operational signals;
+- добавлены зашифрованные PostgreSQL backup с SHA-256 и retention;
+- destructive restore требует явного подтверждения;
+- добавлен isolated restore drill во временную БД;
+- release-integrity CI выполняет реальный encrypted backup/restore roundtrip;
+- добавлен operations runbook и зафиксированы стартовые RPO/RTO targets;
+- расширена подробная история версий проекта.
 
 ## [0.9.0-alpha.2] — 2026-09-15
 
-Release-governance and P25 production-deployment baseline.
+P25 — управление версиями и базовый production deployment.
 
-- established root `VERSION` as canonical product version;
-- aligned backend/frontend version metadata;
-- documented SemVer, `alpha -> beta -> rc -> stable` transition rules;
-- added detailed reconstructed release history;
-- started reproducible production container/deployment baseline.
+- корневой `VERSION` стал канонической версией продукта;
+- версия backend/frontend приведена к единой схеме;
+- задокументированы правила SemVer и переходов `alpha -> beta -> rc -> stable`;
+- реконструирована история продуктовых версий;
+- добавлены production Docker images backend/frontend;
+- добавлена production Compose topology с отдельными migration/API/worker/beat/frontend процессами;
+- добавлен same-origin `/api` gateway;
+- исправлены параметры refresh-cookie для production HTTPS/reverse proxy;
+- добавлены deployment/upgrade/rollback runbook и release-integrity CI.
 
 ## [0.9.0-alpha.1] — 2026-09-15
 
-Release-hardening baseline after P19–P24.
+Базовая стадия release-hardening после P19–P24.
 
-### P19 — Wildberries credential compliance — PR #34
+### P19 — соответствие WB credential contract — PR #34
 
-- WB token type is derived from JWT claim `acc`, not frontend input;
-- real `exp` is used instead of an artificial 180-day lifetime;
-- Personal/Test tokens are rejected for the cloud flow;
-- Service token is bound to configured service identity;
-- WB auth header moved to documented Bearer form.
+- тип WB-токена определяется по JWT claim `acc`, а не по вводу frontend;
+- срок действия берётся из реального `exp`, а не вычисляется как условные 180 дней;
+- Personal/Test tokens запрещены для cloud production flow;
+- Service token связывается с настроенным service identity;
+- WB authorization переведён на документированный Bearer format.
 
-### P20 — Marketplace adapter core — PR #35
+### P20 — Marketplace Adapter Core — PR #35
 
-- introduced generic `MarketplaceAdapter` contract and registry;
-- moved WB handlers behind `WildberriesAdapter`;
-- generic sync orchestration became marketplace-aware without duplicating worker infrastructure.
+- введены общий контракт `MarketplaceAdapter` и registry;
+- WB handlers вынесены за `WildberriesAdapter`;
+- orchestration синхронизации стала marketplace-aware без дублирования worker infrastructure.
 
-### P21 — Marketplace credential foundation — PR #36
+### P21 — Marketplace Credential Foundation — PR #36
 
-- credentials gained `external_account_id`;
-- expiration became nullable for non-expiring marketplace keys;
-- WB seller identity is preserved separately from encrypted secret material;
-- legacy credential endpoint regressions were corrected.
+- credentials получили `external_account_id`;
+- `expires_at` стал nullable для ключей без фиксированного срока действия;
+- seller identity хранится отдельно от encrypted secret;
+- исправлены регрессии legacy credential endpoint.
 
-### P22 — WB access-token policy and live validation — PR #37
+### P22 — WB access-token policy и live validation — PR #37
 
-- required WB API categories and read-only permission mask are validated;
-- production requires partner `WB_SERVICE_ID` and `WB_SERVICE_SECRET`;
-- Base/Service seller requests use partner `X-Client-Secret`;
-- token is live-validated against WB before persistence;
-- revoked/invalid credentials fail closed.
+- проверяются обязательные категории WB API и Read Only permission mask;
+- production требует partner `WB_SERVICE_ID` и `WB_SERVICE_SECRET`;
+- Base/Service seller requests используют `X-Client-Secret`;
+- перед сохранением токен live-проверяется через WB;
+- revoked/invalid credentials отклоняются fail-closed.
 
-### P23 — Release readiness baseline — PR #38
+### P23 — Release Readiness baseline — PR #38
 
-- added liveness/readiness endpoints;
-- readiness checks PostgreSQL and Redis;
-- README/SETUP were aligned with the actual product state;
-- explicit release blockers and Definition of Done were recorded.
+- добавлены liveness/readiness endpoints;
+- readiness проверяет PostgreSQL и Redis;
+- README/SETUP приведены к фактическому состоянию продукта;
+- зафиксированы release blockers и Definition of Done.
 
-### P24 — Production Sber acquiring flow — PR #39
+### P24 — production flow Сбер acquiring — PR #39
 
-- server-to-server payment registration and status verification;
+- server-to-server регистрация и проверка статуса платежа;
 - idempotent payment attempts;
-- callback treated only as a trigger, never as proof of payment;
-- subscription activates only after bank-confirmed deposited state;
-- payment event log, duplicate-activation protection and sandbox/production separation.
+- callback используется только как trigger, а не как доказательство оплаты;
+- подписка активируется только после подтверждённого банком deposited state;
+- добавлены payment event log, защита от двойной активации и разделение sandbox/production.
 
 ## [0.8.0-alpha.1] — 2026-09-15
 
-Feature-complete WB analytics alpha after P14–P18.
+Функционально полный alpha-контур WB-аналитики после P14–P18.
 
-### P14 — Dashboard UX foundation — PR #29
+### P14 — Dashboard UX Foundation — PR #29
 
-- unified calm application design system;
-- restructured Overview / Unit Economy / Ads UX;
-- removed demo/hardcoded KPI values;
-- corrected period/filter propagation and metric labels.
+- создан единый спокойный дизайн системы аналитики;
+- перестроены Overview / Unit Economy / Ads;
+- удалены demo/hardcoded KPI;
+- исправлена передача периода/фильтров и подписи метрик.
 
-### P15 — Seller inputs and settings workspace — PR #30
+### P15 — Seller Inputs и Settings Workspace — PR #30
 
-- real seller profile editing;
-- WB account workspace;
-- cost-price input with effective dates and CSV path;
-- manual expense management;
-- settings UI aligned with the main design system.
+- реальное редактирование профиля продавца;
+- workspace подключённых WB-кабинетов;
+- ввод себестоимости с effective dates и CSV path;
+- управление ручными расходами;
+- settings UI приведён к основному design system.
 
-### P16 — Inventory risk and replenishment planning — PR #31
+### P16 — Inventory Risk и Replenishment Planning — PR #31
 
-- 30-completed-day demand model;
-- stock-cover calculation;
-- critical stock threshold and replenishment recommendation;
-- dedicated stocks dashboard with account scope.
+- модель спроса по 30 завершённым дням;
+- расчёт stock cover;
+- порог критического остатка и рекомендация поставки;
+- отдельный stocks dashboard с account scope.
 
-### P17 — Price monitoring and history — PR #32
+### P17 — Price Monitoring и History — PR #32
 
-- durable WB price snapshot sync;
-- change-only price history;
+- durable sync цен WB;
+- история только фактических изменений;
 - size-aware current price model;
-- prices dashboard and account filtering.
+- price dashboard и фильтрация по кабинету.
 
-### P18 — Finance reports and payout reconciliation — PR #33
+### P18 — Finance Reports и Payout Reconciliation — PR #33
 
-- canonical WB finance report summaries;
-- current balance snapshot;
-- report summary/detail reconciliation with tolerance;
-- finance dashboard and durable finance sync.
+- canonical summaries финансовых отчётов WB;
+- снимок текущего баланса;
+- reconciliation summary/detail с tolerance;
+- finance dashboard и durable finance sync.
 
 ## [0.7.0-alpha.1] — 2026-09-15
 
-Semantic/data-model maturation after P8–P13.
+Созревание semantic/data model после P8–P13.
 
-### P8 — Unified semantic metrics — PR #23
+### P8 — Unified Semantic Metrics — PR #23
 
-- shared semantic metrics layer;
-- operational orders separated from finance realization facts;
-- advertising attribution separated from total orders;
-- corrected comparison periods, Moscow-day boundaries and sync status semantics.
+- общий semantic metrics layer;
+- operational orders отделены от finance realization facts;
+- advertising attribution отделена от общего количества заказов;
+- исправлены comparison periods, границы московского дня и sync status semantics.
 
-### P9 — Multi-account dashboard filter — PR #24
+### P9 — Multi-account Dashboard Filter — PR #24
 
-- unified `DashboardAccountScope`;
-- safe selected-account and all-allowed-accounts modes;
-- SQL-level scoping across Main, Charts, Ads and Unit Economy;
-- frontend account selector persisted across analytics sections.
+- единый `DashboardAccountScope`;
+- безопасные режимы выбранного кабинета и всех разрешённых кабинетов;
+- SQL-level scoping в Main, Charts, Ads и Unit Economy;
+- frontend account selector сохраняется между аналитическими разделами.
 
-### P10 — Unit Economy correctness — PR #25
+### P10 — корректность Unit Economy — PR #25
 
-- repaired obsolete aliases/runtime mismatches;
-- aggregate ratios recalculated from numerators/denominators;
-- actual advertising spend included by SKU;
-- API contract aligned with frontend expectations.
+- исправлены obsolete aliases/runtime mismatches;
+- aggregate ratios пересчитываются из числителей/знаменателей;
+- фактические рекламные расходы включены по SKU;
+- API contract синхронизирован с frontend expectations.
 
-### P11 — Monthly revenue plans — PR #26
+### P11 — Monthly Revenue Plans — PR #26
 
-- persistent monthly revenue targets per WB account;
-- correct calendar month length;
-- separate required revenue/day and orders/day metrics;
-- all-accounts plan aggregation without invented fallback targets.
+- persistent monthly revenue targets по WB-кабинету;
+- корректная длина календарного месяца;
+- отдельно считаются required revenue/day и orders/day;
+- aggregation по всем кабинетам без выдуманных fallback targets.
 
-### P12 — Durable paid storage sync — PR #27
+### P12 — Durable Paid Storage Sync — PR #27
 
-- official WB Paid Storage task/status/download flow;
-- durable task checkpoints and <=8-day chunks;
-- rolling refresh and idempotent replacement semantics.
+- официальный WB Paid Storage task/status/download flow;
+- durable task checkpoints и chunks не более 8 дней;
+- rolling refresh и idempotent replacement semantics.
 
-### P13 — Historical COGS and seller expenses — PR #28
+### P13 — Historical COGS и Seller Expenses — PR #28
 
-- date-effective cost-price history;
-- account/SKU manual expenses;
-- Unit Economy and Main profit use historical COGS and scoped expenses;
-- cost-price API was properly registered.
+- date-effective история себестоимости;
+- manual expenses на уровне account/SKU;
+- Unit Economy и Main profit используют историческую COGS и scoped expenses;
+- cost-price API корректно зарегистрирован в приложении.
 
 ## [0.6.0-alpha.1] — 2026-09-14
 
-Operational WB data foundation after P5–P7.
+Фундамент операционных WB-данных после P5–P7.
 
-### P5 — Orders and sales facts — PR #20
+### P5 — Orders и Sales Facts — PR #20
 
-- account-scoped WB orders and sales/returns facts;
-- canonical identities and stale-update protection;
-- durable source cursors and retention-aware initial sync.
+- account-scoped WB orders и sales/returns facts;
+- canonical identities и stale-update protection;
+- durable source cursors и retention-aware initial sync.
 
-### P6 — Advertising sync — PR #21
+### P6 — Advertising Sync — PR #21
 
-- current Promotion API campaign discovery and fullstats v3 ingestion;
-- account-scoped ad facts and rolling refresh;
-- campaign batching, typed permission errors and durable checkpoints.
+- актуальный Promotion API campaign discovery и `fullstats v3` ingestion;
+- account-scoped рекламные facts и rolling refresh;
+- campaign batching, typed permission errors и durable checkpoints.
 
-### P7 — Daily sales funnel — PR #22
+### P7 — Daily Sales Funnel — PR #22
 
-- product funnel facts by account/product/day;
-- views, carts, orders, buyouts and conversion metrics;
-- 20-item batching, 7-day refresh and durable checkpointing;
-- typed handling of feature-unavailable responses.
+- product funnel facts по account/product/day;
+- views, carts, orders, buyouts и conversion metrics;
+- batching по 20 items, 7-day refresh и durable checkpointing;
+- typed handling feature-unavailable responses.
 
 ## [0.5.0-alpha.1] — 2026-09-14
 
-Production-safety and durable-sync foundation after P0–P4.
+Production-safety и durable-sync foundation после P0–P4.
 
-### P0 — Production safety — PR #15
+### P0 — Production Safety — PR #15
 
-- strict access/refresh JWT separation and safer refresh/logout flow;
-- server-side RBAC for control panel;
-- protected user/role administration;
-- marketplace credential secrecy and tariff account limits;
+- строгая separation access/refresh JWT и безопасный refresh/logout flow;
+- server-side RBAC control panel;
+- защищённое управление пользователями/ролями;
+- secrecy marketplace credentials и тарифные лимиты кабинетов;
 - fail-closed billing defaults;
-- audit logging and migration/test CI baseline.
+- audit logging и migration/test CI baseline.
 
-### P1 — Account-scoped sync — PR #16
+### P1 — Account-scoped Sync — PR #16
 
-- sync state/job identity moved to exact marketplace credential;
-- scheduler and worker enforce ownership, validity and tariff allowance;
-- migrations made reproducible and checked against clean PostgreSQL.
+- sync state/job identity привязана к точному marketplace credential;
+- scheduler/worker проверяют ownership, validity и tariff allowance;
+- миграции стали воспроизводимыми и проверяются на чистом PostgreSQL.
 
-### P2 — WB transport hardening — PR #17
+### P2 — WB Transport Hardening — PR #17
 
-- Redis-coordinated endpoint/account rate limiting;
+- Redis-coordinated rate limiting по endpoint/account;
 - bounded retries, `Retry-After`, typed transport/auth/rate errors;
-- credential deactivation only on confirmed auth failures;
-- deterministic resource cleanup.
+- credential деактивируется только при подтверждённой auth failure;
+- deterministic cleanup ресурсов.
 
-### P3 — WB API contracts and pagination — PR #18
+### P3 — WB API Contracts и Pagination — PR #18
 
-- current Finance, Stocks and Content request/response contracts;
-- safe pagination and cursor-stall protection;
+- актуальные Finance, Stocks и Content contracts;
+- безопасная pagination и cursor-stall protection;
 - account-scoped finance/product/stock identities;
-- normalized current API payloads.
+- нормализация текущих API payloads.
 
-### P4 — Durable resumable jobs — PR #19
+### P4 — Durable Resumable Jobs — PR #19
 
-- atomic job claims with leases;
-- crash recovery and bounded retries;
-- committed page checkpoints for Finance/Stocks/Products;
-- restart resumes from last persisted page rather than the beginning.
+- atomic job claims с leases;
+- crash recovery и bounded retries;
+- committed page checkpoints для Finance/Stocks/Products;
+- restart продолжает работу с последней сохранённой страницы.
 
 ## [0.4.0-alpha.1] — 2026-05-07
 
-Database/documentation consolidation milestone.
+Веха консолидации БД и документации.
 
-- merged PR #14 with database requirements/notes updates;
-- consolidated early persistence assumptions before the September production audit.
+- слит PR #14 с обновлением требований/заметок по базе данных;
+- ранние assumptions persistence были собраны перед сентябрьским production-аудитом.
 
 ## [0.3.0-alpha.1] — 2026-05-06
 
-Early Wildberries synchronization and advertising milestone.
+Ранняя синхронизация Wildberries и реклама.
 
-- PR #8: corrected sync behavior around invalid marketplace tokens;
-- PR #9: advertising statistics synchronization;
-- PR #10 and #11: advertising page/backend/frontend iteration;
-- PR #12: advertising import correction.
+- PR #8: исправлено поведение sync при недействительном marketplace token;
+- PR #9: синхронизация рекламной статистики;
+- PR #10 и #11: итерации advertising backend/frontend;
+- PR #12: исправление advertising import.
 
-PR #13 was closed without merge and is not part of the mainline release history.
+PR #13 был закрыт без merge и не входит в mainline release history.
 
 ## [0.2.0-alpha.1] — 2026-05-05
 
-Initial Unit Economy milestone.
+Первая веха Unit Economy.
 
-- PRs #4–#7 progressively introduced and refined the first WB reports / unit-economy implementation.
+- PR #4–#7 последовательно добавляли и уточняли первые WB reports и unit-economy implementation.
 
 ## [0.1.0-alpha.1] — 2026-03-30
 
-Repository reconstruction baseline.
+Базовая реконструкция репозитория.
 
-- PR #1 established the first reconstructed codebase on `main`.
-- PRs #2 and #3 were closed without merge and therefore are excluded from product versions.
+- PR #1 сформировал первый reconstructed codebase в `main`;
+- PR #2 и #3 были закрыты без merge и исключены из продуктовой истории версий.
 
-## Versioning interpretation
+## Почему проект остаётся в 0.x
 
-The project remained in `0.x` because no public stable contract had yet been declared. The September P0–P24 work substantially changed authentication, data identities, API contracts, sync semantics, finance logic and release infrastructure; calling any of those states `1.0.0` would have falsely signaled stability.
+Стабильный публичный контракт ещё не объявлен. Работы P0–P26 существенно изменяли authentication, data identities, WB API contracts, sync semantics, финансовую модель, billing и release infrastructure. Назвать одну из этих промежуточных стадий `1.0.0` означало бы преждевременно заявить стабильность.
 
-The target sequence for WB Web v1 is now:
+Целевая последовательность WB Web v1:
 
 `0.9.0-alpha.N` -> `0.9.0-beta.N` -> `1.0.0-rc.N` -> `1.0.0`.
