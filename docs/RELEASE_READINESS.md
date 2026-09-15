@@ -4,10 +4,11 @@
 
 ## Текущий статус
 
-- `main`: **`0.9.0-alpha.5`** после P28.
-- P29 готовит **`0.9.0-alpha.6`**: dependency/security hardening + полная ревизия документации.
-- Основной WB Web v1 feature baseline собран.
-- Следующий release stage — `0.9.0-beta.1`, но только после production-like и data-accuracy acceptance.
+- `main`: **`0.9.0-alpha.6`** после P29 / PR #44.
+- P29 dependency/security hardening закрыт; frontend и backend dependency audits входят в постоянный CI.
+- P30 готовит **`0.9.0-alpha.7`**: воспроизводимую data-accuracy acceptance и release-evidence baseline.
+- Основной WB Web v1 feature baseline собран и находится в feature-freeze направлении.
+- `0.9.0-beta.1` назначается только после фактического production-like и real-seller acceptance, а не после merge tooling.
 
 ## Code-side status
 
@@ -31,33 +32,44 @@
 - versioned legal-consent technical baseline;
 - browser access token in-memory + refresh restore;
 - release smoke runner;
-- frontend dependency audit gate;
-- backend dependency audit gate — P29 candidate.
+- frontend production/full dependency audit gate;
+- backend `pip-audit` gate без известных vulnerabilities на P29 merge head;
+- полная структурированная документация проекта.
 
-### До merge P29
+### P30 candidate
 
-- backend `pip-audit` должен пройти на последнем head;
-- frontend production/full dependency audit должен быть green;
-- временный lockfile regeneration workflow должен оставаться disabled/read-only и быть удалён housekeeping-изменением, когда доступно;
-- вся version/documentation metadata должна быть синхронизирована;
-- четыре основных CI-контура должны быть green на одном exact head.
+P30 добавляет code-side доказуемость acceptance-процесса:
+
+- versioned policy метрик/tolerances;
+- deterministic data-accuracy comparator;
+- машинные JSON/Markdown acceptance reports;
+- positive/negative CI contracts;
+- release-evidence manifest с exact commit/version/environment и hashes artifacts;
+- обязательные evidence kinds для beta/RC/stable;
+- запуск backend security и Alembic при каждом изменении `VERSION`.
+
+Эти инструменты считаются готовыми только после green CI и merge P30. Они не заменяют реальные staging/WB/Sber/ops evidence.
 
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
+- merge P30 с green release-candidate CI;
 - feature freeze WB Web v1;
-- green `0.9.0-alpha.6` code baseline;
 - production-like HTTPS deployment из репозитория;
-- миграций на чистой и upgrade существующей DB;
+- миграций на чистой БД и upgrade существующей БД;
 - deploy/rollback smoke;
 - core `ops/release_smoke.py`;
-- disposable registration + demo + legal evidence;
+- disposable registration + demo subscription + legal evidence;
 - browser session restore/logout smoke;
 - основных desktop/mobile UX сценариев;
-- проверки отсутствия secrets в frontend/git/logs;
-- приёмочной сверки аналитики с реальными WB отчётами/исходной spreadsheet-моделью;
-- отсутствия необъяснённых существенных денежных расхождений.
+- проверки отсутствия secrets в frontend bundle/git/logs;
+- приёмочной сверки аналитики минимум на одном реальном WB seller account;
+- фиксированных acceptance-периодов и versioned tolerance policy;
+- отсутствия необъяснённых существенных денежных расхождений;
+- полного `beta` manifest от `ops/release_evidence.py` для exact candidate commit.
+
+Подробности data-accuracy: `DATA_ACCURACY_ACCEPTANCE.md`. Формат evidence: `RELEASE_EVIDENCE.md`.
 
 ## Внешние blockers до RC
 
@@ -101,7 +113,7 @@ Beta разрешена только после:
 - non-draft legal documents;
 - account lifecycle закрыт;
 - полный release smoke;
-- сохранён release evidence для exact commit.
+- полный `rc` evidence manifest для exact commit.
 
 ## Gate до `1.0.0`
 
@@ -113,7 +125,7 @@ Stable выпускается из проверенного RC, если:
 - backup актуален и rollback plan проверен;
 - legal published;
 - CHANGELOG/release notes финальны;
-- release evidence сохранён;
+- полный `stable` evidence manifest сохранён;
 - exact stable commit получает `VERSION=1.0.0` и tag `v1.0.0`.
 
 Полная последовательность и ownership задач: [`RELEASE_ROADMAP.md`](RELEASE_ROADMAP.md). Smoke contract: [`RELEASE_SMOKE.md`](RELEASE_SMOKE.md).
