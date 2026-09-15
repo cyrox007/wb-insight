@@ -16,6 +16,7 @@ on:
       - .dockerignore
       - ops/**
       - docs/OPERATIONS.md
+      - docs/RELEASE_SMOKE.md
       - docs/VERSIONING.md
       - docs/VERSION_HISTORY.md
       - docs/RELEASE_READINESS.md
@@ -36,6 +37,7 @@ on:
       - .dockerignore
       - ops/**
       - docs/OPERATIONS.md
+      - docs/RELEASE_SMOKE.md
       - docs/VERSIONING.md
       - docs/VERSION_HISTORY.md
       - docs/RELEASE_READINESS.md
@@ -57,6 +59,10 @@ jobs:
           frontend="$(node -p "require('./frontend/package.json').version")"
           test "$expected" = "$frontend"
           grep -F "## [$expected]" CHANGELOG.md
+      - name: Validate release smoke runner
+        run: |
+          python3 -m py_compile ops/release_smoke.py
+          python3 ops/release_smoke.py --help >/dev/null
 
   docker-build:
     runs-on: ubuntu-latest
