@@ -84,11 +84,11 @@ class WBClient:
 
     def _auth_headers(self, raw_token: str) -> dict[str, str]:
         headers = {"Authorization": f"Bearer {raw_token}"}
-        if self._token_type == "service":
+        if self._token_type in {"base", "service"}:
             service_secret = config.WB_SERVICE_SECRET
             if not service_secret:
                 raise WBAuthError(
-                    "Wildberries service secret is not configured",
+                    "Wildberries partner service secret is not configured",
                     endpoint="authorization",
                 )
             headers["X-Client-Secret"] = service_secret
