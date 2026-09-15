@@ -28,6 +28,25 @@ def make_payment():
 
 
 @pytest.mark.asyncio
+async def test_payment_user_active_check_locks_account_row():
+    class ScalarResult:
+        def scalar_one_or_none(self):
+            return True
+
+    class LockingSession:
+        def __init__(self):
+            self.for_update = False
+
+        async def execute(self, statement):
+            self.for_update = getattr(statement, "_for_update_arg", None) is not None
+            return ScalarResult()
+
+    session = LockingSession()
+    assert await payment_service.is_payment_user_active(session, uuid4()) is True  # type: ignore[arg-type]
+    assert session.for_update is True
+
+
+@pytest.mark.asyncio
 async def test_deposited_payment_activates_subscription_once(monkeypatch):
     payment = make_payment()
     created_subscription = SimpleNamespace(id=uuid4())
