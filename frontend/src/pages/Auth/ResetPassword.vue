@@ -5,7 +5,10 @@ import AuthService from '@/API/AuthService'
 
 const route = useRoute()
 const router = useRouter()
-const token = computed(() => String(route.query.token || '').trim())
+const token = computed(() => {
+  const fragment = String(route.hash || '').replace(/^#/, '')
+  return String(new URLSearchParams(fragment).get('token') || '').trim()
+})
 const email = ref('')
 const password = ref('')
 const passwordConfirm = ref('')
