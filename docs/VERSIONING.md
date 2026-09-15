@@ -59,14 +59,14 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` после P30 находится на **`0.9.0-alpha.7`**.
+`main` после P31 находится на **`0.9.0-alpha.8`**. P31 слит через PR #47, merge `6cb34aa9b4633e20d1810b6a5edd690056cde986`, после полного green CI exact-head кандидата.
 
-P31 — кандидат **`0.9.0-alpha.8`** в ветке `codex/p31-account-lifecycle`. Он закрывает code-side account lifecycle: password recovery, durable session revocation, cancel-at-period-end, soft deactivation/retention metadata и auditable support flow.
+`0.9.0-alpha.8` закрывает code-side account lifecycle: password recovery, durable session revocation, cancel-at-period-end, soft deactivation/retention metadata, защищённый Sber/deactivation race и auditable support flow. Следующее повышение стадии — не новая alpha по счётчику задач, а `0.9.0-beta.1` только после фактического production-like acceptance.
 
 Каноническая последовательность:
 
 1. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
-2. `0.9.0-alpha.8` — account-lifecycle code baseline;
+2. `0.9.0-alpha.8` — account-lifecycle code baseline, текущий `main`;
 3. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + data-accuracy acceptance;
 4. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
 5. `1.0.0` — публичный WB Insight Web v1 Stable.
