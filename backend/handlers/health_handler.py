@@ -4,6 +4,7 @@ import redis.asyncio as redis
 from fastapi import APIRouter, Response, status
 
 from core.database import Database
+from core.version import APP_VERSION
 from settings import config
 
 
@@ -27,7 +28,7 @@ async def _redis_health_check() -> bool:
 @router.get("/live")
 async def liveness() -> dict:
     """Process liveness: no downstream dependency checks."""
-    return {"status": "ok"}
+    return {"status": "ok", "version": APP_VERSION}
 
 
 @router.get("/ready")
@@ -43,6 +44,7 @@ async def readiness(response: Response) -> dict:
 
     return {
         "status": "ok" if ready else "degraded",
+        "version": APP_VERSION,
         "checks": {
             "database": "ok" if database_ok else "error",
             "redis": "ok" if redis_ok else "error",
