@@ -12,6 +12,7 @@ from services.legal_service import (
     record_consents,
     validate_consent_payload,
 )
+from services.session_identity import session_user_payload
 from services.subscription_service import create_demo_subscription
 from services.tariff_service import get_tariff_by_code
 from services.user_service import (
@@ -67,13 +68,7 @@ async def login(
         access_token=access_token,
         token_type="bearer",
         expires_in=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user={
-            "id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "tariff": None,
-            "roles": [role.role for role in user.roles],
-        },
+        user=session_user_payload(user),
     )
 
 
