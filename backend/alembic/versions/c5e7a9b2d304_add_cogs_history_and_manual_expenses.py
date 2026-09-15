@@ -21,9 +21,12 @@ def upgrade() -> None:
         "product_cost_prices",
         sa.Column("effective_from", sa.Date(), nullable=True),
     )
+    # Existing snapshots were historically applied to every selected period in
+    # the spreadsheet/current service. Preserve that behaviour during the
+    # migration; only future edits become date-effective versions.
     op.execute(
         "UPDATE product_cost_prices "
-        "SET effective_from = CAST(created_at AS date) "
+        "SET effective_from = DATE '1970-01-01' "
         "WHERE effective_from IS NULL"
     )
     op.alter_column("product_cost_prices", "effective_from", nullable=False)
