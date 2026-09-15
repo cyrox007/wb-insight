@@ -3,11 +3,16 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import Response
+from fastapi import HTTPException, Response
 from starlette.requests import Request
 
 from core import middleware
+from core.authorization import require_admin
+from core.lifecycle_config import lifecycle_config
 from handlers import account_lifecycle_handler
+from handlers.control_panel import users as control_panel_users
+from models.account_lifecycle import PasswordResetToken
+from models.subscription_model import SubscriptionStatus
 from services import account_lifecycle_service as lifecycle
 from utils.hashed_password import hash_password, verify_password
 from utils.jwt import create_access_token
@@ -28,12 +33,12 @@ class _FakeSession:
     def __init__(self, results=None):
         self.results = list(results or [])
         self.added = []
-        self.executed = 0
+        self.statements = []
         self.flushes = 0
         self.rollbacks = 0
 
-    async def execute(self, _statement):
-        self.executed += 1
+    async def execute(self, statement):
+        self.statements.append(statement)
         return self.results.pop(0) if self.results else _Result()
 
     def add(self, value):
@@ -93,6 +98,8 @@ async def test_password_reset_token_is_random_and_only_digest_is_persisted(monke
     assert len(row.token_hash) == 64
     assert row.token_hash == lifecycle._token_hash(raw_token)
     assert row.expires_at > datetime.now(timezone.utc)
+    assert "token" not in PasswordResetToken.__table__.columns
+    assert "raw_token" not in PasswordResetToken.__table__.columns
 
 
 @pytest.mark.asyncio
@@ -122,11 +129,11 @@ async def test_password_reset_changes_password_and_revokes_prior_sessions():
     assert user.session_version == 5
     assert verify_password("new-password-123", user.hashed_password)
     assert not verify_password("old-password", user.hashed_password)
-    assert session.executed == 3
+    assert len(session.statements) == 3
 
 
 @pytest.mark.asyncio
-async def test_soft_deactivation_revokes_sessions_and_credentials(monkeypatch):
+async def test_soft_deactivation_revokes_sessions_credentials_and_reset_links(monkeypatch):
     monkeypatch.setattr(lifecycle.config, "ACCOUNT_DEACTIVATION_RETENTION_DAYS", 90)
     user = SimpleNamespace(
         id=USER_ID,
@@ -136,7 +143,7 @@ async def test_soft_deactivation_revokes_sessions_and_credentials(monkeypatch):
         deactivation_reason=None,
         retention_until=None,
     )
-    session = _FakeSession([_Result(), _Result()])
+    session = _FakeSession()
 
     changed = await lifecycle.deactivate_account(
         session,
@@ -151,7 +158,11 @@ async def test_soft_deactivation_revokes_sessions_and_credentials(monkeypatch):
     assert user.deactivated_at is not None
     assert user.deactivation_reason == "user request"
     assert user.retention_until > user.deactivated_at
-    assert session.executed == 2
+    assert len(session.statements) == 3
+    statement_sql = "\n".join(str(statement) for statement in session.statements)
+    assert "password_reset_tokens" in statement_sql
+    assert "api_tokens" in statement_sql
+    assert "subscriptions" in statement_sql
     assert any(
         getattr(item, "event_type", None) == "account_deactivated"
         for item in session.added
@@ -181,6 +192,9 @@ async def test_paid_subscription_cancellation_keeps_current_period_access():
     assert subscription.cancel_requested_at is not None
     assert subscription.current_period_end == period_end
     assert subscription.cancel_reason == "not needed"
+    params = session.statements[0].compile().params
+    assert SubscriptionStatus.ACTIVE in params.values()
+    assert SubscriptionStatus.DEMO not in params.values()
 
 
 @pytest.mark.asyncio
@@ -191,11 +205,26 @@ async def test_access_token_session_version_mismatch_is_rejected(monkeypatch):
     monkeypatch.setattr(middleware, "_load_account_state", fake_state)
     token = create_access_token({"sub": str(USER_ID), "sv": 2})
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(HTTPException) as exc_info:
         await middleware.auth_middle(_request("/dashboard", method="GET", token=token))
 
-    assert getattr(exc_info.value, "status_code", None) == 401
+    assert exc_info.value.status_code == 401
     assert exc_info.value.detail["error_type"] == "session_revoked"
+
+
+@pytest.mark.asyncio
+async def test_access_token_current_session_version_is_accepted(monkeypatch):
+    async def fake_state(_user_id):
+        return True, 3
+
+    monkeypatch.setattr(middleware, "_load_account_state", fake_state)
+    token = create_access_token({"sub": str(USER_ID), "sv": 3})
+    request = _request("/dashboard", method="GET", token=token)
+
+    await middleware.auth_middle(request)
+
+    assert request.state.user["sub"] == str(USER_ID)
+    assert request.state.user["sv"] == 3
 
 
 @pytest.mark.asyncio
@@ -219,15 +248,64 @@ async def test_password_reset_request_does_not_disclose_account_existence(monkey
     )
 
     assert payload["status"] == "success"
-    assert "существует" in payload["message"]
+    assert "Если активный аккаунт" in payload["message"]
+
+
+@pytest.mark.asyncio
+async def test_reset_delivery_failure_rolls_back_undelivered_token(monkeypatch):
+    monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_ENABLED", True)
+    user = SimpleNamespace(id=USER_ID, email="seller@example.com", is_active=True)
+
+    async def existing_user(_session, _email):
+        return user
+
+    async def issue(_session, _user):
+        return "raw-reset-secret"
+
+    async def fail_delivery(_email, _token):
+        raise RuntimeError("smtp unavailable")
+
+    monkeypatch.setattr(account_lifecycle_handler, "get_user_by_email", existing_user)
+    monkeypatch.setattr(account_lifecycle_handler, "issue_password_reset_token", issue)
+    monkeypatch.setattr(account_lifecycle_handler, "send_password_reset_email", fail_delivery)
+
+    session = _FakeSession()
+    payload = await account_lifecycle_handler.request_password_reset(
+        _request(
+            "/auth/password-reset/request",
+            body=b'{"email":"seller@example.com"}',
+        ),
+        Response(),
+        session,
+    )
+
+    assert payload["status"] == "success"
+    assert session.rollbacks == 1
+
+
+def test_control_panel_user_routes_have_explicit_admin_dependency():
+    for route in control_panel_users.router.routes:
+        dependency_calls = {dependency.call for dependency in route.dependant.dependencies}
+        assert require_admin in dependency_calls, route.path
 
 
 def test_account_lifecycle_routes_are_registered():
     from app import app
 
     paths = app.openapi()["paths"]
-    assert "/auth/password-reset/request" in paths
-    assert "/auth/password-reset/confirm" in paths
-    assert "/account/deactivate" in paths
-    assert "/account/subscription/cancel" in paths
+    assert "post" in paths["/auth/password-reset/request"]
+    assert "post" in paths["/auth/password-reset/confirm"]
+    assert "post" in paths["/account/deactivate"]
+    assert "post" in paths["/account/subscription/cancel"]
+    assert "delete" in paths["/account/subscription/cancel"]
     assert "/control-panel/users/{user_uuid}/lifecycle-events" in paths
+
+
+def test_production_password_reset_requires_https_when_enabled(monkeypatch):
+    monkeypatch.setattr(lifecycle_config, "PASSWORD_RESET_ENABLED", True)
+    monkeypatch.setattr(lifecycle_config, "PASSWORD_RESET_BASE_URL", "http://example.com/reset-password")
+    monkeypatch.setattr(lifecycle_config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(lifecycle_config, "SMTP_FROM_EMAIL", "no-reply@example.com")
+
+    with pytest.raises(RuntimeError, match="https"):
+        lifecycle_config.validate(production=True)
