@@ -26,13 +26,21 @@ MONEY_FIELDS = {
 }
 
 
-def money(value: Any) -> Decimal:
+def _decimal(value: Any, quantum: str) -> Decimal:
     if value in (None, ""):
-        return Decimal("0.00")
+        return Decimal("0").quantize(Decimal(quantum))
     try:
-        return Decimal(str(value).replace(",", ".")).quantize(Decimal("0.01"))
+        return Decimal(str(value).replace(",", ".")).quantize(Decimal(quantum))
     except (InvalidOperation, TypeError, ValueError) as exc:
-        raise ValueError(f"Некорректное денежное значение WB: {value!r}") from exc
+        raise ValueError(f"Некорректное числовое значение WB: {value!r}") from exc
+
+
+def money(value: Any) -> Decimal:
+    return _decimal(value, "0.01")
+
+
+def percentage(value: Any) -> Decimal:
+    return _decimal(value, "0.0001")
 
 
 def report_date(value: Any) -> date | None:
@@ -71,7 +79,7 @@ def normalize_finance_report_summary(
         "create_date": report_date(item.get("createDate")),
         "currency": item.get("currency"),
         "report_type": int(item["reportType"]) if item.get("reportType") is not None else None,
-        "avg_sale_percent": money(item.get("avgSalePercent")),
+        "avg_sale_percent": percentage(item.get("avgSalePercent")),
         "observed_at": observed_at,
     }
     for target, source in MONEY_FIELDS.items():
