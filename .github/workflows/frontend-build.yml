@@ -31,5 +31,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify browser auth is not persisted
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE "(localStorage|sessionStorage)\\.(setItem|getItem)\\(['\"](access_token|user)['\"]" src --include='*.js' --include='*.vue'; then
+            echo 'Persistent access-token/user storage is forbidden; keep auth identity in memory and restore via HttpOnly refresh cookie.' >&2
+            exit 1
+          fi
+          grep -F "localStorage.removeItem('access_token')" src/security/session.js
+          grep -F "sessionStorage.removeItem('access_token')" src/security/session.js
+
       - name: Build
         run: npm run build
