@@ -99,5 +99,4 @@ async def test_http_metrics_are_noop_when_disabled(monkeypatch):
 def test_operations_route_is_registered():
     from app import app
 
-    paths = {route.path for route in app.routes}
-    assert "/control-panel/operations/health" in paths
+    assert "/control-panel/operations/health" in app.openapi()["paths"]
