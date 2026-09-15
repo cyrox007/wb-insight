@@ -16,18 +16,20 @@ async def validate_wb_token_live(
     service_secret: str | None = None,
     http_client: httpx.AsyncClient | None = None,
 ) -> None:
-    """Verify with WB that a credential is active and accepted server-side."""
+    """Verify with WB that a partner-service credential is active and accepted."""
 
-    headers = {"Authorization": f"Bearer {raw_token.strip()}"}
-    if metadata.token_type == "service":
-        secret = (service_secret or "").strip()
-        if not secret:
-            raise WBTokenValidationError(
-                "WB_SERVICE_SECRET_NOT_CONFIGURED",
-                "На сервере не настроен сервисный секрет Wildberries.",
-                status_code=503,
-            )
-        headers["X-Client-Secret"] = secret
+    secret = (service_secret or "").strip()
+    if metadata.token_type in {"base", "service"} and not secret:
+        raise WBTokenValidationError(
+            "WB_SERVICE_CREDENTIALS_NOT_CONFIGURED",
+            "На сервере не настроен сервисный секрет Wildberries.",
+            status_code=503,
+        )
+
+    headers = {
+        "Authorization": f"Bearer {raw_token.strip()}",
+        "X-Client-Secret": secret,
+    }
 
     owns_client = http_client is None
     client = http_client or httpx.AsyncClient(timeout=10.0)
@@ -57,17 +59,12 @@ async def validate_wb_token_live(
             )
 
         if response.status_code == 403:
-            if metadata.token_type == "service":
-                raise WBTokenValidationError(
-                    "WB_SERVICE_AUTH_REJECTED",
-                    (
-                        "Wildberries отклонил связку сервисного токена и "
-                        "X-Client-Secret. Создайте токен именно для WB Insight."
-                    ),
-                )
             raise WBTokenValidationError(
-                "WB_TOKEN_REJECTED",
-                "Wildberries отклонил токен для этого способа подключения.",
+                "WB_PARTNER_AUTH_REJECTED",
+                (
+                    "Wildberries отклонил связку токена продавца и "
+                    "X-Client-Secret WB Insight."
+                ),
             )
 
         if response.status_code == 429:
