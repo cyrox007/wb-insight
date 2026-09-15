@@ -4,55 +4,70 @@
 
 Цель: первый публичный стабильный релиз **WB Insight Web v1 / `1.0.0` для продавцов Wildberries**.
 
-В scope `1.0.0`: регистрация и сессия, роли/admin, тарифы/demo/limits, подключение WB-кабинетов, автоматическая синхронизация, KPI/финансы/остатки/цены/реклама/unit-экономика, себестоимость, ручные расходы, план выручки, Сбер acquiring, production deployment, monitoring, backup/restore и versioned legal consent.
+В scope `1.0.0`: регистрация и сессия, роли/admin, тарифы/demo/limits, подключение WB-кабинетов, автоматическая синхронизация, KPI/финансы/остатки/цены/реклама/unit-экономика, COGS, ручные расходы, план выручки, Сбер acquiring, production deployment, monitoring, backup/restore и versioned legal consent.
 
 Не блокируют `1.0.0`: Ozon, AI-аналитик, native mobile и WB OAuth 2.0 onboarding после Catalog readiness.
 
 ## Текущее состояние
 
-- `main`: `0.9.0-alpha.5`, P28 слит.
-- P22–P28 закрыли основной code baseline: WB credential contract, marketplace foundation, Sber acquiring code, deployment, monitoring/backup baseline, legal-consent foundation, browser-session hardening и release-smoke runner.
-- P29 готовится как `0.9.0-alpha.6`: dependency/security hardening перед beta.
-- Переход стадии определяется release gates, а не номером P-задачи или количеством коммитов.
+- `main`: **`0.9.0-alpha.6`**, P29 слит PR #44;
+- dependency audits frontend/backend являются постоянными CI gates;
+- основной WB Web v1 feature baseline собран;
+- P30 готовит **`0.9.0-alpha.7`** — acceptance tooling и release evidence;
+- переход стадии определяется доказанными gates, а не номером P-задачи.
 
-## Этап A — завершить P29 / `0.9.0-alpha.6`
+## Этап A — P29 / `0.9.0-alpha.6` — закрыт
 
-Цель: убрать известные dependency/security blockers и получить чистый последний alpha baseline.
+Результат:
+
+- production/full frontend dependency audits без известных High/Critical;
+- backend `pip-audit` без известных vulnerabilities на merge head;
+- уязвимая `python-jose -> ecdsa` цепочка удалена;
+- документация полностью реструктурирована;
+- Backend security, Frontend build, Database migrations и Release integrity зелёные на exact merge head.
+
+## Этап B — P30 / `0.9.0-alpha.7`: acceptance tooling
+
+Цель: сделать beta-приёмку воспроизводимой и привязанной к exact commit.
+
+В P30 входят:
+
+- versioned metric/tolerance policy;
+- deterministic data-accuracy runner на `Decimal`;
+- JSON + Markdown acceptance reports;
+- SHA-256 input/policy binding;
+- positive/negative CI fixtures;
+- release-evidence manifest для beta/RC/stable;
+- CI contract, который проверяет успешный и намеренно провальный acceptance;
+- запуск backend security и Alembic при каждом изменении `VERSION`.
+
+Выход этапа: `main = 0.9.0-alpha.7`, если P30 проходит полный release-candidate CI.
+
+**Важно:** merge P30 не означает beta. Инструмент проверки не является доказательством фактического прохождения проверки.
+
+## Этап C — production-like validation → `0.9.0-beta.1`
+
+Цель: доказать работу продукта как единой системы.
 
 Обязательно:
 
-- production frontend dependency audit без High/Critical;
-- полный frontend dependency audit без High/Critical;
-- backend dependency audit (`pip-audit` или эквивалент) без необработанных High/Critical;
-- удалить временные self-write workflow/permissions, использованные только для регенерации lockfile;
-- синхронизировать `VERSION`, frontend package metadata, CHANGELOG, VERSION_HISTORY и RELEASE_READINESS;
-- backend tests, frontend build, Alembic, Docker/Compose, gateway smoke, backup/restore CI — green на одном финальном head;
-- merge P29 только после green CI.
+- feature freeze WB Web v1;
+- отдельный production-like HTTPS environment из репозитория;
+- миграции на чистой БД и upgrade копии существующей БД;
+- deploy/rollback smoke без destructive downgrade;
+- core `ops/release_smoke.py`;
+- disposable registration + demo subscription + legal consent evidence;
+- login/refresh-cookie restore/logout;
+- основные desktop/mobile сценарии и empty/loading/error states;
+- отсутствие secrets/JWT/WB credentials в frontend bundle, git и logs;
+- real-seller data-accuracy acceptance;
+- полный beta evidence manifest для exact candidate commit.
 
-Выход этапа: `main = 0.9.0-alpha.6`, известных code-side P0 security blockers нет.
+### Data-accuracy gate
 
-## Этап B — production-like validation / кандидат в `0.9.0-beta.1`
+Минимум на одном реальном WB seller account и нескольких фиксированных периодах сверяются:
 
-Цель: доказать, что продукт разворачивается и работает как единая система, а не только проходит unit/CI.
-
-Обязательно:
-
-- feature freeze WB Web v1: новые крупные функции не добавляются;
-- поднять отдельный production-like HTTPS environment из репозитория;
-- выполнить реальные миграции на чистой БД и upgrade существующей БД;
-- проверить deploy и rollback приложения без destructive DB downgrade;
-- выполнить core `ops/release_smoke.py`: health/readiness, legal registry, login, protected API, refresh-cookie restore, dashboard contract, logout/revocation;
-- проверить регистрацию disposable user + demo subscription + legal consent evidence;
-- пройти основные пользовательские сценарии на desktop и mobile: empty/loading/error states, profile, WB connections, dashboards, costs, expenses, plans, tariff flow;
-- проверить отсутствие секретов/JWT/WB credentials в frontend bundle, git и application logs.
-
-### Отдельный обязательный gate: точность аналитики
-
-До beta должна быть выполнена приёмочная сверка минимум на одном реальном WB seller account и нескольких фиксированных периодах.
-
-Сверяем WB Insight с официальными WB отчётами и исходной моделью Excel по доступным показателям:
-
-- заказы, продажи и возвраты;
+- заказы, продажи, возвраты;
 - выручка;
 - комиссии WB;
 - логистика и хранение;
@@ -63,164 +78,81 @@
 - прибыль;
 - выплаты/reconciliation;
 - остатки и цены;
-- unit-экономика и производные KPI.
+- unit-economy ratios.
 
-Для каждого расхождения фиксируются формула, источник и допустимый tolerance. Нельзя повышать стадию при необъяснённых денежных расхождениях.
+Приоритет источников: официальный WB source для соответствующего домена, seller inputs для управленческих данных и исходная spreadsheet-модель как coverage/business reference. Spreadsheet не заменяет официальный источник, если прежняя формула была исправлена semantic layer.
 
-Выход этапа: `0.9.0-beta.1` допускается только после green code baseline, feature freeze и успешного production-like core/data-accuracy smoke.
+Нельзя назначать beta при необъяснённом существенном денежном расхождении. Contract: `DATA_ACCURACY_ACCEPTANCE.md`.
 
-## Этап C — закрыть внешние и эксплуатационные blockers перед RC
+## Этап D — внешние и эксплуатационные blockers до RC
 
 ### Wildberries
 
-Нужно получить и настроить реальные partner credentials:
-
-- `WB_SERVICE_ID`;
-- `WB_SERVICE_SECRET`;
-- сервисные API limits;
-- отдельный реальный seller account для smoke.
-
-Проверки:
-
-- Base/Service token live validation;
-- корректный permission mask и Read Only;
-- `X-Client-Secret` + Bearer signing;
-- полный sync orders/sales/products/stocks/prices/ads/funnel/paid-storage/finance;
-- отсутствие необъяснённых 401/403/429;
-- проверка ротации service secret и seller credential expiry alerts.
+Нужны реальные `WB_SERVICE_ID`, `WB_SERVICE_SECRET`, service limits и seller account. Проверяется Base/Service flow, permissions/read-only, signing, полный sync orders/sales/products/stocks/prices/ads/funnel/paid-storage/finance и отсутствие необъяснённых 401/403/429.
 
 ### Сбер acquiring
 
-Нужно завершить merchant onboarding и получить sandbox/production credentials.
-
-Проверки:
-
-- success;
-- decline;
-- cancel;
-- retry;
-- duplicate callback;
-- server-side status confirmation;
-- ровно одна subscription на один подтверждённый payment;
-- production HTTPS callback/return/fail URLs;
-- минимальный production smoke-платёж;
-- сверка с merchant back office.
+Нужны merchant onboarding и sandbox/production credentials. Проверяются success, decline, cancel, retry, duplicate callback, server-side confirmation, одна subscription на payment и merchant back-office reconciliation.
 
 ### Production infrastructure
 
-Нужно:
-
-- production host/cluster;
-- domain + DNS;
-- TLS;
-- production secret store/env;
-- PostgreSQL и Redis с подтверждённым persistence/availability планом;
-- один Celery Beat instance;
-- migration release procedure;
-- deploy/rollback drill.
+Нужны host/cluster, domain/DNS/TLS, secret management, PostgreSQL/Redis persistence, один Celery Beat, migration procedure и deploy/rollback drill.
 
 ### Monitoring и incident readiness
 
-Нужно реально подключить, а не только иметь код:
+Нужно фактически подключить uptime `/health/ready`, alert destination, centralized logs/error triage и проверить доставку alert.
 
-- внешний uptime monitor на `/health/ready`;
-- alert destination;
-- централизованные structured logs;
-- error tracking или эквивалентный процесс triage;
-- проверку alert delivery;
-- финальную настройку thresholds на production-like traffic.
+### Backup/restore
 
-### Backup / restore
-
-Нужно:
-
-- ежедневный автоматический encrypted backup;
-- off-host/object storage;
-- retention;
-- restore drill из реального backup в отдельную БД;
-- подтверждённые фактические RPO/RTO;
-- зафиксированный результат drill.
+Нужно включить ежедневный encrypted backup, off-host/object storage, retention и выполнить restore drill с измеренными RPO/RTO.
 
 ### Legal
 
-Нужно заменить draft-документы утверждёнными versioned документами:
+Draft-тексты заменяются утверждёнными versioned documents: terms/offer, privacy, personal-data consent, credential policy, refund/cancellation policy и реквизиты оператора. Нужен immutable archive опубликованных версий и production `LEGAL_EVIDENCE_HMAC_KEY`.
 
-- пользовательское соглашение/оферта;
-- privacy policy;
-- согласие на обработку персональных данных;
-- credential policy;
-- refund/cancellation policy;
-- реквизиты оператора/продавца услуги.
+## Этап E — account lifecycle
 
-Обязательно сохранить immutable archive каждой опубликованной версии и production `LEGAL_EVIDENCE_HMAC_KEY`.
-
-## Этап D — account lifecycle и публичная эксплуатация
-
-Перед RC нужно отдельно закрыть жизненный цикл аккаунта, чтобы public stable не зависел от ручного вмешательства разработчика.
-
-Обязательные решения и реализация:
+До RC закрываются:
 
 - восстановление/сброс пароля через подтверждённый канал;
-- понятный путь отмены платной подписки и возврата в соответствии с утверждённой policy;
-- процедура деактивации/удаления аккаунта и retention персональных данных;
-- support/admin procedure для заблокированного пользователя, ошибочного платежа и потерянного доступа;
+- отмена платной подписки и возврат согласно policy;
+- деактивация/удаление аккаунта и retention;
+- support/admin procedure для блокировки, ошибочного платежа и потерянного доступа;
 - audit trail административных действий, влияющих на доступ/оплату.
 
-Если часть этих сценариев сознательно остаётся manual/support-mediated в `1.0.0`, это должно быть явно описано в legal/support runbook и не должно требовать прямого изменения БД оператором.
+Support-mediated flow допустим, если документирован и не требует прямой правки БД оператором.
 
-## Этап E — `1.0.0-rc.1`
+## Этап F — `1.0.0-rc.1`
 
-RC допускается только когда этапы A–D закрыты и полный release smoke подтверждён evidence.
+RC допускается только после этапов C–E и полного `rc` evidence manifest.
 
-Полный RC smoke включает:
+Полный RC smoke включает registration/legal/demo, login/refresh/logout, реальный WB credential + full sync, все основные dashboards, COGS/expenses/plan, реальный Sber payment + paid activation, idempotency, monitoring, off-host backup, restore drill и deploy/rollback evidence.
 
-- disposable registration + legal evidence + demo;
-- login/refresh/logout;
-- реальный WB seller credential;
-- полный WB sync;
-- все основные dashboard sections;
-- COGS, expenses, monthly plan;
-- реальный Sber payment flow и paid subscription activation;
-- duplicate callback/idempotency;
-- monitoring signals;
-- off-host encrypted backup;
-- restore drill;
-- deploy/rollback evidence.
-
-Для RC сохраняются commit SHA, version, environment, UTC timestamp, CI results, smoke output без секретов, WB/Sber evidence, backup/restore evidence и список известных проблем.
-
-## Этап F — `1.0.0` Stable
+## Этап G — `1.0.0` Stable
 
 Stable выпускается из проверенного RC, а не из новой функциональной ветки.
 
-Перед тегом `v1.0.0`:
+Перед `v1.0.0`:
 
-- нет открытых Critical/High security issues без формально принятого исключения;
+- нет необработанных Critical/High security issues;
 - нет необъяснённых финансовых/аналитических расхождений;
-- нет release-blocking ошибок по результатам RC эксплуатации;
-- production backup актуален;
-- rollback plan проверен;
-- legal documents опубликованы как non-draft;
-- CHANGELOG и release notes финальны;
-- все release evidence сохранены;
-- exact RC commit либо его минимальный release-fix descendant получает `VERSION=1.0.0` и immutable tag `v1.0.0`.
+- нет release-blocking RC дефектов;
+- backup актуален, rollback проверен;
+- legal documents non-draft;
+- CHANGELOG/release notes финальны;
+- полный `stable` evidence manifest сохранён;
+- exact stable commit получает `VERSION=1.0.0` и immutable tag `v1.0.0`.
 
-После deploy `1.0.0` включается усиленный post-release monitoring; новые функции идут уже в следующую release line.
+## Ownership
 
-## Кто от кого зависит
+Внутри репозитория закрываем acceptance tooling, account-lifecycle code gaps, smoke bugfixes, CI gates и versioning.
 
-### Код/репозиторий — выполняем внутри проекта
+Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials, production hosting/domain/TLS, legal approval/requisites, alert/logging/object-storage providers.
 
-P29 security, staging/release automation, data-accuracy acceptance tooling, account-lifecycle gaps, bugfixes по smoke, release evidence templates, CI gates и versioning.
-
-### Внешние действия владельца продукта/инфраструктуры
-
-WB partner credentials и service limits, Сбер merchant onboarding/credentials, production domain/hosting/TLS, legal approval и реквизиты, выбор alert/logging/object-storage providers.
-
-Внешний blocker не блокирует разработку остальных этапов, но без его фактического закрытия нельзя повышать релиз в `1.0.0-rc.N`/`1.0.0`.
+Внешний blocker не останавливает безопасную code-side разработку, но без фактического закрытия нельзя выдавать RC/stable.
 
 ## Каноническая последовательность
 
-`0.9.0-alpha.5` -> `0.9.0-alpha.6` (P29 security) -> `0.9.0-beta.1` (feature freeze + production-like + data accuracy) -> `1.0.0-rc.1` (real WB/Sber/prod/legal/ops) -> `1.0.0` (stable).
+`0.9.0-alpha.6` -> `0.9.0-alpha.7` (P30 acceptance tooling) -> `0.9.0-beta.1` (реальная production-like + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
 
-Источник деталей smoke: `docs/RELEASE_SMOKE.md`. Политика версий: `docs/VERSIONING.md`. Текущий статус blockers: `docs/RELEASE_READINESS.md`.
+Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
