@@ -48,7 +48,6 @@ const loginError = ref('')
 const modalLoadedBtn = ref(false)
 
 const performLogin = async () => {
-	// Логика входа
 	modalLoadedBtn.value = true;
 	if (loginEmail.value === '' && loginPassword.value === '') {
 		modalLoadedBtn.value = false
@@ -57,21 +56,18 @@ const performLogin = async () => {
 	}
 
 	try {
-		let response = await AuthService.login(loginEmail.value, loginPassword.value);
-		if (response.data && response.data) {
-			if (response.data.access_token) {
-				authStore.login(response.data.user);
-				localStorage.setItem("access_token", response.data.access_token);
-				localStorage.setItem("user", JSON.stringify(response.data.user));
-				router.push('/dashboard');
-				emit('close')
-			}
+		const response = await AuthService.login(loginEmail.value, loginPassword.value);
+		if (response.data?.access_token && response.data?.user) {
+			authStore.login(response.data);
+			const redirectPath = localStorage.getItem('redirectPath');
+			localStorage.removeItem('redirectPath');
+			await router.push(redirectPath || '/dashboard');
+			emit('close')
 		}
-
 	} catch (error) {
 		console.error(error);
 		if (error.response) {
-			loginError.value = error.response.data.message || 'Ошибка авторизации';
+			loginError.value = error.response.data?.error?.message || error.response.data?.message || 'Ошибка авторизации';
 		}
 	} finally {
 		modalLoadedBtn.value = false
