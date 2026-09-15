@@ -80,6 +80,40 @@ class Config:
         and os.getenv("ALLOW_FAKE_BILLING", "false").lower() == "true"
     )
 
+    SBER_ACQUIRING_ENABLED = os.getenv("SBER_ACQUIRING_ENABLED", "false").lower() == "true"
+    SBER_API_BASE_URL = os.getenv(
+        "SBER_API_BASE_URL",
+        "https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1",
+    ).strip().rstrip("/")
+    SBER_USERNAME = os.getenv("SBER_USERNAME", "").strip() or None
+    SBER_PASSWORD = os.getenv("SBER_PASSWORD", "").strip() or None
+    SBER_RETURN_URL = os.getenv("SBER_RETURN_URL", "").strip() or None
+    SBER_FAIL_URL = os.getenv("SBER_FAIL_URL", "").strip() or None
+    SBER_CURRENCY_CODE = os.getenv("SBER_CURRENCY_CODE", "643").strip()
+    SBER_HTTP_TIMEOUT_SECONDS = float(os.getenv("SBER_HTTP_TIMEOUT_SECONDS", "10.0"))
+
+    if SBER_ACQUIRING_ENABLED:
+        missing_sber = [
+            name
+            for name, value in {
+                "SBER_USERNAME": SBER_USERNAME,
+                "SBER_PASSWORD": SBER_PASSWORD,
+                "SBER_RETURN_URL": SBER_RETURN_URL,
+                "SBER_FAIL_URL": SBER_FAIL_URL,
+            }.items()
+            if not value
+        ]
+        if missing_sber:
+            raise RuntimeError(
+                "SBER_ACQUIRING_ENABLED requires: " + ", ".join(missing_sber)
+            )
+        if SBER_HTTP_TIMEOUT_SECONDS <= 0:
+            raise RuntimeError("SBER_HTTP_TIMEOUT_SECONDS must be positive")
+        if IS_PRODUCTION and "ecomift.sberbank.ru" in SBER_API_BASE_URL:
+            raise RuntimeError(
+                "Production cannot use the Sber acquiring sandbox endpoint"
+            )
+
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     # WB requires partner services to identify themselves with a service ID and
