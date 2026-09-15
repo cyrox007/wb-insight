@@ -42,6 +42,15 @@ const router = createRouter({
 			}
 		},
 		{
+			path: '/dashboard/stocks',
+			name: 'dashboard.stocks',
+			component: () => import('../pages/Dashboard/Inventory/index.vue'),
+			meta: {
+				title: 'Остатки · WB Insight',
+				requestAuth: true,
+			}
+		},
+		{
 			path: '/dashboard/ads',
 			name: 'dashboard.ads',
 			component: () => import('../pages/Dashboard/Ads/AdsPage.vue'),
