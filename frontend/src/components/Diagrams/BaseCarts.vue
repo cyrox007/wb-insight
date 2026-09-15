@@ -1,411 +1,304 @@
 <script setup>
-import { ref, computed } from 'vue'
-import CardLoaders from '../UI/Loaders/CardLoaders.vue';
+import { computed } from 'vue'
+import CardLoaders from '../UI/Loaders/CardLoaders.vue'
+
 const props = defineProps({
-	chartData: {
-		type: Array,
-		default: () => []
-	},
-	metrics: {
-		type: Array,
-		default: () => []
-	},
-	isLoading: {
-		type: Boolean,
-		default: false
-	}
-});
+  chartData: {
+    type: Array,
+    default: () => [],
+  },
+  metrics: {
+    type: Array,
+    default: () => [],
+  },
+  isLoading: {
+    type: Boolean,
+    default: false,
+  },
+})
 
-const hasData = computed(() => props.chartData.length > 0);
+const hasData = computed(() => props.chartData.length > 0)
+const visibleMetrics = computed(() => props.metrics.filter(metric => metric.visible !== false))
 
-// Функция для обновления видимости серий (вызывается при изменении чекбокса)
-const updateVisibleSeries = () => {
-	// Метрики реактивны, поэтому изменение metric.visible автоматически обновит отображение
-};
+const maxAbsValue = computed(() => {
+  const values = props.chartData.flatMap(item =>
+    visibleMetrics.value
+      .map(metric => Number(item?.[metric.key]))
+      .filter(Number.isFinite)
+  )
+  if (!values.length) return 1
+  return Math.max(1, ...values.map(value => Math.abs(value)))
+})
 
-const getMaxAbsValue = computed(() => {
-	const values = props.chartData.flatMap(item =>
-		props.metrics.map(metric => item[metric.key])
-	);
-	return Math.max(...values);
-});
+const hasNegative = computed(() => props.chartData.some(item =>
+  visibleMetrics.value.some(metric => Number(item?.[metric.key]) < 0)
+))
 
-const getMinAbsValue = computed(() => {
-	const values = props.chartData.flatMap(item =>
-		props.metrics.map(metric => item[metric.key])
-	);
-	console.log(values);
+const chartWidth = computed(() => Math.max(640, props.chartData.length * 58))
 
-	return Math.min(...values);
-});
+const getBarStyle = (value, color) => {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return { display: 'none' }
 
-// Положительные значения (от 0 до max)
-const positiveSteps = computed(() => {
-	const step = getMaxAbsValue.value / 5;
-	return [5, 4, 3, 2, 1, 0].map(i => step * i);
-});
+  const normalized = Math.min(1, Math.abs(numericValue) / maxAbsValue.value)
+  if (hasNegative.value) {
+    const height = Math.max(2, normalized * 46)
+    return numericValue >= 0
+      ? { height: `${height}%`, bottom: '50%', backgroundColor: color }
+      : { height: `${height}%`, top: '50%', backgroundColor: color }
+  }
 
-// Отрицательные значения (от 0 до min)  
-const negativeSteps = computed(() => {
-	const step = Math.abs(getMinAbsValue.value) / 5; // Используем абсолютное значение
-	return [1, 2, 3, 4, 5].map(i => -(step * i)); // Отрицательные числа
-});
+  return {
+    height: `${Math.max(2, normalized * 88)}%`,
+    bottom: '0',
+    backgroundColor: color,
+  }
+}
 
-// Все шаги для оси
-const axisSteps = computed(() => {
-	const min = getMinAbsValue.value;
-	const max = getMaxAbsValue.value;
-	const hasNegative = min < 0;
+const formatValue = (value, metric) => {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return '—'
+  const formatted = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(numericValue)
+  if (metric.type === 'rub') return `${formatted} ₽`
+  if (metric.type === 'percent') return `${formatted}%`
+  return formatted
+}
 
-	if (!hasNegative) {
-		const step = max / 5;
-		return [0, 1, 2, 3, 4, 5].map(i => step * i);
-	}
-
-	// Симметричная ось
-	const maxAbs = Math.max(Math.abs(min), max);
-
-	// Округляем 
-	const magnitude = Math.pow(10, Math.floor(Math.log10(maxAbs)));
-	const niceMax = Math.ceil(maxAbs / magnitude) * magnitude;
-
-	const steps = [];
-	const divisions = 5;
-
-	for (let i = -divisions; i <= divisions; i++) {
-		steps.push((niceMax / divisions) * i);
-	}
-
-	return steps;
-});
-
-// Позиция дня в процентах
-const getDayPosition = (index) => {
-	if (props.chartData.length <= 1) return 50;
-	return (index / (props.chartData.length - 1)) * 100;
-};
-
-const getBarStyles = (value, color) => {
-	const heightPercent = (Math.abs(value) / getMaxAbsValue.value) * 50; // 50% от половины оси
-
-	if (value >= 0) {
-		// Положительные: от центра вверх
-		return {
-			height: heightPercent + '%',
-			backgroundColor: color,
-			bottom: '50%', // стартуем от центра
-			top: 'auto',
-			borderRadius: '4px 4px 0 0'
-		};
-	} else {
-		// Отрицательные: от центра вниз
-		return {
-			height: heightPercent + '%',
-			backgroundColor: color,
-			top: '50%', // стартуем от центра
-			bottom: 'auto',
-			borderRadius: '0 0 4px 4px'
-		};
-	}
-};
+const shortDate = (value) => {
+  if (!value) return '—'
+  const text = String(value)
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(5, 10).split('-').reverse().join('.') : text
+}
 </script>
+
 <template>
-	<div class="chart-container">
-		<div class="chart-header">
-			<h2 class="chart-title">Сводные данные по дням</h2>
-		</div>
-		<!-- Легенда с чекбоксами -->
-		<div class="chart-controls">
-			<div class="chart-controls--item" v-for="metric in props.metrics" :key="metric.key">
-				<input type="checkbox" :id="metric.key" v-model="metric.visible" @change="updateVisibleSeries" />
-				<label :for="metric.key" :style="{ color: metric.color }">
-					{{ metric.name }}
-				</label>
-			</div>
-		</div>
+  <div class="daily-chart">
+    <div class="legend" aria-label="Серии графика">
+      <span v-for="metric in visibleMetrics" :key="metric.key" class="legend-item">
+        <i :style="{ backgroundColor: metric.color }" />
+        {{ metric.name }}
+      </span>
+    </div>
 
-		<!-- Состояние загрузки -->
-		<CardLoaders v-if="isLoading" />
+    <CardLoaders v-if="isLoading" />
 
-		<!-- Пустое состояние -->
-		<div v-else-if="!hasData" class="chart-empty">
-			<div class="empty-icon">📊</div>
-			<p class="empty-text">Нет данных для отображения</p>
-			<p class="empty-hint">Данные появятся после синхронизации с Wildberries</p>
-		</div>
+    <div v-else-if="!hasData" class="chart-empty">
+      <strong>Нет данных за выбранный период</strong>
+      <span>После синхронизации здесь появится динамика по дням.</span>
+    </div>
 
-		<!-- Диаграмма -->
-		<div v-else class="chars-area">
-			<!-- Ось Y (рубли) -->
-			<div class="axis left">
-				<div v-for="value in axisSteps" :key="value" class="axis-label" :class="{
-					positive: value > 0,
-					negative: value < 0,
-					zero: value === 0
-				}" :style="{
-					bottom: (50 + (value / getMaxAbsValue) * 50) + '%'
-				}">
-					{{ value > 0 ? '+' + value.toFixed(1) : value.toFixed(1) }}
-				</div>
-			</div>
+    <div v-else class="chart-scroll">
+      <div class="chart-area" :style="{ width: `${chartWidth}px` }">
+        <div class="grid-line grid-line--top" />
+        <div class="grid-line grid-line--middle" />
+        <div class="grid-line grid-line--bottom" />
+        <div v-if="hasNegative" class="zero-line" />
 
-			<!-- Сетка -->
-			<div class="grid">
-				<div v-for="i in 5" :key="i" class="grid-line" :style="{ bottom: (i * 20) + '%' }"></div>
-			</div>
-
-			<!-- Столбцы -->
-			<div class="bars-container">
-				<div v-for="(day, dayIndex) in chartData" :key="dayIndex" class="day-group"
-					:style="{ left: getDayPosition(dayIndex) + '%' }">
-					<div v-for="(metric, mIndex) in metrics" :key="metric.key" class="bar-wrapper" :style="{
-						left: (mIndex * 12) + 'px'
-					}">
-						<div v-if="metric.visible && day[metric.key] != null" class="bar"
-							:class="{ positive: day[metric.key] >= 0, negative: day[metric.key] < 0 }"
-							:style="getBarStyles(day[metric.key], metric.color)">
-							<div class="bar-tooltip" :class="{ 'tooltip-bottom': day[metric.key] < 0 }">
-								<div class="tooltip-label">{{ metric.name }}</div>
-								<div class="tooltip-value">{{ day[metric.key] }}</div>
-							</div>
-						</div>
-					</div>
-					<div class="date-label">{{ day.date || '—' }}</div>
-				</div>
-			</div>
-		</div>
-	</div>
+        <div
+          v-for="(day, dayIndex) in chartData"
+          :key="`${day.date || 'day'}-${dayIndex}`"
+          class="day-column"
+        >
+          <div class="bars">
+            <div
+              v-for="metric in visibleMetrics"
+              :key="metric.key"
+              class="bar-slot"
+            >
+              <div
+                v-if="day[metric.key] !== null && day[metric.key] !== undefined"
+                class="bar"
+                :class="{ 'bar--negative': Number(day[metric.key]) < 0 }"
+                :style="getBarStyle(day[metric.key], metric.color)"
+              >
+                <span class="tooltip">{{ metric.name }}: {{ formatValue(day[metric.key], metric) }}</span>
+              </div>
+            </div>
+          </div>
+          <span class="date-label">{{ shortDate(day.date) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-/* Основные стили */
-.chart-container {
-	background-color: var(--card-bg);
-	border-radius: 8px;
-	padding: 20px;
-	box-shadow: var(--shadow);
-	margin-bottom: 20px;
+.daily-chart {
+  min-width: 0;
 }
 
-.chart-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 15px;
+.legend {
+  min-height: 28px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.chart-title {
-	font-size: 24px;
-	font-weight: 600;
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
-/* Легенда */
-.chart-controls {
-	display: flex;
-	gap: 10px;
-	margin: 5px 0;
+.legend-item i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 
-.chart-controls--item {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 13px;
-}
-
-.chart-controls--item input[type="checkbox"] {
-	width: 16px;
-	height: 16px;
-	cursor: pointer;
-	accent-color: #4caf50;
-}
-
-.chart-controls--item label {
-	cursor: pointer;
-	color: var(--text-color);
-}
-
-/* Пустое состояние */
 .chart-empty {
-	height: 300px;
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	background-color: var(--medium-bg);
-	border-radius: 10px;
-	color: #888;
-	border: 1px dashed var(--border-color);
+  min-height: 230px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.35);
+  text-align: center;
 }
 
-.empty-icon {
-	font-size: 48px;
-	margin-bottom: 16px;
-	opacity: 0.6;
+.chart-empty strong {
+  font-size: 13px;
 }
 
-.empty-text {
-	font-size: 16px;
-	font-weight: 500;
-	margin: 0 0 8px 0;
-	color: var(--text-color);
+.chart-empty span {
+  color: var(--text-subtle);
+  font-size: 11px;
 }
 
-.empty-hint {
-	font-size: 14px;
-	color: #aaa;
-	text-align: center;
-	max-width: 300px;
+.chart-scroll {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
-/* Область диаграммы */
-.chars-area {
-	position: relative;
-	height: 280px;
-	background-color: var(--medium-bg);
-	border-radius: 10px;
-	padding: 20px 0 30px 60px;
+.chart-area {
+  position: relative;
+  min-width: 100%;
+  height: 260px;
+  padding: 14px 12px 30px;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 10px;
+  background: rgba(15, 20, 28, 0.45);
 }
 
-/* Оси */
-.axis {
-	position: absolute;
-	top: 20px;
-	bottom: 30px;
-	width: 50px;
-	font-size: 11px;
-	color: #888;
-	z-index: 2;
-	pointer-events: none;
-}
-
-.axis.left {
-	left: 10px;
-}
-
-.axis-label {
-	position: absolute;
-	transform: translateY(50%);
-	width: 100%;
-	text-align: right;
-}
-
-/* Сетка */
-.grid {
-	position: absolute;
-	left: 60px;
-	right: 20px;
-	top: 20px;
-	bottom: 30px;
-	pointer-events: none;
-	z-index: 1;
+.grid-line,
+.zero-line {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  pointer-events: none;
 }
 
 .grid-line {
-	position: absolute;
-	left: 0;
-	right: 0;
-	height: 1px;
-	background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent);
+  background: rgba(148, 163, 184, 0.08);
 }
 
-/* Столбцы */
-.bars-container {
-	position: absolute;
-	left: 90px;
-	right: 30px;
-	top: 20px;
-	bottom: 30px;
-	z-index: 3;
+.grid-line--top { top: 14px; }
+.grid-line--middle { top: 50%; }
+.grid-line--bottom { bottom: 30px; }
+
+.zero-line {
+  top: 50%;
+  background: rgba(148, 163, 184, 0.22);
 }
 
-.day-group {
-	position: absolute;
-	bottom: 0;
-	width: 40px;
-	height: 100%;
-	transform: translateX(-50%);
+.day-column {
+  position: relative;
+  z-index: 1;
+  min-width: 52px;
+  flex: 1 0 52px;
+  display: flex;
+  flex-direction: column;
 }
 
-.bar-wrapper {
-	position: absolute;
-	bottom: 0;
-	width: 8px;
-	height: 100%;
+.bars {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 3px;
+}
+
+.bar-slot {
+  position: relative;
+  width: 8px;
+  height: 100%;
 }
 
 .bar {
-	position: absolute;
-	width: 100%;
-	transition: all 0.2s ease;
-	cursor: pointer;
-	min-height: 2px;
+  position: absolute;
+  left: 0;
+  width: 8px;
+  min-height: 2px;
+  border-radius: 3px 3px 1px 1px;
+  opacity: 0.86;
+  transition: opacity var(--transition), transform var(--transition);
+}
+
+.bar--negative {
+  border-radius: 1px 1px 3px 3px;
 }
 
 .bar:hover {
-	filter: brightness(1.2);
-	transform: scaleX(1.1);
-	z-index: 20;
+  z-index: 5;
+  opacity: 1;
+  transform: scaleX(1.2);
 }
 
-/* Тултипы для столбцов */
-.bar-tooltip {
-	position: absolute;
-	left: 50%;
-	transform: translateX(-50%);
-	background: rgba(30, 30, 40, 0.95);
-	padding: 6px 10px;
-	border-radius: 6px;
-	font-size: 12px;
-	white-space: nowrap;
-	opacity: 0;
-	transition: opacity 0.2s;
-	pointer-events: none;
-	z-index: 30;
-	border: 1px solid var(--border-color);
+.tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  z-index: 10;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 8px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: #111923;
+  color: var(--text-color);
+  box-shadow: var(--shadow);
+  font-size: 10px;
+  line-height: 1.3;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.bar-tooltip:not(.tooltip-bottom) {
-	bottom: 100%;
-	margin-bottom: 8px;
+.bar--negative .tooltip {
+  top: calc(100% + 7px);
+  bottom: auto;
 }
 
-.bar-tooltip.tooltip-bottom {
-	top: 100%;
-	margin-top: 8px;
+.bar:hover .tooltip {
+  opacity: 1;
 }
 
-.bar:hover .bar-tooltip {
-	opacity: 1;
-}
-
-/* Подписи дат */
 .date-label {
-	position: absolute;
-	bottom: -25px;
-	left: 50%;
-	transform: translateX(-50%);
-	font-size: 11px;
-	color: #aaa;
-	white-space: nowrap;
-	z-index: 5;
+  height: 22px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  color: var(--text-subtle);
+  font-size: 9px;
 }
 
-.date-labels-container {
-	position: absolute;
-	left: 60px;
-	right: 20px;
-	bottom: 0;
-	height: 30px;
-	z-index: 5;
-}
-
-.date-label-wrapper {
-	position: absolute;
-	bottom: 0;
-	transform: translateX(-50%);
-	font-size: 11px;
-	color: #aaa;
-	white-space: nowrap;
+@media (max-width: 640px) {
+  .chart-area {
+    height: 230px;
+  }
 }
 </style>
