@@ -14,6 +14,22 @@ const router = createRouter({
 			}
 		},
 		{
+			path: '/legal/:code',
+			name: 'legal.document',
+			component: () => import('../pages/Legal/DocumentPage.vue'),
+			meta: {
+				title: 'Юридический документ · WB Insight',
+			}
+		},
+		{
+			path: '/terms',
+			redirect: '/legal/terms',
+		},
+		{
+			path: '/privacy',
+			redirect: '/legal/privacy',
+		},
+		{
 			path: '/dashboard',
 			name: 'dashboard.home',
 			component: () => import('../pages/Dashboard/Main/index.vue'),
