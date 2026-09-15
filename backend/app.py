@@ -14,6 +14,7 @@ from handlers.control_panel.tariffs import router as CP_tariffs_router
 from handlers.control_panel.users import router as CP_users_router
 from handlers.dashboard.ads_handler import router as D_ads_router
 from handlers.dashboard.biling_handler import router as D_biling_handler_router
+from handlers.dashboard.cost_price_handler import router as D_cost_price_router
 from handlers.dashboard.expense_handler import router as D_expense_router
 from handlers.dashboard.main_handler import router as D_main_router
 from handlers.dashboard.profile_handler import router as D_user_profile_router
@@ -65,6 +66,7 @@ def _register_routers(app: FastAPI) -> None:
         D_unit_economy_router,
         D_ads_router,
         D_expense_router,
+        D_cost_price_router,
         CP_home_router,
         CP_users_router,
         CP_tariffs_router,
