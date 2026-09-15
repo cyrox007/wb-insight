@@ -1,244 +1,404 @@
 <script setup>
-import { ref, computed } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { useAuthStore } from './stores/auth';
-import AuthService from './API/AuthService.js';
-import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue';
-import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue';
-import DashboardAccountSelect from './components/DashboardAccountSelect.vue';
-import { useDashboardAccount } from './composables/dashboardAccount.js';
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from './stores/auth'
+import AuthService from './API/AuthService.js'
+import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue'
+import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue'
+import DashboardAccountSelect from './components/DashboardAccountSelect.vue'
+import { useDashboardAccount } from './composables/dashboardAccount.js'
 
-const showHeader = ref(true)
-const showFooter = ref(true)
-
-const authStore = useAuthStore();
-const router = useRouter();
-const route = useRoute();
-const { selectedTokenId, dashboardVersion } = useDashboardAccount();
+const authStore = useAuthStore()
+const router = useRouter()
+const route = useRoute()
+const { selectedTokenId, dashboardVersion } = useDashboardAccount()
 
 const navItems = [
-	{ name: 'dashboard.home', label: 'Ключевые показатели' },
-	{ name: 'dashboard.unity', label: 'Unit-экономика' },
-	{ name: 'dashboard.ads', label: 'Внутренняя реклама' },
+  { name: 'dashboard.home', label: 'Обзор' },
+  { name: 'dashboard.unity', label: 'Юнит-экономика' },
+  { name: 'dashboard.ads', label: 'Реклама' },
 ]
 
-const isActive = (name) => route.name === name
-const isAuthenticated = computed(() => authStore.isAuthSatus);
-const user = computed(() => authStore.getUser);
-const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'));
-const showAccountFilter = computed(() => navItems.some(item => item.name === route.name));
-const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}:${dashboardVersion.value}`);
-const isAdmin = computed(() => {
-	return user.value?.roles?.some(
-		role => role === 'super_admin' || role === 'admin'
-	)
-})
+const isAuthenticated = computed(() => authStore.isAuthSatus)
+const user = computed(() => authStore.getUser)
+const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'))
+const showAccountFilter = computed(() => navItems.some(item => item.name === route.name))
+const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}:${dashboardVersion.value}`)
+const isAdmin = computed(() => user.value?.roles?.some(role => role === 'super_admin' || role === 'admin'))
+const currentYear = new Date().getFullYear()
 
 const showLogin = ref(false)
 const showRegister = ref(false)
 
 const logout = async () => {
-	try {
-		await AuthService.logout();
-	} catch (error) {
-		console.warn('Не удалось завершить серверную сессию:', error);
-	} finally {
-		localStorage.removeItem('access_token');
-		localStorage.removeItem('user');
-		localStorage.removeItem('redirectPath');
-		localStorage.removeItem('wb-dashboard-token-id');
-		authStore.logout();
-		await router.push('/');
-	}
+  try {
+    await AuthService.logout()
+  } catch (error) {
+    console.warn('Не удалось завершить серверную сессию:', error)
+  } finally {
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('redirectPath')
+    localStorage.removeItem('wb-dashboard-token-id')
+    authStore.logout()
+    await router.push('/')
+  }
 }
 </script>
 
 <template>
-	<header class="header" v-if="showHeader">
-		<div class="header-left">
-			<div class="logo" @click="router.push('/')">
-				WB<span>Insight</span>
-				<span class="logo-ai">AI</span>
-			</div>
-		</div>
+  <header class="app-header">
+    <div class="app-header__inner">
+      <RouterLink to="/" class="brand" aria-label="WB Insight — на главную">
+        <span class="brand__mark">WB</span>
+        <span class="brand__name">Insight</span>
+        <span class="brand__badge">AI</span>
+      </RouterLink>
 
-		<div class="header-right">
-			<div class="user-section" v-if="isAuthenticated && user">
-				<div class="user-dropdown">
-					<div class="user-trigger">
-						<div class="avatar">{{ user.full_name?.charAt(0) }}</div>
-						<div class="user-info-mini">
-							<div class="user-name">{{ user?.full_name }}</div>
-							<div class="user-email">{{ user.email }}</div>
-						</div>
-					</div>
+      <div class="header-actions">
+        <details v-if="isAuthenticated && user" class="user-menu">
+          <summary class="user-menu__trigger" aria-label="Меню пользователя">
+            <span class="avatar" aria-hidden="true">{{ user.full_name?.charAt(0) || user.email?.charAt(0) || 'U' }}</span>
+            <span class="user-identity">
+              <strong>{{ user.full_name || 'Пользователь' }}</strong>
+              <small>{{ user.email }}</small>
+            </span>
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </summary>
 
-					<div class="dropdown-content">
-						<div v-if="isAdmin" @click="router.push({ name: 'control-panel.index' })" class="dropdown-item">
-							⚙ Панель управления
-						</div>
-						<div class="dropdown-item" @click="$router.push({ name: 'dashboard.profile' })">
-							👤 Профиль
-						</div>
-						<div class="dropdown-divider"></div>
-						<div class="dropdown-item logout" @click="logout">🚪 Выйти</div>
-					</div>
-				</div>
-			</div>
+          <div class="user-menu__content">
+            <button v-if="isAdmin" class="menu-action" type="button" @click="router.push({ name: 'control-panel.index' })">
+              Панель управления
+            </button>
+            <button class="menu-action" type="button" @click="router.push({ name: 'dashboard.profile' })">
+              Профиль и подключения
+            </button>
+            <div class="menu-divider" />
+            <button class="menu-action menu-action--danger" type="button" @click="logout">
+              Выйти
+            </button>
+          </div>
+        </details>
 
-			<div class="auth-section" v-else>
-				<button class="btn btn-outline" @click="showLogin = true">Войти</button>
-				<button class="btn btn-primary" @click="showRegister = true">Регистрация</button>
-			</div>
-		</div>
-	</header>
+        <div v-else class="auth-actions">
+          <button class="button button--ghost" type="button" @click="showLogin = true">Войти</button>
+          <button class="button button--primary" type="button" @click="showRegister = true">Регистрация</button>
+        </div>
+      </div>
+    </div>
+  </header>
 
-	<LoginModal :is-open="showLogin" @close="showLogin = false" />
-	<RegistrationModal :is-open="showRegister" @close="showRegister = false" />
+  <LoginModal :is-open="showLogin" @close="showLogin = false" />
+  <RegistrationModal :is-open="showRegister" @close="showRegister = false" />
 
-	<main class="main-content">
-		<nav v-if="isAuthenticated && !isControlPanelRoute" class="dashboard-nav">
-			<div class="dashboard-nav__links">
-				<div
-					v-for="item in navItems"
-					:key="item.name"
-					class="nav-item"
-					:class="{ active: isActive(item.name) }"
-					@click="router.push({ name: item.name })"
-				>
-					{{ item.label }}
-				</div>
-			</div>
-			<DashboardAccountSelect v-if="showAccountFilter" class="dashboard-account-select" />
-		</nav>
-		<RouterView :key="dashboardViewKey" />
-	</main>
+  <main class="app-main">
+    <section v-if="isAuthenticated && !isControlPanelRoute" class="workspace-bar" aria-label="Навигация аналитики">
+      <nav class="workspace-nav">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.name"
+          :to="{ name: item.name }"
+          class="workspace-nav__item"
+          :class="{ 'workspace-nav__item--active': route.name === item.name }"
+        >
+          {{ item.label }}
+        </RouterLink>
+      </nav>
+      <DashboardAccountSelect v-if="showAccountFilter" class="workspace-account" />
+    </section>
 
-	<footer class="footer" v-if="showFooter">
-		© 2025 Wildberries Dashboard. Все права защищены.
-	</footer>
+    <RouterView :key="dashboardViewKey" />
+  </main>
+
+  <footer v-if="!isAuthenticated" class="app-footer">
+    © {{ currentYear }} WB Insight
+  </footer>
 </template>
 
 <style scoped>
-.header {
-	background: linear-gradient(90deg, #1a1a1a, #222);
-	padding: 12px 24px;
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	border-bottom: 1px solid var(--border-color);
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 20, 28, 0.9);
+  backdrop-filter: blur(16px);
 }
 
-.logo {
-	font-size: 22px;
-	font-weight: 700;
-	color: #fff;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-.logo span { color: #ff6b6b; }
-.logo-ai {
-	font-size: 12px;
-	background: linear-gradient(45deg, #ff6b6b, #8e44ad);
-	padding: 2px 6px;
-	border-radius: 6px;
-	color: white;
+.app-header__inner {
+  width: min(100% - 32px, var(--content-width));
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
 }
 
-.user-dropdown { position: relative; }
-.user-trigger {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	cursor: pointer;
-	padding: 6px 10px;
-	border-radius: 8px;
-	transition: 0.2s;
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
-.user-trigger:hover { background-color: var(--hover-bg); }
+
+.brand__mark {
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  color: #fff;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.brand__name {
+  font-size: 18px;
+}
+
+.brand__badge {
+  padding: 2px 6px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  border-radius: 6px;
+  color: #c4b5fd;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.header-actions,
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+
+.button:hover {
+  background: var(--hover-bg);
+}
+
+.button--primary {
+  border-color: var(--secondary-color);
+  background: var(--secondary-color);
+  color: #fff;
+}
+
+.button--primary:hover {
+  background: var(--secondary-hover);
+}
+
+.user-menu {
+  position: relative;
+}
+
+.user-menu summary {
+  list-style: none;
+}
+
+.user-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.user-menu__trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.user-menu__trigger:hover,
+.user-menu[open] .user-menu__trigger {
+  background: var(--hover-bg);
+}
+
 .avatar {
-	width: 36px;
-	height: 36px;
-	border-radius: 50%;
-	background: linear-gradient(135deg, #3498db, #8e44ad);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: white;
-	font-weight: 600;
-}
-.user-info-mini { display: flex; flex-direction: column; }
-.user-name { font-size: 14px; font-weight: 600; }
-.user-email { font-size: 12px; color: #aaa; }
-
-.dropdown-content {
-	position: absolute;
-	top: 100%;
-	right: 0;
-	background-color: var(--card-bg);
-	border-radius: 10px;
-	min-width: 200px;
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-	opacity: 0;
-	pointer-events: none;
-	transition: opacity 0.2s;
-	z-index: 20;
-}
-.user-dropdown:hover > .dropdown-content { opacity: 1; pointer-events: auto; }
-.dropdown-item { padding: 12px 16px; cursor: pointer; transition: 0.2s; font-size: 14px; }
-.dropdown-item:hover { background-color: var(--hover-bg); }
-.dropdown-item.logout:hover { background-color: rgba(231, 76, 60, 0.2); color: #e74c3c; }
-.dropdown-divider { height: 1px; background-color: var(--border-color); }
-
-.dashboard-nav {
-	padding: 12px;
-	margin: 20px;
-	border-radius: 10px;
-	background-color: var(--medium-bg);
-	display: flex;
-	gap: 18px;
-	justify-content: space-between;
-	align-items: center;
-	flex-wrap: wrap;
-	border: 1px solid var(--border-color);
-}
-.dashboard-nav__links { display: flex; gap: 10px; flex-wrap: wrap; }
-.dashboard-account-select { margin-left: auto; }
-.nav-item {
-	padding: 8px 14px;
-	border-radius: 6px;
-	cursor: pointer;
-	font-size: 14px;
-	color: #ccc;
-	transition: var(--transition);
-	background-color: transparent;
-	border: 1px solid transparent;
-}
-.nav-item:hover { background-color: var(--hover-bg); color: #fff; border-color: var(--border-color); }
-.nav-item.active {
-	background-color: var(--secondary-color);
-	color: white;
-	border-color: var(--secondary-color);
-	box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: #263449;
+  color: #c4b5fd;
+  font-weight: 700;
 }
 
-.footer {
-	background-color: var(--medium-bg);
-	padding: 15px 20px;
-	border-top: 1px solid var(--border-color);
-	text-align: center;
-	font-size: 14px;
-	color: #aaa;
+.user-identity {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
-.main-content { min-height: calc(100vh - 120px); }
 
-@media (max-width: 760px) {
-	.dashboard-nav { align-items: stretch; }
-	.dashboard-nav__links { width: 100%; }
-	.dashboard-account-select { width: 100%; margin-left: 0; }
-	.user-email { display: none; }
+.user-identity strong,
+.user-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-identity strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.user-identity small {
+  margin-top: 1px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.chevron {
+  color: var(--text-muted);
+}
+
+.user-menu__content {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.menu-action {
+  width: 100%;
+  padding: 10px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-color);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-action:hover {
+  background: var(--hover-bg);
+}
+
+.menu-action--danger {
+  color: #fda4af;
+}
+
+.menu-divider {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border-color);
+}
+
+.app-main {
+  min-height: calc(100vh - 64px);
+}
+
+.workspace-bar {
+  width: min(100% - 32px, var(--content-width));
+  margin: 18px auto 0;
+  padding: 10px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: rgba(24, 33, 46, 0.82);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.workspace-nav__item {
+  padding: 9px 13px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  transition: color var(--transition), background var(--transition);
+}
+
+.workspace-nav__item:hover {
+  color: var(--text-color);
+  background: var(--hover-bg);
+}
+
+.workspace-nav__item--active {
+  color: #fff;
+  background: rgba(124, 58, 237, 0.22);
+}
+
+.workspace-account {
+  margin-left: auto;
+}
+
+.app-footer {
+  padding: 24px;
+  color: var(--text-subtle);
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .workspace-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-account {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-header__inner,
+  .workspace-bar {
+    width: min(100% - 20px, var(--content-width));
+  }
+
+  .brand__badge,
+  .user-identity {
+    display: none;
+  }
+
+  .user-menu__trigger {
+    min-width: auto;
+  }
+
+  .workspace-nav {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .workspace-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workspace-nav__item {
+    white-space: nowrap;
+  }
 }
 </style>
