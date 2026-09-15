@@ -10,18 +10,23 @@ P31 — безопасный жизненный цикл аккаунта и sup
 
 - добавлен password recovery через одноразовую ссылку и подтверждённый email-канал;
 - reset token генерируется криптографически случайным, а в PostgreSQL хранится только SHA-256 digest; старые и использованные ссылки инвалидируются;
+- raw reset token передаётся во frontend через URL fragment `#token=...`, поэтому nginx/HTTP access logs не получают секрет в request URI;
 - публичный reset request не раскрывает существование аккаунта, а недоставленный email откатывает созданный token;
+- production password recovery fail-closed требует HTTPS reset URL и `SMTP_STARTTLS=true`; SMTP TLS использует системную проверку сертификата;
 - login/access/refresh JWT привязаны к durable `session_version`; смена пароля, отзыв сессий, деактивация и повторная активация делают старые токены недействительными;
 - refresh-cookie по-прежнему управляется единым `core.session_cookie`, legacy cookie rewriting удалён;
 - пользователь может отключить продление только платной `ACTIVE`-подписки; доступ сохраняется до конца оплаченного периода, demo не маскируется под платное автопродление;
 - пользователь получил отдельный экран безопасности с recovery и подтверждаемой soft-deactivation;
 - soft-deactivation немедленно закрывает доступ, отзывает marketplace credentials, инвалидирует reset-ссылки и ставит остановку продления, но не выполняет необратимый hard purge;
 - технический retention после деактивации конфигурируется отдельно; окончательный срок остаётся зависимым от утверждённой legal/retention policy;
+- late Sber callback и account deactivation сериализованы через блокировку строки пользователя: платёж сохраняет правдивый `SUCCEEDED`, но деактивированный аккаунт не получает новую подписку из race-condition;
 - control-panel получил явную admin-защиту lifecycle routes, отзыв сессий, reactivation и просмотр append-only lifecycle events;
+- обычный `admin` не может выполнять security-sensitive reactivation/revoke-sessions над `super_admin`; такие действия требуют `super_admin`;
 - support может фиксировать только разрешённые access/payment/refund review events с actor/reference без прямого редактирования production DB;
-- поздний успешный Sber callback для уже деактивированного пользователя сохраняет правдивый `SUCCEEDED` payment, но не создаёт новую подписку автоматически; случай остаётся в audit trail для reconciliation/refund;
-- SMTP/recovery настройки fail-closed и password reset по умолчанию отключён до фактической настройки и smoke провайдера;
-- добавлены regression tests lifecycle/session/payment invariants и Alembic migration `c8e5f1a2b934`.
+- `/account/*` добавлен в production same-origin nginx gateway и закреплён container smoke-проверкой;
+- password reset по умолчанию отключён до фактической настройки и smoke SMTP-провайдера;
+- добавлены regression tests lifecycle/session/payment/RBAC/transport invariants и Alembic migration `c8e5f1a2b934`;
+- Alembic model registry и migration comments синхронизированы с ORM, чтобы `alembic check` не допускал schema drift.
 
 P31 закрывает code-side baseline account lifecycle, но не объявляет beta: до `0.9.0-beta.1` всё ещё нужны реальный production-like HTTPS deployment, SMTP smoke, core release smoke, WB seller data-accuracy acceptance и полный beta evidence manifest.
 
