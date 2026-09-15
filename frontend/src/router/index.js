@@ -51,6 +51,15 @@ const router = createRouter({
 			}
 		},
 		{
+			path: '/dashboard/prices',
+			name: 'dashboard.prices',
+			component: () => import('../pages/Dashboard/Prices/index.vue'),
+			meta: {
+				title: 'Цены и скидки · WB Insight',
+				requestAuth: true,
+			}
+		},
+		{
 			path: '/dashboard/ads',
 			name: 'dashboard.ads',
 			component: () => import('../pages/Dashboard/Ads/AdsPage.vue'),
