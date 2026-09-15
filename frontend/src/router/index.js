@@ -59,6 +59,15 @@ const router = createRouter({
 			}
 		},
 		{
+			path: '/dashboard/account-security',
+			name: 'dashboard.account-security',
+			component: () => import('../pages/Dashboard/AccountSecurity.vue'),
+			meta: {
+				title: 'Безопасность аккаунта · WB Insight',
+				requestAuth: true,
+			}
+		},
+		{
 			path: '/dashboard/unity',
 			name: 'dashboard.unity',
 			component: () => import('../pages/Dashboard/UnityEconomy/index.vue'),
