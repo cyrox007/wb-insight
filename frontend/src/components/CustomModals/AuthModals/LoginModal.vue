@@ -11,6 +11,7 @@
 			<div class="modal-body">
 				<TextInput v-model="loginEmail" label="Email" placeholder="Введите email" type="email" />
 				<TextInput v-model="loginPassword" label="Пароль" placeholder="Введите пароль" type="password" />
+				<button class="recovery-link" type="button" @click="openRecovery">Забыли пароль?</button>
 			</div>
 			<div class="modal-error" v-if="loginError !== ''">{{ loginError }}</div>
 		</template>
@@ -46,6 +47,11 @@ const loginEmail = ref('')
 const loginPassword = ref('')
 const loginError = ref('')
 const modalLoadedBtn = ref(false)
+
+const openRecovery = async () => {
+	emit('close')
+	await router.push('/reset-password')
+}
 
 const performLogin = async () => {
 	modalLoadedBtn.value = true;
@@ -97,6 +103,17 @@ const performLogin = async () => {
 
 .modal-body {
 	margin-bottom: 20px;
+}
+
+.recovery-link {
+	margin-top: 10px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+	opacity: .78;
 }
 
 .modal-footer {

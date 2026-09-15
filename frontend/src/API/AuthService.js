@@ -17,6 +17,17 @@ export default class AuthService {
         return await $api.post('/auth/logout')
     }
 
+    static async requestPasswordReset(email) {
+        return await $api.post('/auth/password-reset/request', { email })
+    }
+
+    static async confirmPasswordReset(token, newPassword) {
+        return await $api.post('/auth/password-reset/confirm', {
+            token,
+            new_password: newPassword,
+        })
+    }
+
     static async checkEmail(email) {
         return await $api.post('/auth/check-email', {
             email: email

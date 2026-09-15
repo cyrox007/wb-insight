@@ -32,6 +32,14 @@ const router = createRouter({
 			redirect: '/legal/privacy',
 		},
 		{
+			path: '/reset-password',
+			name: 'auth.reset-password',
+			component: () => import('../pages/Auth/ResetPassword.vue'),
+			meta: {
+				title: 'Восстановление доступа · WB Insight',
+			}
+		},
+		{
 			path: '/dashboard',
 			name: 'dashboard.home',
 			component: () => import('../pages/Dashboard/Main/index.vue'),
@@ -47,6 +55,15 @@ const router = createRouter({
 			component: () => import('../pages/Dashboard/Profile/index.vue'),
 			meta: {
 				title: 'Настройки продавца · WB Insight',
+				requestAuth: true,
+			}
+		},
+		{
+			path: '/dashboard/account-security',
+			name: 'dashboard.account-security',
+			component: () => import('../pages/Dashboard/AccountSecurity.vue'),
+			meta: {
+				title: 'Безопасность аккаунта · WB Insight',
 				requestAuth: true,
 			}
 		},

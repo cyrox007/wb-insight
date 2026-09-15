@@ -4,7 +4,7 @@ WB Insight использует Semantic Versioning:
 
 `MAJOR.MINOR.PATCH[-PRERELEASE]`
 
-Примеры: `0.9.0-alpha.7`, `0.9.0-beta.1`, `1.0.0-rc.1`, `1.0.0`.
+Примеры: `0.9.0-alpha.8`, `0.9.0-beta.1`, `1.0.0-rc.1`, `1.0.0`.
 
 ## Номера версии
 
@@ -30,10 +30,11 @@ Backward-compatible исправления опубликованной capabili
 
 Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускается только когда одновременно:
 
-- P29 dependency/security hardening и P30 acceptance tooling слиты с green CI;
+- P29 dependency/security hardening, P30 acceptance tooling и P31 account-lifecycle code baseline слиты с green CI;
 - известных необработанных code-side release blockers нет;
 - production-like HTTPS environment воспроизводимо разворачивается из репозитория;
 - core end-to-end smoke реально пройден;
+- password recovery проверен через фактический SMTP/provider;
 - выполнена приёмочная сверка ключевой аналитики на реальном WB seller account;
 - нет необъяснённых существенных денежных расхождений;
 - сформирован полный beta release-evidence manifest для exact commit;
@@ -45,11 +46,11 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 - production deployment и TLS;
 - реальные WB partner credentials и seller smoke;
-- реальный Sber acquiring smoke;
+- реальный Sber acquiring/refund-reconciliation smoke;
 - подключённые monitoring/alerts/uptime/logging;
 - off-host encrypted backup и подтверждённый restore drill;
-- утверждённые non-draft legal documents;
-- закрытый account lifecycle или утверждённые безопасные support procedures;
+- утверждённые non-draft legal documents, включая retention/refund/cancellation policy;
+- production-smoke account lifecycle;
 - полный RC release-evidence manifest.
 
 ### stable
@@ -58,16 +59,16 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` после P29 находится на **`0.9.0-alpha.6`**.
+`main` после P30 находится на **`0.9.0-alpha.7`**.
 
-P30 — кандидат **`0.9.0-alpha.7`** в ветке `codex/p30-beta-readiness-data-accuracy`. Он добавляет reproducible data-accuracy acceptance и release-evidence contracts, но не считается фактическим прохождением production-like acceptance.
+P31 — кандидат **`0.9.0-alpha.8`** в ветке `codex/p31-account-lifecycle`. Он закрывает code-side account lifecycle: password recovery, durable session revocation, cancel-at-period-end, soft deactivation/retention metadata и auditable support flow.
 
 Каноническая последовательность:
 
-1. `0.9.0-alpha.6` — dependency/security + documentation baseline;
-2. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
-3. `0.9.0-beta.1` — feature freeze + реальный production-like + data-accuracy acceptance;
-4. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops/account-lifecycle blockers;
+1. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
+2. `0.9.0-alpha.8` — account-lifecycle code baseline;
+3. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + data-accuracy acceptance;
+4. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
 5. `1.0.0` — публичный WB Insight Web v1 Stable.
 
 Stage нельзя повышать только из-за количества commits, номера P-задачи или наличия скрипта проверки. Gates определяются `docs/RELEASE_ROADMAP.md` и `docs/RELEASE_READINESS.md`.

@@ -114,10 +114,8 @@ Access JWT перенесён в память, session restore выполняе�
 
 ## 0.9.0-alpha.7 — P30: beta acceptance tooling
 
-**Ветка:** `codex/p30-beta-readiness-data-accuracy`  
-**Статус:** текущий кандидат; становится mainline только после green CI и merge.
-
-Что входит в P30:
+**PR:** #46  
+**Merge:** `77f1ec19cbe565cdbaca2a65a2c4cd7d5199ff5f`.
 
 - versioned policy ключевых метрик WB Web v1 и их tolerances;
 - deterministic `Decimal` comparator для expected/actual;
@@ -126,27 +124,54 @@ Access JWT перенесён в память, session restore выполняе�
 - positive/negative CI fixtures;
 - release-evidence manifest, связывающий stage, exact commit, version, environment и hashes artifacts;
 - отдельные evidence contracts для beta/RC/stable;
-- CI self-test, который проверяет как успешный, так и заведомо провальный acceptance;
-- `VERSION` теперь триггерит backend security и database-migration gates, чтобы каждый release candidate проходил полный контур.
+- CI self-test успешного и намеренно провального acceptance;
+- изменение `VERSION` запускает backend security и database-migration gates.
 
-Почему это всё ещё alpha: tooling создаёт доказуемый процесс, но не заменяет реальный production-like deployment и сверку на настоящем seller account. `0.9.0-beta.1` назначается только после фактического прохождения этих gates.
+P30 делает приёмку воспроизводимой, но сам по себе не является фактом прохождения production-like acceptance.
+
+## 0.9.0-alpha.8 — P31: account lifecycle baseline
+
+**Ветка:** `codex/p31-account-lifecycle`  
+**Статус:** текущий кандидат; становится mainline только после green CI и merge.
+
+P31 закрывает запланированные code-side lifecycle gaps:
+
+- email password recovery с одноразовыми hashed reset tokens и anti-enumeration response;
+- raw reset secret передаётся через URL fragment `#token=...`, поэтому HTTP/nginx access logs не получают его в request URI;
+- production recovery fail-closed требует HTTPS reset URL и `SMTP_STARTTLS=true`, TLS использует системную проверку сертификата;
+- durable `session_version` для немедленного отзыва access/refresh JWT;
+- paid subscription cancel-at-period-end без обрыва оплаченного доступа;
+- demo исключён из paid cancellation semantics;
+- self-service soft deactivation с retention metadata;
+- деактивация отзывает sessions, WB credentials и ранее выданные reset links;
+- admin reactivation не восстанавливает старые marketplace credentials;
+- lifecycle/support действия сохраняются в append-only audit events;
+- support review/refund evidence доступно через allowlisted control-panel API без ручной правки production DB;
+- late Sber callback и account deactivation сериализованы блокировкой строки пользователя: подтверждённый payment остаётся финансовым фактом, но inactive account не получает subscription из race-condition;
+- обычный `admin` не может выполнять reactivation/revoke-sessions над `super_admin`; security-sensitive lifecycle mutation такого аккаунта требует `super_admin`;
+- `/account/*` включён в production same-origin nginx gateway и проверяется container smoke-тестом;
+- добавлены recovery/security UI и regression tests lifecycle/session/payment/RBAC/transport invariants;
+- Alembic revision `c8e5f1a2b934` после `b7d4e6f8a921`; model registry и migration comments синхронизированы с ORM для чистого `alembic check`.
+
+P31 не вводит автоматический hard purge и не объявляет юридически утверждённый retention/refund процесс: это остаётся внешним legal/operator gate.
 
 ## Следующая стадия — 0.9.0-beta.1
 
 Допускается только после:
 
-- merge P30 с green CI;
+- merge P31 с green CI;
 - feature freeze WB Web v1;
 - production-like HTTPS deployment из repo;
 - core release smoke;
 - disposable registration/demo/legal evidence;
+- реального SMTP/recovery smoke;
 - data-accuracy acceptance на реальном WB seller account и фиксированных периодах;
 - отсутствия необъяснённых существенных денежных расхождений;
 - сохранённого beta release-evidence manifest для exact commit.
 
 ## 1.0.0-rc.1
 
-Требует фактического закрытия внешних/операционных gates: WB partner/service credentials и real seller full sync, Sber merchant payment smoke, production DNS/TLS, monitoring/logging, off-host backup/restore drill, non-draft legal documents и account lifecycle.
+Требует фактического закрытия внешних/операционных gates: WB partner/service credentials и real seller full sync, Sber merchant payment/refund smoke, production DNS/TLS, monitoring/logging, off-host backup/restore drill и non-draft legal documents.
 
 ## 1.0.0 — WB Insight Web v1 Stable
 

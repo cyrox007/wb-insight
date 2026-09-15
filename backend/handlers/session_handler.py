@@ -34,6 +34,7 @@ async def refresh_session(
 
     try:
         user_id = UUID(str(payload["sub"]))
+        token_session_version = int(payload.get("sv"))
     except (TypeError, ValueError):
         clear_refresh_cookie(response)
         response.status_code = status.HTTP_401_UNAUTHORIZED
@@ -43,7 +44,11 @@ async def refresh_session(
         )
 
     user = await get_user_by_uuid(db_session, user_id)
-    if not user or not user.is_active:
+    if (
+        not user
+        or not user.is_active
+        or user.session_version != token_session_version
+    ):
         clear_refresh_cookie(response)
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return response_error(
@@ -54,6 +59,7 @@ async def refresh_session(
     token_data = {
         "sub": str(user.id),
         "email": user.email,
+        "sv": user.session_version,
     }
     access_token = create_access_token(token_data)
     set_refresh_cookie(response, create_refresh_token(token_data))

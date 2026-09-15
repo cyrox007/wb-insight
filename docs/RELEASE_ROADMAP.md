@@ -4,33 +4,25 @@
 
 Цель: первый публичный стабильный релиз **WB Insight Web v1 / `1.0.0` для продавцов Wildberries**.
 
-В scope `1.0.0`: регистрация и сессия, роли/admin, тарифы/demo/limits, подключение WB-кабинетов, автоматическая синхронизация, KPI/финансы/остатки/цены/реклама/unit-экономика, COGS, ручные расходы, план выручки, Сбер acquiring, production deployment, monitoring, backup/restore и versioned legal consent.
+В scope `1.0.0`: регистрация и сессия, роли/admin, тарифы/demo/limits, подключение WB-кабинетов, автоматическая синхронизация, KPI/финансы/остатки/цены/реклама/unit-экономика, COGS, ручные расходы, план выручки, Сбер acquiring, production deployment, monitoring, backup/restore, versioned legal consent и безопасный account lifecycle.
 
 Не блокируют `1.0.0`: Ozon, AI-аналитик, native mobile и WB OAuth 2.0 onboarding после Catalog readiness.
 
 ## Текущее состояние
 
-- `main`: **`0.9.0-alpha.6`**, P29 слит PR #44;
-- dependency audits frontend/backend являются постоянными CI gates;
+- `main`: **`0.9.0-alpha.7`**, P30 слит PR #46, merge `77f1ec19cbe565cdbaca2a65a2c4cd7d5199ff5f`;
+- dependency audits, release integrity, data-accuracy tooling и evidence manifest являются постоянными release gates;
 - основной WB Web v1 feature baseline собран;
-- P30 готовит **`0.9.0-alpha.7`** — acceptance tooling и release evidence;
+- P31 готовит **`0.9.0-alpha.8`** — account lifecycle code baseline;
 - переход стадии определяется доказанными gates, а не номером P-задачи.
 
 ## Этап A — P29 / `0.9.0-alpha.6` — закрыт
 
+Результат: frontend/backend dependency security gates, исправленный dependency graph и канонический `docs/`-портал.
+
+## Этап B — P30 / `0.9.0-alpha.7` — закрыт
+
 Результат:
-
-- production/full frontend dependency audits без известных High/Critical;
-- backend `pip-audit` без известных vulnerabilities на merge head;
-- уязвимая `python-jose -> ecdsa` цепочка удалена;
-- документация полностью реструктурирована;
-- Backend security, Frontend build, Database migrations и Release integrity зелёные на exact merge head.
-
-## Этап B — P30 / `0.9.0-alpha.7`: acceptance tooling
-
-Цель: сделать beta-приёмку воспроизводимой и привязанной к exact commit.
-
-В P30 входят:
 
 - versioned metric/tolerance policy;
 - deterministic data-accuracy runner на `Decimal`;
@@ -38,14 +30,34 @@
 - SHA-256 input/policy binding;
 - positive/negative CI fixtures;
 - release-evidence manifest для beta/RC/stable;
-- CI contract, который проверяет успешный и намеренно провальный acceptance;
-- запуск backend security и Alembic при каждом изменении `VERSION`.
+- CI contract успешного и намеренно провального acceptance;
+- backend security и Alembic запускаются при каждом изменении `VERSION`.
 
-Выход этапа: `main = 0.9.0-alpha.7`, если P30 проходит полный release-candidate CI.
+P30 сделал процесс приёмки доказуемым, но не заменил фактическую production-like приёмку.
 
-**Важно:** merge P30 не означает beta. Инструмент проверки не является доказательством фактического прохождения проверки.
+## Этап C — P31 / `0.9.0-alpha.8`: account lifecycle
 
-## Этап C — production-like validation → `0.9.0-beta.1`
+Цель: убрать оставшиеся code-side сценарии, которые иначе требовали бы ручного вмешательства в production DB.
+
+В P31 входят:
+
+- password recovery через одноразовый email token, в БД хранится только digest;
+- anti-enumeration response и rollback недоставленного SMTP token;
+- durable `session_version` и немедленный отзыв ранее выданных JWT;
+- paid cancel-at-period-end + undo без обрыва оплаченного периода;
+- demo не участвует в paid cancellation semantics;
+- self-service soft deactivation, retention metadata, отзыв sessions/credentials/reset links;
+- admin reactivation и revoke-sessions;
+- append-only lifecycle events;
+- allowlisted support access/payment/refund records с actor/reference;
+- late-Sber-payment safeguard для inactive account;
+- recovery/security UI, migration и regression tests.
+
+P31 не вводит автоматический hard purge и не подменяет утверждение legal retention/refund policy.
+
+Выход этапа: `main = 0.9.0-alpha.8`, если exact P31 head проходит полный CI и PR merge.
+
+## Этап D — production-like validation → `0.9.0-beta.1`
 
 Цель: доказать работу продукта как единой системы.
 
@@ -58,6 +70,7 @@
 - core `ops/release_smoke.py`;
 - disposable registration + demo subscription + legal consent evidence;
 - login/refresh-cookie restore/logout;
+- account lifecycle smoke, включая password reset через реальный SMTP/provider;
 - основные desktop/mobile сценарии и empty/loading/error states;
 - отсутствие secrets/JWT/WB credentials в frontend bundle, git и logs;
 - real-seller data-accuracy acceptance;
@@ -84,7 +97,7 @@
 
 Нельзя назначать beta при необъяснённом существенном денежном расхождении. Contract: `DATA_ACCURACY_ACCEPTANCE.md`.
 
-## Этап D — внешние и эксплуатационные blockers до RC
+## Этап E — внешние и эксплуатационные blockers до RC
 
 ### Wildberries
 
@@ -92,7 +105,7 @@
 
 ### Сбер acquiring
 
-Нужны merchant onboarding и sandbox/production credentials. Проверяются success, decline, cancel, retry, duplicate callback, server-side confirmation, одна subscription на payment и merchant back-office reconciliation.
+Нужны merchant onboarding и sandbox/production credentials. Проверяются success, decline, cancel, retry, duplicate callback, server-side confirmation, одна subscription на payment, refund/reconciliation procedure и merchant back-office reconciliation.
 
 ### Production infrastructure
 
@@ -108,25 +121,17 @@
 
 ### Legal
 
-Draft-тексты заменяются утверждёнными versioned documents: terms/offer, privacy, personal-data consent, credential policy, refund/cancellation policy и реквизиты оператора. Нужен immutable archive опубликованных версий и production `LEGAL_EVIDENCE_HMAC_KEY`.
+Draft-тексты заменяются утверждёнными versioned documents: terms/offer, privacy, personal-data consent, credential policy, refund/cancellation policy, retention/deletion policy и реквизиты оператора. Нужен immutable archive опубликованных версий и production `LEGAL_EVIDENCE_HMAC_KEY`.
 
-## Этап E — account lifecycle
+### Lifecycle activation
 
-До RC закрываются:
-
-- восстановление/сброс пароля через подтверждённый канал;
-- отмена платной подписки и возврат согласно policy;
-- деактивация/удаление аккаунта и retention;
-- support/admin procedure для блокировки, ошибочного платежа и потерянного доступа;
-- audit trail административных действий, влияющих на доступ/оплату.
-
-Support-mediated flow допустим, если документирован и не требует прямой правки БД оператором.
+P31 закрывает code baseline, но до RC нужны реальный SMTP recovery smoke, утверждённые retention/refund procedures и production-like evidence этих сценариев.
 
 ## Этап F — `1.0.0-rc.1`
 
-RC допускается только после этапов C–E и полного `rc` evidence manifest.
+RC допускается только после этапов D–E и полного `rc` evidence manifest.
 
-Полный RC smoke включает registration/legal/demo, login/refresh/logout, реальный WB credential + full sync, все основные dashboards, COGS/expenses/plan, реальный Sber payment + paid activation, idempotency, monitoring, off-host backup, restore drill и deploy/rollback evidence.
+Полный RC smoke включает registration/legal/demo, login/refresh/logout/recovery, account deactivation/support flow, реальный WB credential + full sync, все основные dashboards, COGS/expenses/plan, реальный Sber payment + paid activation/refund reconciliation, idempotency, monitoring, off-host backup, restore drill и deploy/rollback evidence.
 
 ## Этап G — `1.0.0` Stable
 
@@ -145,14 +150,14 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрываем acceptance tooling, account-lifecycle code gaps, smoke bugfixes, CI gates и versioning.
+Внутри репозитория закрываем lifecycle code, acceptance tooling, smoke bugfixes, CI gates и versioning.
 
-Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials, production hosting/domain/TLS, legal approval/requisites, alert/logging/object-storage providers.
+Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials/refund procedure, production hosting/domain/TLS, legal approval/requisites/retention, SMTP provider, alert/logging/object-storage providers.
 
-Внешний blocker не останавливает безопасную code-side разработку, но без фактического закрытия нельзя выдавать RC/stable.
+Внешний blocker не останавливает безопасную code-side разработку, но без фактического закрытия нельзя выдавать beta/RC/stable в обход соответствующего gate.
 
 ## Каноническая последовательность
 
-`0.9.0-alpha.6` -> `0.9.0-alpha.7` (P30 acceptance tooling) -> `0.9.0-beta.1` (реальная production-like + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
+`0.9.0-alpha.7` -> `0.9.0-alpha.8` (P31 account lifecycle) -> `0.9.0-beta.1` (реальная production-like + SMTP + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
 
-Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
+Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `ACCOUNT_LIFECYCLE.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.

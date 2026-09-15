@@ -13,10 +13,12 @@ audit_logger = setup_logger("security.audit", "security_audit.log")
 _AUDITED_PREFIXES = (
     "/control-panel",
     "/billing",
+    "/account",
     "/dashboard/profile/token",
     "/dashboard/tokens",
     "/auth/logout",
     "/auth/refresh",
+    "/auth/password-reset",
 )
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 

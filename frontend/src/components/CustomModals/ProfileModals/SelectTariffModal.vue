@@ -4,6 +4,7 @@ import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
 import LegalConsentChecklist from '@/components/LegalConsentChecklist.vue';
 import { ref, onMounted, watch } from 'vue';
+import AccountLifecycleService from '@/API/AccountLifecycleService';
 import ProfileServices from '@/API/Dashboard/ProfileServices';
 import TariffService from '@/API/Dashboard/TariffService';
 import { notify } from '@/composables/notification';
@@ -16,7 +17,9 @@ const props = defineProps({
 const emit = defineEmits(['close', 'select', 'payment']);
 const tariffs = ref([]);
 const selectedTariff = ref(props.currentTariffCode || '');
+const currentSubscription = ref(null);
 const loadingPayment = ref(false);
+const loadingCancellation = ref(false);
 const paymentAttemptKey = ref(null);
 const legalConsents = ref([]);
 const legalValid = ref(false);
@@ -26,8 +29,14 @@ const newAttemptKey = () => {
 	return `payment-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+const formatDate = (value) => {
+	if (!value) return '—';
+	const date = new Date(value);
+	return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat('ru-RU').format(date);
+};
+
 onMounted(async () => {
-	await loadTariffs();
+	await Promise.all([loadTariffs(), loadSubscription()]);
 });
 
 watch(
@@ -50,6 +59,50 @@ const loadTariffs = async () => {
 	} catch (e) {
 		console.error('Ошибка загрузки тарифов', e);
 		tariffs.value = [];
+	}
+};
+
+const loadSubscription = async () => {
+	try {
+		const response = await ProfileServices.getProfile();
+		currentSubscription.value = response.data?.subscription || null;
+	} catch (e) {
+		currentSubscription.value = null;
+	}
+};
+
+const cancelSubscription = async () => {
+	if (!confirm('Отключить автопродление? Доступ сохранится до конца уже оплаченного периода.')) return;
+	loadingCancellation.value = true;
+	try {
+		const response = await AccountLifecycleService.cancelSubscription('user_requested');
+		const data = response.data;
+		currentSubscription.value = {
+			...(currentSubscription.value || {}),
+			cancel_at_period_end: true,
+			end_date: data.access_until || currentSubscription.value?.end_date,
+		};
+		notify.success(data.message || 'Автопродление отключено');
+	} catch (error) {
+		notify.error(error.response?.data?.error?.message || 'Не удалось отменить продление');
+	} finally {
+		loadingCancellation.value = false;
+	}
+};
+
+const undoCancellation = async () => {
+	loadingCancellation.value = true;
+	try {
+		const response = await AccountLifecycleService.undoSubscriptionCancellation();
+		currentSubscription.value = {
+			...(currentSubscription.value || {}),
+			cancel_at_period_end: false,
+		};
+		notify.success(response.data?.message || 'Отмена подписки отозвана');
+	} catch (error) {
+		notify.error(error.response?.data?.error?.message || 'Не удалось восстановить продление');
+	} finally {
+		loadingCancellation.value = false;
 	}
 };
 
@@ -97,6 +150,37 @@ const selectTariff = async () => {
 			<h3>Выберите подходящий тариф</h3>
 		</template>
 		<template #body>
+			<div v-if="currentSubscription?.is_active" class="subscription-lifecycle">
+				<div>
+					<strong>{{ currentSubscription.tariff_name || 'Текущая подписка' }}</strong>
+					<p v-if="currentSubscription.status === 'demo'">
+						Демо-доступ действует до {{ formatDate(currentSubscription.end_date) }}. Автопродление к demo не применяется.
+					</p>
+					<p v-else-if="currentSubscription.cancel_at_period_end">
+						Автопродление отключено. Доступ действует до {{ formatDate(currentSubscription.end_date) }}.
+					</p>
+					<p v-else>
+						Текущий оплаченный период действует до {{ formatDate(currentSubscription.end_date) }}.
+					</p>
+				</div>
+				<template v-if="currentSubscription.status === 'active'">
+					<button
+						v-if="currentSubscription.cancel_at_period_end"
+						type="button"
+						class="lifecycle-button"
+						:disabled="loadingCancellation"
+						@click="undoCancellation"
+					>Вернуть продление</button>
+					<button
+						v-else
+						type="button"
+						class="lifecycle-button danger"
+						:disabled="loadingCancellation"
+						@click="cancelSubscription"
+					>Отменить продление</button>
+				</template>
+			</div>
+
 			<div class="tariffs-grid">
 				<div v-for="tariff in tariffs" :key="tariff.code" class="tariff-card"
 					:class="{ selected: selectedTariff === tariff.code }" @click="selectedTariff = tariff.code">
@@ -134,6 +218,21 @@ const selectTariff = async () => {
 </template>
 
 <style scoped>
+.subscription-lifecycle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 18px;
+	padding: 14px 16px;
+	margin-bottom: 16px;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: var(--medium-bg);
+}
+.subscription-lifecycle p { margin: 5px 0 0; color: #bbb; font-size: .9rem; }
+.lifecycle-button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
+.lifecycle-button.danger { color: #fda4af; border-color: rgba(251,113,133,.35); }
+.lifecycle-button:disabled { opacity: .55; cursor: wait; }
 .tariffs-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -205,5 +304,9 @@ const selectTariff = async () => {
 	font-style: italic;
 	text-align: center;
 	margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+	.subscription-lifecycle { align-items: stretch; flex-direction: column; }
 }
 </style>

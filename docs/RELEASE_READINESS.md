@@ -4,15 +4,15 @@
 
 ## Текущий статус
 
-- `main`: **`0.9.0-alpha.6`** после P29 / PR #44.
-- P29 dependency/security hardening закрыт; frontend и backend dependency audits входят в постоянный CI.
-- P30 готовит **`0.9.0-alpha.7`**: воспроизводимую data-accuracy acceptance и release-evidence baseline.
+- `main`: **`0.9.0-alpha.7`** после P30 / PR #46, merge `77f1ec19cbe565cdbaca2a65a2c4cd7d5199ff5f`.
+- P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
+- P31 готовит **`0.9.0-alpha.8`**: production-safe code baseline жизненного цикла аккаунта.
 - Основной WB Web v1 feature baseline собран и находится в feature-freeze направлении.
-- `0.9.0-beta.1` назначается только после фактического production-like и real-seller acceptance, а не после merge tooling.
+- `0.9.0-beta.1` назначается только после фактического production-like, SMTP recovery и real-seller acceptance, а не после merge code/tooling.
 
 ## Code-side status
 
-### Закрыто
+### Закрыто в main до P31
 
 - auth/session/RBAC baseline;
 - account-scoped durable WB sync;
@@ -34,34 +34,43 @@
 - release smoke runner;
 - frontend production/full dependency audit gate;
 - backend `pip-audit` gate без известных vulnerabilities на P29 merge head;
+- versioned data-accuracy comparator и release-evidence manifest tooling;
 - полная структурированная документация проекта.
 
-### P30 candidate
+### P31 candidate — `0.9.0-alpha.8`
 
-P30 добавляет code-side доказуемость acceptance-процесса:
+P31 закрывает code-side account lifecycle:
 
-- versioned policy метрик/tolerances;
-- deterministic data-accuracy comparator;
-- машинные JSON/Markdown acceptance reports;
-- positive/negative CI contracts;
-- release-evidence manifest с exact commit/version/environment и hashes artifacts;
-- обязательные evidence kinds для beta/RC/stable;
-- запуск backend security и Alembic при каждом изменении `VERSION`.
+- password reset/recovery через email с anti-enumeration response;
+- криптографически случайный reset secret, в БД — только digest;
+- SMTP failure rollback недоставленного token;
+- durable `session_version`, делающий password reset/revoke/deactivation немедленно действующими для access и refresh JWT;
+- paid subscription cancel-at-period-end и undo без обрыва оплаченного периода;
+- demo исключён из paid cancellation semantics;
+- self-service soft deactivation с retention metadata;
+- деактивация отзывает sessions, marketplace credentials и reset links;
+- admin reactivation без автоматического восстановления старых WB credentials;
+- append-only account lifecycle audit trail;
+- allowlisted support access/payment/refund events без ручного редактирования production DB;
+- late Sber success для inactive account сохраняется как финансовый факт, но не создаёт subscription;
+- recovery/security frontend UI и regression tests;
+- Alembic migration `c8e5f1a2b934`.
 
-Эти инструменты считаются готовыми только после green CI и merge P30. Они не заменяют реальные staging/WB/Sber/ops evidence.
+P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy.
 
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
-- merge P30 с green release-candidate CI;
+- merge P31 с green release-candidate CI;
 - feature freeze WB Web v1;
 - production-like HTTPS deployment из репозитория;
 - миграций на чистой БД и upgrade существующей БД;
 - deploy/rollback smoke;
 - core `ops/release_smoke.py`;
 - disposable registration + demo subscription + legal evidence;
-- browser session restore/logout smoke;
+- login/refresh-cookie restore/logout и lifecycle smoke;
+- реального password-recovery smoke через настроенный SMTP/provider;
 - основных desktop/mobile UX сценариев;
 - проверки отсутствия secrets в frontend bundle/git/logs;
 - приёмочной сверки аналитики минимум на одном реальном WB seller account;
@@ -79,7 +88,7 @@ Beta разрешена только после:
 
 ### Сбер
 
-Нужны merchant onboarding, sandbox/production credentials, HTTPS callback/return/fail URLs и реальные smoke-сценарии success/decline/cancel/retry/duplicate callback с back-office reconciliation.
+Нужны merchant onboarding, sandbox/production credentials, HTTPS callback/return/fail URLs и реальные smoke-сценарии success/decline/cancel/retry/duplicate callback с back-office reconciliation. Для refund требуется утверждённая процедура и фактическая проверка у провайдера.
 
 ### Production infrastructure
 
@@ -95,23 +104,29 @@ Beta разрешена только после:
 
 ### Legal
 
-Текущие встроенные документы остаются draft. Перед RC должны быть утверждены и опубликованы non-draft версии: terms/offer, privacy, personal-data consent, marketplace credential policy, refund/cancellation policy и реквизиты оператора.
+Текущие встроенные документы остаются draft. Перед RC должны быть утверждены и опубликованы non-draft версии: terms/offer, privacy, personal-data consent, marketplace credential policy, refund/cancellation policy, retention/deletion policy и реквизиты оператора.
 
-### Account lifecycle
+### Account lifecycle — внешняя активация после P31
 
-До RC нужен production-safe сценарий восстановления доступа, отмены подписки, обработки возврата/ошибочного платежа, деактивации/удаления аккаунта и audit trail административных действий. Допускается support-mediated flow, если он документирован и не требует прямой правки DB.
+После code baseline P31 остаются доказательства среды:
+
+- реальный SMTP/provider и recovery-delivery smoke;
+- утверждённый retention срок и hard-delete procedure;
+- утверждённая refund/cancellation policy;
+- проверенная Sber refund/reconciliation procedure;
+- production-like lifecycle smoke и evidence.
 
 ## Gate до `1.0.0-rc.1`
 
 Все beta-gates плюс:
 
 - реальный WB seller credential + full sync;
-- реальный Sber smoke;
+- реальный Sber payment/refund smoke;
 - production deployment/TLS;
 - monitoring/alerts/logging active;
 - off-host backup + restore evidence;
 - non-draft legal documents;
-- account lifecycle закрыт;
+- account lifecycle проверен в production-like окружении;
 - полный release smoke;
 - полный `rc` evidence manifest для exact commit.
 

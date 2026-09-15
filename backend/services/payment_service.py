@@ -14,6 +14,7 @@ from models.payments_model import (
     PaymentProvider,
     PaymentStatus,
 )
+from models.users_model import User
 from services.subscription_service import (
     create_subscription,
     deactivate_active_subscriptions,
@@ -150,6 +151,24 @@ async def get_payment_by_idempotency_key(
     return result.scalar_one_or_none()
 
 
+async def is_payment_user_active(
+    session: AsyncSession,
+    user_id: UUID,
+) -> bool:
+    """Lock account state while deciding whether a paid callback may grant access.
+
+    The row lock serializes subscription activation with account deactivation.
+    Without it, a callback could read the previously committed active state while
+    deactivation is in progress and create a subscription after access was revoked.
+    """
+    result = await session.execute(
+        select(User.is_active)
+        .where(User.id == user_id)
+        .with_for_update()
+    )
+    return bool(result.scalar_one_or_none())
+
+
 async def record_payment_event(
     session: AsyncSession,
     *,
@@ -265,13 +284,26 @@ async def apply_sber_status(
         payment.status = PaymentStatus.SUCCEEDED
         payment.confirmed_at = datetime.now(timezone.utc)
         if existing_subscription is None:
-            await deactivate_active_subscriptions(session, payment.user_id)
-            existing_subscription = await create_subscription(
-                session,
-                payment.user_id,
-                payment.tariff_id,
-                payment_id=payment.id,
-            )
+            if await is_payment_user_active(session, payment.user_id):
+                await deactivate_active_subscriptions(session, payment.user_id)
+                existing_subscription = await create_subscription(
+                    session,
+                    payment.user_id,
+                    payment.tariff_id,
+                    payment_id=payment.id,
+                )
+            else:
+                # Money can be confirmed by the bank after an account was
+                # deactivated. Preserve the true payment state, but never grant
+                # access to an inactive account automatically. Support can
+                # reconcile/refund this case from the immutable payment events.
+                await record_payment_event(
+                    session,
+                    payment_id=payment.id,
+                    event_type="subscription_activation_skipped",
+                    provider_status=normalized,
+                    provider_data={"reason": "inactive_account"},
+                )
     elif status.order_status == 6:
         payment.status = PaymentStatus.FAILED
     elif status.order_status in {3, 4}:
