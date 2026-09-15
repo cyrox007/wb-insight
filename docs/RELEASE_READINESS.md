@@ -2,9 +2,11 @@
 
 Дата ревизии: 2026-09-15.
 
+Текущая release-линия: **`0.9.0-alpha.N`**. Правила переходов: `docs/VERSIONING.md`.
+
 ## Целевой первый релиз
 
-Первый публичный релиз фиксируем как **WB Insight Web v1 для продавцов Wildberries**:
+Первый публичный стабильный релиз фиксируем как **WB Insight Web v1 / `1.0.0` для продавцов Wildberries**:
 
 - регистрация и безопасная сессия;
 - подключение одного или нескольких WB-кабинетов в рамках тарифа;
@@ -29,7 +31,7 @@ Ozon, AI-аналитик и мобильные приложения не явл
 - лимиты API, настроенные WB для сервиса;
 - минимум один реальный seller account для pre-release smoke test.
 
-Получить реквизиты можно до публикации в Каталоге через `business-solutions@rwb.ru`. Production backend намеренно fail-closed без них.
+Production backend намеренно fail-closed без них.
 
 Подробности: `docs/WB_ACCESS_TOKEN_REQUIREMENTS.md`.
 
@@ -37,17 +39,7 @@ Ozon, AI-аналитик и мобильные приложения не явл
 
 Статус кода: **реализовано в P24**.
 
-Sber acquiring flow включает:
-
-- server-to-server `register.do`;
-- redirect на банковский `formUrl`;
-- уникальный `Idempotency-Key` на платёжную попытку;
-- server-side `getOrderStatusExtended.do`;
-- callback как trigger, а не источник истины;
-- активацию подписки только после `orderStatus=2` и `paymentState=DEPOSITED`;
-- row lock + уникальный `subscription.payment_id` против двойной активации;
-- append-only `payment_events` без merchant credentials и неизвестных чувствительных полей;
-- sandbox/prod separation и fail-fast при sandbox URL в production.
+Sber acquiring flow включает server-to-server регистрацию, server-side status verification, idempotency, callback-as-trigger semantics и активацию подписки только после подтверждённого deposited state.
 
 До release всё ещё нужны внешние действия:
 
@@ -60,31 +52,39 @@ Sber acquiring flow включает:
 
 Подробности: `docs/SBER_ACQUIRING.md`.
 
-### 3. Production deployment — CODE/OPS BLOCKER
+### 3. Production deployment — CODE BASELINE READY IN P25 / OPS VALIDATION REMAINS
 
-Статус: **не готово**.
+P25 добавляет:
 
-В репозитории пока нет полностью воспроизводимого production deployment. Нужны:
+- production Docker image backend;
+- production multi-stage frontend/nginx image;
+- отдельные API / Celery worker / Celery beat процессы;
+- one-shot `alembic upgrade head` как release step;
+- PostgreSQL/Redis container baseline с health checks;
+- same-origin API gateway;
+- `.env.production.example` без реальных секретов;
+- release-integrity CI с Docker builds и Compose validation;
+- deploy/upgrade/rollback runbook.
 
-- контейнер backend;
-- контейнер frontend/static build;
-- PostgreSQL и Redis как managed services либо документированная эксплуатационная схема;
-- отдельные Celery worker и scheduler/beat процессы;
-- reverse proxy/TLS termination;
-- автоматический `alembic upgrade head` как контролируемый release step;
-- environment/secret injection без `.env` в образе;
-- rollback runbook.
+До RC остаются environment-specific действия:
 
-### 4. Health, monitoring и alerts — IN PROGRESS
+- выбрать production host/cluster;
+- настроить DNS и TLS termination;
+- заменить bundled PostgreSQL/Redis managed services при необходимости;
+- проверить deploy/rollback на production-like environment.
 
-P23 добавил:
+Подробности: `docs/PRODUCTION_DEPLOYMENT.md`.
 
-- `GET /health/live` — liveness без внешних зависимостей;
-- `GET /health/ready` — readiness PostgreSQL + Redis.
+### 4. Health, monitoring и alerts — P26
 
-До релиза ещё нужны:
+Уже есть:
 
-- error tracking (например Sentry или аналог);
+- `GET /health/live` — liveness + deployed version;
+- `GET /health/ready` — readiness PostgreSQL + Redis + deployed version.
+
+До релиза нужны:
+
+- error tracking;
 - централизованные production logs;
 - alert на 5xx/error rate;
 - alert на failed/dead sync jobs;
@@ -92,9 +92,7 @@ P23 добавил:
 - alert на срок действия `WB_SERVICE_SECRET` и seller tokens;
 - uptime check `/health/ready`.
 
-### 5. Backup / restore — OPS BLOCKER
-
-Статус: **не готово**.
+### 5. Backup / restore — P26 OPS BLOCKER
 
 Нужно определить и проверить:
 
@@ -106,11 +104,9 @@ P23 добавил:
 - минимум один успешный restore drill до публичного запуска;
 - RPO/RTO для первой версии.
 
-### 6. Legal / privacy / consent — PRODUCT + EXTERNAL BLOCKER
+### 6. Legal / privacy / consent — P27 PRODUCT + EXTERNAL BLOCKER
 
-Статус: **не готово**.
-
-В публичном frontend сейчас нет отдельных legal routes. Перед продажами нужны утверждённые владельцем/юристом тексты и страницы:
+Перед продажами нужны утверждённые тексты и страницы:
 
 - оферта/условия использования;
 - политика конфиденциальности;
@@ -118,21 +114,33 @@ P23 добавил:
 - политика обработки/хранения marketplace credentials;
 - реквизиты оператора сервиса;
 - правила возвратов/отмены подписки;
-- согласие с документами при регистрации и/или оплате с версией документа и timestamp.
+- фиксация версии согласия и timestamp.
 
-### 7. Production documentation — MOSTLY READY
+### 7. Browser session hardening + release smoke — P28
 
-P23/P24 привели README/SETUP к текущей архитектуре, зафиксировали WB credential contract и Sber acquiring contract. Перед RC останется синхронизировать документацию с выбранной production infrastructure из P25/P26.
+Frontend пока хранит access JWT в `localStorage`. Refresh token уже HttpOnly cookie. Целевое состояние до публичного релиза: короткоживущий access token в memory с восстановлением через HttpOnly refresh cookie.
 
-## P1 — важно сразу после базового release hardening
+Также нужен полный release smoke suite.
 
-### Access token в browser storage
+## Release stages
 
-Frontend сейчас хранит access JWT в `localStorage`. Refresh token уже защищён HttpOnly cookie, но access token остаётся доступен JavaScript при XSS.
+### Alpha — текущая стадия
 
-Целевое состояние: короткоживущий access token только в memory, восстановление сессии через HttpOnly refresh cookie при загрузке приложения. Это нужно закрыть до широкого масштабирования; желательно до публичного релиза.
+`0.9.0-alpha.N` используется, пока закрываются P25–P28, environment validation и внешние WB/Sber blockers.
 
-### End-to-end release smoke suite
+### Beta
+
+`0.9.0-beta.1` допускается только после feature freeze WB Web v1, закрытия code-side P0 blockers и успешного production-like end-to-end smoke. Beta не назначается автоматически по количеству коммитов.
+
+### Release Candidate
+
+`1.0.0-rc.1` допускается только после настройки реальных WB/Sber credentials, production deployment/TLS, monitoring, backup/restore drill, legal/consent flow и полного release smoke.
+
+### Stable
+
+`1.0.0` — публичный стабильный WB Web v1.
+
+## End-to-end release smoke suite
 
 Нужен автоматизируемый или документированный smoke:
 
@@ -157,7 +165,7 @@ Marketplace adapter foundation уже создана. Ozon подключает�
 
 ### Wildberries OAuth 2.0
 
-После публикации в Каталоге OAuth 2.0 стоит сделать основным onboarding flow. Он уменьшит количество ручных действий продавца и риск ошибок при выборе категорий.
+После публикации в Каталоге OAuth 2.0 стоит сделать основным onboarding flow.
 
 ### AI / mobile
 
@@ -167,20 +175,21 @@ AI-аналитик, прогнозы и native mobile apps не должны ф
 
 Публичный WB Web v1 можно выпускать, когда одновременно выполнено:
 
-- [ ] `main` green: backend tests, frontend build, Alembic check;
+- [ ] release commit green: backend tests, frontend build, Alembic check, release-integrity;
 - [ ] получены и установлены WB partner credentials;
 - [ ] Base/Service token smoke проходит на реальном seller account;
 - [ ] все sync entities проходят end-to-end без необъяснённых 401/403;
 - [ ] получены production merchant credentials Сбера;
 - [ ] Sber sandbox + production smoke подтверждены;
 - [x] payment success в коде подтверждается только server-side;
-- [ ] production deployment воспроизводим из репозитория;
+- [x] production deployment baseline воспроизводим из репозитория;
+- [ ] production-like deploy/rollback проверен;
 - [ ] HTTPS и production CORS настроены;
 - [ ] `/health/live` и `/health/ready` используются инфраструктурой;
 - [ ] error monitoring и critical alerts работают;
 - [ ] backup и restore drill подтверждены;
 - [ ] legal documents опубликованы и consent фиксируется;
-- [ ] README/SETUP соответствуют production infrastructure;
+- [ ] browser access-token hardening завершён;
 - [ ] smoke suite пройдена на production-like environment;
 - [ ] секреты/токены не присутствуют в git, frontend bundle или логах.
 
@@ -188,11 +197,13 @@ AI-аналитик, прогнозы и native mobile apps не должны ф
 
 1. P22 — WB credential contract — **done**.
 2. P23 — release readiness / health / documentation — **done**.
-3. P24 — Sber acquiring code integration — **done после green CI; merchant onboarding остаётся внешним blocker**.
-4. P25 — production container/deployment baseline.
-5. P26 — monitoring, sync/token expiry alerts, backup runbook.
+3. P24 — Sber acquiring code integration — **done; merchant onboarding остаётся внешним blocker**.
+4. P25 — versioning + production container/deployment baseline — **done после green CI**.
+5. P26 — monitoring, sync/token expiry alerts, backup/restore runbook.
 6. P27 — legal routes + consent persistence.
 7. P28 — browser access-token hardening + release smoke.
-8. WB Web v1 release candidate.
-9. Ozon adapter/products/orders/finance.
-10. WB OAuth 2.0 onboarding after Catalog readiness.
+8. `0.9.0-beta.1` после feature freeze и production-like validation.
+9. `1.0.0-rc.1` после закрытия external/ops blockers.
+10. `1.0.0` — public stable WB Web v1.
+11. Ozon adapter/products/orders/finance.
+12. WB OAuth 2.0 onboarding after Catalog readiness.
