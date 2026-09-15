@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from sync.process_advertising import process_advertising
+from sync.process_finance_summary import process_finance_summary
 from sync.process_operational import process_orders, process_sales
 from sync.process_paid_storage import process_paid_storage
 from sync.process_prices import process_prices
@@ -14,6 +15,7 @@ from sync.process_stock import process_stock
 
 HANDLERS = {
     "realization": process_realization,
+    "finance_summary": process_finance_summary,
     "stocks": process_stock,
     "products": process_products,
     "prices": process_prices,
