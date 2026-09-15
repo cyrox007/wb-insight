@@ -14,6 +14,11 @@ on:
       - compose.production.yml
       - .env.production.example
       - .dockerignore
+      - ops/**
+      - docs/OPERATIONS.md
+      - docs/VERSIONING.md
+      - docs/VERSION_HISTORY.md
+      - docs/RELEASE_READINESS.md
       - .github/workflows/release-integrity.yml
   push:
     branches: [main]
@@ -29,6 +34,11 @@ on:
       - compose.production.yml
       - .env.production.example
       - .dockerignore
+      - ops/**
+      - docs/OPERATIONS.md
+      - docs/VERSIONING.md
+      - docs/VERSION_HISTORY.md
+      - docs/RELEASE_READINESS.md
       - .github/workflows/release-integrity.yml
 
 jobs:
@@ -60,3 +70,73 @@ jobs:
         run: |
           cp .env.production.example .env.production
           docker compose --env-file .env.production -f compose.production.yml config >/dev/null
+
+  backup-restore:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wbops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wbops"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: wbops
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      BACKUP_DIR: /tmp/wb-insight-backups
+      BACKUP_RETENTION_DAYS: 14
+      BACKUP_ENCRYPTION_PASSPHRASE_FILE: /tmp/wb-insight-backup-passphrase
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Validate shell syntax
+        run: bash -n ops/postgres_backup.sh ops/postgres_restore.sh ops/postgres_restore_drill.sh
+      - name: Prepare source database
+        run: |
+          set -euo pipefail
+          export PGPASSWORD="$DB_PASSWORD"
+          printf '%s\n' 'ci-backup-passphrase-only' > "$BACKUP_ENCRYPTION_PASSPHRASE_FILE"
+          chmod 600 "$BACKUP_ENCRYPTION_PASSPHRASE_FILE"
+          psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" <<'SQL'
+          CREATE TABLE alembic_version (version_num varchar(32) PRIMARY KEY);
+          INSERT INTO alembic_version(version_num) VALUES ('ci_restore_revision');
+          CREATE TABLE restore_marker (id integer PRIMARY KEY, value text NOT NULL);
+          INSERT INTO restore_marker(id, value) VALUES (1, 'backup-roundtrip-ok');
+          SQL
+      - name: Create encrypted backup
+        id: backup
+        run: |
+          set -euo pipefail
+          output="$(bash ops/postgres_backup.sh)"
+          printf '%s\n' "$output"
+          backup="$(printf '%s\n' "$output" | sed -n 's/^backup=//p')"
+          test -s "$backup"
+          test -s "${backup}.sha256"
+          test ! -e "${backup%.enc}"
+          echo "backup=$backup" >> "$GITHUB_OUTPUT"
+      - name: Run isolated restore drill
+        run: |
+          set -euo pipefail
+          bash ops/postgres_restore_drill.sh "${{ steps.backup.outputs.backup }}" | tee /tmp/restore-drill.txt
+          grep -F 'restore_drill=success' /tmp/restore-drill.txt
+          grep -F 'alembic_revision=ci_restore_revision' /tmp/restore-drill.txt
+      - name: Verify destructive restore guard
+        run: |
+          set -euo pipefail
+          if bash ops/postgres_restore.sh "${{ steps.backup.outputs.backup }}"; then
+            echo 'Restore unexpectedly succeeded without RESTORE_CONFIRM=YES' >&2
+            exit 1
+          fi

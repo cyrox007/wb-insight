@@ -6,7 +6,7 @@ WB Insight follows Semantic Versioning in the form:
 
 Examples:
 
-- `0.9.0-alpha.2`
+- `0.9.0-alpha.3`
 - `0.9.0-beta.1`
 - `1.0.0-rc.1`
 - `1.0.0`
@@ -67,22 +67,26 @@ Stable versions have no prerelease suffix. The first public stable release is `1
 
 ## Current release line
 
-Current repository version after P25 is **`0.9.0-alpha.2`**.
+`0.9.0-alpha.2` is the current version on `main` after P25.
 
-The previous code baseline after P24 is recorded as **`0.9.0-alpha.1`**.
+P26 is the **`0.9.0-alpha.3` candidate**. It becomes the repository version only after its required CI checks pass and the P26 PR is merged into `main`.
 
 The next intended transitions are:
 
-1. `0.9.0-alpha.N` — finish P25–P28 release hardening;
-2. `0.9.0-beta.1` — WB Web v1 feature freeze and production-like validation;
-3. `1.0.0-rc.1` — production candidate with all external/ops blockers closed;
-4. `1.0.0` — public stable WB Web v1.
+1. `0.9.0-alpha.3` — P26 operations monitoring / backup hardening;
+2. `0.9.0-alpha.4` — P27 legal / consent;
+3. `0.9.0-alpha.5` — P28 browser-session hardening / release smoke;
+4. `0.9.0-beta.1` — WB Web v1 feature freeze and production-like validation;
+5. `1.0.0-rc.1` — production candidate with all external/ops blockers closed;
+6. `1.0.0` — public stable WB Web v1.
 
 A beta or RC number must never be assigned merely because many commits have accumulated. Stage changes are gated by `docs/RELEASE_READINESS.md`.
 
 ## Version source of truth
 
-The root `VERSION` file is the canonical product version. Backend and frontend metadata must match it in release PRs. Release PRs must also update `CHANGELOG.md`.
+The root `VERSION` file is the canonical product version. Backend runtime reads that file and frontend `package.json` must match it in release PRs. Release PRs must also update `CHANGELOG.md`.
+
+`package-lock.json` is dependency-resolution metadata and is not treated as a product-version source of truth.
 
 ## Git tags
 

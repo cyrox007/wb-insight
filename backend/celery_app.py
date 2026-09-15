@@ -1,9 +1,11 @@
 # celery_app.py
 
 from celery import Celery
-from celery.schedules import crontab
-from settings import config
+
 import models
+from core.ops_config import ops_config
+from settings import config
+
 
 celery_app = Celery(
     "wb_analytics",
@@ -13,8 +15,8 @@ celery_app = Celery(
         "tasks.schedulers.create_state_scheduler",
         "tasks.schedulers.state_scheduler",
         "tasks.processors.job_processor",
-        
-    ]
+        "tasks.processors.operations_monitor",
+    ],
 )
 
 celery_app.conf.update(
@@ -23,32 +25,31 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="Europe/Moscow",
     enable_utc=False,
-
     task_track_started=True,
     task_time_limit=30 * 60,
     task_soft_time_limit=25 * 60,
-
     worker_concurrency=1,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
-
-    # важно для стабильности
     task_acks_late=True,
     worker_max_tasks_per_child=100,
 )
 
-# ❗ ЕДИНСТВЕННЫЙ SCHEDULER
 celery_app.conf.beat_schedule = {
     "wb-global-sync-scheduler": {
         "task": "tasks.schedulers.state_scheduler.schedule_sync",
-        "schedule": 60.0,  # каждую минуту проверяем
+        "schedule": 60.0,
     },
     "wb-global-sync-scheduler-2": {
         "task": "tasks.schedulers.create_state_scheduler.schedule_sync",
-        "schedule": 600.0,  # каждые 5 минут проверяем
+        "schedule": 600.0,
     },
     "wb-job-worker": {
         "task": "tasks.processors.job_processor.run",
-        "schedule": 300.0,  # каждые 300 секунд
+        "schedule": 300.0,
+    },
+    "operations-monitor": {
+        "task": "tasks.processors.operations_monitor.run",
+        "schedule": float(ops_config.ALERT_CHECK_INTERVAL_SECONDS),
     },
 }
