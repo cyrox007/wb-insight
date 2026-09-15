@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 import models
 from core.audit import AuditMiddleware
 from core.session_security import SessionSecurityMiddleware
+from core.version import APP_VERSION
 from handlers.auth_handler import router as auth_router
 from handlers.control_panel.home import router as CP_home_router
 from handlers.control_panel.roles import router as CP_roles_router
@@ -38,8 +38,6 @@ STATIC_DIRECTORIES = {
     "static": "/static",
     "uploads": "/uploads",
 }
-VERSION_FILE = Path(__file__).resolve().parent.parent / "VERSION"
-APP_VERSION = VERSION_FILE.read_text(encoding="utf-8").strip()
 
 
 def _setup_cors(app: FastAPI) -> None:
