@@ -53,7 +53,7 @@ async def test_429_retry_after_sets_shared_cooldown_and_retries():
     async def handler(request: httpx.Request):
         nonlocal calls
         calls += 1
-        assert request.headers["Authorization"] == "raw-secret"
+        assert request.headers["Authorization"] == "Bearer raw-secret"
         if calls == 1:
             return httpx.Response(429, headers={"Retry-After": "2"})
         return httpx.Response(200, json={"data": {"items": []}})
