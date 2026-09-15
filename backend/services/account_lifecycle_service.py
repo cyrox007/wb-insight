@@ -153,6 +153,17 @@ async def deactivate_account(
     user.retention_until = now + timedelta(days=config.ACCOUNT_DEACTIVATION_RETENTION_DAYS)
     user.session_version += 1
 
+    # Deactivation invalidates every previously issued recovery capability too.
+    # Otherwise an old reset link could become usable again after an admin
+    # later reactivates the account within the token TTL.
+    await session.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
     await session.execute(
         update(APIToken)
         .where(APIToken.user_id == user.id)
@@ -213,12 +224,17 @@ async def request_subscription_cancellation(
     user_id: UUID,
     reason: str | None = None,
 ) -> Subscription | None:
+    """Disable renewal for the current paid subscription only.
+
+    Demo access has no paid autorenewal and therefore must not enter the paid
+    cancellation flow. Account deactivation handles DEMO separately.
+    """
     now = datetime.now(timezone.utc)
     result = await session.execute(
         select(Subscription)
         .where(
             Subscription.user_id == user_id,
-            Subscription.status.in_([SubscriptionStatus.ACTIVE, SubscriptionStatus.DEMO]),
+            Subscription.status == SubscriptionStatus.ACTIVE,
             Subscription.current_period_end > now,
         )
         .order_by(Subscription.current_period_end.desc())
