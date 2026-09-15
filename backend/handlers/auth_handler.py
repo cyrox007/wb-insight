@@ -60,6 +60,7 @@ async def login(
     token_data = {
         "sub": str(user.id),
         "email": user.email,
+        "sv": user.session_version,
     }
     access_token = create_access_token(token_data)
     set_refresh_cookie(response, create_refresh_token(token_data))
