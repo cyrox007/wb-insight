@@ -37,7 +37,7 @@ def _public_token(token, *, dashboard_available: bool | None = None) -> dict:
         "label": token.label,
         "marketplace": token.marketplace.value,
         "token_type": token.token_type,
-        "external_account_id": token.external_account_id,
+        "external_account_id": getattr(token, "external_account_id", None),
         "issued_at": token.issued_at,
         "expires_at": token.expires_at,
         "is_active": token.is_active,
