@@ -14,11 +14,6 @@ from settings import config
 
 
 logger = setup_logger(__name__, "operations_monitor.log")
-_alert_redis = redis.from_url(
-    config.REDIS_URL,
-    encoding="utf-8",
-    decode_responses=True,
-)
 _ALERT_FINGERPRINT_KEY = "ops:alert:last-fingerprint"
 
 
@@ -29,7 +24,15 @@ def _alert_fingerprint(snapshot: dict) -> str:
             name: {
                 key: value
                 for key, value in check.items()
-                if key in {"status", "count", "errors", "requests", "rate", "reason"}
+                if key in {
+                    "status",
+                    "count",
+                    "errors",
+                    "requests",
+                    "rate",
+                    "reason",
+                    "days_remaining",
+                }
             }
             for name, check in snapshot.get("checks", {}).items()
         },
@@ -39,12 +42,18 @@ def _alert_fingerprint(snapshot: dict) -> str:
 
 
 async def _should_send_webhook(snapshot: dict) -> bool:
+    """Deduplicate alerts using a Redis client bound to this task event loop."""
     fingerprint = _alert_fingerprint(snapshot)
+    client = redis.from_url(
+        config.REDIS_URL,
+        encoding="utf-8",
+        decode_responses=True,
+    )
     try:
-        previous = await _alert_redis.get(_ALERT_FINGERPRINT_KEY)
+        previous = await client.get(_ALERT_FINGERPRINT_KEY)
         if previous == fingerprint:
             return False
-        await _alert_redis.set(
+        await client.set(
             _ALERT_FINGERPRINT_KEY,
             fingerprint,
             ex=ops_config.ALERT_REPEAT_SECONDS,
@@ -54,6 +63,8 @@ async def _should_send_webhook(snapshot: dict) -> bool:
         # Alert delivery must not fail because deduplication storage is down.
         logger.exception("Unable to deduplicate operations alert")
         return True
+    finally:
+        await client.aclose()
 
 
 async def _send_webhook(snapshot: dict) -> None:
