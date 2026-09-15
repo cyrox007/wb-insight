@@ -4,15 +4,15 @@
 
 ## Текущий статус
 
-- `main`: **`0.9.0-alpha.7`** после P30 / PR #46, merge `77f1ec19cbe565cdbaca2a65a2c4cd7d5199ff5f`.
+- `main`: **`0.9.0-alpha.8`** после P31 / PR #47, merge `6cb34aa9b4633e20d1810b6a5edd690056cde986`.
 - P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
-- P31 готовит **`0.9.0-alpha.8`**: production-safe code baseline жизненного цикла аккаунта.
-- Основной WB Web v1 feature baseline собран и находится в feature-freeze направлении.
-- `0.9.0-beta.1` назначается только после фактического production-like, SMTP recovery и real-seller acceptance, а не после merge code/tooling.
+- P31 закрыл production-safe code baseline жизненного цикла аккаунта с полным green CI exact-head кандидата.
+- Основной WB Web v1 feature baseline собран; следующий stage — не очередная alpha по номеру задачи, а beta только после фактического acceptance.
+- `0.9.0-beta.1` назначается только после production-like, SMTP recovery и real-seller acceptance с evidence manifest.
 
 ## Code-side status
 
-### Закрыто в main до P31
+### Закрыто в main
 
 - auth/session/RBAC baseline;
 - account-scoped durable WB sync;
@@ -33,28 +33,23 @@
 - browser access token in-memory + refresh restore;
 - release smoke runner;
 - frontend production/full dependency audit gate;
-- backend `pip-audit` gate без известных vulnerabilities на P29 merge head;
+- backend `pip-audit` gate без известных vulnerabilities на P31 merge candidate;
 - versioned data-accuracy comparator и release-evidence manifest tooling;
-- полная структурированная документация проекта.
-
-### P31 candidate — `0.9.0-alpha.8`
-
-P31 закрывает code-side account lifecycle:
-
 - password reset/recovery через email с anti-enumeration response;
-- криптографически случайный reset secret, в БД — только digest;
-- SMTP failure rollback недоставленного token;
-- durable `session_version`, делающий password reset/revoke/deactivation немедленно действующими для access и refresh JWT;
+- hashed one-time reset tokens; raw secret передаётся через URL fragment, а не HTTP query;
+- production recovery requires HTTPS и SMTP STARTTLS с проверкой сертификата;
+- durable `session_version` для немедленного отзыва access/refresh JWT;
 - paid subscription cancel-at-period-end и undo без обрыва оплаченного периода;
 - demo исключён из paid cancellation semantics;
 - self-service soft deactivation с retention metadata;
 - деактивация отзывает sessions, marketplace credentials и reset links;
-- admin reactivation без автоматического восстановления старых WB credentials;
+- Sber paid callback/account deactivation race сериализован блокировкой строки пользователя;
+- admin lifecycle mutations над `super_admin` ограничены `super_admin`;
 - append-only account lifecycle audit trail;
 - allowlisted support access/payment/refund events без ручного редактирования production DB;
-- late Sber success для inactive account сохраняется как финансовый факт, но не создаёт subscription;
-- recovery/security frontend UI и regression tests;
-- Alembic migration `c8e5f1a2b934`.
+- `/account/*` закреплён в production same-origin gateway smoke;
+- Alembic `c8e5f1a2b934` проходит clean upgrade и metadata check;
+- полная структурированная документация проекта.
 
 P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy.
 
@@ -62,8 +57,7 @@ P31 намеренно не реализует автоматический hard
 
 Beta разрешена только после:
 
-- merge P31 с green release-candidate CI;
-- feature freeze WB Web v1;
+- feature freeze WB Web v1 на текущем code baseline;
 - production-like HTTPS deployment из репозитория;
 - миграций на чистой БД и upgrade существующей БД;
 - deploy/rollback smoke;
