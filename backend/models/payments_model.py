@@ -123,7 +123,7 @@ class Payment(Database.Base):
         onupdate=func.now(),
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="payments")
+    user: Mapped["User"] = relationship("User")
     tariff: Mapped["TariffPlan"] = relationship("TariffPlan")
     events: Mapped[list["PaymentEvent"]] = relationship(
         "PaymentEvent",
