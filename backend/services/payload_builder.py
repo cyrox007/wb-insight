@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable, Optional
 from zoneinfo import ZoneInfo
 
@@ -104,6 +104,48 @@ def _sales_funnel_payload(
     }
 
 
+def _cursor_date(source_cursor: Optional[dict]) -> date | None:
+    if not source_cursor or not source_cursor.get("completedThrough"):
+        return None
+    try:
+        return date.fromisoformat(str(source_cursor["completedThrough"])[:10])
+    except ValueError:
+        return None
+
+
+def _paid_storage_payload(
+    _last_sync_at: Optional[datetime],
+    source_cursor: Optional[dict] = None,
+) -> dict:
+    # Storage charges for the current Moscow day can still change. Sync only
+    # completed calendar days and refresh the latest documented report window.
+    end_date = datetime.now(MOSCOW_TZ).date() - timedelta(days=1)
+    cursor = _cursor_date(source_cursor)
+    recent_start = end_date - timedelta(days=config.WB_STORAGE_REFRESH_DAYS - 1)
+
+    if cursor is None:
+        start_date = end_date - timedelta(days=config.WB_STORAGE_BACKFILL_DAYS - 1)
+    elif cursor < recent_start:
+        # Catch up a gap first. The processor will split it into <=8-day tasks.
+        start_date = cursor + timedelta(days=1)
+    else:
+        # Normal steady state: replace the recent window to absorb WB revisions.
+        start_date = recent_start
+
+    if start_date > end_date:
+        start_date = end_date
+
+    return {
+        "dateFrom": start_date.isoformat(),
+        "dateTo": end_date.isoformat(),
+        "currentDateFrom": start_date.isoformat(),
+        "taskId": None,
+        "taskDateFrom": None,
+        "taskDateTo": None,
+        "completedThrough": cursor.isoformat() if cursor else None,
+    }
+
+
 PAYLOAD_BUILDERS: dict[
     str,
     Callable[[Optional[datetime], Optional[dict]], dict],
@@ -115,6 +157,7 @@ PAYLOAD_BUILDERS: dict[
     "sales": _operational_payload,
     "advertising": _advertising_payload,
     "sales_funnel": _sales_funnel_payload,
+    "paid_storage": _paid_storage_payload,
 }
 
 
