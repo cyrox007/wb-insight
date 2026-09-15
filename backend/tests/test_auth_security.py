@@ -214,10 +214,7 @@ def test_refresh_cookie_clear_uses_same_root_scope(monkeypatch):
 def test_application_has_only_post_refresh_route():
     from app import app
 
-    refresh_methods = set()
-    for route in app.routes:
-        if getattr(route, "path", None) == "/auth/refresh":
-            refresh_methods.update(getattr(route, "methods", set()) or set())
+    refresh_contract = app.openapi()["paths"]["/auth/refresh"]
 
-    assert "POST" in refresh_methods
-    assert "GET" not in refresh_methods
+    assert "post" in refresh_contract
+    assert "get" not in refresh_contract
