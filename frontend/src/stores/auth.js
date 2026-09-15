@@ -1,27 +1,69 @@
-import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import AuthService from '@/API/AuthService'
+import { clearClientSession, setAccessToken } from '@/API'
+import { purgeLegacyPersistentAuth } from '@/security/session'
 
 export const useAuthStore = defineStore('auth', {
 	state: () => ({
-		isAuthenticated: localStorage.getItem('access_token') ? true : false,
-		user: (localStorage.getItem('user')) ? JSON.parse(localStorage.getItem('user')) : null,
+		isAuthenticated: false,
+		user: null,
+		initialized: false,
 	}),
 	getters: {
 		isAuthSatus: (state) => state.isAuthenticated,
 		getUser: (state) => state.user,
+		isInitialized: (state) => state.initialized,
 	},
 	actions: {
-		login(user) {
-			if (user) {
-				this.isAuthenticated = true
-				this.user = user
+		applySession(payload) {
+			const accessToken = payload?.access_token
+			const user = payload?.user
+			if (!accessToken || !user) {
+				this.clearSession()
+				return false
+			}
+			setAccessToken(accessToken)
+			this.isAuthenticated = true
+			this.user = user
+			return true
+		},
+		async restoreSession() {
+			if (this.initialized) return this.isAuthenticated
+
+			purgeLegacyPersistentAuth()
+			try {
+				const response = await AuthService.refresh()
+				return this.applySession(response.data)
+			} catch {
+				this.clearSession()
+				return false
+			} finally {
+				this.initialized = true
 			}
 		},
-		logout() {
-			if (this.isAuthenticated) {
-				this.isAuthenticated = false
-				this.user = null
+		login(payload) {
+			// Compatibility with the profile screen: an object without an access
+			// token is a UI identity update, never a new authenticated session.
+			if (payload && !payload.access_token && !payload.user) {
+				return this.updateUser(payload)
 			}
+			const applied = this.applySession(payload)
+			this.initialized = true
+			return applied
+		},
+		updateUser(user) {
+			if (!this.isAuthenticated || !user) return false
+			this.user = { ...(this.user || {}), ...user }
+			return true
+		},
+		clearSession() {
+			clearClientSession()
+			this.isAuthenticated = false
+			this.user = null
+		},
+		logout() {
+			this.clearSession()
+			this.initialized = true
 		},
 	},
 })

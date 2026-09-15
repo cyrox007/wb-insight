@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
 from core.session_cookie import clear_refresh_cookie, set_refresh_cookie
+from services.session_identity import session_user_payload
 from services.user_service import get_user_by_uuid
 from settings import config
 from utils.jwt import create_access_token, create_refresh_token, verify_token
@@ -61,6 +62,7 @@ async def refresh_session(
         access_token=access_token,
         token_type="bearer",
         expires_in=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=session_user_payload(user),
     )
 
 

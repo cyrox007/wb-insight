@@ -1,18 +1,18 @@
 # WB Insight — подробная история версий
 
-Дата ревизии истории: 2026-09-15.
+Дата ревизии: 15 сентября 2026 года.
 
-Этот документ фиксирует продуктовую историю WB Insight по фактически слитым изменениям в `main` и отдельно обозначает текущий release candidate ветки, если он ещё не слит.
+Этот документ фиксирует продуктовую историю WB Insight по фактически слитым изменениям в `main` и отдельно обозначает текущую release-кандидат ветку, если она ещё не слита.
 
-Важно: версии до введения формальной release-policy 15 сентября 2026 года являются **ретроспективно реконструированными milestones**. Они описывают фактический уровень зрелости продукта после соответствующих merge и не утверждают, что в тот момент существовал Git tag. Канонические правила дальнейшего версионирования описаны в `docs/VERSIONING.md`, краткие release notes — в `CHANGELOG.md`.
+До введения формальной release-policy 15 сентября 2026 года номера версий ниже являются **ретроспективно реконструированными milestones**. Они описывают фактический уровень зрелости продукта после соответствующих merge и не означают, что на тот момент существовал Git tag. Канонические правила дальнейшего версионирования находятся в `docs/VERSIONING.md`, краткие release notes — в `CHANGELOG.md`.
 
 ## Как читать историю
 
-Мы разделяем:
+Мы разделяем три уровня:
 
-- **Git history** — отдельные технические commit и merge;
+- **Git history** — отдельные технические commits и merge;
 - **product version history** — законченные уровни зрелости продукта;
-- **release stage** — alpha, beta, rc или stable, которая меняется только при выполнении заранее определённых gates.
+- **release stage** — `alpha`, `beta`, `rc`, `stable`, меняющаяся только после выполнения release gates.
 
 Один продуктовый milestone может объединять несколько PR. Номер версии не является номером коммита.
 
@@ -20,11 +20,11 @@
 
 ## 0.1.0-alpha.1 — реконструкция проекта
 
-**Период:** 2026-03-30  
-**Mainline:** PR #1.  
-**Статус:** ранний прототип.
+**Период:** 30 марта 2026 года  
+**Mainline:** PR #1  
+**Стадия:** ранний прототип.
 
-### Что появилось
+Что появилось:
 
 - восстановлен первый рабочий codebase;
 - сформирована исходная структура backend/frontend;
@@ -32,68 +32,60 @@
 
 PR #2 и #3 были закрыты без merge и в mainline-историю не входят.
 
-### Почему 0.1
-
-Первый воспроизводимый baseline, но ещё не продуктовый MVP.
+**Почему 0.1:** первый воспроизводимый baseline, но ещё не продуктовый MVP.
 
 ---
 
 ## 0.2.0-alpha.1 — первая Unit Economy
 
-**Период:** 2026-05-05  
+**Период:** 5 мая 2026 года  
 **Mainline:** PR #4–#7.
 
-### Что изменилось
+Что изменилось:
 
 - появились первые расчёты по WB reports;
 - начал формироваться контур unit-экономики;
 - несколько итераций уточнили расчёты и связку с отчётами WB.
 
-### Почему 0.2
-
-Проект перешёл от skeleton к первой самостоятельной полезной аналитической функции.
+**Почему 0.2:** проект перешёл от skeleton к первой самостоятельной полезной аналитической функции.
 
 ---
 
 ## 0.3.0-alpha.1 — ранняя синхронизация и реклама
 
-**Период:** 2026-05-06  
+**Период:** 6 мая 2026 года  
 **Mainline:** PR #8–#12.  
 **Не входит:** PR #13 — закрыт без merge.
 
-### Что изменилось
+Что изменилось:
 
 - исправлена работа sync при проблемном WB credential;
 - появилась первая синхронизация рекламной статистики;
 - добавлялся и дорабатывался backend/frontend рекламного раздела;
 - исправлялись ошибки импорта advertising data.
 
-### Почему 0.3
-
-Появился второй самостоятельный аналитический контур и регулярная внешняя WB API integration.
+**Почему 0.3:** появился второй самостоятельный аналитический контур и регулярная интеграция с внешним WB API.
 
 ---
 
 ## 0.4.0-alpha.1 — консолидация БД и требований
 
-**Период:** 2026-05-07  
+**Период:** 7 мая 2026 года  
 **Mainline:** PR #14.
 
-### Что изменилось
+Что изменилось:
 
 - уточнены требования к БД;
 - зафиксированы дополнительные требования к persistence/data structure;
 - подготовлен переход к системному production-аудиту.
 
-### Почему 0.4
-
-Архитектурная точка перед большой переработкой P0–P24, а не публичный релиз.
+**Почему 0.4:** архитектурная точка перед большой переработкой P0–P24, а не публичный релиз.
 
 ---
 
 ## 0.5.0-alpha.1 — production safety и durable sync foundation
 
-**Период:** 2026-09-14  
+**Период:** 14 сентября 2026 года  
 **Mainline:** P0–P4, PR #15–#19.
 
 ### P0 / PR #15 — Production Safety
@@ -128,7 +120,7 @@ PR #2 и #3 были закрыты без merge и в mainline-историю �
 - актуализированы Finance, Stocks и Content contracts;
 - безопасная pagination/cursor semantics;
 - account-scoped canonical identities;
-- normalized ingestion current WB payloads.
+- normalized ingestion текущих WB payloads.
 
 ### P4 / PR #19 — Durable Resumable Jobs
 
@@ -138,15 +130,13 @@ PR #2 и #3 были закрыты без merge и в mainline-историю �
 - durable page checkpoints;
 - restart продолжает sync с подтверждённой страницы.
 
-### Почему 0.5
-
-Проект впервые получил production-oriented security и устойчивый ingestion core, но пользовательский scope ещё был неполным.
+**Почему 0.5:** проект впервые получил production-oriented security и устойчивый ingestion core, но пользовательский scope ещё был неполным.
 
 ---
 
 ## 0.6.0-alpha.1 — operational WB facts
 
-**Период:** 2026-09-14  
+**Период:** 14 сентября 2026 года  
 **Mainline:** P5–P7, PR #20–#22.
 
 ### P5 / PR #20 — Orders и Sales/Returns
@@ -173,15 +163,13 @@ PR #2 и #3 были закрыты без merge и в mainline-историю �
 - batching `nmIds`;
 - typed feature-unavailable behavior.
 
-### Почему 0.6
-
-Система получила канонический operational/marketing fact layer вместо ранних отчётных assumptions.
+**Почему 0.6:** система получила канонический operational/marketing fact layer вместо ранних отчётных assumptions.
 
 ---
 
 ## 0.7.0-alpha.1 — semantic layer и бизнес-вводы
 
-**Период:** 2026-09-15  
+**Период:** 15 сентября 2026 года  
 **Mainline:** P8–P13, PR #23–#28.
 
 ### P8 / PR #23 — Unified Semantic Metrics
@@ -227,15 +215,13 @@ PR #2 и #3 были закрыты без merge и в mainline-историю �
 - новая закупочная цена не искажает историю;
 - Main и Unit Economy используют одинаковую temporal semantics.
 
-### Почему 0.7
-
-Появился единый semantic/business layer поверх marketplace facts — основа замены исходной аналитической таблицы.
+**Почему 0.7:** появился единый semantic/business layer поверх marketplace facts — основа замены исходной аналитической таблицы.
 
 ---
 
 ## 0.8.0-alpha.1 — feature-complete WB analytics alpha
 
-**Период:** 2026-09-15  
+**Период:** 15 сентября 2026 года  
 **Mainline:** P14–P18, PR #29–#33.
 
 ### P14 / PR #29 — Dashboard UX Foundation
@@ -276,15 +262,13 @@ PR #2 и #3 были закрыты без merge и в mainline-историю �
 - tolerance 2 копейки;
 - durable finance sync.
 
-### Почему 0.8
-
-Пользовательский WB analytics scope уже близок к первому полному продукту, но production access, billing и release infrastructure ещё не закрыты.
+**Почему 0.8:** пользовательский WB analytics scope уже близок к первому полному продукту, но production access, billing и release infrastructure ещё не закрыты.
 
 ---
 
 ## 0.9.0-alpha.1 — release-hardening baseline
 
-**Период:** 2026-09-15  
+**Период:** 15 сентября 2026 года  
 **Mainline:** P19–P24, PR #34–#39.  
 **Main commit после P24:** `ff0d278c32f0a770dc0cdbc0cf0ab9d98c2377ca`.
 
@@ -333,47 +317,43 @@ PR #2 и #3 были закрыты без merge и в mainline-историю �
 - callback используется только как trigger;
 - backend самостоятельно подтверждает deposited state;
 - subscription связана с подтверждённым payment;
-- duplicate callback/refresh не создаёт вторую подписку;
+- duplicate callback/refresh не создаёт вторую subscription;
 - sandbox/production separation.
 
-### Почему 0.9.0-alpha.1
-
-Функциональный WB scope сформирован, но ещё отсутствовали deployment/monitoring/backup/legal/session/release-smoke слои.
+**Почему 0.9.0-alpha.1:** функциональный WB scope сформирован, но ещё отсутствовали deployment/monitoring/backup/legal/session/release-smoke слои.
 
 ---
 
 ## 0.9.0-alpha.2 — version governance и production deployment baseline
 
-**Период:** 2026-09-15  
-**Mainline:** P25, PR #40.  
+**Период:** 15 сентября 2026 года  
+**Mainline:** P25, PR #40  
 **Merge commit:** `8cad1f098ae63c813ed36aad2c462d196484153a`.
 
-### Что изменилось
+Что изменилось:
 
 - root `VERSION` стал source of truth;
 - frontend/FastAPI version приведены к одной схеме;
 - runtime version доступна через health endpoints;
 - формализованы SemVer и stage gates;
 - добавлены production Docker images;
-- same-origin nginx `/api` gateway;
+- same-origin nginx gateway;
 - Compose topology: PostgreSQL, Redis, migration, API, worker, beat, frontend;
 - production env contract без секретов;
 - deployment/upgrade/rollback runbook;
 - release-integrity CI проверяет version consistency, images и Compose.
 
-### Почему всё ещё alpha
-
-Deployment воспроизводим из repo, но operations, legal и финальный browser-session/release-smoke hardening ещё не закрыты.
+**Почему всё ещё alpha:** deployment воспроизводим из repo, но operations, legal и финальный browser-session/release-smoke hardening ещё не закрыты.
 
 ---
 
 ## 0.9.0-alpha.3 — operations hardening
 
-**Период:** 2026-09-15  
-**Mainline:** P26, PR #41.  
+**Период:** 15 сентября 2026 года  
+**Mainline:** P26, PR #41  
 **Merge commit:** `76ee8651298fff99b8bf6a11921dcbfbf0916c46`.
 
-### Что изменилось
+Что изменилось:
 
 - super-admin operational snapshot;
 - failed/stale sync и expired processing lease checks;
@@ -387,92 +367,120 @@ Deployment воспроизводим из repo, но operations, legal и фи�
 - isolated restore drill;
 - CI выполняет настоящий encrypted backup/restore roundtrip;
 - зафиксированы RPO/RTO baseline и operations runbook;
-- найден и закрыт production refresh-cookie regression: единая Secure/SameSite/Domain policy, `Path=/`, legacy GET refresh удалён.
+- закрыт production refresh-cookie regression: единая Secure/SameSite/Domain policy, `Path=/`, legacy GET refresh удалён.
 
-### Почему всё ещё alpha
-
-Operations code baseline готов, но legal/consent и persistent browser access-token ещё оставались code-side blockers. Реальные WB/Sber credentials, off-host backup, alert destination и production-like drills также остаются внешними/ops gates.
+**Почему всё ещё alpha:** operations code baseline готов, но legal/consent и persistent browser access-token ещё оставались code-side blockers; реальные external/ops gates также не закрыты.
 
 ---
 
 ## 0.9.0-alpha.4 — versioned legal documents и consent evidence
 
-**Период:** 2026-09-15  
-**Рабочая ветка:** `codex/p27-legal-consent-foundation`.  
-**Статус на момент этой записи:** кандидат P27; становится mainline milestone только после green CI и merge.
+**Период:** 15 сентября 2026 года  
+**Mainline:** P27, PR #42  
+**Merge commit:** `591b3919eb80403a7e4225382d996dca63b8c039`.
 
-### Что реализовано в P27
+Что изменилось:
 
 - backend registry обязательных юридических документов;
-- каждый документ имеет стабильный `code`, `version` и вычисляемый SHA-256;
+- каждый документ имеет стабильный `code`, `version` и SHA-256;
 - публичные `/legal/requirements/{context}` и `/legal/documents/{code}`;
-- immutable `legal_consents` с `user_id`, кодом, точной версией, SHA-256, контекстом и UTC timestamp;
-- IP/User-Agent не сохраняются открытым текстом, а фиксируются как HMAC evidence;
-- отдельный production `LEGAL_EVIDENCE_HMAC_KEY` документирован;
-- backend отвергает отсутствующее согласие, устаревшую версию и несовпадающий document hash;
+- immutable `legal_consents` с user/document/version/hash/context/timestamp;
+- IP/User-Agent сохраняются только как HMAC evidence;
+- backend отвергает отсутствующее согласие, устаревшую версию и несовпадающий hash;
 - регистрация физлица/самозанятого требует `terms + privacy`;
 - регистрация юрлица дополнительно требует `personal_data`;
-- создание платного payment attempt требует `privacy + offer + refund_policy`;
-- сохранение marketplace credential требует `privacy + credential_policy`;
+- платный payment attempt требует `privacy + offer + refund_policy`;
+- marketplace credential требует `privacy + credential_policy`;
 - billing consent связывается с `payment_id`, credential consent — с credential ID;
-- idempotent повтор Sber payment attempt не создаёт вторую пачку consent evidence;
-- frontend получает актуальные document metadata с backend и отправляет точные `version + sha256`;
-- созданы публичные legal pages и совместимые `/terms`/`/privacy` routes;
-- добавлен reusable legal consent checklist;
+- idempotent повтор Sber payment attempt не дублирует consent evidence;
+- frontend получает актуальные версии документов с backend;
+- созданы публичные legal pages и reusable consent checklist;
+- legacy token-add endpoint также закрыт consent enforcement;
 - техническая архитектура описана в `docs/LEGAL_CONSENT.md`.
 
-### Что намеренно не считается готовым
+Что намеренно не считается готовым:
 
-Встроенные тексты имеют версию `1.0-draft.1` и явно помечены как черновики. P27 доказывает **кто, когда и какую конкретную версию принял**, но не заменяет юридическую проверку содержания.
+- встроенные тексты имеют `1.0-draft.1`;
+- реквизиты оператора/продавца ещё должны быть заполнены;
+- финальные privacy/data-processing/refund terms должны пройти legal review;
+- перед RC нужны non-draft версии и архив утверждённых текстов.
 
-До RC требуется:
-
-- утверждение текстов владельцем сервиса и юридическим специалистом;
-- реквизиты оператора/продавца услуги;
-- утверждённые правила возврата/отмены;
-- утверждённая privacy/data processing модель;
-- публикация новых non-draft версий без переписывания уже принятой версии;
-- архив выпущенных текстов.
-
-### Почему всё ещё alpha
-
-После P27 остаётся code-side P28: access JWT должен уйти из persistent browser storage, а end-to-end release smoke должен стать формализованным и воспроизводимым. Кроме того, внешние production gates ещё не закрыты.
+**Почему всё ещё alpha:** P27 закрывает техническую доказуемость согласий, но не юридическое утверждение содержания; также оставался code-side P28 browser session/release smoke.
 
 ---
 
-## Следующие запланированные версии
+## 0.9.0-alpha.5 — browser-session hardening и release smoke
 
-### 0.9.0-alpha.5 — P28 Browser Session Hardening / Release Smoke
+**Период:** 15 сентября 2026 года  
+**Рабочая ветка:** `codex/p28-session-hardening-release-smoke`  
+**Статус:** кандидат P28; становится mainline milestone только после green CI и merge.
 
-Цель:
+Что реализовано в P28:
 
-- access JWT только в памяти приложения;
-- восстановление browser session через HttpOnly refresh cookie;
-- отсутствие access token в `localStorage`/`sessionStorage`;
-- формальный automated production-like release smoke.
+- access JWT больше не хранится в `localStorage`/`sessionStorage`;
+- access JWT существует только в оперативной памяти frontend;
+- pre-P28 persistent auth values очищаются при загрузке;
+- browser session после reload восстанавливается только по HttpOnly refresh-cookie;
+- `/auth/refresh` возвращает access JWT и минимальный safe user snapshot;
+- login/refresh используют единый session identity contract;
+- Pinia auth store стартует пустым и выполняет refresh bootstrap до mount приложения;
+- Axios подставляет только in-memory access JWT;
+- concurrent 401 используют один refresh promise, без refresh storm;
+- CI запрещает persistent `access_token`/user storage;
+- production frontend больше не использует `localhost:9000` как API fallback;
+- nginx gateway маршрутизирует `/auth`, `/dashboard`, `/billing`, `/legal`, `/control-panel`, `/users`, `/health`;
+- release-integrity CI проверяет routing на реально запущенном frontend container;
+- backend regression tests проверяют cookie-only session restore и безопасный user payload;
+- `ops/release_smoke.py` формализует production-like health/legal/auth/session/dashboard smoke;
+- runner имеет опциональные WB credential и Sber payment-init phases без вывода секретов;
+- `docs/RELEASE_SMOKE.md` фиксирует полный smoke contract и release evidence.
+
+### Что P28 не может закрыть кодом
+
+Даже после green merge остаются внешние/операционные gates:
+
+- реальные `WB_SERVICE_ID` и `WB_SERVICE_SECRET`;
+- реальный seller account и полный WB sync smoke;
+- Sber merchant onboarding/credentials и payment smoke;
+- production host, DNS и TLS;
+- реальный alert destination/uptime/logging;
+- off-host backup и production-like restore drill;
+- утверждённые non-draft legal documents;
+- фактический production-like полный release smoke.
+
+### Почему после P28 не назначаем beta автоматически
+
+`0.9.0-beta.1` допускается только после **реального production-like прогона** и feature freeze. P28 закрывает последний запланированный code-side security/smoke baseline, но сам merge не является доказательством готовности внешних интеграций и среды.
+
+---
+
+## Следующие запланированные стадии
 
 ### 0.9.0-beta.1
 
-Допускается только после:
+Разрешена только после:
 
+- merge P28 с полностью зелёным CI;
 - feature freeze WB Web v1;
-- закрытия всех code-side P0 blockers;
-- green release commit;
-- успешного production-like end-to-end smoke.
+- отсутствия известных code-side P0 blocker;
+- успешного production-like deployment;
+- прохождения core release smoke;
+- фиксации списка оставшихся только внешних/операционных blocker.
 
-Beta не означает, что внешние WB/Sber/legal/operations условия уже обязательно закрыты, но продуктовый код и scope должны быть заморожены.
+Beta означает заморозку функционального scope и переход к дефектам, UX-polish и production validation.
 
 ### 1.0.0-rc.1
 
-Допускается только после закрытия внешних production blockers:
+Разрешена только после:
 
-- реальные WB partner credentials и seller smoke;
+- реальных WB partner credentials и seller smoke;
+- полного WB sync по всем release entities;
 - Sber production merchant credentials и payment smoke;
 - production deployment/TLS;
-- реальный alert destination/uptime/logging;
+- реального alert destination/uptime/logging;
 - off-host backup и production-like restore drill;
-- юридические документы утверждены и опубликованы как non-draft;
-- полный release smoke пройден.
+- юридических документов, утверждённых и опубликованных как non-draft;
+- полного release smoke и сохранённого release evidence.
 
 ### 1.0.0 — WB Insight Web v1 Stable
 
@@ -490,4 +498,4 @@ Beta не означает, что внешние WB/Sber/legal/operations ус�
 - локально работающей функции без release validation;
 - документации о будущем функционале.
 
-Переход `alpha -> beta -> rc -> stable` происходит только после выполнения соответствующих gates.
+Переход `alpha -> beta -> rc -> stable` происходит только после выполнения соответствующих release gates.

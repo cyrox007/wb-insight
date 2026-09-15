@@ -1,12 +1,19 @@
 import axios from "axios";
+import {
+    clearAccessToken,
+    getAccessToken,
+    purgeLegacyPersistentAuth,
+    setAccessToken,
+} from '@/security/session';
+
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:9000');
 
 const $api = axios.create({
     withCredentials: true,
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:9000',
+    baseURL: apiBaseURL,
 });
 
-let isRefreshing = false;
-let failedQueue = [];
+let refreshPromise = null;
 
 const ACCOUNT_SCOPED_ENDPOINTS = new Set([
     '/dashboard/',
@@ -24,23 +31,37 @@ const ACCOUNT_SCOPED_ENDPOINTS = new Set([
     '/dashboard/finance/',
 ]);
 
-const clearLocalSession = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
+const clearClientSession = () => {
+    clearAccessToken();
+    purgeLegacyPersistentAuth();
     localStorage.removeItem('redirectPath');
-    localStorage.removeItem('wb-dashboard-token-id');
 };
 
-const processQueue = (error = null) => {
-    failedQueue.forEach(({ resolve, reject }) => {
-        if (error) reject(error);
-        else resolve();
-    });
-    failedQueue = [];
+export const refreshSessionRequest = async () => {
+    const response = await axios.post(
+        `${apiBaseURL}/auth/refresh`,
+        {},
+        { withCredentials: true },
+    );
+    const accessToken = response.data?.access_token;
+    if (!accessToken) {
+        throw new Error('Refresh response does not contain access_token');
+    }
+    setAccessToken(accessToken);
+    return response;
+};
+
+const refreshAccessToken = async () => {
+    if (!refreshPromise) {
+        refreshPromise = refreshSessionRequest().finally(() => {
+            refreshPromise = null;
+        });
+    }
+    return refreshPromise;
 };
 
 $api.interceptors.request.use((config) => {
-    const accessToken = localStorage.getItem('access_token');
+    const accessToken = getAccessToken();
     if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -62,43 +83,28 @@ $api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+        const requestPath = (originalRequest?.url || '').split('?')[0];
 
-        if (error.response?.status === 401 && originalRequest && !originalRequest._isRetry) {
-            if (!isRefreshing) {
-                isRefreshing = true;
-                originalRequest._isRetry = true;
-
-                try {
-                    const refreshResponse = await axios.post(
-                        `${$api.defaults.baseURL}/auth/refresh`,
-                        {},
-                        { withCredentials: true },
-                    );
-                    const { access_token } = refreshResponse.data;
-
-                    if (!access_token) {
-                        throw new Error('Refresh response does not contain access_token');
-                    }
-
-                    localStorage.setItem('access_token', access_token);
-                    originalRequest.headers = originalRequest.headers || {};
-                    originalRequest.headers.Authorization = `Bearer ${access_token}`;
-
-                    processQueue();
-                    return $api(originalRequest);
-                } catch (refreshError) {
-                    processQueue(refreshError);
-                    clearLocalSession();
-                    window.location.href = '/';
-                    return Promise.reject(refreshError);
-                } finally {
-                    isRefreshing = false;
+        if (
+            error.response?.status === 401 &&
+            originalRequest &&
+            !originalRequest._isRetry &&
+            requestPath !== '/auth/refresh'
+        ) {
+            originalRequest._isRetry = true;
+            try {
+                const refreshResponse = await refreshAccessToken();
+                const accessToken = refreshResponse.data.access_token;
+                originalRequest.headers = originalRequest.headers || {};
+                originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+                return $api(originalRequest);
+            } catch (refreshError) {
+                clearClientSession();
+                if (window.location.pathname !== '/') {
+                    window.location.assign('/');
                 }
+                return Promise.reject(refreshError);
             }
-
-            return new Promise((resolve, reject) => {
-                failedQueue.push({ resolve, reject });
-            }).then(() => $api(originalRequest));
         }
 
         if (error.response?.status === 403) {
@@ -117,4 +123,7 @@ $api.interceptors.response.use(
     }
 );
 
+purgeLegacyPersistentAuth();
+
+export { clearClientSession, setAccessToken };
 export default $api;

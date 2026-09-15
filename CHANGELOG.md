@@ -4,6 +4,24 @@
 
 Подробная история с объяснением каждого перехода находится в `docs/VERSION_HISTORY.md`, правила дальнейшего версионирования — в `docs/VERSIONING.md`.
 
+## [0.9.0-alpha.5] — 2026-09-15
+
+P28 — browser-session hardening и формализация release smoke.
+
+- access JWT больше не сохраняется в `localStorage` или `sessionStorage` и живёт только в памяти frontend-приложения;
+- после перезагрузки страницы authenticated session восстанавливается исключительно через HttpOnly refresh-cookie;
+- `/auth/refresh` возвращает минимальный безопасный user snapshot вместе с новым access JWT;
+- login и refresh используют единый session identity contract;
+- добавлена очистка legacy `access_token`/`user`, оставшихся от сборок до P28;
+- Axios использует единый in-memory token store и один concurrent refresh promise, исключая гонку нескольких refresh-запросов;
+- frontend CI запрещает повторное появление persistent storage для access JWT/user identity;
+- исправлен production API fallback: production frontend использует same-origin backend gateway, а не `localhost:9000`;
+- nginx gateway дополнен маршрутами `/billing` и `/legal`, которые ранее могли ошибочно попадать в SPA fallback;
+- release-integrity CI теперь поднимает реальный frontend container и mock backend и проверяет маршрутизацию `/auth`, `/dashboard`, `/billing`, `/legal`, `/control-panel` и `/health`;
+- добавлены backend regression tests восстановления session по refresh-cookie;
+- добавлен `ops/release_smoke.py` для production-like health/legal/login/profile/refresh/dashboard/logout smoke и опциональных WB/Sber фаз;
+- добавлен `docs/RELEASE_SMOKE.md` с полным WB Web v1 smoke contract и требованиями к release evidence.
+
 ## [0.9.0-alpha.4] — 2026-09-15
 
 P27 — versioned legal documents и доказуемая фиксация согласий.
@@ -283,7 +301,7 @@ PR #13 был закрыт без merge и не входит в mainline release
 
 ## Почему проект остаётся в 0.x
 
-Стабильный публичный контракт ещё не объявлен. Работы P0–P27 существенно изменяли authentication, data identities, WB API contracts, sync semantics, финансовую модель, billing, legal-consent model и release infrastructure. Назвать одну из этих промежуточных стадий `1.0.0` означало бы преждевременно заявить стабильность.
+Стабильный публичный контракт ещё не объявлен. Работы P0–P28 существенно изменяли authentication, data identities, WB API contracts, sync semantics, финансовую модель, billing, legal-consent model, browser session security и release infrastructure. Назвать одну из этих промежуточных стадий `1.0.0` означало бы преждевременно заявить стабильность.
 
 Целевая последовательность WB Web v1:
 
