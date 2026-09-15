@@ -34,7 +34,7 @@ async def insert_token(
     marketplace_code: str = "wb",
     label: str = "Токен для аналитики",
 ) -> Optional[APIToken]:
-    """Validate marketplace credential metadata and store the encrypted secret."""
+    """Validate a WB credential and store the encrypted marketplace secret."""
 
     normalized_marketplace = marketplace_code.strip().lower()
     if normalized_marketplace not in {"wb", "wildberries"}:
@@ -53,6 +53,7 @@ async def insert_token(
         user_id=user_id,
         marketplace=Marketplace.WILDBERRIES,
         token_type=metadata.token_type,
+        external_account_id=metadata.seller_id,
         encrypted_token=encrypt_token(raw_token, str(user_id)),
         label=label,
         issued_at=datetime.now(timezone.utc),
