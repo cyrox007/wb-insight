@@ -39,7 +39,7 @@ def transport_settings(monkeypatch):
     monkeypatch.setattr(wb_client_module.config, "WB_API_MAX_ATTEMPTS", 3)
     monkeypatch.setattr(wb_client_module.config, "WB_API_BACKOFF_BASE_SECONDS", 0.01)
     monkeypatch.setattr(wb_client_module.config, "WB_API_MAX_BACKOFF_SECONDS", 5.0)
-    monkeypatch.setattr(wb_client_module.config, "WB_SERVICE_SECRET", None)
+    monkeypatch.setattr(wb_client_module.config, "WB_SERVICE_SECRET", "test-service-secret")
     monkeypatch.setattr(wb_client_module, "decrypt_token", lambda *_args: "raw-secret")
 
     async def no_sleep(_seconds):
@@ -56,6 +56,7 @@ async def test_429_retry_after_sets_shared_cooldown_and_retries():
         nonlocal calls
         calls += 1
         assert request.headers["Authorization"] == "Bearer raw-secret"
+        assert request.headers["X-Client-Secret"] == "test-service-secret"
         if calls == 1:
             return httpx.Response(429, headers={"Retry-After": "2"})
         return httpx.Response(200, json={"data": {"items": []}})
@@ -85,20 +86,16 @@ async def test_429_retry_after_sets_shared_cooldown_and_retries():
 
 
 @pytest.mark.asyncio
-async def test_service_token_requests_include_x_client_secret(monkeypatch):
+@pytest.mark.parametrize("token_type", ["base", "service"])
+async def test_partner_tokens_include_x_client_secret(token_type):
     async def handler(request: httpx.Request):
         assert request.headers["Authorization"] == "Bearer raw-secret"
-        assert request.headers["X-Client-Secret"] == "catalog-service-secret"
+        assert request.headers["X-Client-Secret"] == "test-service-secret"
         return httpx.Response(200, json={"cards": []})
 
-    monkeypatch.setattr(
-        wb_client_module.config,
-        "WB_SERVICE_SECRET",
-        "catalog-service-secret",
-    )
     limiter = FakeRateLimiter()
     async with WBClient(
-        make_token("service"),
+        make_token(token_type),
         http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         rate_limiter=limiter,
     ) as client:
@@ -108,10 +105,11 @@ async def test_service_token_requests_include_x_client_secret(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_service_token_fails_closed_without_service_secret():
+async def test_partner_token_fails_closed_without_service_secret(monkeypatch):
+    monkeypatch.setattr(wb_client_module.config, "WB_SERVICE_SECRET", None)
     limiter = FakeRateLimiter()
     client = WBClient(
-        make_token("service"),
+        make_token("base"),
         http_client=httpx.AsyncClient(
             transport=httpx.MockTransport(lambda _request: httpx.Response(200))
         ),
