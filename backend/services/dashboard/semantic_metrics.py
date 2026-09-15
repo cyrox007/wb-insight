@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sync_job_model import SyncJob
 from models.wb_advertising_stats import WbAdvertisingStats
 from models.wb_operational import WbOrder
+from services.dashboard.account_scope import DashboardAccountScope
 
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
@@ -46,7 +47,6 @@ def previous_period(start_date: date, end_date: date) -> tuple[date, date]:
 
 
 def is_auth_sync_error(error: str | None) -> bool:
-    """Classify credential failures without treating entity-level 403 as auth loss."""
     if not error:
         return False
     normalized = error.lower()
@@ -69,11 +69,16 @@ def _moscow_period_utc(start_date: date, end_date: date) -> tuple[datetime, date
     return start, end_exclusive
 
 
-async def has_active_sync_jobs(session: AsyncSession, user_id: UUID) -> bool:
+async def has_active_sync_jobs(
+    session: AsyncSession,
+    user_id: UUID,
+    scope: DashboardAccountScope,
+) -> bool:
     query = select(func.count(SyncJob.id)).where(
         SyncJob.user_id == user_id,
         SyncJob.is_active.is_(True),
     )
+    query = scope.apply(query, SyncJob.token_id)
     return bool((await session.execute(query)).scalar() or 0)
 
 
@@ -82,6 +87,7 @@ async def get_order_totals(
     user_id: UUID,
     start_date: date,
     end_date: date,
+    scope: DashboardAccountScope,
 ) -> OrderTotals:
     start, end_exclusive = _moscow_period_utc(start_date, end_date)
     query = select(
@@ -97,6 +103,7 @@ async def get_order_totals(
         WbOrder.order_date >= start,
         WbOrder.order_date < end_exclusive,
     )
+    query = scope.apply(query, WbOrder.token_id)
     row = (await session.execute(query)).one()
     return OrderTotals(
         count=int(row.order_count or 0),
@@ -110,6 +117,7 @@ async def get_order_totals_by_nm(
     user_id: UUID,
     start_date: date,
     end_date: date,
+    scope: DashboardAccountScope,
 ) -> dict[int, OrderTotals]:
     start, end_exclusive = _moscow_period_utc(start_date, end_date)
     query = (
@@ -131,6 +139,7 @@ async def get_order_totals_by_nm(
         )
         .group_by(WbOrder.nm_id)
     )
+    query = scope.apply(query, WbOrder.token_id)
     rows = (await session.execute(query)).all()
     return {
         int(row.nm_id): OrderTotals(
@@ -148,6 +157,7 @@ async def get_advertising_totals(
     user_id: UUID,
     start_date: date,
     end_date: date,
+    scope: DashboardAccountScope,
 ) -> AdvertisingTotals:
     query = select(
         func.coalesce(func.sum(WbAdvertisingStats.views), 0).label("views"),
@@ -167,6 +177,7 @@ async def get_advertising_totals(
         WbAdvertisingStats.date >= start_date,
         WbAdvertisingStats.date <= end_date,
     )
+    query = scope.apply(query, WbAdvertisingStats.token_id)
     row = (await session.execute(query)).one()
     return AdvertisingTotals(
         views=int(row.views or 0),

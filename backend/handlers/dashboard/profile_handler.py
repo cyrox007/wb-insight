@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.access_control import permissions_for_roles
 from core.dependencies import get_db_session
 from core.middleware import auth_middle
-from services.marketplace_access_service import get_wb_account_quota
+from services.marketplace_access_service import (
+    get_allowed_wb_tokens,
+    get_wb_account_quota,
+)
 from services.subscription_service import get_user_subscription
 from services.token_services import (
     delete_token,
@@ -25,9 +28,8 @@ def _current_user_id(request: Request) -> UUID:
     return UUID(str(request.state.user["sub"]))
 
 
-def _public_token(token) -> dict:
-    """Serialize marketplace credential metadata without any secret material."""
-    return {
+def _public_token(token, *, dashboard_available: bool | None = None) -> dict:
+    data = {
         "id": str(token.id),
         "label": token.label,
         "marketplace": token.marketplace.value,
@@ -38,6 +40,9 @@ def _public_token(token) -> dict:
         "is_revoked": token.is_revoked,
         "is_valid": token.is_valid,
     }
+    if dashboard_available is not None:
+        data["dashboard_available"] = dashboard_available
+    return data
 
 
 @router.get("/", dependencies=[Depends(auth_middle)])
@@ -54,13 +59,17 @@ async def get_profile(
 
     subscription = await get_user_subscription(db_session, user_id)
     user_tokens = await get_tokens_by_user_id(db_session, user_id)
+    allowed_ids = {token.id for token in await get_allowed_wb_tokens(db_session, user_id)}
     role_codes = [role.role for role in current_user.roles]
     permission_codes = sorted(
         permission.value for permission in permissions_for_roles(role_codes)
     )
 
     return response_success(
-        tokens=[_public_token(token) for token in user_tokens],
+        tokens=[
+            _public_token(token, dashboard_available=token.id in allowed_ids)
+            for token in user_tokens
+        ],
         user={
             "id": str(current_user.id),
             "full_name": current_user.full_name,
@@ -120,7 +129,7 @@ async def check_token_permission(
 
 
 @router.post(
-    '/token/add',
+    "/token/add",
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(auth_middle)],
 )
@@ -141,21 +150,18 @@ async def add_token(
         )
 
     data = await request.json()
-    raw_token = str(data.get('token') or '').strip()
+    raw_token = str(data.get("token") or "").strip()
     if not raw_token:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(
-            code="VALIDATION_ERROR",
-            message="Токен обязателен",
-        )
+        return response_error(code="VALIDATION_ERROR", message="Токен обязателен")
 
     token = await insert_token(
         session=db_session,
         user_id=user_id,
         raw_token=raw_token,
-        marketplace_code='wb',
-        token_type=data.get('token_type') or 'personal',
-        label=data.get('label') or 'Wildberries',
+        marketplace_code="wb",
+        token_type=data.get("token_type") or "personal",
+        label=data.get("label") or "Wildberries",
     )
     if token is None:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -164,10 +170,12 @@ async def add_token(
             message="Не удалось сохранить токен",
         )
 
-    return response_success(token=_public_token(token))
+    return response_success(
+        token=_public_token(token, dashboard_available=True)
+    )
 
 
-@router.delete('/token/{token_id}', dependencies=[Depends(auth_middle)])
+@router.delete("/token/{token_id}", dependencies=[Depends(auth_middle)])
 async def delete_user_token(
     token_id: UUID,
     request: Request,
