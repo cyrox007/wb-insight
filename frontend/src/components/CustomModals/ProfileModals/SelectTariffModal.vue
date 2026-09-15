@@ -9,32 +9,36 @@ import { notify } from '@/composables/notification';
 
 const props = defineProps({
 	isOpen: Boolean,
-	currentTariffCode: String // например, 'demo'
+	currentTariffCode: String
 });
 
-const emit = defineEmits(['close', 'select']);
-
-// Мок-данные (замените на API-запрос)
+const emit = defineEmits(['close', 'select', 'payment']);
 const tariffs = ref([]);
-
-// Состояние выбранного тарифа
 const selectedTariff = ref(props.currentTariffCode || '');
-
-// Состояние загрузки
 const loadingPayment = ref(false);
+const paymentAttemptKey = ref(null);
+
+const newAttemptKey = () => {
+	if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+	return `payment-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 onMounted(async () => {
-	// Здесь можно загрузить реальные тарифы через API
 	await loadTariffs();
 });
 
 watch(
 	() => props.currentTariffCode,
 	(val) => {
-		selectedTariff.value = val || ''
+		selectedTariff.value = val || '';
+		paymentAttemptKey.value = null;
 	},
 	{ immediate: true }
-)
+);
+
+watch(selectedTariff, () => {
+	paymentAttemptKey.value = null;
+});
 
 const loadTariffs = async () => {
 	try {
@@ -44,32 +48,43 @@ const loadTariffs = async () => {
 		console.error('Ошибка загрузки тарифов', e);
 		tariffs.value = [];
 	}
-}
+};
 
 const selectTariff = async () => {
 	if (!selectedTariff.value || loadingPayment.value) return;
 
 	loadingPayment.value = true;
+	paymentAttemptKey.value ||= newAttemptKey();
 
 	try {
-		const response = await TariffService.paymetTariff(selectedTariff.value);
+		const response = await TariffService.createPayment(
+			selectedTariff.value,
+			paymentAttemptKey.value
+		);
 		const data = response.data;
 
 		if (data.status === 'error') {
-			console.log(data.error);
 			notify.error(data.error.message);
 			return;
 		}
 
-		emit('payment', data.payment_id);
+		if (data.confirmation_url) {
+			window.location.assign(data.confirmation_url);
+			return;
+		}
+
+		// Development fake billing remains explicit and never runs in production.
+		if (data.payment_id) {
+			emit('payment', data.payment_id);
+			return;
+		}
+
+		notify.error('Платёжный провайдер не вернул ссылку на оплату');
 	} catch (error) {
-		notify.error(error);
+		notify.error(error.response?.data?.error?.message || 'Не удалось создать платёж');
 	} finally {
 		loadingPayment.value = false;
-		emit('close');
 	}
-
-
 };
 </script>
 
@@ -100,7 +115,7 @@ const selectTariff = async () => {
 		</template>
 		<template #footer>
 			<ButtonCancel @click="$emit('close')" text="Отмена" />
-			<ButtonPrimary @click="selectTariff" :disabled="!selectedTariff" text="Применить тариф"
+			<ButtonPrimary @click="selectTariff" :disabled="!selectedTariff" text="Перейти к оплате"
 				:loading="loadingPayment" />
 		</template>
 	</Modal>
