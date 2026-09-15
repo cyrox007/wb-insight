@@ -3,7 +3,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum as PgEnum, ForeignKey, Text, func
+from sqlalchemy import Boolean, DateTime, Enum as PgEnum, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -66,6 +66,18 @@ class Subscription(Database.Base):
         nullable=False,
         comment="Конец текущего оплаченного периода",
     )
+    cancel_at_period_end: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="Не продлевать подписку после уже оплаченного периода",
+    )
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     yookassa_payment_id: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
