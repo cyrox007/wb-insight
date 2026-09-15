@@ -9,6 +9,9 @@ class OpsConfig:
     CREDENTIAL_EXPIRY_WARNING_DAYS = int(
         os.getenv("OPS_CREDENTIAL_EXPIRY_WARNING_DAYS", "14")
     )
+    WB_SERVICE_SECRET_EXPIRES_AT = (
+        os.getenv("OPS_WB_SERVICE_SECRET_EXPIRES_AT", "").strip() or None
+    )
     HTTP_METRICS_ENABLED = os.getenv("OPS_HTTP_METRICS_ENABLED", "false").lower() == "true"
     HTTP_ERROR_WINDOW_MINUTES = int(
         os.getenv("OPS_HTTP_ERROR_WINDOW_MINUTES", "5")
