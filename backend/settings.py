@@ -82,11 +82,18 @@ class Config:
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+    # WB requires partner services to identify themselves with a service ID and
+    # sign seller-data requests with X-Client-Secret. This applies to Base and
+    # Service seller tokens; production must therefore fail closed without both.
     WB_SERVICE_ID = os.getenv("WB_SERVICE_ID", "").strip() or None
     WB_SERVICE_SECRET = os.getenv("WB_SERVICE_SECRET", "").strip() or None
     if bool(WB_SERVICE_ID) != bool(WB_SERVICE_SECRET):
         raise RuntimeError(
             "WB_SERVICE_ID and WB_SERVICE_SECRET must be configured together"
+        )
+    if IS_PRODUCTION and (not WB_SERVICE_ID or not WB_SERVICE_SECRET):
+        raise RuntimeError(
+            "WB_SERVICE_ID and WB_SERVICE_SECRET are required in production"
         )
 
     WB_API_BASE_URL = "https://statistics-api.wildberries.ru"
