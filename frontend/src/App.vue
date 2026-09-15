@@ -17,6 +17,7 @@ const navItems = [
   { name: 'dashboard.home', label: 'Обзор' },
   { name: 'dashboard.unity', label: 'Юнит-экономика' },
   { name: 'dashboard.stocks', label: 'Остатки' },
+  { name: 'dashboard.prices', label: 'Цены' },
   { name: 'dashboard.ads', label: 'Реклама' },
 ]
 

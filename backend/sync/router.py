@@ -5,6 +5,7 @@ from models.tokens_model import APIToken
 from sync.process_advertising import process_advertising
 from sync.process_operational import process_orders, process_sales
 from sync.process_paid_storage import process_paid_storage
+from sync.process_prices import process_prices
 from sync.process_products import process_products
 from sync.process_realization import process_realization
 from sync.process_sales_funnel import process_sales_funnel
@@ -15,6 +16,7 @@ HANDLERS = {
     "realization": process_realization,
     "stocks": process_stock,
     "products": process_products,
+    "prices": process_prices,
     "orders": process_orders,
     "sales": process_sales,
     "advertising": process_advertising,

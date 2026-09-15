@@ -54,6 +54,16 @@ def _products_payload(
     }
 
 
+def _prices_payload(
+    _last_sync_at: Optional[datetime],
+    _source_cursor: Optional[dict] = None,
+) -> dict:
+    # Prices endpoint is a current-state listing. Each scheduled run must begin
+    # from offset zero; the processor adds snapshotAt only while resuming that
+    # specific durable job.
+    return {"limit": 1000, "offset": 0}
+
+
 def _operational_payload(
     last_sync_at: Optional[datetime],
     source_cursor: Optional[dict] = None,
@@ -151,6 +161,7 @@ PAYLOAD_BUILDERS: dict[
     Callable[[Optional[datetime], Optional[dict]], dict],
 ] = {
     "products": _products_payload,
+    "prices": _prices_payload,
     "stocks": _stocks_payload,
     "realization": _realization_payload,
     "orders": _operational_payload,

@@ -9,6 +9,11 @@ STOCKS: str = "https://statistics-api.wildberries.ru/api/v1/supplier/stocks"
 STOCKS_V2: str = "https://seller-analytics-api.wildberries.ru/api/analytics/v1/stocks-report/wb-warehouses" # Метод доступен по типам токенов: Персональный, Сервисный для категории Аналитика
 
 PRODUCTS: str = "https://content-api.wildberries.ru/content/v2/get/cards/list" # Метод доступен по токену с категорией Контент или Продвижение
+
+# Текущие цены и скидки. Read-only endpoint; изменение цен намеренно не
+# используется этим сервисом из-за отдельного upload/quarantine workflow WB.
+PRICES_LIST: str = "https://discounts-prices-api.wildberries.ru/api/v2/list/goods/filter"
+
 #SALES = "/api/v1/supplier/sales"
 
 # Реклама - Advert API (новая документация 2025)
