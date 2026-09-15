@@ -4,9 +4,30 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
-## [0.9.0-alpha.7] — кандидат, 2026-09-15
+## [0.9.0-alpha.8] — кандидат, 2026-09-15
 
-P30 — beta-readiness acceptance tooling и release evidence.
+P31 — безопасный жизненный цикл аккаунта и support-процедуры перед beta.
+
+- добавлен password recovery через одноразовую ссылку и подтверждённый email-канал;
+- reset token генерируется криптографически случайным, а в PostgreSQL хранится только SHA-256 digest; старые и использованные ссылки инвалидируются;
+- публичный reset request не раскрывает существование аккаунта, а недоставленный email откатывает созданный token;
+- login/access/refresh JWT привязаны к durable `session_version`; смена пароля, отзыв сессий, деактивация и повторная активация делают старые токены недействительными;
+- refresh-cookie по-прежнему управляется единым `core.session_cookie`, legacy cookie rewriting удалён;
+- пользователь может отключить продление только платной `ACTIVE`-подписки; доступ сохраняется до конца оплаченного периода, demo не маскируется под платное автопродление;
+- пользователь получил отдельный экран безопасности с recovery и подтверждаемой soft-deactivation;
+- soft-deactivation немедленно закрывает доступ, отзывает marketplace credentials, инвалидирует reset-ссылки и ставит остановку продления, но не выполняет необратимый hard purge;
+- технический retention после деактивации конфигурируется отдельно; окончательный срок остаётся зависимым от утверждённой legal/retention policy;
+- control-panel получил явную admin-защиту lifecycle routes, отзыв сессий, reactivation и просмотр append-only lifecycle events;
+- support может фиксировать только разрешённые access/payment/refund review events с actor/reference без прямого редактирования production DB;
+- поздний успешный Sber callback для уже деактивированного пользователя сохраняет правдивый `SUCCEEDED` payment, но не создаёт новую подписку автоматически; случай остаётся в audit trail для reconciliation/refund;
+- SMTP/recovery настройки fail-closed и password reset по умолчанию отключён до фактической настройки и smoke провайдера;
+- добавлены regression tests lifecycle/session/payment invariants и Alembic migration `c8e5f1a2b934`.
+
+P31 закрывает code-side baseline account lifecycle, но не объявляет beta: до `0.9.0-beta.1` всё ещё нужны реальный production-like HTTPS deployment, SMTP smoke, core release smoke, WB seller data-accuracy acceptance и полный beta evidence manifest.
+
+## [0.9.0-alpha.7] — 2026-09-15
+
+P30 — beta-readiness acceptance tooling и release evidence. PR #46, merge `77f1ec19cbe565cdbaca2a65a2c4cd7d5199ff5f`.
 
 - добавлена versioned policy сверки ключевых WB Web v1 метрик;
 - денежные значения сравниваются через `Decimal`, без ошибок float-округления;
@@ -164,8 +185,8 @@ PR #1 — первый воспроизводимый backend/frontend baseline.
 
 ## Следующие release stages
 
-- `0.9.0-beta.1` — feature freeze + реальный production-like deployment/core smoke + data-accuracy acceptance;
-- `1.0.0-rc.1` — real WB/Sber/prod/legal/ops/account-lifecycle gates;
+- `0.9.0-beta.1` — feature freeze + реальный production-like deployment/core smoke + SMTP recovery smoke + data-accuracy acceptance;
+- `1.0.0-rc.1` — real WB/Sber/prod/legal/ops gates;
 - `1.0.0` — публичный stable WB Insight Web v1 из проверенного RC.
 
 Полный план: [`docs/RELEASE_ROADMAP.md`](docs/RELEASE_ROADMAP.md).
