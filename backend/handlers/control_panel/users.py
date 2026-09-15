@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.authorization import require_admin
 from core.dependencies import get_db_session
 from services.account_lifecycle_service import (
     deactivate_account,
@@ -21,7 +22,11 @@ from services.user_service import (
 from utils.responce_helps import response_error, response_success
 
 
-router = APIRouter(prefix='/control-panel/users', tags=['Control Panel'])
+router = APIRouter(
+    prefix='/control-panel/users',
+    tags=['Control Panel'],
+    dependencies=[Depends(require_admin)],
+)
 
 
 def _user_to_dict(user) -> dict:
