@@ -19,6 +19,7 @@ from utils.jwt import create_access_token
 
 
 USER_ID = UUID("9da81db8-b89f-4aaf-9d9f-087c48b64e3c")
+ADMIN_ID = UUID("41c426ee-f39c-4446-912b-615f1fc51f5f")
 
 
 class _Result:
@@ -283,6 +284,71 @@ async def test_reset_delivery_failure_rolls_back_undelivered_token(monkeypatch):
     assert session.rollbacks == 1
 
 
+@pytest.mark.asyncio
+async def test_support_event_is_allowlisted_and_attributed_to_admin(monkeypatch):
+    target = SimpleNamespace(id=USER_ID)
+    recorded = {}
+
+    async def get_user(_session, user_id):
+        assert user_id == USER_ID
+        return target
+
+    async def record(_session, **kwargs):
+        recorded.update(kwargs)
+        return SimpleNamespace(
+            id=uuid4(),
+            event_type=kwargs["event_type"],
+            reference_id=kwargs["reference_id"],
+            created_at=datetime.now(timezone.utc),
+        )
+
+    monkeypatch.setattr(control_panel_users, "get_user_by_uuid", get_user)
+    monkeypatch.setattr(control_panel_users, "record_lifecycle_event", record)
+    request = _request(
+        f"/control-panel/users/{USER_ID}/lifecycle-events",
+        body=b'{"event_type":"support_payment_review","reason":"checked merchant statement","reference_id":"payment-42"}',
+    )
+    request.state.user_id = ADMIN_ID
+
+    payload = await control_panel_users.add_support_lifecycle_event(
+        USER_ID,
+        request,
+        Response(),
+        _FakeSession(),
+    )
+
+    assert payload["status"] == "success"
+    assert recorded["user_id"] == USER_ID
+    assert recorded["actor_user_id"] == ADMIN_ID
+    assert recorded["event_type"] == "support_payment_review"
+    assert recorded["reference_id"] == "payment-42"
+    assert recorded["event_data"] == {"source": "control_panel"}
+
+
+@pytest.mark.asyncio
+async def test_support_event_rejects_unbounded_event_type(monkeypatch):
+    async def get_user(_session, _user_id):
+        return SimpleNamespace(id=USER_ID)
+
+    monkeypatch.setattr(control_panel_users, "get_user_by_uuid", get_user)
+    request = _request(
+        f"/control-panel/users/{USER_ID}/lifecycle-events",
+        body=b'{"event_type":"arbitrary_database_action","reason":"no"}',
+    )
+    request.state.user_id = ADMIN_ID
+    response = Response()
+
+    payload = await control_panel_users.add_support_lifecycle_event(
+        USER_ID,
+        request,
+        response,
+        _FakeSession(),
+    )
+
+    assert response.status_code == 400
+    assert payload["error"]["code"] == "INVALID_SUPPORT_EVENT_TYPE"
+
+
 def test_control_panel_user_routes_have_explicit_admin_dependency():
     for route in control_panel_users.router.routes:
         dependency_calls = {dependency.call for dependency in route.dependant.dependencies}
@@ -298,7 +364,8 @@ def test_account_lifecycle_routes_are_registered():
     assert "post" in paths["/account/deactivate"]
     assert "post" in paths["/account/subscription/cancel"]
     assert "delete" in paths["/account/subscription/cancel"]
-    assert "/control-panel/users/{user_uuid}/lifecycle-events" in paths
+    assert "get" in paths["/control-panel/users/{user_uuid}/lifecycle-events"]
+    assert "post" in paths["/control-panel/users/{user_uuid}/lifecycle-events"]
 
 
 def test_production_password_reset_requires_https_when_enabled(monkeypatch):
