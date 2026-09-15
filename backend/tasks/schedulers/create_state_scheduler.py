@@ -18,6 +18,7 @@ ALL_ENTITIES = [
     "stocks",
     "realization",
     "products",
+    "prices",
     "orders",
     "sales",
     "advertising",
