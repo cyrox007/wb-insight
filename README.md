@@ -1,10 +1,14 @@
 # WB Insight
 
+Current version: **0.9.0-alpha.2**.
+
 WB Insight — web-сервис аналитики для продавцов Wildberries. Проект собирает данные через официальный WB API, связывает операционные, маркетинговые и финансовые факты и рассчитывает показатели, которые продавец использует для управления прибылью.
+
+Версионная политика: [`docs/VERSIONING.md`](docs/VERSIONING.md). Подробная история: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Текущий release scope
 
-Первый релиз — **WB Insight Web v1**. В него входят:
+Первый стабильный релиз — **WB Insight Web v1 (`1.0.0`)**. В него входят:
 
 - регистрация, авторизация и refresh-session;
 - роли и административная панель;
@@ -63,7 +67,8 @@ WB Insight — облачный партнёрский сервис. Production 
 - Pinia;
 - Vue Router;
 - Axios;
-- Vite.
+- Vite;
+- nginx production runtime.
 
 ### Sync
 
@@ -83,8 +88,8 @@ Browser access JWT пока хранится в `localStorage`; его пере�
 
 ## Health
 
-- `GET /health/live` — liveness процесса;
-- `GET /health/ready` — readiness PostgreSQL + Redis.
+- `GET /health/live` — liveness процесса + deployed version;
+- `GET /health/ready` — readiness PostgreSQL + Redis + deployed version.
 
 ## Billing
 
@@ -126,13 +131,28 @@ npm ci
 npm run dev
 ```
 
+## Production baseline
+
+P25 добавляет воспроизводимый container deployment:
+
+```bash
+cp .env.production.example .env.production
+# заполнить реальные production values
+
+docker compose --env-file .env.production -f compose.production.yml build
+docker compose --env-file .env.production -f compose.production.yml up -d
+```
+
+Стек разделяет migration, API, Celery worker, Celery beat, frontend/nginx, PostgreSQL и Redis. HTTPS должен завершаться внешним reverse proxy/load balancer. Полный runbook: [`docs/PRODUCTION_DEPLOYMENT.md`](docs/PRODUCTION_DEPLOYMENT.md).
+
 ## CI
 
-Pull requests проверяются тремя обязательными контурами:
+Pull requests проверяются четырьмя контурами:
 
 - backend tests/security;
 - frontend build;
-- чистый PostgreSQL → `alembic upgrade head` → `alembic check`.
+- чистый PostgreSQL → `alembic upgrade head` → `alembic check`;
+- release integrity: canonical version, Docker image builds и Compose validation.
 
 ## Release readiness
 
@@ -144,12 +164,11 @@ Pull requests проверяются тремя обязательными ко�
 2. получить test/production merchant credentials Сбер acquiring и провести bank smoke;
 3. подготовить production domain/TLS и юридические документы сервиса.
 
-Ключевые code/ops блокеры после P24:
+После P25 основные code/ops блоки до beta/RC:
 
-1. воспроизводимый production deployment;
-2. monitoring/alerts и backup/restore;
-3. legal pages + consent persistence;
-4. browser session hardening и release smoke suite.
+1. monitoring/alerts и backup/restore;
+2. legal pages + consent persistence;
+3. browser session hardening и release smoke suite.
 
 ## Roadmap после WB Web v1
 
