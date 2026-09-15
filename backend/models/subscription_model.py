@@ -1,10 +1,10 @@
-import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum as PgEnum, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import DateTime, Enum as PgEnum, ForeignKey, Text, func
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Database
@@ -24,22 +24,24 @@ class SubscriptionStatus(str, Enum):
 class Subscription(Database.Base):
     __tablename__ = "subscriptions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    tariff_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    tariff_id: Mapped[UUID] = mapped_column(
         ForeignKey("tariff_plans.id", ondelete="RESTRICT"),
         nullable=False,
+        index=True,
     )
-    payment_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+    payment_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("payments.id", ondelete="SET NULL"),
         nullable=True,
         unique=True,
@@ -52,41 +54,47 @@ class Subscription(Database.Base):
             name="subscription_status",
         ),
         nullable=False,
-        default=SubscriptionStatus.DEMO,
+        default=SubscriptionStatus.ACTIVE,
     )
     current_period_start: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Начало текущего оплаченного периода",
     )
     current_period_end: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Конец текущего оплаченного периода",
     )
-    auto_renew: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-
-    # Legacy compatibility field. New acquiring integrations must use payment_id.
-    yookassa_payment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
+    yookassa_payment_id: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="ID платежа в ЮKassa (null для демо-подписок)",
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Дата оформления подписки",
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Последнее обновление статуса или периода",
     )
 
-    user: Mapped["User"] = relationship("User", back_populates="subscriptions")
     tariff: Mapped["TariffPlan"] = relationship("TariffPlan", back_populates="subscriptions")
+    user: Mapped["User"] = relationship("User", back_populates="subscriptions")
+
+    def __repr__(self):
+        return f"Subscription<{self.id}>"
 
     @property
     def is_active(self) -> bool:
-        if self.status not in {SubscriptionStatus.DEMO, SubscriptionStatus.ACTIVE}:
-            return False
         now = datetime.now(timezone.utc)
-        start = self.current_period_start
-        end = self.current_period_end
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
-        if end.tzinfo is None:
-            end = end.replace(tzinfo=timezone.utc)
-        return start <= now <= end
+        return (
+            self.status in {SubscriptionStatus.ACTIVE, SubscriptionStatus.DEMO}
+            and self.current_period_start <= now < self.current_period_end
+        )
