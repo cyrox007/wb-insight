@@ -46,6 +46,11 @@ export const useAuthStore = defineStore('auth', {
 			this.initialized = true
 			return applied
 		},
+		updateUser(user) {
+			if (!this.isAuthenticated || !user) return false
+			this.user = { ...(this.user || {}), ...user }
+			return true
+		},
 		clearSession() {
 			clearClientSession()
 			this.isAuthenticated = false
