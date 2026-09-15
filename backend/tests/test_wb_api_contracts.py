@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
@@ -26,9 +26,10 @@ def test_payload_builder_uses_current_wb_contracts():
     cursor = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
 
     finance = build_payload_for_entity("realization", cursor)
-    assert finance["dateFrom"] == "2026-09-13"
+    assert date.fromisoformat(finance["dateFrom"]) == cursor.date() - timedelta(days=13)
     assert finance["limit"] == 100000
     assert finance["rrdId"] == 0
+    assert finance["period"] == "daily"
     assert "date_from" not in finance
 
     stocks = build_payload_for_entity("stocks", cursor)

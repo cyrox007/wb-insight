@@ -21,6 +21,7 @@ from models.wb_operational import WbOrder, WbSale
 from models.wb_sales_funnel import WbSalesFunnelDaily
 from models.wb_paid_storage import WbPaidStorage
 from models.wb_price import WbPriceCurrent, WbPriceChange
+from models.wb_finance_summary import WbFinanceReportSummary, WbFinanceBalanceCurrent
 from models.sync_job_model import SyncJob
 from models.user_sync_state_model import UserSyncState
 from models.product_cost_price_model import ProductCostPrice

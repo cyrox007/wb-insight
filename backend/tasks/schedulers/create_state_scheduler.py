@@ -17,6 +17,7 @@ logger = setup_logger(__name__, "create_state_scheduler.log")
 ALL_ENTITIES = [
     "stocks",
     "realization",
+    "finance_summary",
     "products",
     "prices",
     "orders",

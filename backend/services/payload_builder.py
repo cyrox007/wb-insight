@@ -7,25 +7,55 @@ from settings import config
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 OPERATIONAL_BACKFILL_DAYS = 89
+FINANCE_DETAIL_BACKFILL_DAYS = 120
+FINANCE_DETAIL_REFRESH_DAYS = 14
+FINANCE_REPORTS_AVAILABLE_FROM = date(2025, 1, 1)
+FINANCE_REPORT_REFRESH_DAYS = 45
 
 
 def _realization_payload(
     last_sync_at: Optional[datetime],
     _source_cursor: Optional[dict] = None,
 ) -> dict:
-    now = datetime.now(timezone.utc)
-    date_from = (
-        last_sync_at.date().isoformat()
-        if last_sync_at
-        else now.date().isoformat()
-    )
+    today = datetime.now(MOSCOW_TZ).date()
+    if last_sync_at is None:
+        date_from = today - timedelta(days=FINANCE_DETAIL_BACKFILL_DAYS - 1)
+    else:
+        # Finance rows can be corrected after the first publication. Refresh a
+        # rolling tail instead of assuming the last successful request froze it.
+        date_from = min(
+            last_sync_at.astimezone(MOSCOW_TZ).date(),
+            today,
+        ) - timedelta(days=FINANCE_DETAIL_REFRESH_DAYS - 1)
 
     return {
-        "dateFrom": date_from,
-        "dateTo": now.date().isoformat(),
+        "dateFrom": date_from.isoformat(),
+        "dateTo": today.isoformat(),
         "limit": 100000,
         "rrdId": 0,
         "period": "daily",
+    }
+
+
+def _finance_summary_payload(
+    last_sync_at: Optional[datetime],
+    _source_cursor: Optional[dict] = None,
+) -> dict:
+    today = datetime.now(MOSCOW_TZ).date()
+    if last_sync_at is None:
+        date_from = FINANCE_REPORTS_AVAILABLE_FROM
+    else:
+        date_from = max(
+            FINANCE_REPORTS_AVAILABLE_FROM,
+            today - timedelta(days=FINANCE_REPORT_REFRESH_DAYS - 1),
+        )
+    return {
+        "dateFrom": date_from.isoformat(),
+        "dateTo": today.isoformat(),
+        "limit": 1000,
+        "offset": 0,
+        "period": "weekly",
+        "balanceFetched": False,
     }
 
 
@@ -58,9 +88,6 @@ def _prices_payload(
     _last_sync_at: Optional[datetime],
     _source_cursor: Optional[dict] = None,
 ) -> dict:
-    # Prices endpoint is a current-state listing. Each scheduled run must begin
-    # from offset zero; the processor adds snapshotAt only while resuming that
-    # specific durable job.
     return {"limit": 1000, "offset": 0}
 
 
@@ -127,8 +154,6 @@ def _paid_storage_payload(
     _last_sync_at: Optional[datetime],
     source_cursor: Optional[dict] = None,
 ) -> dict:
-    # Storage charges for the current Moscow day can still change. Sync only
-    # completed calendar days and refresh the latest documented report window.
     end_date = datetime.now(MOSCOW_TZ).date() - timedelta(days=1)
     cursor = _cursor_date(source_cursor)
     recent_start = end_date - timedelta(days=config.WB_STORAGE_REFRESH_DAYS - 1)
@@ -136,10 +161,8 @@ def _paid_storage_payload(
     if cursor is None:
         start_date = end_date - timedelta(days=config.WB_STORAGE_BACKFILL_DAYS - 1)
     elif cursor < recent_start:
-        # Catch up a gap first. The processor will split it into <=8-day tasks.
         start_date = cursor + timedelta(days=1)
     else:
-        # Normal steady state: replace the recent window to absorb WB revisions.
         start_date = recent_start
 
     if start_date > end_date:
@@ -164,6 +187,7 @@ PAYLOAD_BUILDERS: dict[
     "prices": _prices_payload,
     "stocks": _stocks_payload,
     "realization": _realization_payload,
+    "finance_summary": _finance_summary_payload,
     "orders": _operational_payload,
     "sales": _operational_payload,
     "advertising": _advertising_payload,

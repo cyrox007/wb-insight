@@ -42,6 +42,15 @@ const router = createRouter({
 			}
 		},
 		{
+			path: '/dashboard/finance',
+			name: 'dashboard.finance',
+			component: () => import('../pages/Dashboard/Finance/index.vue'),
+			meta: {
+				title: 'Финансы и выплаты · WB Insight',
+				requestAuth: true,
+			}
+		},
+		{
 			path: '/dashboard/stocks',
 			name: 'dashboard.stocks',
 			component: () => import('../pages/Dashboard/Inventory/index.vue'),
