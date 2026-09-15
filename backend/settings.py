@@ -82,6 +82,13 @@ class Config:
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+    WB_SERVICE_ID = os.getenv("WB_SERVICE_ID", "").strip() or None
+    WB_SERVICE_SECRET = os.getenv("WB_SERVICE_SECRET", "").strip() or None
+    if bool(WB_SERVICE_ID) != bool(WB_SERVICE_SECRET):
+        raise RuntimeError(
+            "WB_SERVICE_ID and WB_SERVICE_SECRET must be configured together"
+        )
+
     WB_API_BASE_URL = "https://statistics-api.wildberries.ru"
     WB_ADVERT_API_BASE_URL = "https://advert-api.wildberries.ru"
     WB_SELLER_ANALYTICS_API_BASE_URL = "https://seller-analytics-api.wildberries.ru"
