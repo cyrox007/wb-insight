@@ -54,7 +54,7 @@ Sber acquiring flow включает server-to-server регистрацию, se
 
 ### 3. Production deployment — CODE BASELINE READY IN P25 / OPS VALIDATION REMAINS
 
-P25 добавляет:
+P25 добавил:
 
 - production Docker image backend;
 - production multi-stage frontend/nginx image;
@@ -75,34 +75,54 @@ P25 добавляет:
 
 Подробности: `docs/PRODUCTION_DEPLOYMENT.md`.
 
-### 4. Health, monitoring и alerts — P26
+### 4. Health, monitoring и alerts — CODE BASELINE READY IN P26 / OPS ACTIVATION REMAINS
 
-Уже есть:
+P26 добавляет:
 
 - `GET /health/live` — liveness + deployed version;
-- `GET /health/ready` — readiness PostgreSQL + Redis + deployed version.
+- `GET /health/ready` — readiness PostgreSQL + Redis + deployed version;
+- super-admin `GET /control-panel/operations/health`;
+- aggregated checks failed sync jobs, expired processing leases и stale sync states;
+- alerts по expired/expiring marketplace credentials;
+- отдельный 30-day rotation warning для `WB_SERVICE_SECRET`;
+- Redis minute-bucket HTTP/5xx telemetry без path/body/PII;
+- периодический Celery operations monitor;
+- deduplicated HTTPS webhook для агрегированных operational alerts.
 
-До релиза нужны:
+До RC остаются environment-specific действия:
 
-- error tracking;
-- централизованные production logs;
-- alert на 5xx/error rate;
-- alert на failed/dead sync jobs;
-- alert на длительное отсутствие успешной синхронизации кабинета;
-- alert на срок действия `WB_SERVICE_SECRET` и seller tokens;
-- uptime check `/health/ready`.
+- подключить реальный alert destination и проверить доставку;
+- подключить внешний uptime monitor к `/health/ready`;
+- направить structured application logs в централизованное хранилище;
+- определить/подключить provider для error tracking, если он используется в production;
+- проверить alert thresholds на production-like traffic.
 
-### 5. Backup / restore — P26 OPS BLOCKER
+Подробности: `docs/OPERATIONS.md`.
 
-Нужно определить и проверить:
+### 5. Backup / restore — CODE BASELINE READY IN P26 / REAL DRILL REMAINS
 
-- ежедневный backup PostgreSQL;
+P26 добавляет:
+
+- encrypted `pg_dump` backup;
+- AES-256-CBC + PBKDF2;
+- SHA-256 integrity checksum;
 - retention policy;
-- шифрование backup;
-- отдельное хранение backup;
-- documented restore procedure;
-- минимум один успешный restore drill до публичного запуска;
-- RPO/RTO для первой версии.
+- удаление plaintext dump после шифрования;
+- destructive restore guard `RESTORE_CONFIRM=YES`;
+- isolated restore drill в отдельную временную БД;
+- проверку `alembic_version` и public tables;
+- CI roundtrip: создать backup -> расшифровать/восстановить -> проверить БД;
+- стартовые targets: RPO <=24h, RTO <=4h, retention >=14 дней.
+
+До RC нужны реальные эксплуатационные доказательства:
+
+- включить ежедневный backup schedule;
+- настроить off-host/object storage для encrypted artifacts;
+- выполнить restore drill на реальном production-like backup;
+- замерить фактические RPO/RTO;
+- задокументировать результат drill.
+
+Подробности: `docs/OPERATIONS.md`.
 
 ### 6. Legal / privacy / consent — P27 PRODUCT + EXTERNAL BLOCKER
 
@@ -186,8 +206,10 @@ AI-аналитик, прогнозы и native mobile apps не должны ф
 - [ ] production-like deploy/rollback проверен;
 - [ ] HTTPS и production CORS настроены;
 - [ ] `/health/live` и `/health/ready` используются инфраструктурой;
-- [ ] error monitoring и critical alerts работают;
-- [ ] backup и restore drill подтверждены;
+- [x] operational monitoring/alerting code baseline реализован;
+- [ ] внешний alerting/uptime/logging реально подключён и проверен;
+- [x] encrypted backup/restore code baseline и CI roundtrip реализованы;
+- [ ] production-like restore drill и off-host backup подтверждены;
 - [ ] legal documents опубликованы и consent фиксируется;
 - [ ] browser access-token hardening завершён;
 - [ ] smoke suite пройдена на production-like environment;
@@ -198,8 +220,8 @@ AI-аналитик, прогнозы и native mobile apps не должны ф
 1. P22 — WB credential contract — **done**.
 2. P23 — release readiness / health / documentation — **done**.
 3. P24 — Sber acquiring code integration — **done; merchant onboarding остаётся внешним blocker**.
-4. P25 — versioning + production container/deployment baseline — **done после green CI**.
-5. P26 — monitoring, sync/token expiry alerts, backup/restore runbook.
+4. P25 — versioning + production container/deployment baseline — **done**.
+5. P26 — monitoring, alerts, backup/restore baseline — **candidate `0.9.0-alpha.3`; после green CI -> done**.
 6. P27 — legal routes + consent persistence.
 7. P28 — browser access-token hardening + release smoke.
 8. `0.9.0-beta.1` после feature freeze и production-like validation.
