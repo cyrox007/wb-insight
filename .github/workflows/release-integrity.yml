@@ -70,6 +70,33 @@ jobs:
         run: |
           cp .env.production.example .env.production
           docker compose --env-file .env.production -f compose.production.yml config >/dev/null
+      - name: Smoke same-origin gateway routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker rm -f wb-ci-frontend wb-ci-backend >/dev/null 2>&1 || true
+            docker network rm wb-ci-network >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          docker network create wb-ci-network >/dev/null
+          docker run -d --name wb-ci-backend --network wb-ci-network --network-alias backend python:3.12-alpine \
+            python -u -c 'from http.server import BaseHTTPRequestHandler,HTTPServer; H=type("H",(BaseHTTPRequestHandler,),{"do_GET":lambda s:(s.send_response(200),s.end_headers(),s.wfile.write(("backend:"+s.path).encode())),"do_POST":lambda s:(s.send_response(200),s.end_headers(),s.wfile.write(("backend:"+s.path).encode())),"log_message":lambda *a:None}); HTTPServer(("0.0.0.0",9000),H).serve_forever()' >/dev/null
+          docker run -d --name wb-ci-frontend --network wb-ci-network -p 18080:8080 wb-insight-frontend:ci >/dev/null
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/ >/tmp/wb-ci-index.html; then
+              break
+            fi
+            sleep 1
+          done
+          grep -F '<div id="app"></div>' /tmp/wb-ci-index.html
+
+          for route in health/live auth/refresh billing/sber/callback legal/documents/terms dashboard/ control-panel/operations/health; do
+            body="$(curl -fsS "http://127.0.0.1:18080/${route}")"
+            test "$body" = "backend:/${route}"
+          done
 
   backup-restore:
     runs-on: ubuntu-latest
