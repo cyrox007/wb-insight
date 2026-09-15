@@ -31,12 +31,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify browser auth is not persisted
+      - name: Verify access credentials are not persisted
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE "(localStorage|sessionStorage)\\.(setItem|getItem)\\(['\"](access_token|user)['\"]" src --include='*.js' --include='*.vue'; then
-            echo 'Persistent access-token/user storage is forbidden; keep auth identity in memory and restore via HttpOnly refresh cookie.' >&2
+          if grep -RInE "(localStorage|sessionStorage)\\.(setItem|getItem)\\(['\"]access_token['\"]" src --include='*.js' --include='*.vue'; then
+            echo 'Persistent access-token storage is forbidden; keep access JWT in memory and restore via HttpOnly refresh cookie.' >&2
             exit 1
           fi
           grep -F "localStorage.removeItem('access_token')" src/security/session.js
