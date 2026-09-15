@@ -6,6 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.dependencies import get_db_session
 from core.middleware import auth_middle
 from integrations.wildberries.token_metadata import WBTokenValidationError
+from services.legal_service import (
+    LegalConsentError,
+    record_consents,
+    validate_consent_payload,
+)
 from services.marketplace_access_service import get_wb_account_quota
 from services.token_services import insert_token
 from utils.responce_helps import response_error, response_success
@@ -41,6 +46,15 @@ async def create_token(
         )
 
     try:
+        legal_documents = validate_consent_payload(
+            data.get("legal_consents"),
+            context="marketplace_credential",
+        )
+    except LegalConsentError as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code=exc.code, message=str(exc))
+
+    try:
         token = await insert_token(
             session=db_session,
             user_id=user_id,
@@ -60,6 +74,16 @@ async def create_token(
             code="TOKEN_CREATE_ERROR",
             message="Не удалось сохранить токен",
         )
+
+    await record_consents(
+        db_session,
+        user_id=user_id,
+        documents=legal_documents,
+        context="marketplace_credential",
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        context_reference=str(token.id),
+    )
 
     return response_success(
         message="Токен добавлен",
