@@ -155,8 +155,17 @@ async def is_payment_user_active(
     session: AsyncSession,
     user_id: UUID,
 ) -> bool:
-    """Check the durable account state before granting paid access."""
-    result = await session.execute(select(User.is_active).where(User.id == user_id))
+    """Lock account state while deciding whether a paid callback may grant access.
+
+    The row lock serializes subscription activation with account deactivation.
+    Without it, a callback could read the previously committed active state while
+    deactivation is in progress and create a subscription after access was revoked.
+    """
+    result = await session.execute(
+        select(User.is_active)
+        .where(User.id == user_id)
+        .with_for_update()
+    )
     return bool(result.scalar_one_or_none())
 
 
