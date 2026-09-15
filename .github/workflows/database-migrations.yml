@@ -3,6 +3,7 @@ name: Database migrations
 on:
   pull_request:
     paths:
+      - 'VERSION'
       - 'backend/**'
       - '.github/workflows/database-migrations.yml'
   push:
@@ -11,6 +12,7 @@ on:
       - p0-production-safety
       - p1-account-scoped-sync
     paths:
+      - 'VERSION'
       - 'backend/**'
       - '.github/workflows/database-migrations.yml'
 
