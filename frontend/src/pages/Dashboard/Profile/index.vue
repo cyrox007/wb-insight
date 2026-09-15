@@ -1,536 +1,849 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import { notify } from '@/composables/notification'
-import DateTransform from '@/utils/date_transform'
-
 import ProfileServices from '@/API/Dashboard/ProfileServices'
-
-import ButtonSuccess from '@/components/UI/Buttons/ButtonSuccess.vue'
+import SellerInputsService from '@/API/Dashboard/SellerInputsService'
 import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue'
 import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue'
 
-const user = ref({})
-const subscription = ref(null)
+const authStore = useAuthStore()
+const activeTab = ref('profile')
 const isLoading = ref(true)
-const tokens = ref([])
-
-const showEditProfile = ref(false)
+const isSavingProfile = ref(false)
+const addBtnLoading = ref(false)
 const showAddTokenModal = ref(false)
 const showTariffModal = ref(false)
-const addBtnLoading = ref(false)
 
-onMounted(async () => {
-	try {
-		isLoading.value = true
-		const response = await ProfileServices.getProfile()
+const user = ref({})
+const subscription = ref(null)
+const tokens = ref([])
 
-		tokens.value = response.data.tokens
-		subscription.value = response.data.subscription
-		user.value = response.data.user
-	} catch (error) {
-		console.error(error)
-		notify.error('Ошибка загрузки профиля')
-	} finally {
-		isLoading.value = false
-	}
+const profileForm = reactive({
+  full_name: '',
+  entity_type: 'individual',
+  tax_percent: 0,
+  timezone: 'Europe/Moscow',
 })
 
-const openAddTokenModal = async () => {
-	addBtnLoading.value = true
-	try {
-		const response = await ProfileServices.checkTokenPermission(user.value.id)
-		if (response.data.status === 'error') {
-			notify.error(response.data.error.message)
-			return
-		}
-		showAddTokenModal.value = true
-	} catch (error) {
-		notify.error(error.response?.data?.error?.message || 'Не удалось проверить лимит кабинетов')
-	} finally {
-		addBtnLoading.value = false
-	}
+const costProducts = ref([])
+const isCostsLoading = ref(false)
+const isCostSaving = ref(false)
+const costForm = reactive({
+  nm_id: '',
+  seller_sku: '',
+  product_name: '',
+  cost_price: '',
+  effective_from: '',
+  comment: '',
+})
+const costFileInput = ref(null)
+
+const expenses = ref([])
+const isExpensesLoading = ref(false)
+const isExpenseSaving = ref(false)
+const expenseFilterTokenId = ref('')
+const expensePeriodStart = ref('')
+const expensePeriodEnd = ref('')
+const editingExpenseId = ref(null)
+const expenseForm = reactive({
+  token_id: '',
+  date: '',
+  category: '',
+  amount: '',
+  nm_id: '',
+  description: '',
+})
+
+const tabs = [
+  { key: 'profile', label: 'Профиль и налог' },
+  { key: 'connections', label: 'Кабинеты WB' },
+  { key: 'costs', label: 'Себестоимость' },
+  { key: 'expenses', label: 'Прочие расходы' },
+]
+
+const entityTypes = [
+  { value: 'individual', label: 'Физическое лицо' },
+  { value: 'self_employed', label: 'Самозанятый' },
+  { value: 'legal_entity', label: 'Юридическое лицо' },
+]
+
+const timezoneOptions = [
+  'Europe/Moscow',
+  'Europe/Berlin',
+  'Europe/Kaliningrad',
+  'Asia/Yekaterinburg',
+  'Asia/Omsk',
+  'Asia/Krasnoyarsk',
+  'Asia/Irkutsk',
+  'Asia/Yakutsk',
+  'Asia/Vladivostok',
+  'Asia/Magadan',
+  'Asia/Kamchatka',
+  'UTC',
+]
+
+const availableTokens = computed(() => tokens.value.filter(token =>
+  token.marketplace === 'wildberries' &&
+  token.dashboard_available !== false &&
+  !isTokenExpired(token)
+))
+
+const totalExpenses = computed(() => expenses.value.reduce(
+  (sum, item) => sum + Number(item.amount || 0),
+  0,
+))
+
+const money = (value) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '—'
+  return `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(number)} ₽`
 }
 
-const handleTokenAdded = async () => {
-	const response = await ProfileServices.getProfile()
-	tokens.value = response.data.tokens
-	showAddTokenModal.value = false
-	notify.success('Подключение Wildberries добавлено')
+const dateLabel = (value) => {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('ru-RU').format(date)
 }
 
-const deleteToken = async (id) => {
-	if (!confirm('Удалить подключение? Это действие нельзя отменить.')) return
-
-	try {
-		const response = await ProfileServices.delete_user_token(id)
-		if (response.data.status === 'error') {
-			notify.error(response.data.error.message)
-			return
-		}
-		tokens.value = tokens.value.filter(token => token.id !== id)
-		notify.success('Подключение удалено')
-	} catch (error) {
-		notify.error(error.response?.data?.error?.message || 'Не удалось удалить подключение')
-	}
+const inputDate = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
-const toPay = async (payment_id) => {
-	location.href = `/billing/success?payment_id=${payment_id}`
+function isTokenExpired(token) {
+  if (token.is_revoked || token.is_active === false || token.is_valid === false) return true
+  return Boolean(token.expires_at && new Date(token.expires_at) < new Date())
 }
 
-const getStatusLabel = (status) => {
-	switch (status) {
-		case 'active': return 'Активна'
-		case 'demo': return 'Демо'
-		case 'expired': return 'Истекла'
-		case 'cancelled': return 'Отменена'
-		default: return 'Нет подписки'
-	}
+function getStatusLabel(status) {
+  switch (status) {
+    case 'active': return 'Активна'
+    case 'demo': return 'Демо'
+    case 'expired': return 'Истекла'
+    case 'cancelled': return 'Отменена'
+    default: return 'Нет подписки'
+  }
 }
 
-const isTokenExpired = (token) => {
-	if (token.is_revoked || token.is_active === false || token.is_valid === false) return true
-	return Boolean(token.expires_at && new Date(token.expires_at) < new Date())
+function tokenLabel(tokenId) {
+  const token = tokens.value.find(item => item.id === tokenId)
+  return token?.label || (tokenId ? `WB · ${String(tokenId).slice(0, 8)}` : '—')
 }
+
+function syncProfileForm() {
+  profileForm.full_name = user.value.full_name || ''
+  profileForm.entity_type = user.value.entity_type || 'individual'
+  profileForm.tax_percent = Math.round(Number(user.value.tax_rate || 0) * 10000) / 100
+  profileForm.timezone = user.value.timezone || 'Europe/Moscow'
+}
+
+function resetCostForm() {
+  costForm.nm_id = ''
+  costForm.seller_sku = ''
+  costForm.product_name = ''
+  costForm.cost_price = ''
+  costForm.effective_from = inputDate(new Date())
+  costForm.comment = ''
+}
+
+function resetExpenseForm() {
+  editingExpenseId.value = null
+  expenseForm.token_id = availableTokens.value[0]?.id || ''
+  expenseForm.date = inputDate(new Date())
+  expenseForm.category = ''
+  expenseForm.amount = ''
+  expenseForm.nm_id = ''
+  expenseForm.description = ''
+}
+
+async function loadProfile() {
+  isLoading.value = true
+  try {
+    const response = await ProfileServices.getProfile()
+    const result = response.data
+    if (result.status === 'error') throw new Error(result.error?.message || 'Не удалось загрузить настройки')
+
+    tokens.value = result.tokens || []
+    subscription.value = result.subscription || null
+    user.value = result.user || {}
+    syncProfileForm()
+
+    if (!expenseForm.token_id && availableTokens.value.length) {
+      expenseForm.token_id = availableTokens.value[0].id
+    }
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || error.message || 'Ошибка загрузки профиля')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function saveProfile() {
+  const taxPercent = Number(profileForm.tax_percent)
+  if (!profileForm.full_name.trim()) {
+    notify.error('Укажите имя или название компании')
+    return
+  }
+  if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) {
+    notify.error('Налоговая ставка должна быть от 0 до 100%')
+    return
+  }
+
+  isSavingProfile.value = true
+  try {
+    const response = await ProfileServices.updateProfile({
+      full_name: profileForm.full_name.trim(),
+      entity_type: profileForm.entity_type,
+      tax_rate: taxPercent / 100,
+      timezone: profileForm.timezone,
+    })
+    const result = response.data
+    if (result.status === 'error') {
+      notify.error(result.error?.message || 'Не удалось сохранить настройки')
+      return
+    }
+
+    user.value = result.user
+    const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+    const nextStoredUser = { ...storedUser, ...result.user }
+    localStorage.setItem('user', JSON.stringify(nextStoredUser))
+    authStore.login(nextStoredUser)
+    syncProfileForm()
+    notify.success('Настройки сохранены')
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось сохранить настройки')
+  } finally {
+    isSavingProfile.value = false
+  }
+}
+
+async function openAddTokenModal() {
+  addBtnLoading.value = true
+  try {
+    const response = await ProfileServices.checkTokenPermission(user.value.id)
+    if (response.data.status === 'error') {
+      notify.error(response.data.error?.message || 'Достигнут лимит кабинетов')
+      return
+    }
+    showAddTokenModal.value = true
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось проверить лимит кабинетов')
+  } finally {
+    addBtnLoading.value = false
+  }
+}
+
+async function handleTokenAdded() {
+  await loadProfile()
+  showAddTokenModal.value = false
+  notify.success('Кабинет Wildberries подключён')
+}
+
+async function deleteToken(id) {
+  if (!confirm('Удалить подключение Wildberries? Это действие нельзя отменить.')) return
+  try {
+    const response = await ProfileServices.delete_user_token(id)
+    if (response.data.status === 'error') {
+      notify.error(response.data.error?.message || 'Не удалось удалить подключение')
+      return
+    }
+    tokens.value = tokens.value.filter(token => token.id !== id)
+    if (expenseForm.token_id === id) resetExpenseForm()
+    notify.success('Подключение удалено')
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось удалить подключение')
+  }
+}
+
+async function loadCosts() {
+  isCostsLoading.value = true
+  try {
+    const end = new Date()
+    const start = new Date(end)
+    start.setDate(start.getDate() - 89)
+    const response = await SellerInputsService.getCostProducts({
+      start_date: inputDate(start),
+      end_date: inputDate(end),
+      limit: 200,
+      offset: 0,
+    })
+    const result = response.data
+    if (result.status === 'error') throw new Error(result.error?.message || 'Не удалось загрузить товары')
+    costProducts.value = result.data?.items || []
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || error.message || 'Не удалось загрузить себестоимость')
+  } finally {
+    isCostsLoading.value = false
+  }
+}
+
+function editCost(item) {
+  costForm.nm_id = String(item.nm_id || '')
+  costForm.seller_sku = item.seller_sku || ''
+  costForm.product_name = item.product_name || ''
+  costForm.cost_price = item.cost_price || ''
+  costForm.effective_from = item.cost_effective_from || inputDate(new Date())
+  costForm.comment = ''
+  document.querySelector('.cost-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function saveCost() {
+  const nmId = Number(costForm.nm_id)
+  const cost = Number(costForm.cost_price)
+  if (!Number.isInteger(nmId) || nmId <= 0) {
+    notify.error('Укажите корректный nmId Wildberries')
+    return
+  }
+  if (!Number.isFinite(cost) || cost < 0) {
+    notify.error('Себестоимость не может быть отрицательной')
+    return
+  }
+  if (!costForm.effective_from) {
+    notify.error('Укажите дату, с которой действует себестоимость')
+    return
+  }
+
+  isCostSaving.value = true
+  try {
+    const response = await SellerInputsService.saveCostPrices([{
+      nm_id: nmId,
+      seller_sku: costForm.seller_sku || null,
+      product_name: costForm.product_name || null,
+      cost_price: cost,
+      effective_from: costForm.effective_from,
+      comment: costForm.comment || null,
+      currency: 'RUB',
+    }])
+    if (response.data.status === 'error') {
+      notify.error(response.data.error?.message || 'Не удалось сохранить себестоимость')
+      return
+    }
+    notify.success('Себестоимость сохранена с указанной даты')
+    resetCostForm()
+    await loadCosts()
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось сохранить себестоимость')
+  } finally {
+    isCostSaving.value = false
+  }
+}
+
+async function deleteCost(item) {
+  if (!confirm(`Удалить всю историю себестоимости для nmId ${item.nm_id}?`)) return
+  try {
+    const response = await SellerInputsService.deleteCostPrice(item.nm_id)
+    if (response.data.status === 'error') {
+      notify.error(response.data.error?.message || 'Не удалось удалить себестоимость')
+      return
+    }
+    notify.success('История себестоимости удалена')
+    await loadCosts()
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось удалить себестоимость')
+  }
+}
+
+function chooseCostFile() {
+  costFileInput.value?.click()
+}
+
+async function uploadCosts(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  isCostSaving.value = true
+  try {
+    const response = await SellerInputsService.uploadCostPrices(file)
+    if (response.data.status === 'error') {
+      notify.error(response.data.error?.message || 'Не удалось загрузить CSV')
+      return
+    }
+    notify.success(`Загружено строк: ${response.data.data?.uploaded_count || 0}`)
+    await loadCosts()
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось загрузить CSV')
+  } finally {
+    isCostSaving.value = false
+    event.target.value = ''
+  }
+}
+
+async function loadExpenses() {
+  isExpensesLoading.value = true
+  try {
+    const params = {
+      start_date: expensePeriodStart.value,
+      end_date: expensePeriodEnd.value,
+    }
+    if (expenseFilterTokenId.value) params.token_id = expenseFilterTokenId.value
+
+    const response = await SellerInputsService.getExpenses(params)
+    const result = response.data
+    if (result.status === 'error') throw new Error(result.error?.message || 'Не удалось загрузить расходы')
+    expenses.value = result.data?.items || []
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || error.message || 'Не удалось загрузить расходы')
+  } finally {
+    isExpensesLoading.value = false
+  }
+}
+
+function editExpense(item) {
+  editingExpenseId.value = item.id
+  expenseForm.token_id = item.token_id
+  expenseForm.date = item.date
+  expenseForm.category = item.category
+  expenseForm.amount = item.amount
+  expenseForm.nm_id = item.nm_id || ''
+  expenseForm.description = item.description || ''
+  document.querySelector('.expense-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function saveExpense() {
+  const amount = Number(expenseForm.amount)
+  if (!expenseForm.token_id) {
+    notify.error('Выберите кабинет Wildberries')
+    return
+  }
+  if (!expenseForm.date || !expenseForm.category.trim()) {
+    notify.error('Укажите дату и категорию расхода')
+    return
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    notify.error('Сумма расхода должна быть больше нуля')
+    return
+  }
+
+  const nmId = expenseForm.nm_id === '' ? null : Number(expenseForm.nm_id)
+  if (nmId !== null && (!Number.isInteger(nmId) || nmId <= 0)) {
+    notify.error('nmId должен быть положительным числом')
+    return
+  }
+
+  const payload = {
+    token_id: expenseForm.token_id,
+    date: expenseForm.date,
+    category: expenseForm.category.trim(),
+    amount,
+    currency: 'RUB',
+    nm_id: nmId,
+    description: expenseForm.description.trim() || null,
+  }
+
+  isExpenseSaving.value = true
+  try {
+    const response = editingExpenseId.value
+      ? await SellerInputsService.updateExpense(editingExpenseId.value, payload)
+      : await SellerInputsService.createExpense(payload)
+    if (response.data.status === 'error') {
+      notify.error(response.data.error?.message || 'Не удалось сохранить расход')
+      return
+    }
+    notify.success(editingExpenseId.value ? 'Расход обновлён' : 'Расход добавлен')
+    resetExpenseForm()
+    await loadExpenses()
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось сохранить расход')
+  } finally {
+    isExpenseSaving.value = false
+  }
+}
+
+async function deleteExpense(item) {
+  if (!confirm(`Удалить расход «${item.category}» на ${money(item.amount)}?`)) return
+  try {
+    const response = await SellerInputsService.deleteExpense(item.id)
+    if (response.data.status === 'error') {
+      notify.error(response.data.error?.message || 'Не удалось удалить расход')
+      return
+    }
+    if (editingExpenseId.value === item.id) resetExpenseForm()
+    notify.success('Расход удалён')
+    await loadExpenses()
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось удалить расход')
+  }
+}
+
+function toPay(paymentId) {
+  location.href = `/billing/success?payment_id=${paymentId}`
+}
+
+async function selectTab(key) {
+  activeTab.value = key
+  if (key === 'costs' && !costProducts.value.length) await loadCosts()
+  if (key === 'expenses' && !expenses.value.length) await loadExpenses()
+}
+
+onMounted(async () => {
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  expensePeriodStart.value = inputDate(monthStart)
+  expensePeriodEnd.value = inputDate(now)
+  resetCostForm()
+  resetExpenseForm()
+  await loadProfile()
+  resetExpenseForm()
+})
 </script>
 
 <template>
-	<div class="dashboard-container">
-		<div class="profile-card">
-			<div class="profile-header">
-				<div class="left">
-					<div class="avatar-placeholder">
-						{{ user.full_name?.charAt(0) }}
-					</div>
+  <section class="settings-page">
+    <header class="settings-header">
+      <div>
+        <p class="eyebrow">Настройки продавца</p>
+        <h1>Исходные данные и подключения</h1>
+        <p>WB Insight получает маркетплейс-данные автоматически. Здесь остаются только параметры, которые Wildberries не знает: налог, себестоимость, собственные расходы и подключения.</p>
+      </div>
+      <div class="subscription-chip">
+        <span>{{ subscription?.tariff_name || 'DEMO' }}</span>
+        <strong>{{ getStatusLabel(subscription?.status) }}</strong>
+        <button type="button" @click="showTariffModal = true">Тариф</button>
+      </div>
+    </header>
 
-					<div class="user-info">
-						<h2 class="user-name">{{ user.full_name }}</h2>
-						<p class="user-email">{{ user.email }}</p>
-					</div>
-				</div>
+    <nav class="settings-tabs" aria-label="Разделы настроек">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        type="button"
+        :class="{ active: activeTab === tab.key }"
+        @click="selectTab(tab.key)"
+      >
+        {{ tab.label }}
+      </button>
+    </nav>
 
-				<div class="right">
-					<div class="tariff-badge">
-						<span class="tariff-name">{{ subscription?.tariff_name || 'DEMO' }}</span>
-						<span class="tariff-status" :class="subscription?.status">
-							{{ getStatusLabel(subscription?.status) }}
-						</span>
-						<div class="tariff-dates" v-if="subscription">
-							до {{ DateTransform.formatDate(subscription.end_date) }}
-						</div>
-					</div>
+    <div v-if="isLoading" class="loading-state">Загружаем настройки…</div>
 
-					<button @click="showTariffModal = true" class="change-tariff-btn">
-						{{ subscription?.status === 'active' ? 'Сменить тариф' : 'Продлить подписку' }}
-					</button>
-				</div>
-			</div>
+    <template v-else>
+      <section v-if="activeTab === 'profile'" class="settings-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Расчётные параметры</p>
+            <h2>Профиль продавца</h2>
+          </div>
+          <span class="section-note">Email и телефон меняются через отдельное подтверждение.</span>
+        </div>
 
-			<div class="profile-actions">
-				<button @click="showEditProfile = true" class="edit-btn">
-					<svg class="edit-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-							d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-					</svg>
-					Редактировать профиль
-				</button>
-			</div>
-		</div>
+        <form class="form-grid" @submit.prevent="saveProfile">
+          <label class="field field--wide">
+            <span>Имя или название компании</span>
+            <input v-model="profileForm.full_name" maxlength="255" autocomplete="name" />
+          </label>
 
-		<div class="account-grid">
-			<div class="account-card">
-				<div class="card-title">Тип аккаунта</div>
-				<div class="card-value">
-					{{ user.entity_type === 'individual' ? 'Физ. лицо' : 'Компания' }}
-				</div>
-			</div>
+          <label class="field">
+            <span>Тип продавца</span>
+            <select v-model="profileForm.entity_type">
+              <option v-for="item in entityTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </label>
 
-			<div class="account-card">
-				<div class="card-title">Налог</div>
-				<div class="card-value">
-					{{ ((user.tax_rate || 0) * 100).toFixed(0) }}%
-				</div>
-			</div>
+          <label class="field">
+            <span>Налоговая ставка, %</span>
+            <input v-model="profileForm.tax_percent" type="number" min="0" max="100" step="0.01" />
+            <small>Используется в юнит-экономике и прибыли.</small>
+          </label>
 
-			<div class="account-card">
-				<div class="card-title">Часовой пояс</div>
-				<div class="card-value">
-					{{ user.timezone }}
-				</div>
-			</div>
+          <label class="field">
+            <span>Часовой пояс</span>
+            <select v-model="profileForm.timezone">
+              <option v-for="timezone in timezoneOptions" :key="timezone" :value="timezone">{{ timezone }}</option>
+            </select>
+          </label>
 
-			<div class="account-card">
-				<div class="card-title">Дата регистрации</div>
-				<div class="card-value">
-					{{ DateTransform.formatDate(user.created_at) }}
-				</div>
-			</div>
-		</div>
+          <div class="profile-readonly">
+            <span>Email</span>
+            <strong>{{ user.email }}</strong>
+          </div>
+          <div class="profile-readonly">
+            <span>Телефон</span>
+            <strong>{{ user.phone }}</strong>
+          </div>
 
-		<div class="tokens-section">
-			<div class="section-header">
-				<h3>Подключения Wildberries</h3>
-				<ButtonSuccess :loading="addBtnLoading" @click="openAddTokenModal" :text="'+ Добавить кабинет'" />
-			</div>
+          <div class="form-actions field--wide">
+            <button class="primary-button" type="submit" :disabled="isSavingProfile">
+              {{ isSavingProfile ? 'Сохраняем…' : 'Сохранить настройки' }}
+            </button>
+          </div>
+        </form>
+      </section>
 
-			<div v-if="tokens.length === 0" class="empty-state">
-				У вас пока нет подключённых кабинетов Wildberries.
-			</div>
+      <section v-else-if="activeTab === 'connections'" class="settings-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Автоматическая синхронизация</p>
+            <h2>Кабинеты Wildberries</h2>
+          </div>
+          <button class="primary-button" type="button" :disabled="addBtnLoading" @click="openAddTokenModal">
+            {{ addBtnLoading ? 'Проверяем…' : 'Добавить кабинет' }}
+          </button>
+        </div>
 
-			<ul v-else class="tokens-list">
-				<li v-for="token in tokens" :key="token.id" class="token-item">
-					<div class="token-left">
-						<div class="token-main">
-							<span class="token-masked">{{ token.label || 'Wildberries' }}</span>
-							<span class="token-label">
-								{{ token.marketplace?.toUpperCase() }} · {{ token.token_type || 'token' }}
-							</span>
-							<span class="token-status" :class="{ expired: isTokenExpired(token) }">
-								{{ isTokenExpired(token) ? 'Недоступен' : 'Активен' }}
-							</span>
-						</div>
+        <div v-if="!tokens.length" class="empty-state">
+          <strong>Нет подключённых кабинетов.</strong>
+          <span>Добавьте API-токен Wildberries — дальше выгрузки и обновления выполняет система.</span>
+        </div>
 
-						<div class="token-dates">
-							<span>Добавлен: {{ DateTransform.formatDate(token.issued_at) }}</span>
-							<span v-if="token.expires_at">До: {{ DateTransform.formatDate(token.expires_at) }}</span>
-						</div>
-					</div>
+        <div v-else class="connection-list">
+          <article v-for="token in tokens" :key="token.id" class="connection-row">
+            <div class="connection-main">
+              <span class="connection-mark">WB</span>
+              <div>
+                <strong>{{ token.label || 'Wildberries' }}</strong>
+                <small>{{ token.id.slice(0, 8) }} · добавлен {{ dateLabel(token.issued_at) }}</small>
+              </div>
+            </div>
+            <div class="connection-status" :class="{ bad: isTokenExpired(token), limited: token.dashboard_available === false }">
+              {{ isTokenExpired(token) ? 'Недоступен' : token.dashboard_available === false ? 'Вне лимита тарифа' : 'Активен' }}
+            </div>
+            <button class="danger-link" type="button" @click="deleteToken(token.id)">Удалить</button>
+          </article>
+        </div>
+      </section>
 
-					<div class="token-actions">
-						<button @click="deleteToken(token.id)" class="btn-icon delete-btn" title="Удалить подключение">
-							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-								stroke="currentColor" width="16" height="16">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-									d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M9 7h6" />
-							</svg>
-						</button>
-					</div>
-				</li>
-			</ul>
-		</div>
-	</div>
+      <section v-else-if="activeTab === 'costs'" class="settings-stack">
+        <article class="settings-card cost-form">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Лист «СС»</p>
+              <h2>Себестоимость товара</h2>
+              <p class="section-description">Новая цена применяется только с указанной даты. Старые периоды сохраняют прежнюю себестоимость.</p>
+            </div>
+            <div class="secondary-actions">
+              <input ref="costFileInput" class="hidden-input" type="file" accept=".csv,text/csv" @change="uploadCosts" />
+              <button class="secondary-button" type="button" :disabled="isCostSaving" @click="chooseCostFile">Загрузить CSV</button>
+            </div>
+          </div>
 
-	<SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
+          <form class="form-grid" @submit.prevent="saveCost">
+            <label class="field">
+              <span>nmId Wildberries</span>
+              <input v-model="costForm.nm_id" type="number" min="1" placeholder="123456789" />
+            </label>
+            <label class="field">
+              <span>Себестоимость, ₽</span>
+              <input v-model="costForm.cost_price" type="number" min="0" step="0.01" placeholder="850" />
+            </label>
+            <label class="field">
+              <span>Действует с</span>
+              <input v-model="costForm.effective_from" type="date" />
+            </label>
+            <label class="field">
+              <span>Артикул продавца</span>
+              <input v-model="costForm.seller_sku" placeholder="Необязательно" />
+            </label>
+            <label class="field field--wide">
+              <span>Название</span>
+              <input v-model="costForm.product_name" placeholder="Необязательно" />
+            </label>
+            <label class="field field--wide">
+              <span>Комментарий</span>
+              <input v-model="costForm.comment" placeholder="Например: новая закупочная партия" />
+            </label>
+            <div class="form-actions field--wide">
+              <button class="primary-button" type="submit" :disabled="isCostSaving">{{ isCostSaving ? 'Сохраняем…' : 'Сохранить версию' }}</button>
+              <button class="secondary-button" type="button" @click="resetCostForm">Очистить</button>
+            </div>
+          </form>
+          <p class="csv-hint">CSV: <code>nm_id,cost_price,effective_from,seller_sku,product_name,comment</code>. Дата — YYYY-MM-DD.</p>
+        </article>
 
-	<AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false"
-		@success="handleTokenAdded" />
+        <article class="settings-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Последние товары</p>
+              <h2>Текущая себестоимость</h2>
+            </div>
+            <button class="secondary-button" type="button" :disabled="isCostsLoading" @click="loadCosts">Обновить</button>
+          </div>
+
+          <div v-if="isCostsLoading" class="loading-state">Загружаем товары…</div>
+          <div v-else-if="!costProducts.length" class="empty-state">
+            <strong>Товары пока не найдены.</strong>
+            <span>Можно добавить себестоимость вручную по nmId или дождаться финансовой синхронизации.</span>
+          </div>
+          <div v-else class="table-wrapper">
+            <table>
+              <thead><tr><th>Товар</th><th>nmId</th><th>Себестоимость</th><th>Действует с</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="item in costProducts" :key="item.nm_id">
+                  <td><strong>{{ item.product_name || item.seller_sku || 'Без названия' }}</strong><small>{{ item.seller_sku || '' }}</small></td>
+                  <td>{{ item.nm_id }}</td>
+                  <td>{{ item.has_cost ? money(item.cost_price) : 'Не задана' }}</td>
+                  <td>{{ item.has_cost ? dateLabel(item.cost_effective_from) : '—' }}</td>
+                  <td class="row-actions">
+                    <button type="button" @click="editCost(item)">{{ item.has_cost ? 'Изменить' : 'Задать' }}</button>
+                    <button v-if="item.has_cost" class="danger-link" type="button" @click="deleteCost(item)">Удалить</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section v-else-if="activeTab === 'expenses'" class="settings-stack">
+        <article class="settings-card expense-form">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Лист «Прочие расходы»</p>
+              <h2>{{ editingExpenseId ? 'Изменить расход' : 'Добавить расход' }}</h2>
+              <p class="section-description">Без nmId расход влияет только на общий P&L. С nmId — на конкретный товар и общий итог.</p>
+            </div>
+          </div>
+
+          <form class="form-grid" @submit.prevent="saveExpense">
+            <label class="field">
+              <span>Кабинет WB</span>
+              <select v-model="expenseForm.token_id">
+                <option value="" disabled>Выберите кабинет</option>
+                <option v-for="token in availableTokens" :key="token.id" :value="token.id">{{ token.label || 'Wildberries' }}</option>
+              </select>
+            </label>
+            <label class="field"><span>Дата</span><input v-model="expenseForm.date" type="date" /></label>
+            <label class="field"><span>Сумма, ₽</span><input v-model="expenseForm.amount" type="number" min="0.01" step="0.01" placeholder="5000" /></label>
+            <label class="field">
+              <span>Категория</span>
+              <input v-model="expenseForm.category" list="expense-categories" maxlength="100" placeholder="Например, упаковка" />
+              <datalist id="expense-categories">
+                <option value="Упаковка" /><option value="Фулфилмент" /><option value="Доставка до WB" />
+                <option value="Сотрудники" /><option value="Сервисы" /><option value="Прочее" />
+              </datalist>
+            </label>
+            <label class="field"><span>nmId, если расход по товару</span><input v-model="expenseForm.nm_id" type="number" min="1" placeholder="Необязательно" /></label>
+            <label class="field field--wide"><span>Комментарий</span><input v-model="expenseForm.description" maxlength="500" placeholder="Что это за расход" /></label>
+            <div class="form-actions field--wide">
+              <button class="primary-button" type="submit" :disabled="isExpenseSaving">{{ isExpenseSaving ? 'Сохраняем…' : editingExpenseId ? 'Сохранить изменения' : 'Добавить расход' }}</button>
+              <button v-if="editingExpenseId" class="secondary-button" type="button" @click="resetExpenseForm">Отменить</button>
+            </div>
+          </form>
+        </article>
+
+        <article class="settings-card">
+          <div class="section-heading expense-list-heading">
+            <div>
+              <p class="eyebrow">Период</p>
+              <h2>Учтённые расходы · {{ money(totalExpenses) }}</h2>
+            </div>
+            <form class="expense-filters" @submit.prevent="loadExpenses">
+              <select v-model="expenseFilterTokenId">
+                <option value="">Все кабинеты</option>
+                <option v-for="token in availableTokens" :key="token.id" :value="token.id">{{ token.label || 'Wildberries' }}</option>
+              </select>
+              <input v-model="expensePeriodStart" type="date" :max="expensePeriodEnd" />
+              <input v-model="expensePeriodEnd" type="date" :min="expensePeriodStart" />
+              <button class="secondary-button" type="submit">Показать</button>
+            </form>
+          </div>
+
+          <div v-if="isExpensesLoading" class="loading-state">Загружаем расходы…</div>
+          <div v-else-if="!expenses.length" class="empty-state">
+            <strong>В этом периоде расходов нет.</strong>
+            <span>Если были собственные расходы вне отчёта WB, добавьте их выше — они попадут в прибыль автоматически.</span>
+          </div>
+          <div v-else class="table-wrapper">
+            <table>
+              <thead><tr><th>Дата</th><th>Категория</th><th>Кабинет</th><th>nmId</th><th>Сумма</th><th>Комментарий</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="item in expenses" :key="item.id">
+                  <td>{{ dateLabel(item.date) }}</td>
+                  <td><strong>{{ item.category }}</strong></td>
+                  <td>{{ tokenLabel(item.token_id) }}</td>
+                  <td>{{ item.nm_id || 'Общий' }}</td>
+                  <td>{{ money(item.amount) }}</td>
+                  <td class="description-cell">{{ item.description || '—' }}</td>
+                  <td class="row-actions">
+                    <button type="button" @click="editExpense(item)">Изменить</button>
+                    <button class="danger-link" type="button" @click="deleteExpense(item)">Удалить</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </template>
+  </section>
+
+  <SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
+  <AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false" @success="handleTokenAdded" />
 </template>
 
 <style scoped>
-.dashboard-container {
-	padding: 20px;
-}
-
-@media (max-width: 1023px) {
-	.dashboard-container {
-		grid-template-columns: 1fr;
-		padding: 16px;
-	}
-}
-
-.profile-card {
-	display: flex;
-	flex-direction: column;
-	justify-content: space-between;
-	width: 100%;
-	padding: 24px;
-	background-color: var(--card-bg);
-	border: 1px solid var(--border-color);
-	border-radius: 12px;
-	box-shadow: var(--shadow);
-	gap: 20px;
-}
-
-.profile-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-.left {
-	display: flex;
-	align-items: center;
-	gap: 16px;
-}
-
-.right {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: 8px;
-}
-
-.tariff-badge {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	background: rgba(52, 152, 219, 0.1);
-	padding: 6px 12px;
-	border-radius: 20px;
-	border: 1px solid rgba(52, 152, 219, 0.3);
-}
-
-.tariff-status.active {
-	background: rgba(46, 204, 113, 0.2);
-	color: #2ecc71;
-}
-
-.tariff-status.expired {
-	background: rgba(231, 76, 60, 0.2);
-	color: #e74c3c;
-}
-
-.tariff-status.cancelled {
-	background: rgba(241, 196, 15, 0.2);
-	color: #f1c40f;
-}
-
-.tariff-dates {
-	font-size: 12px;
-	color: #888;
-	margin-top: 4px;
-	text-align: right;
-}
-
-.profile-actions {
-	display: flex;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-
-.edit-btn,
-.change-tariff-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	padding: 10px 16px;
-	border: none;
-	border-radius: 6px;
-	font-weight: 500;
-	cursor: pointer;
-	transition: var(--transition);
-}
-
-.edit-btn {
-	background-color: var(--secondary-color);
-	color: white;
-}
-
-.edit-btn:hover {
-	background-color: #2980b9;
-	transform: translateY(-2px);
-}
-
-.change-tariff-btn {
-	background-color: var(--info-color);
-	color: white;
-}
-
-.change-tariff-btn:hover {
-	background-color: #8e44ad;
-	transform: translateY(-2px);
-}
-
-.tokens-section {
-	background-color: var(--card-bg);
-	border: 1px solid var(--border-color);
-	border-radius: 12px;
-	padding: 24px;
-	box-shadow: var(--shadow);
-	margin-top: 20px;
-}
-
-.section-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-}
-
-.section-header h3 {
-	font-size: 1.25rem;
-	font-weight: 600;
-	color: var(--text-color);
-}
-
-.account-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-	gap: 16px;
-	margin-top: 20px;
-}
-
-.account-card {
-	background: var(--medium-bg);
-	border: 1px solid var(--border-color);
-	border-radius: 10px;
-	padding: 16px;
-	transition: 0.2s;
-}
-
-.account-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-.card-title {
-	font-size: 12px;
-	color: #888;
-	margin-bottom: 6px;
-	text-transform: uppercase;
-}
-
-.card-value {
-	font-size: 16px;
-	font-weight: 600;
-	color: var(--text-color);
-}
-
-.add-token-btn {
-	padding: 8px 16px;
-	background-color: var(--success-color);
-	color: white;
-	border: none;
-	border-radius: 6px;
-	font-weight: 500;
-	cursor: pointer;
-	transition: var(--transition);
-}
-
-.add-token-btn:hover {
-	background-color: #27ae60;
-	transform: translateY(-1px);
-}
-
-.empty-state {
-	color: #aaa;
-	font-style: italic;
-	text-align: center;
-	padding: 20px;
-}
-
-.tokens-list {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-}
-
-.token-item {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 16px;
-	background-color: var(--medium-bg);
-	border-radius: 10px;
-	margin-bottom: 12px;
-	border: 1px solid var(--border-color);
-	transition: var(--transition);
-}
-
-.token-item:hover {
-	background-color: var(--hover-bg);
-	transform: translateY(-2px);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-.token-left {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.token-status {
-	font-size: 12px;
-	padding: 2px 8px;
-	border-radius: 6px;
-	background: rgba(46, 204, 113, 0.2);
-	color: #2ecc71;
-}
-
-.token-status.expired {
-	background: rgba(231, 76, 60, 0.2);
-	color: #e74c3c;
-}
-
-.token-main {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	flex-wrap: wrap;
-}
-
-.token-label {
-	font-size: 12px;
-	color: #888;
-	text-transform: uppercase;
-}
-
-.token-masked {
-	font-size: 14px;
-	font-weight: 600;
-	color: var(--text-color);
-}
-
-.token-dates {
-	display: flex;
-	gap: 15px;
-	font-size: 12px;
-	color: #777;
-	flex-wrap: wrap;
-}
-
-.token-actions {
-	display: flex;
-	gap: 8px;
-	margin-left: 16px;
-}
-
-.btn-icon {
-	width: 32px;
-	height: 32px;
-	border-radius: 6px;
-	background-color: var(--light-bg);
-	border: 1px solid var(--border-color);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	cursor: pointer;
-	transition: var(--transition);
-}
-
-.btn-icon:hover {
-	background-color: var(--hover-bg);
-}
-
-.delete-btn:hover {
-	background-color: var(--accent-color);
-}
-
-@media (max-width: 1023px) {
-	.profile-actions {
-		flex-direction: column;
-	}
-
-	.edit-btn,
-	.change-tariff-btn {
-		width: 100%;
-		justify-content: center;
-	}
-
-	.section-header {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 12px;
-	}
-
-	.token-item {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 10px;
-	}
-
-	.token-actions {
-		align-self: flex-end;
-	}
+.settings-page { width: min(100% - 32px, 1180px); margin: 0 auto; padding: 22px 0 56px; }
+.settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.settings-header h1 { margin-top: 3px; font-size: clamp(26px, 3vw, 36px); line-height: 1.08; letter-spacing: -0.035em; }
+.settings-header > div:first-child > p:last-child { max-width: 760px; margin-top: 9px; color: var(--text-muted); font-size: 14px; }
+.eyebrow { color: #a78bfa; font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.subscription-chip { min-width: 180px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; border: 1px solid var(--border-color); border-radius: var(--radius); background: var(--card-bg); }
+.subscription-chip span { color: var(--text-muted); font-size: 11px; }
+.subscription-chip strong { font-size: 12px; }
+.subscription-chip button { grid-column: 1 / -1; margin-top: 5px; padding: 6px; border: 0; border-radius: 7px; background: var(--hover-bg); color: var(--text-color); cursor: pointer; }
+.settings-tabs { margin: 20px 0 12px; padding: 5px; display: flex; gap: 4px; overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--radius); background: rgba(24,33,46,.72); }
+.settings-tabs button { padding: 9px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); white-space: nowrap; font-weight: 650; cursor: pointer; }
+.settings-tabs button:hover { color: var(--text-color); background: var(--hover-bg); }
+.settings-tabs button.active { color: #fff; background: rgba(124,58,237,.22); }
+.settings-card { padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: linear-gradient(180deg, rgba(29,40,55,.96), rgba(24,33,46,.96)); box-shadow: var(--shadow-sm); }
+.settings-stack { display: flex; flex-direction: column; gap: 12px; }
+.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.section-heading h2 { margin-top: 2px; font-size: 18px; }
+.section-note, .section-description { margin-top: 5px; color: var(--text-subtle); font-size: 11px; line-height: 1.4; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field--wide { grid-column: 1 / -1; }
+.field > span { color: var(--text-muted); font-size: 11px; font-weight: 650; }
+.field input, .field select, .expense-filters input, .expense-filters select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--light-bg); color: var(--text-color); }
+.field small { color: var(--text-subtle); font-size: 10px; }
+.profile-readonly { min-height: 58px; padding: 10px; display: flex; flex-direction: column; gap: 5px; border: 1px solid rgba(148,163,184,.08); border-radius: 8px; background: rgba(15,20,28,.28); }
+.profile-readonly span { color: var(--text-subtle); font-size: 10px; }
+.profile-readonly strong { font-size: 12px; font-weight: 600; }
+.form-actions, .secondary-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.primary-button, .secondary-button, .row-actions button, .danger-link { min-height: 36px; padding: 7px 11px; border-radius: 8px; font-weight: 650; cursor: pointer; }
+.primary-button { border: 1px solid var(--secondary-color); background: var(--secondary-color); color: #fff; }
+.secondary-button, .row-actions button { border: 1px solid var(--border-color); background: transparent; color: var(--text-muted); }
+.primary-button:disabled, .secondary-button:disabled { opacity: .5; cursor: default; }
+.danger-link { border: 0; background: transparent; color: #fda4af; }
+.connection-list { display: flex; flex-direction: column; }
+.connection-row { min-height: 68px; padding: 11px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; border-bottom: 1px solid rgba(148,163,184,.09); }
+.connection-row:last-child { border-bottom: 0; }
+.connection-main { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.connection-main > div { min-width: 0; display: flex; flex-direction: column; }
+.connection-main small { color: var(--text-subtle); font-size: 10px; }
+.connection-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: rgba(124,58,237,.18); color: #c4b5fd; font-size: 11px; font-weight: 800; }
+.connection-status { padding: 4px 7px; border-radius: 999px; background: rgba(52,211,153,.09); color: #6ee7b7; font-size: 10px; font-weight: 700; }
+.connection-status.bad { background: rgba(251,113,133,.09); color: #fda4af; }
+.connection-status.limited { background: rgba(251,191,36,.09); color: #fde68a; }
+.loading-state, .empty-state { min-height: 110px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--text-muted); text-align: center; }
+.empty-state strong { color: var(--text-color); font-size: 13px; }
+.empty-state span { max-width: 520px; color: var(--text-subtle); font-size: 11px; }
+.hidden-input { display: none; }
+.csv-hint { margin-top: 12px; color: var(--text-subtle); font-size: 10px; }
+.csv-hint code { color: #c4b5fd; }
+.table-wrapper { width: 100%; overflow-x: auto; }
+table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 12px; }
+th, td { padding: 11px 9px; border-bottom: 1px solid rgba(148,163,184,.09); text-align: left; vertical-align: middle; }
+th { color: var(--text-subtle); font-size: 10px; text-transform: uppercase; }
+td > strong { display: block; }
+td > small { display: block; margin-top: 2px; color: var(--text-subtle); font-size: 10px; }
+.row-actions { text-align: right; white-space: nowrap; }
+.row-actions button { margin-left: 4px; min-height: 30px; padding: 5px 8px; font-size: 10px; }
+.expense-list-heading { align-items: flex-end; }
+.expense-filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.expense-filters input, .expense-filters select { min-height: 34px; padding: 6px 8px; font-size: 11px; }
+.description-cell { max-width: 260px; color: var(--text-muted); white-space: normal; }
+@media (max-width: 760px) {
+  .settings-page { width: min(100% - 20px, 1180px); padding-top: 16px; }
+  .settings-header, .section-heading { flex-direction: column; }
+  .subscription-chip { width: 100%; }
+  .form-grid { grid-template-columns: 1fr; }
+  .field--wide { grid-column: auto; }
+  .connection-row { grid-template-columns: 1fr auto; }
+  .connection-status { grid-column: 1 / 2; width: fit-content; margin-left: 45px; }
+  .expense-list-heading { align-items: stretch; }
+  .expense-filters { justify-content: flex-start; }
 }
 </style>
