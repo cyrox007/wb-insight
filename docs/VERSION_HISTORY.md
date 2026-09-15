@@ -131,10 +131,10 @@ P30 делает приёмку воспроизводимой, но сам по
 
 ## 0.9.0-alpha.8 — P31: account lifecycle baseline
 
-**Ветка:** `codex/p31-account-lifecycle`  
-**Статус:** текущий кандидат; становится mainline только после green CI и merge.
+**PR:** #47  
+**Merge:** `6cb34aa9b4633e20d1810b6a5edd690056cde986`.
 
-P31 закрывает запланированные code-side lifecycle gaps:
+P31 закрыл запланированные code-side lifecycle gaps:
 
 - email password recovery с одноразовыми hashed reset tokens и anti-enumeration response;
 - raw reset secret передаётся через URL fragment `#token=...`, поэтому HTTP/nginx access logs не получают его в request URI;
@@ -151,7 +151,7 @@ P31 закрывает запланированные code-side lifecycle gaps:
 - обычный `admin` не может выполнять reactivation/revoke-sessions над `super_admin`; security-sensitive lifecycle mutation такого аккаунта требует `super_admin`;
 - `/account/*` включён в production same-origin nginx gateway и проверяется container smoke-тестом;
 - добавлены recovery/security UI и regression tests lifecycle/session/payment/RBAC/transport invariants;
-- Alembic revision `c8e5f1a2b934` после `b7d4e6f8a921`; model registry и migration comments синхронизированы с ORM для чистого `alembic check`.
+- Alembic revision `c8e5f1a2b934` после `b7d4e6f8a921`; clean upgrade и metadata check прошли CI exact-head кандидата.
 
 P31 не вводит автоматический hard purge и не объявляет юридически утверждённый retention/refund процесс: это остаётся внешним legal/operator gate.
 
@@ -159,8 +159,7 @@ P31 не вводит автоматический hard purge и не объяв
 
 Допускается только после:
 
-- merge P31 с green CI;
-- feature freeze WB Web v1;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.8` baseline;
 - production-like HTTPS deployment из repo;
 - core release smoke;
 - disposable registration/demo/legal evidence;
