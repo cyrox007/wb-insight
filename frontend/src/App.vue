@@ -76,6 +76,9 @@ const logout = async () => {
             <button class="menu-action" type="button" @click="router.push({ name: 'dashboard.profile' })">
               Профиль и подключения
             </button>
+            <button class="menu-action" type="button" @click="router.push({ name: 'dashboard.account-security' })">
+              Безопасность аккаунта
+            </button>
             <div class="menu-divider" />
             <button class="menu-action menu-action--danger" type="button" @click="logout">
               Выйти
