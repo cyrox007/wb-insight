@@ -6,10 +6,12 @@ from fastapi.staticfiles import StaticFiles
 
 import models
 from core.audit import AuditMiddleware
+from core.http_metrics import HTTPMetricsMiddleware
 from core.session_security import SessionSecurityMiddleware
 from core.version import APP_VERSION
 from handlers.auth_handler import router as auth_router
 from handlers.control_panel.home import router as CP_home_router
+from handlers.control_panel.operations import router as CP_operations_router
 from handlers.control_panel.roles import router as CP_roles_router
 from handlers.control_panel.tariffs import router as CP_tariffs_router
 from handlers.control_panel.users import router as CP_users_router
@@ -80,6 +82,7 @@ def _register_routers(app: FastAPI) -> None:
         CP_users_router,
         CP_tariffs_router,
         CP_roles_router,
+        CP_operations_router,
     ]
     for router in routers:
         app.include_router(router)
@@ -92,7 +95,7 @@ def create_app() -> FastAPI:
         version=APP_VERSION,
     )
 
-    # Middleware order: CORS stays outermost; audit never logs request bodies.
+    app.add_middleware(HTTPMetricsMiddleware)
     app.add_middleware(SessionSecurityMiddleware)
     app.add_middleware(AuditMiddleware)
     _setup_cors(app)
