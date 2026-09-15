@@ -11,6 +11,11 @@ from core.middleware import auth_middle
 from integrations.sber.client import SberAcquiringClient, SberAcquiringError
 from models.payments_model import PaymentProvider, PaymentStatus
 from models.tariffs_model import TariffPlan
+from services.legal_service import (
+    LegalConsentError,
+    record_consents,
+    validate_consent_payload,
+)
 from services.payment_service import (
     apply_sber_status,
     create_or_get_payment,
@@ -101,6 +106,25 @@ async def _confirm_sber_payment(
     )
 
 
+async def _record_billing_consents(
+    session: AsyncSession,
+    *,
+    request: Request,
+    user_id: UUID,
+    documents,
+    payment_id: UUID,
+) -> None:
+    await record_consents(
+        session,
+        user_id=user_id,
+        documents=documents,
+        context="billing",
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        context_reference=str(payment_id),
+    )
+
+
 @router.post("/create-payment", dependencies=[Depends(auth_middle)])
 async def create_payment_handler(
     request: Request,
@@ -115,6 +139,15 @@ async def create_payment_handler(
         )
 
     body = await request.json()
+    try:
+        legal_documents = validate_consent_payload(
+            body.get("legal_consents"),
+            context="billing",
+        )
+    except LegalConsentError as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code=exc.code, message=str(exc))
+
     tariff_code = str(body.get("tariff_code") or "").strip()
     if not tariff_code:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -156,6 +189,15 @@ async def create_payment_handler(
         except ValueError as exc:
             response.status_code = status.HTTP_409_CONFLICT
             return response_error(code="IDEMPOTENCY_CONFLICT", message=str(exc))
+
+        if created:
+            await _record_billing_consents(
+                db_session,
+                request=request,
+                user_id=user_id,
+                documents=legal_documents,
+                payment_id=payment.id,
+            )
 
         existing_url = (payment.provider_data or {}).get("form_url")
         if payment.external_payment_id and existing_url:
@@ -234,6 +276,13 @@ async def create_payment_handler(
         tariff_id=tariff.id,
         amount=amount,
         provider=PaymentProvider.FAKE,
+    )
+    await _record_billing_consents(
+        db_session,
+        request=request,
+        user_id=user_id,
+        documents=legal_documents,
+        payment_id=payment.id,
     )
     return response_success(**_payment_payload(payment))
 
@@ -322,7 +371,6 @@ async def sber_callback_handler(
     params = await _callback_params(request)
     external_id = str(params.get("mdOrder") or params.get("orderId") or "").strip()
     if not external_id:
-        # A callback without an order identifier cannot mutate payment state.
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code="CALLBACK_INVALID", message="Не указан идентификатор заказа")
 
@@ -332,7 +380,6 @@ async def sber_callback_handler(
         external_payment_id=external_id,
     )
     if payment is None:
-        # Do not leak whether a provider-side order exists in our database.
         return response_success(accepted=True)
 
     callback_data = {

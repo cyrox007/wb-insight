@@ -7,6 +7,11 @@ from core.dependencies import get_db_session
 from core.logger import setup_logger
 from core.session_cookie import set_refresh_cookie
 from schemas.auth import LoginRequest
+from services.legal_service import (
+    LegalConsentError,
+    record_consents,
+    validate_consent_payload,
+)
 from services.subscription_service import create_demo_subscription
 from services.tariff_service import get_tariff_by_code
 from services.user_service import (
@@ -139,10 +144,30 @@ async def registration(
 ) -> dict:
     """Регистрация нового пользователя и выдача demo-подписки."""
     data = await request.json()
-    reg_data = data.get("registrationData")
+    reg_data = data.get("registrationData") or {}
+    legal_context = (
+        "registration_legal"
+        if reg_data.get("entity_type") == "legal_entity"
+        else "registration"
+    )
 
-    user = await insert_user(db_session, reg_data)
+    try:
+        legal_documents = validate_consent_payload(
+            reg_data.get("legal_consents"),
+            context=legal_context,
+        )
+    except LegalConsentError as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code=exc.code, message=str(exc))
+
+    user_data = {
+        key: value
+        for key, value in reg_data.items()
+        if key not in {"legal_consents", "agree_terms", "agree_privacy", "agree_data_processing"}
+    }
+    user = await insert_user(db_session, user_data)
     if not user:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
             code="REGISTRATION_ERROR",
             message="Ошибка при регистрации",
@@ -150,8 +175,19 @@ async def registration(
 
     await create_user_role_association(db_session, str(user.id), "user")
 
+    await record_consents(
+        db_session,
+        user_id=user.id,
+        documents=legal_documents,
+        context=legal_context,
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        context_reference=str(user.id),
+    )
+
     demo = await get_tariff_by_code(db_session, "demo")
     if demo is None:
+        await db_session.rollback()
         response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return response_error(
             code="INTERNAL_SERVER_ERROR",

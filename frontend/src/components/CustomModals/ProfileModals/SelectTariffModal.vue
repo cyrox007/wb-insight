@@ -2,6 +2,7 @@
 import Modal from '@/components/UI/Modal.vue';
 import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue';
 import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
+import LegalConsentChecklist from '@/components/LegalConsentChecklist.vue';
 import { ref, onMounted, watch } from 'vue';
 import ProfileServices from '@/API/Dashboard/ProfileServices';
 import TariffService from '@/API/Dashboard/TariffService';
@@ -17,6 +18,8 @@ const tariffs = ref([]);
 const selectedTariff = ref(props.currentTariffCode || '');
 const loadingPayment = ref(false);
 const paymentAttemptKey = ref(null);
+const legalConsents = ref([]);
+const legalValid = ref(false);
 
 const newAttemptKey = () => {
 	if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -51,7 +54,7 @@ const loadTariffs = async () => {
 };
 
 const selectTariff = async () => {
-	if (!selectedTariff.value || loadingPayment.value) return;
+	if (!selectedTariff.value || loadingPayment.value || !legalValid.value) return;
 
 	loadingPayment.value = true;
 	paymentAttemptKey.value ||= newAttemptKey();
@@ -59,7 +62,8 @@ const selectTariff = async () => {
 	try {
 		const response = await TariffService.createPayment(
 			selectedTariff.value,
-			paymentAttemptKey.value
+			paymentAttemptKey.value,
+			legalConsents.value
 		);
 		const data = response.data;
 
@@ -73,7 +77,6 @@ const selectTariff = async () => {
 			return;
 		}
 
-		// Development fake billing remains explicit and never runs in production.
 		if (data.payment_id) {
 			emit('payment', data.payment_id);
 			return;
@@ -112,11 +115,20 @@ const selectTariff = async () => {
 			<p v-if="!selectedTariff" class="selection-hint">
 				Выберите тариф, чтобы продолжить
 			</p>
+			<LegalConsentChecklist
+				v-model="legalConsents"
+				context="billing"
+				@valid="legalValid = $event"
+			/>
 		</template>
 		<template #footer>
 			<ButtonCancel @click="$emit('close')" text="Отмена" />
-			<ButtonPrimary @click="selectTariff" :disabled="!selectedTariff" text="Перейти к оплате"
-				:loading="loadingPayment" />
+			<ButtonPrimary
+				@click="selectTariff"
+				:disabled="!selectedTariff || !legalValid"
+				text="Перейти к оплате"
+				:loading="loadingPayment"
+			/>
 		</template>
 	</Modal>
 </template>

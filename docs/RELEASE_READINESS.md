@@ -77,7 +77,7 @@ P25 добавил:
 
 ### 4. Health, monitoring и alerts — CODE BASELINE READY IN P26 / OPS ACTIVATION REMAINS
 
-P26 добавляет:
+P26 добавил:
 
 - `GET /health/live` — liveness + deployed version;
 - `GET /health/ready` — readiness PostgreSQL + Redis + deployed version;
@@ -101,7 +101,7 @@ P26 добавляет:
 
 ### 5. Backup / restore — CODE BASELINE READY IN P26 / REAL DRILL REMAINS
 
-P26 добавляет:
+P26 добавил:
 
 - encrypted `pg_dump` backup;
 - AES-256-CBC + PBKDF2;
@@ -124,17 +124,34 @@ P26 добавляет:
 
 Подробности: `docs/OPERATIONS.md`.
 
-### 6. Legal / privacy / consent — P27 PRODUCT + EXTERNAL BLOCKER
+### 6. Legal / privacy / consent — CODE BASELINE READY IN P27 / LEGAL APPROVAL REMAINS
 
-Перед продажами нужны утверждённые тексты и страницы:
+P27 закрывает технический контур:
 
-- оферта/условия использования;
-- политика конфиденциальности;
-- согласие на обработку персональных данных;
-- политика обработки/хранения marketplace credentials;
-- реквизиты оператора сервиса;
-- правила возвратов/отмены подписки;
-- фиксация версии согласия и timestamp.
+- backend является source of truth для текущей версии каждого обязательного документа;
+- публичные `/legal/requirements/{context}` и `/legal/documents/{code}`;
+- immutable `legal_consents` с user/document/version/SHA-256/context/timestamp;
+- IP и User-Agent сохраняются только как HMAC evidence, без исходного значения;
+- backend отклоняет отсутствующую, устаревшую или несовпадающую по SHA-256 версию согласия;
+- регистрация требует `terms + privacy`, для юрлица дополнительно `personal_data`;
+- платный payment attempt требует `privacy + offer + refund_policy`;
+- подключение marketplace credential требует `privacy + credential_policy`;
+- frontend получает версии документов с backend непосредственно перед действием.
+
+До RC остаётся обязательный внешний legal review:
+
+- утвердить окончательное Пользовательское соглашение/оферту;
+- утвердить Политику конфиденциальности и согласие на обработку персональных данных;
+- утвердить правила обработки marketplace credentials;
+- заполнить реквизиты оператора/продавца услуги;
+- утвердить правила отмены подписки и возвратов;
+- заменить `1.0-draft.1` на утверждённые версии без изменения уже принятой версии «на месте»;
+- настроить отдельный `LEGAL_EVIDENCE_HMAC_KEY` в production;
+- сохранить неизменяемый архив выпущенных юридических текстов.
+
+Пока встроенные документы имеют статус `draft`, продукт **не может** перейти в `1.0.0-rc.N`.
+
+Подробности: `docs/LEGAL_CONSENT.md`.
 
 ### 7. Browser session hardening + release smoke — P28
 
@@ -146,7 +163,7 @@ Frontend пока хранит access JWT в `localStorage`. Refresh token уж�
 
 ### Alpha — текущая стадия
 
-`0.9.0-alpha.N` используется, пока закрываются P25–P28, environment validation и внешние WB/Sber blockers.
+`0.9.0-alpha.N` используется, пока закрываются P27–P28, environment validation и внешние WB/Sber/legal blockers.
 
 ### Beta
 
@@ -154,7 +171,7 @@ Frontend пока хранит access JWT в `localStorage`. Refresh token уж�
 
 ### Release Candidate
 
-`1.0.0-rc.1` допускается только после настройки реальных WB/Sber credentials, production deployment/TLS, monitoring, backup/restore drill, legal/consent flow и полного release smoke.
+`1.0.0-rc.1` допускается только после настройки реальных WB/Sber credentials, production deployment/TLS, monitoring, backup/restore drill, утверждения legal documents/consent flow и полного release smoke.
 
 ### Stable
 
@@ -164,14 +181,14 @@ Frontend пока хранит access JWT в `localStorage`. Refresh token уж�
 
 Нужен автоматизируемый или документированный smoke:
 
-1. регистрация;
+1. регистрация с фиксацией актуальных legal consent;
 2. demo subscription;
-3. подключение WB кабинета;
+3. подключение WB кабинета с credential consent;
 4. полный sync;
 5. открытие всех dashboard sections;
 6. ввод себестоимости и расходов;
 7. создание плана;
-8. создание реального платежа;
+8. создание реального платежа с billing consent;
 9. callback/status confirmation;
 10. активация платного тарифа;
 11. logout/login/refresh session;
@@ -210,7 +227,9 @@ AI-аналитик, прогнозы и native mobile apps не должны ф
 - [ ] внешний alerting/uptime/logging реально подключён и проверен;
 - [x] encrypted backup/restore code baseline и CI roundtrip реализованы;
 - [ ] production-like restore drill и off-host backup подтверждены;
-- [ ] legal documents опубликованы и consent фиксируется;
+- [x] versioned legal/consent code baseline реализован;
+- [ ] юридические тексты утверждены и опубликованы как non-draft версии;
+- [ ] отдельный `LEGAL_EVIDENCE_HMAC_KEY` настроен в production;
 - [ ] browser access-token hardening завершён;
 - [ ] smoke suite пройдена на production-like environment;
 - [ ] секреты/токены не присутствуют в git, frontend bundle или логах.
@@ -221,11 +240,11 @@ AI-аналитик, прогнозы и native mobile apps не должны ф
 2. P23 — release readiness / health / documentation — **done**.
 3. P24 — Sber acquiring code integration — **done; merchant onboarding остаётся внешним blocker**.
 4. P25 — versioning + production container/deployment baseline — **done**.
-5. P26 — monitoring, alerts, backup/restore baseline — **candidate `0.9.0-alpha.3`; после green CI -> done**.
-6. P27 — legal routes + consent persistence.
+5. P26 — monitoring, alerts, backup/restore baseline — **done; `0.9.0-alpha.3`**.
+6. P27 — legal routes + versioned consent persistence — **candidate `0.9.0-alpha.4`; legal approval остаётся внешним blocker**.
 7. P28 — browser access-token hardening + release smoke.
 8. `0.9.0-beta.1` после feature freeze и production-like validation.
-9. `1.0.0-rc.1` после закрытия external/ops blockers.
+9. `1.0.0-rc.1` после закрытия external/ops/legal blockers.
 10. `1.0.0` — public stable WB Web v1.
 11. Ozon adapter/products/orders/finance.
 12. WB OAuth 2.0 onboarding after Catalog readiness.

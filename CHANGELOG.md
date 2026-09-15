@@ -4,6 +4,24 @@
 
 Подробная история с объяснением каждого перехода находится в `docs/VERSION_HISTORY.md`, правила дальнейшего версионирования — в `docs/VERSIONING.md`.
 
+## [0.9.0-alpha.4] — 2026-09-15
+
+P27 — versioned legal documents и доказуемая фиксация согласий.
+
+- добавлен backend registry юридических документов с кодом, версией и SHA-256 текста;
+- добавлены публичные API requirements и просмотра конкретного документа;
+- создана immutable таблица `legal_consents` для точной версии принятого документа;
+- evidence содержит контекст, ссылку на бизнес-объект и UTC timestamp;
+- IP и User-Agent не сохраняются открытым текстом — фиксируются только HMAC;
+- регистрация backend-ом требует актуальные версии `terms` и `privacy`, а для юрлиц также `personal_data`;
+- платёж нельзя создать без актуальных `privacy`, `offer` и `refund_policy`;
+- WB credential нельзя сохранить без `privacy` и `credential_policy`;
+- frontend получает legal requirements с backend и отправляет точные `version + sha256`;
+- добавлены публичные `/legal/:code`, совместимые `/terms` и `/privacy`, а также reusable consent checklist;
+- production env дополнен отдельным `LEGAL_EVIDENCE_HMAC_KEY`;
+- добавлена техническая документация `docs/LEGAL_CONSENT.md` и тесты version/hash enforcement;
+- юридические тексты намеренно остаются `draft`: их утверждение владельцем сервиса/юристом остаётся обязательным внешним условием до RC.
+
 ## [0.9.0-alpha.3] — 2026-09-15
 
 P26 — эксплуатационный hardening: monitoring, alerts, backup/restore и проверяемые operational assets.
@@ -265,7 +283,7 @@ PR #13 был закрыт без merge и не входит в mainline release
 
 ## Почему проект остаётся в 0.x
 
-Стабильный публичный контракт ещё не объявлен. Работы P0–P26 существенно изменяли authentication, data identities, WB API contracts, sync semantics, финансовую модель, billing и release infrastructure. Назвать одну из этих промежуточных стадий `1.0.0` означало бы преждевременно заявить стабильность.
+Стабильный публичный контракт ещё не объявлен. Работы P0–P27 существенно изменяли authentication, data identities, WB API contracts, sync semantics, финансовую модель, billing, legal-consent model и release infrastructure. Назвать одну из этих промежуточных стадий `1.0.0` означало бы преждевременно заявить стабильность.
 
 Целевая последовательность WB Web v1:
 

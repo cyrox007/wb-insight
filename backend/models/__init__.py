@@ -12,3 +12,4 @@ from .wb_finance_summary import WbFinanceReportSummary, WbFinanceBalanceCurrent
 from .product_cost_price_model import ProductCostPrice
 from .product_cost_price_history import ProductCostPriceHistory
 from .manual_expense import ManualExpense
+from .legal_consent import LegalConsent

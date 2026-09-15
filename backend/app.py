@@ -29,6 +29,7 @@ from handlers.dashboard.tariffs_handler import router as D_tariffs_router
 from handlers.dashboard.token_handler import router as D_tokens_router
 from handlers.dashboard.unit_economy_handler import router as D_unit_economy_router
 from handlers.health_handler import router as health_router
+from handlers.legal_handler import router as legal_router
 from handlers.session_handler import router as session_router
 from handlers.users_handler import routers as user_router
 from settings import config
@@ -62,6 +63,7 @@ def _setup_static_files(app: FastAPI) -> None:
 def _register_routers(app: FastAPI) -> None:
     routers = [
         health_router,
+        legal_router,
         user_router,
         auth_router,
         session_router,

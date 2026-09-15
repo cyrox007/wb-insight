@@ -2,40 +2,39 @@
 
 Дата ревизии истории: 2026-09-15.
 
-Этот документ фиксирует продуктовую историю WB Insight по фактически слитым изменениям в `main`.
+Этот документ фиксирует продуктовую историю WB Insight по фактически слитым изменениям в `main` и отдельно обозначает текущий release candidate ветки, если он ещё не слит.
 
-Важно: до введения формальной release-policy версии ниже являются **ретроспективно реконструированными milestones**. Они описывают уровень зрелости продукта после соответствующих merge, но не утверждают, что в тот момент существовал Git tag с таким номером. Канонические правила дальнейшего версионирования описаны в `docs/VERSIONING.md`, краткие release notes — в `CHANGELOG.md`.
+Важно: версии до введения формальной release-policy 15 сентября 2026 года являются **ретроспективно реконструированными milestones**. Они описывают фактический уровень зрелости продукта после соответствующих merge и не утверждают, что в тот момент существовал Git tag. Канонические правила дальнейшего версионирования описаны в `docs/VERSIONING.md`, краткие release notes — в `CHANGELOG.md`.
 
 ## Как читать историю
 
-Мы разделяем две истории:
+Мы разделяем:
 
-- **Git history** — каждый технический commit/merge;
-- **product version history** — законченные уровни зрелости продукта.
+- **Git history** — отдельные технические commit и merge;
+- **product version history** — законченные уровни зрелости продукта;
+- **release stage** — alpha, beta, rc или stable, которая меняется только при выполнении заранее определённых gates.
 
-Один продуктовый milestone может объединять несколько PR, если только вместе они дают осмысленное состояние продукта. Это позволяет не превращать номер версии в номер коммита и сохраняет смысл переходов `alpha -> beta -> rc -> stable`.
+Один продуктовый milestone может объединять несколько PR. Номер версии не является номером коммита.
 
 ---
 
 ## 0.1.0-alpha.1 — реконструкция проекта
 
 **Период:** 2026-03-30  
-**Mainline:** PR #1  
-**Статус:** ранний прототип / техническая реконструкция.
+**Mainline:** PR #1.  
+**Статус:** ранний прототип.
 
 ### Что появилось
 
-- восстановлен первый рабочий кодовый baseline репозитория;
+- восстановлен первый рабочий codebase;
 - сформирована исходная структура backend/frontend;
-- подготовлена база для последующей синхронизации Wildberries.
+- подготовлена база для последующей интеграции Wildberries.
 
-### Что не вошло
+PR #2 и #3 были закрыты без merge и в mainline-историю не входят.
 
-PR #2 и #3 были закрыты без merge и поэтому не являются частью истории `main`.
+### Почему 0.1
 
-### Почему версия 0.1
-
-Это первый воспроизводимый mainline baseline, но ещё не продуктовый MVP.
+Первый воспроизводимый baseline, но ещё не продуктовый MVP.
 
 ---
 
@@ -46,18 +45,13 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 
 ### Что изменилось
 
-- появились первые расчёты на основе WB reports;
-- начал формироваться экран/контур unit-экономики;
-- несколько итераций подряд уточняли расчётную модель и связку с отчётами WB.
+- появились первые расчёты по WB reports;
+- начал формироваться контур unit-экономики;
+- несколько итераций уточнили расчёты и связку с отчётами WB.
 
-### Ограничения этапа
+### Почему 0.2
 
-- модель данных и API-контракты ещё не были приведены к production semantics;
-- account isolation, durable sync, финальная безопасность и release-инфраструктура ещё отсутствовали.
-
-### Почему версия 0.2
-
-Проект перешёл от восстановленного skeleton к первой полезной аналитической функции.
+Проект перешёл от skeleton к первой самостоятельной полезной аналитической функции.
 
 ---
 
@@ -69,14 +63,14 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 
 ### Что изменилось
 
-- исправлена работа синхронизации при проблемном WB credential;
-- добавлена первая синхронизация рекламной статистики;
+- исправлена работа sync при проблемном WB credential;
+- появилась первая синхронизация рекламной статистики;
 - добавлялся и дорабатывался backend/frontend рекламного раздела;
-- исправлялись ошибки импорта рекламных данных.
+- исправлялись ошибки импорта advertising data.
 
-### Почему версия 0.3
+### Почему 0.3
 
-Появился второй самостоятельный аналитический контур — реклама — и началась регулярная интеграция с внешним WB API.
+Появился второй самостоятельный аналитический контур и регулярная внешняя WB API integration.
 
 ---
 
@@ -88,67 +82,65 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 ### Что изменилось
 
 - уточнены требования к БД;
-- зафиксированы дополнительные notes по функционалу и структуре данных;
-- подготовлен переход от раннего прототипа к системной переработке persistence/API слоя.
+- зафиксированы дополнительные требования к persistence/data structure;
+- подготовлен переход к системному production-аудиту.
 
-### Почему версия 0.4
+### Почему 0.4
 
-Это не большой пользовательский релиз, а важная архитектурная точка перед production-аудитом и последующим P0–P24 hardening.
+Архитектурная точка перед большой переработкой P0–P24, а не публичный релиз.
 
 ---
 
-## 0.5.0-alpha.1 — production-safety и durable sync foundation
+## 0.5.0-alpha.1 — production safety и durable sync foundation
 
 **Период:** 2026-09-14  
 **Mainline:** P0–P4, PR #15–#19.
 
-### P0 / PR #15 — production safety
+### P0 / PR #15 — Production Safety
 
 - строгая модель access/refresh JWT;
 - server-side refresh/logout;
-- production fail-closed для security secrets;
 - server-side RBAC control panel;
-- защита ролей и super-admin invariants;
+- защита super-admin invariants;
 - marketplace credentials перестали возвращаться на frontend;
-- тарифные лимиты WB-кабинетов начали проверяться backend-ом;
-- fake billing ограничен dev-режимом;
-- audit trail без request body/секретов;
-- появился CI baseline backend/frontend/PostgreSQL migrations.
+- тарифные лимиты WB-кабинетов проверяются backend-ом;
+- fake billing ограничен development;
+- audit logging без request body/секретов;
+- CI baseline backend/frontend/PostgreSQL migrations.
 
-### P1 / PR #16 — account-scoped sync
+### P1 / PR #16 — Account-scoped Sync
 
-- `SyncJob` и `UserSyncState` получили размерность конкретного marketplace credential;
-- worker и scheduler перестали смешивать кабинеты одного пользователя;
-- ownership, marketplace, credential validity и тариф проверяются перед sync;
-- clean PostgreSQL + Alembic check стали частью CI.
+- `SyncJob` и `UserSyncState` привязаны к конкретному marketplace credential;
+- scheduler/worker не смешивают кабинеты одного пользователя;
+- ownership, marketplace, validity и tariff allowance проверяются перед sync;
+- Alembic проверяется на чистом PostgreSQL.
 
-### P2 / PR #17 — WB transport hardening
+### P2 / PR #17 — WB Transport Hardening
 
 - Redis-coordinated rate limiting;
-- bounded retries;
-- `Retry-After` и shared cooldown;
-- typed WB auth/rate/API errors;
+- bounded retries и `Retry-After`;
+- typed auth/rate/API errors;
 - credential не деактивируется из-за любого 4xx;
-- закрытие HTTP/Redis resources стало детерминированным.
+- deterministic cleanup HTTP/Redis resources.
 
-### P3 / PR #18 — актуальные WB contracts
+### P3 / PR #18 — WB API Contracts
 
-- обновлены Finance/Stocks/Content API contracts;
-- добавлена безопасная pagination/cursor semantics;
-- исправлены account-scoped canonical identities;
-- ingestion начал писать normalized current API data вместо raw response assumptions.
+- актуализированы Finance, Stocks и Content contracts;
+- безопасная pagination/cursor semantics;
+- account-scoped canonical identities;
+- normalized ingestion current WB payloads.
 
-### P4 / PR #19 — durable/resumable jobs
+### P4 / PR #19 — Durable Resumable Jobs
 
 - atomic claim через `FOR UPDATE SKIP LOCKED`;
-- processing lease и crash recovery;
+- processing leases и crash recovery;
 - bounded retry budget;
 - durable page checkpoints;
-- restart продолжает sync с последней подтверждённой страницы.
+- restart продолжает sync с подтверждённой страницы.
 
-### Почему версия 0.5
+### Почему 0.5
 
-Это точка, где проект впервые получил production-oriented security и устойчивый ingestion core. Пользовательский набор функций ещё был неполным, поэтому стадия осталась alpha.
+Проект впервые получил production-oriented security и устойчивый ingestion core, но пользовательский scope ещё был неполным.
 
 ---
 
@@ -159,33 +151,31 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 
 ### P5 / PR #20 — Orders и Sales/Returns
 
-- account-scoped operational orders;
-- sales/returns facts;
-- canonical `(token_id, srid)` и `(token_id, sale_id)` identities;
+- account-scoped orders и sales/returns facts;
+- canonical identities;
 - retention-aware initial sync;
-- cursor based on `lastChangeDate`;
+- cursor по `lastChangeDate`;
 - stale replay protection.
 
 ### P6 / PR #21 — Advertising
 
 - актуальный Promotion API;
 - campaign discovery и `fullstats v3`;
-- campaign batching;
-- rolling refresh attribution data;
-- account-scoped ad facts;
-- permission error отделён от invalid credential.
+- batching и rolling refresh;
+- account-scoped advertising facts;
+- permission errors отделены от invalid credential.
 
 ### P7 / PR #22 — Sales Funnel
 
 - daily product funnel facts;
-- views/carts/orders/buyouts/conversions;
+- views, carts, orders, buyouts и conversions;
 - rolling 7-day refresh;
-- batch по `nmIds`;
+- batching `nmIds`;
 - typed feature-unavailable behavior.
 
-### Почему версия 0.6
+### Почему 0.6
 
-Система перестала быть только Finance/Unit Economy prototype и получила канонический operational/marketing fact layer.
+Система получила канонический operational/marketing fact layer вместо ранних отчётных assumptions.
 
 ---
 
@@ -194,54 +184,52 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 **Период:** 2026-09-15  
 **Mainline:** P8–P13, PR #23–#28.
 
-### P8 / PR #23 — Semantic Metrics
+### P8 / PR #23 — Unified Semantic Metrics
 
-- единые определения метрик между Main/Ads;
-- operational orders отделены от Finance realization;
-- advertising attribution отделена от общего заказа;
-- исправлены предыдущие периоды и Moscow-day boundaries;
-- sync-state semantics перестали давать ложный вечный `syncing`.
+- единые определения метрик между аналитическими разделами;
+- operational orders отделены от finance realization;
+- advertising attribution отделена от общего количества заказов;
+- исправлены comparison periods, Moscow-day boundaries и sync status semantics.
 
 ### P9 / PR #24 — Multi-account Dashboard
 
 - единый `DashboardAccountScope`;
-- режим всех тарифно разрешённых кабинетов;
-- безопасный выбор одного кабинета;
-- SQL-level scope для основных аналитических разделов;
-- общий frontend selector кабинета.
+- безопасный selected/all account scope;
+- SQL-level scoping основных разделов;
+- общий frontend account selector.
 
 ### P10 / PR #25 — Unit Economy correctness
 
-- устранены obsolete aliases и runtime mismatches;
-- ratios считаются из агрегированных числителей/знаменателей;
-- фактические рекламные расходы входят в Unit Economy;
-- API output синхронизирован с frontend contract.
+- исправлены runtime/alias mismatches;
+- aggregate ratios считаются из числителей/знаменателей;
+- фактические advertising расходы включены в unit economics;
+- API contract синхронизирован с frontend.
 
-### P11 / PR #26 — Revenue Plans
+### P11 / PR #26 — Monthly Revenue Plans
 
-- persistent monthly revenue target;
-- target отдельно по кабинету/месяцу;
+- persistent monthly targets;
+- target по кабинету и месяцу;
 - реальная длина календарного месяца;
-- разделены required revenue/day и required orders/day;
-- удалены выдуманные fallback-планы.
+- раздельные required revenue/day и orders/day;
+- удалены выдуманные fallback targets.
 
 ### P12 / PR #27 — Paid Storage
 
-- официальный WB task/status/download flow;
-- <=8-day chunks;
-- persisted task ID/checkpoint;
-- rolling refresh с заменой завершённого диапазона.
+- официальный task/status/download flow;
+- chunks не более 8 дней;
+- persisted task/checkpoint;
+- rolling refresh.
 
-### P13 / PR #28 — COGS history и seller expenses
+### P13 / PR #28 — Historical COGS и Seller Expenses
 
-- date-effective себестоимость;
-- account/SKU manual expenses;
-- история не искажается при новой закупочной цене;
-- Main и Unit Economy используют одинаковую temporal COGS semantics.
+- date-effective COGS history;
+- manual expenses по account/SKU;
+- новая закупочная цена не искажает историю;
+- Main и Unit Economy используют одинаковую temporal semantics.
 
-### Почему версия 0.7
+### Почему 0.7
 
-Проект получил единый semantic/business layer поверх сырых marketplace facts и начал заменять ручные листы исходной аналитической таблицы.
+Появился единый semantic/business layer поверх marketplace facts — основа замены исходной аналитической таблицы.
 
 ---
 
@@ -250,50 +238,47 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 **Период:** 2026-09-15  
 **Mainline:** P14–P18, PR #29–#33.
 
-### P14 / PR #29 — UI/UX foundation
+### P14 / PR #29 — Dashboard UX Foundation
 
-- единый спокойный интерфейс аналитики;
-- Overview перестроен вокруг результата/отклонения/причин;
+- единый спокойный UI аналитики;
+- Overview, Unit Economy и Ads перестроены вокруг реальных данных;
 - удалены demo/hardcoded KPI;
-- исправлена передача периода;
-- Unit Economy и Ads приведены к рабочей информационной архитектуре.
+- исправлены period/filter semantics.
 
-### P15 / PR #30 — Seller Settings
+### P15 / PR #30 — Seller Inputs / Settings
 
-- реальный профиль продавца;
-- workspace подключённых WB-кабинетов;
-- UI ввода себестоимости;
-- CSV secondary path;
-- CRUD ручных расходов;
-- налоговая ставка и timezone валидируются backend-ом.
+- рабочий профиль продавца;
+- workspace WB-кабинетов;
+- ввод COGS с effective dates и CSV path;
+- ручные расходы;
+- единый settings design system.
 
-### P16 / PR #31 — Inventory/Replenishment
+### P16 / PR #31 — Inventory Risk / Replenishment
 
-- спрос за 30 завершённых дней;
+- спрос по 30 завершённым дням;
 - stock cover;
-- порог критичности 14 дней;
-- целевой запас 30 дней;
-- рекомендация поставки без отрицательных значений;
-- позиции без спроса отделены от нормального stock coverage.
+- критический остаток;
+- recommendation quantity;
+- отдельный inventory dashboard.
 
 ### P17 / PR #32 — Price Monitoring
 
-- read-only current price snapshot;
-- история только реальных изменений;
+- durable current-price sync;
+- история только фактических изменений;
 - size-aware identity;
 - price dashboard.
 
 ### P18 / PR #33 — Finance Reconciliation
 
-- canonical finance report summary;
-- current WB balance;
-- summary/detail reconciliation;
+- canonical finance summaries;
+- current balance snapshot;
+- reconciliation summary/detail;
 - tolerance 2 копейки;
-- `bankPaymentSum` сохраняется как канонический итог WB, а не восстанавливается собственной формулой.
+- durable finance sync.
 
-### Почему версия 0.8
+### Почему 0.8
 
-К этому моменту пользовательский WB analytics scope уже близок к полному первому продукту: обзор, Unit Economy, реклама, финансы, остатки, цены, планы, COGS и расходы. Но production access, billing и эксплуатационный контур ещё не готовы.
+Пользовательский WB analytics scope уже близок к первому полному продукту, но production access, billing и release infrastructure ещё не закрыты.
 
 ---
 
@@ -303,11 +288,11 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 **Mainline:** P19–P24, PR #34–#39.  
 **Main commit после P24:** `ff0d278c32f0a770dc0cdbc0cf0ab9d98c2377ca`.
 
-### P19 / PR #34 — WB credential compliance
+### P19 / PR #34 — WB Credential Compliance
 
-- backend сам определяет token type из JWT `acc`;
+- token type определяется по JWT `acc`;
 - expiry берётся из реального `exp`;
-- Personal/Test не допускаются в cloud production flow;
+- Personal/Test запрещены для cloud flow;
 - Service token проверяется на service binding;
 - официальный Bearer header.
 
@@ -315,46 +300,45 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 
 - общий `MarketplaceAdapter`;
 - registry адаптеров;
-- WB-specific handlers спрятаны за adapter contract;
-- будущий Ozon сможет использовать тот же scheduler/worker.
+- WB implementation скрыта за adapter contract;
+- создан фундамент для будущего Ozon без дублирования scheduler/worker.
 
 ### P21 / PR #36 — Marketplace Credential Foundation
 
 - `external_account_id`;
-- nullable `expires_at` для non-expiring provider keys;
-- исправлена WB enum semantics;
-- устранён legacy endpoint regression после предыдущего token API refactor.
+- nullable `expires_at`;
+- seller identity отделена от encrypted secret;
+- исправлены legacy credential regressions.
 
-### P22 / PR #37 — WB production token policy
+### P22 / PR #37 — WB Production Access-token Policy
 
-- обязательные категории: Контент, Аналитика, Цены и скидки, Статистика, Продвижение, Финансы;
+- обязательные permissions: Контент, Аналитика, Цены и скидки, Статистика, Продвижение, Финансы;
 - обязателен Read Only;
-- Base/Service requests подписываются `X-Client-Secret`;
+- Base/Service requests используют `X-Client-Secret`;
 - production требует `WB_SERVICE_ID + WB_SERVICE_SECRET`;
-- credential live-validates against WB `/ping` перед сохранением.
+- credential live-validates через WB `/ping` перед сохранением.
 
-### P23 / PR #38 — Release Readiness
+### P23 / PR #38 — Release Readiness baseline
 
 - `/health/live`;
-- `/health/ready` с PostgreSQL + Redis;
+- `/health/ready` с PostgreSQL/Redis;
 - README/SETUP приведены к фактическому продукту;
-- создан release Definition of Done;
+- создан Definition of Done;
 - Ozon/AI/mobile выведены за scope WB Web v1.
 
 ### P24 / PR #39 — Sber Acquiring
 
-- server-to-server registration;
+- server-to-server registration/status verification;
 - idempotency key;
-- provider `orderId/formUrl`;
-- callback только триггер;
-- backend самостоятельно подтверждает payment state;
-- subscription привязана к подтверждённому payment;
+- callback используется только как trigger;
+- backend самостоятельно подтверждает deposited state;
+- subscription связана с подтверждённым payment;
 - duplicate callback/refresh не создаёт вторую подписку;
-- sandbox/prod separation.
+- sandbox/production separation.
 
-### Почему версия 0.9.0-alpha.1
+### Почему 0.9.0-alpha.1
 
-Функциональный WB scope уже сформирован, но продукт ещё нельзя честно назвать beta: отсутствовали воспроизводимый production deployment, monitoring, backup/restore, legal/consent и финальный session/release smoke hardening.
+Функциональный WB scope сформирован, но ещё отсутствовали deployment/monitoring/backup/legal/session/release-smoke слои.
 
 ---
 
@@ -366,58 +350,117 @@ PR #2 и #3 были закрыты без merge и поэтому не явля
 
 ### Что изменилось
 
-- введён root `VERSION` как source of truth;
-- frontend и FastAPI перестали объявлять разные версии;
+- root `VERSION` стал source of truth;
+- frontend/FastAPI version приведены к одной схеме;
 - runtime version доступна через health endpoints;
-- зафиксированы SemVer и stage gates;
-- появились production Docker images backend/frontend;
-- same-origin nginx gateway;
-- production Compose topology: PostgreSQL, Redis, migration job, API, worker, единственный beat, frontend;
-- production env contract без реальных секретов;
+- формализованы SemVer и stage gates;
+- добавлены production Docker images;
+- same-origin nginx `/api` gateway;
+- Compose topology: PostgreSQL, Redis, migration, API, worker, beat, frontend;
+- production env contract без секретов;
 - deployment/upgrade/rollback runbook;
-- CI проверяет version consistency, Docker builds и Compose model.
+- release-integrity CI проверяет version consistency, images и Compose.
 
 ### Почему всё ещё alpha
 
-Production deployment теперь воспроизводим из репозитория, но monitoring/backup, legal consent, browser session hardening и внешние WB/Sber production smoke ещё не закрыты.
+Deployment воспроизводим из repo, но operations, legal и финальный browser-session/release-smoke hardening ещё не закрыты.
 
 ---
 
-## 0.9.0-alpha.3 — P26 Operations hardening
+## 0.9.0-alpha.3 — operations hardening
 
-**Статус:** в разработке на `codex/p26-operations-monitoring-backup`.
+**Период:** 2026-09-15  
+**Mainline:** P26, PR #41.  
+**Merge commit:** `76ee8651298fff99b8bf6a11921dcbfbf0916c46`.
 
-Планируемое содержание milestone:
+### Что изменилось
 
-- operational snapshot для super-admin;
-- monitoring failed/stale sync jobs и processing leases;
-- alerts по истекающим marketplace credentials;
-- контроль срока ротации `WB_SERVICE_SECRET`;
-- HTTP 5xx rate telemetry;
-- scheduled Celery operations check;
-- deduplicated alert webhook;
-- encrypted PostgreSQL backup + checksum + retention;
-- guarded restore;
+- super-admin operational snapshot;
+- failed/stale sync и expired processing lease checks;
+- marketplace credential expiry alerts;
+- отдельный 30-day warning по ротации `WB_SERVICE_SECRET`;
+- Redis minute-bucket HTTP/5xx telemetry;
+- scheduled Celery operations monitor;
+- deduplicated HTTPS alert webhook;
+- encrypted PostgreSQL backup, checksum и retention;
+- destructive restore guard;
 - isolated restore drill;
-- operational runbook и CI для release assets.
+- CI выполняет настоящий encrypted backup/restore roundtrip;
+- зафиксированы RPO/RTO baseline и operations runbook;
+- найден и закрыт production refresh-cookie regression: единая Secure/SameSite/Domain policy, `Path=/`, legacy GET refresh удалён.
 
-Версия станет канонической только после green CI и merge P26 в `main`.
+### Почему всё ещё alpha
+
+Operations code baseline готов, но legal/consent и persistent browser access-token ещё оставались code-side blockers. Реальные WB/Sber credentials, off-host backup, alert destination и production-like drills также остаются внешними/ops gates.
+
+---
+
+## 0.9.0-alpha.4 — versioned legal documents и consent evidence
+
+**Период:** 2026-09-15  
+**Рабочая ветка:** `codex/p27-legal-consent-foundation`.  
+**Статус на момент этой записи:** кандидат P27; становится mainline milestone только после green CI и merge.
+
+### Что реализовано в P27
+
+- backend registry обязательных юридических документов;
+- каждый документ имеет стабильный `code`, `version` и вычисляемый SHA-256;
+- публичные `/legal/requirements/{context}` и `/legal/documents/{code}`;
+- immutable `legal_consents` с `user_id`, кодом, точной версией, SHA-256, контекстом и UTC timestamp;
+- IP/User-Agent не сохраняются открытым текстом, а фиксируются как HMAC evidence;
+- отдельный production `LEGAL_EVIDENCE_HMAC_KEY` документирован;
+- backend отвергает отсутствующее согласие, устаревшую версию и несовпадающий document hash;
+- регистрация физлица/самозанятого требует `terms + privacy`;
+- регистрация юрлица дополнительно требует `personal_data`;
+- создание платного payment attempt требует `privacy + offer + refund_policy`;
+- сохранение marketplace credential требует `privacy + credential_policy`;
+- billing consent связывается с `payment_id`, credential consent — с credential ID;
+- idempotent повтор Sber payment attempt не создаёт вторую пачку consent evidence;
+- frontend получает актуальные document metadata с backend и отправляет точные `version + sha256`;
+- созданы публичные legal pages и совместимые `/terms`/`/privacy` routes;
+- добавлен reusable legal consent checklist;
+- техническая архитектура описана в `docs/LEGAL_CONSENT.md`.
+
+### Что намеренно не считается готовым
+
+Встроенные тексты имеют версию `1.0-draft.1` и явно помечены как черновики. P27 доказывает **кто, когда и какую конкретную версию принял**, но не заменяет юридическую проверку содержания.
+
+До RC требуется:
+
+- утверждение текстов владельцем сервиса и юридическим специалистом;
+- реквизиты оператора/продавца услуги;
+- утверждённые правила возврата/отмены;
+- утверждённая privacy/data processing модель;
+- публикация новых non-draft версий без переписывания уже принятой версии;
+- архив выпущенных текстов.
+
+### Почему всё ещё alpha
+
+После P27 остаётся code-side P28: access JWT должен уйти из persistent browser storage, а end-to-end release smoke должен стать формализованным и воспроизводимым. Кроме того, внешние production gates ещё не закрыты.
 
 ---
 
 ## Следующие запланированные версии
 
-### 0.9.0-alpha.4 — P27 Legal / Consent
+### 0.9.0-alpha.5 — P28 Browser Session Hardening / Release Smoke
 
-Цель: публичные legal routes, versioned consent и фиксация согласия пользователя при необходимых действиях.
+Цель:
 
-### 0.9.0-alpha.5 — P28 Session hardening / Release smoke
-
-Цель: убрать browser access JWT из persistent storage, восстановление session через HttpOnly refresh и формальный end-to-end release smoke.
+- access JWT только в памяти приложения;
+- восстановление browser session через HttpOnly refresh cookie;
+- отсутствие access token в `localStorage`/`sessionStorage`;
+- формальный automated production-like release smoke.
 
 ### 0.9.0-beta.1
 
-Допускается только после закрытия code-side P0 blockers и успешного production-like end-to-end smoke. На beta feature scope WB Web v1 замораживается.
+Допускается только после:
+
+- feature freeze WB Web v1;
+- закрытия всех code-side P0 blockers;
+- green release commit;
+- успешного production-like end-to-end smoke.
+
+Beta не означает, что внешние WB/Sber/legal/operations условия уже обязательно закрыты, но продуктовый код и scope должны быть заморожены.
 
 ### 1.0.0-rc.1
 
@@ -425,26 +468,26 @@ Production deployment теперь воспроизводим из репози�
 
 - реальные WB partner credentials и seller smoke;
 - Sber production merchant credentials и payment smoke;
-- monitoring/alerts включены;
-- backup restore drill подтверждён;
-- legal documents опубликованы;
-- HTTPS/domain/secrets настроены;
+- production deployment/TLS;
+- реальный alert destination/uptime/logging;
+- off-host backup и production-like restore drill;
+- юридические документы утверждены и опубликованы как non-draft;
 - полный release smoke пройден.
 
 ### 1.0.0 — WB Insight Web v1 Stable
 
-Первый публичный стабильный релиз для продавцов Wildberries. После него breaking changes требуют увеличения MAJOR, backward-compatible feature releases — MINOR, fixes — PATCH.
+Первый публичный стабильный релиз для продавцов Wildberries. После stable breaking changes увеличивают MAJOR, backward-compatible feature releases — MINOR, исправления — PATCH.
 
 ---
 
-## Что не должно менять версию само по себе
+## Что не должно менять release stage само по себе
 
 Не повышаем стадию только из-за:
 
-- большого количества commit;
+- количества commits;
 - номера P-задачи;
 - косметического merge;
-- наличия локально работающей функции без release validation;
+- локально работающей функции без release validation;
 - документации о будущем функционале.
 
-Версия меняется, когда изменилось **фактическое состояние продукта**, а переход стадии (`alpha -> beta -> rc -> stable`) — только когда выполнены соответствующие release gates.
+Переход `alpha -> beta -> rc -> stable` происходит только после выполнения соответствующих gates.
