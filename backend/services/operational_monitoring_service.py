@@ -9,6 +9,7 @@ from core.version import APP_VERSION
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from models.user_sync_state_model import UserSyncState
+from settings import config
 
 
 def _check(status: str, **values) -> dict:
@@ -22,6 +23,51 @@ def summarize_operational_status(checks: dict[str, dict]) -> str:
     if "warning" in statuses:
         return "warning"
     return "ok"
+
+
+def _wb_service_secret_check(current: datetime, warning_days: int) -> dict:
+    """Return rotation status without ever exposing the service secret itself."""
+    if not config.WB_SERVICE_SECRET:
+        return _check("not_applicable", configured=False)
+
+    raw_expiry = ops_config.WB_SERVICE_SECRET_EXPIRES_AT
+    if not raw_expiry:
+        return _check(
+            "warning",
+            configured=True,
+            reason="expiry_not_configured",
+            warning_days=warning_days,
+        )
+
+    try:
+        expires_at = datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
+        if expires_at.tzinfo is None:
+            raise ValueError("timezone is required")
+        expires_at = expires_at.astimezone(timezone.utc)
+    except ValueError:
+        return _check(
+            "critical",
+            configured=True,
+            reason="invalid_expiry_config",
+            warning_days=warning_days,
+        )
+
+    seconds_remaining = (expires_at - current).total_seconds()
+    days_remaining = int(seconds_remaining // 86400)
+    if seconds_remaining <= 0:
+        status = "critical"
+    elif expires_at <= current + timedelta(days=warning_days):
+        status = "warning"
+    else:
+        status = "ok"
+
+    return _check(
+        status,
+        configured=True,
+        expires_at=expires_at.isoformat(),
+        days_remaining=days_remaining,
+        warning_days=warning_days,
+    )
 
 
 async def _count(session: AsyncSession, statement) -> int:
@@ -112,12 +158,14 @@ async def build_operational_snapshot(
             window_minutes=ops_config.HTTP_ERROR_WINDOW_MINUTES,
             threshold=ops_config.HTTP_5XX_RATE_THRESHOLD,
             min_requests=ops_config.HTTP_MIN_REQUESTS,
+            enabled=ops_config.HTTP_METRICS_ENABLED,
         )
     except Exception:
         http_5xx = _check(
             "error",
             reason="metrics_unavailable",
             window_minutes=ops_config.HTTP_ERROR_WINDOW_MINUTES,
+            enabled=ops_config.HTTP_METRICS_ENABLED,
         )
 
     checks = {
@@ -143,6 +191,10 @@ async def build_operational_snapshot(
             "warning" if expiring_credentials else "ok",
             count=expiring_credentials,
             warning_days=ops_config.CREDENTIAL_EXPIRY_WARNING_DAYS,
+        ),
+        "wb_service_secret": _wb_service_secret_check(
+            current,
+            ops_config.CREDENTIAL_EXPIRY_WARNING_DAYS,
         ),
         "http_5xx": http_5xx,
     }
