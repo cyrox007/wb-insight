@@ -97,11 +97,14 @@ async def get_profile(
         ],
         user=_public_user(current_user),
         subscription=None if not subscription else {
+            "id": str(subscription.id),
             "tariff_name": subscription.tariff.name,
             "status": subscription.status.value,
             "start_date": subscription.current_period_start,
             "end_date": subscription.current_period_end,
             "is_active": subscription.is_active,
+            "cancel_at_period_end": subscription.cancel_at_period_end,
+            "cancel_requested_at": subscription.cancel_requested_at,
         },
     )
 
