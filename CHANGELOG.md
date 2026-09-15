@@ -4,23 +4,43 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
-## [0.9.0-alpha.6] — кандидат, 2026-09-15
+## [0.9.0-alpha.7] — кандидат, 2026-09-15
 
-P29 — dependency/security hardening и полная ревизия документации перед beta-validation.
+P30 — beta-readiness acceptance tooling и release evidence.
+
+- добавлена versioned policy сверки ключевых WB Web v1 метрик;
+- денежные значения сравниваются через `Decimal`, без ошибок float-округления;
+- поддерживаются absolute/relative/either/both tolerance modes;
+- обязательное отсутствующее значение и превышение tolerance блокируют acceptance;
+- `ops/data_accuracy_acceptance.py` формирует машинный JSON и Markdown-отчёт с SHA-256 входа и policy;
+- добавлены положительный и отрицательный CI fixtures, чтобы runner не мог «всегда проходить»;
+- `ops/release_evidence.py` связывает stage, exact commit, version, environment и SHA-256 evidence artifacts;
+- определены обязательные evidence kinds отдельно для beta, RC и stable;
+- Release integrity получил отдельный `acceptance-tools` job с positive/negative contract tests;
+- изменение корневого `VERSION` теперь автоматически запускает Backend security и Database migrations, поэтому release-candidate head всегда проходит полный backend/migration gate;
+- добавлены `docs/DATA_ACCURACY_ACCEPTANCE.md` и `docs/RELEASE_EVIDENCE.md`;
+- P30 намеренно не назначает beta: `0.9.0-beta.1` разрешена только после фактического production-like smoke и реальной data-accuracy сверки.
+
+## [0.9.0-alpha.6] — 2026-09-15
+
+P29 — dependency/security hardening и полная ревизия документации. PR #44, merge `6a4e754738617085a22e540a84b5c8ee5e0854d1`.
 
 - frontend dependency tree обновлён после фактического security audit;
 - Axios переведён на исправленную release line `^1.18.0`;
 - удалён ошибочно включённый в browser dependencies пакет `node`;
 - безопасные transitive versions закреплены для `follow-redirects`, `form-data`, `nanoid` и `postcss`;
-- CI теперь отдельно проверяет production и полный frontend dependency tree через `npm audit` с порогом High;
-- backend CI дополнен `pip-audit` для production Python requirements;
-- временный self-write lockfile flow отключён, постоянный frontend CI снова read-only;
-- документация перестроена в единый `docs/`-портал: обзор, системные требования, установка, конфигурация, архитектура, функции, пользовательская/административная/разработческая инструкции, безопасность, API overview, данные и метрики, troubleshooting, account lifecycle, release roadmap/readiness;
-- корневые `README.md` и `SETUP.md` приведены к текущему состоянию продукта;
-- история версий и release gates синхронизированы с фактически слитым P28;
-- до beta добавлен обязательный data-accuracy gate: сверка ключевой аналитики с реальными WB-источниками и исходной spreadsheet-моделью.
-
-Версия становится mainline только после полного green CI и merge PR #44.
+- CI проверяет production и полный frontend dependency tree через `npm audit`;
+- backend CI дополнен `pip-audit` production requirements;
+- первый backend audit выявил проблемы в `cryptography`, `ecdsa`, `pyasn1`, `python-dotenv`, `starlette`;
+- цепочка `python-jose -> ecdsa` удалена, HS256 JWT переведён на PyJWT;
+- FastAPI/Starlette, cryptography и python-dotenv обновлены до исправленных веток;
+- итоговый backend audit: `No known vulnerabilities found`;
+- route tests переведены с внутренних структур FastAPI на публичный OpenAPI contract;
+- nginx container smoke получил bounded backend-readiness retry;
+- временный self-write lockfile flow отключён, постоянный frontend CI read-only;
+- документация перестроена в единый `docs/`-портал;
+- root README/SETUP и история версий приведены к фактическому состоянию;
+- до beta закреплён обязательный data-accuracy gate.
 
 ## [0.9.0-alpha.5] — 2026-09-15
 
@@ -31,9 +51,9 @@ P28 — browser-session hardening и release smoke. PR #43, merge `351cbcd7129c6
 - refresh возвращает новый access token и безопасный user snapshot;
 - concurrent 401 используют единый refresh flow;
 - frontend CI запрещает persistent access-token storage;
-- исправлен production API fallback на same-origin;
+- production API fallback переведён на same-origin;
 - nginx gateway дополнен `/billing` и `/legal`;
-- release-integrity CI проверяет маршрутизацию на реально запущенном frontend container;
+- release-integrity проверяет маршрутизацию на реально запущенном frontend container;
 - добавлены backend session-restore regression tests;
 - добавлены `ops/release_smoke.py` и `docs/RELEASE_SMOKE.md`.
 
@@ -144,7 +164,7 @@ PR #1 — первый воспроизводимый backend/frontend baseline.
 
 ## Следующие release stages
 
-- `0.9.0-beta.1` — feature freeze + production-like deployment/core smoke + data-accuracy acceptance;
+- `0.9.0-beta.1` — feature freeze + реальный production-like deployment/core smoke + data-accuracy acceptance;
 - `1.0.0-rc.1` — real WB/Sber/prod/legal/ops/account-lifecycle gates;
 - `1.0.0` — публичный stable WB Insight Web v1 из проверенного RC.
 
