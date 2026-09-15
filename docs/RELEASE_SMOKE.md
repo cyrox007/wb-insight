@@ -1,31 +1,27 @@
 # WB Insight — release smoke
 
-Документ фиксирует обязательную проверку сборки перед переходом `alpha -> beta -> rc -> stable`.
+Документ фиксирует обязательные проверки перед переходами `alpha -> beta -> rc -> stable`.
 
-## Уровни smoke
+## 1. CI smoke
 
-Release smoke разделён на три уровня, потому что CI не располагает реальными seller credentials, merchant account и production инфраструктурой.
+На release PR автоматически проверяются:
 
-### 1. CI smoke — выполняется на каждом release PR
-
-Автоматически проверяется:
-
-- backend test suite;
+- backend dependency audit и test suite;
+- frontend production/full dependency audits;
 - frontend production build;
-- запрет сохранения `access_token` и user identity в `localStorage`/`sessionStorage`;
+- запрет persistent browser storage для `access_token`;
 - Alembic upgrade/check на чистом PostgreSQL;
 - production Docker images;
-- production Compose model;
+- Compose model;
 - реальный nginx container routing для `/auth`, `/dashboard`, `/billing`, `/legal`, `/control-panel`, `/health`;
-- encrypted PostgreSQL backup/restore roundtrip.
+- encrypted PostgreSQL backup/restore roundtrip;
+- consistency canonical product version.
 
-CI smoke не доказывает доступность Wildberries или Сбер из production environment.
+CI smoke не доказывает доступность WB/Сбер из production environment и не доказывает корректность денежных показателей на реальном кабинете.
 
-### 2. Production-like smoke — `ops/release_smoke.py`
+## 2. Production-like core smoke
 
-Запускается против уже развёрнутого HTTPS environment.
-
-Обязательные переменные:
+Runner: `ops/release_smoke.py`. Запускается против отдельного HTTPS environment.
 
 ```bash
 export SMOKE_BASE_URL=https://staging.example.com
@@ -34,120 +30,139 @@ export SMOKE_PASSWORD='...'
 python3 ops/release_smoke.py
 ```
 
-Smoke runner не печатает пароль, JWT, refresh cookie или WB token.
+Runner не должен печатать credentials/session values.
 
-Проверяется:
+Core checks:
 
-1. `/health/live` и точная deployed version;
+1. `/health/live` и deployed version;
 2. `/health/ready`;
-3. legal registry для registration, billing и marketplace credential contexts;
+3. legal registry для registration/billing/marketplace contexts;
 4. login;
 5. protected profile API;
-6. удаление access JWT из памяти клиента и восстановление session только через HttpOnly refresh cookie;
+6. cookie-only session restore после потери in-memory access token;
 7. dashboard API contract;
 8. logout;
 9. невозможность refresh после logout.
 
-Только публичные проверки:
+Только public checks:
 
 ```bash
 python3 ops/release_smoke.py --base-url https://staging.example.com --public-only
 ```
 
-### 3. External integration smoke
+## 3. Disposable registration smoke
 
-#### Wildberries
+Для beta/RC в disposable staging environment:
 
-В dedicated staging/smoke account можно передать:
+1. получить актуальные registration legal requirements;
+2. создать уникального test user;
+3. проверить demo subscription;
+4. проверить точные document version/SHA-256/timestamp в consent evidence;
+5. продолжить session/dashboard smoke;
+6. удалить/деактивировать test account утверждённым способом.
 
-```bash
-export SMOKE_WB_TOKEN='...'
-python3 ops/release_smoke.py
-```
+## 4. Wildberries integration smoke
 
-Runner:
+В dedicated seller account runner может использовать отдельно переданный `SMOKE_WB_TOKEN`.
 
-- получает актуальные marketplace legal requirements;
-- выполняет live validation seller credential;
-- сохраняет credential;
-- проверяет успешный API response;
-- удаляет созданный credential в `finally` cleanup.
+Проверяется:
 
-Токен не выводится в stdout/stderr.
+- актуальный marketplace legal requirement;
+- live credential validation;
+- успешное сохранение подключения;
+- cleanup созданного credential;
+- затем полный Celery sync: orders/sales, products/stocks, prices, ads, funnel, paid storage, finance;
+- отсутствие необъяснённых auth/permission/rate-limit ошибок.
 
-После этого отдельно проверяется полный Celery sync и наличие фактов во всех разделах: orders/sales, products/stocks, prices, ads, funnel, paid storage и finance.
+## 5. Data-accuracy acceptance
 
-#### Сбер
+До beta выбираются фиксированные периоды реального seller account и сравниваются WB Insight, официальные WB-источники и, где применимо, исходная spreadsheet-модель.
 
-Для sandbox или заранее разрешённого production smoke:
+Минимум сверяются:
+
+- orders/sales/returns;
+- revenue;
+- commissions;
+- logistics/storage;
+- advertising;
+- COGS/manual expenses/taxes;
+- profit;
+- payout/reconciliation;
+- inventory/prices;
+- unit-economy ratios.
+
+Для каждого существенного расхождения сохраняется причина или bug reference. Необъяснённое денежное расхождение блокирует повышение release stage.
+
+## 6. Сбер acquiring smoke
+
+Для sandbox или заранее согласованного production test:
 
 ```bash
 export SMOKE_BILLING_TARIFF=pro
 python3 ops/release_smoke.py
 ```
 
-Runner создаёт новый idempotent payment attempt и печатает только внутренний `payment_id`. Если provider вернул payment page, оператор завершает платёж вручную, после чего обязательны:
+Проверяются:
 
-- server-side confirmation;
-- активная subscription, связанная с тем же payment;
-- duplicate callback/refresh без второй subscription;
-- сверка статуса в merchant back office.
+- payment attempt;
+- provider payment page;
+- server-side status confirmation;
+- paid subscription activation;
+- duplicate callback/status refresh без второй subscription;
+- decline/cancel/retry;
+- сверка с merchant back office.
 
-Нельзя запускать billing phase на боевом тарифе без заранее согласованного smoke-платежа.
+## 7. Operations smoke
 
-## Регистрация
+Перед RC дополнительно подтверждаются:
 
-Полный RC smoke должен также проверять регистрацию нового пользователя с актуальными legal consent. Этот шаг выполняется в disposable staging environment или с заранее определённой процедурой очистки тестового пользователя. Нельзя создавать бесконтрольные smoke accounts в production.
+- внешний uptime monitor видит `/health/ready`;
+- alert destination получает test signal;
+- structured logs доступны для incident triage;
+- encrypted backup создан и перенесён off-host;
+- isolated restore drill успешен;
+- фактические RPO/RTO записаны;
+- deploy/rollback procedure проверена.
 
-Обязательная последовательность:
+## Полный WB Web v1 RC checklist
 
-1. получить `/legal/requirements/registration` или `registration_legal`;
-2. создать уникальный smoke account;
-3. убедиться, что создана demo subscription;
-4. убедиться, что в `legal_consents` зафиксированы точные version/SHA-256/timestamp;
-5. продолжить session/WB/dashboard/billing smoke;
-6. удалить/деактивировать smoke account по утверждённой operational procedure.
-
-## Полный WB Web v1 release smoke
-
-Перед `1.0.0-rc.1` должны быть подтверждены все шаги:
-
-- [ ] регистрация нового disposable smoke user;
-- [ ] legal consent evidence регистрации;
+- [ ] disposable registration;
+- [ ] legal consent evidence;
 - [ ] demo subscription;
-- [ ] login и refresh после reload без persistent access JWT;
-- [ ] подключение реального WB seller account;
-- [ ] полный sync без необъяснённых 401/403;
+- [ ] login/refresh/logout без persistent access JWT;
+- [ ] реальный WB seller connection;
+- [ ] полный WB sync;
+- [ ] data-accuracy acceptance;
 - [ ] Overview;
 - [ ] Unit Economy;
 - [ ] Finance/Reconciliation;
 - [ ] Inventory;
 - [ ] Prices;
 - [ ] Ads;
-- [ ] COGS и manual expenses;
-- [ ] monthly revenue plan;
-- [ ] Sber payment init;
-- [ ] success payment confirmation;
+- [ ] COGS/manual expenses/revenue plan;
+- [ ] Sber success/decline/cancel/retry/idempotency;
 - [ ] paid subscription activation;
-- [ ] duplicate callback/idempotency;
-- [ ] logout и невозможность refresh после logout;
-- [ ] удаление WB credential;
-- [ ] monitoring получает ожидаемые operational signals;
-- [ ] encrypted off-host backup создан;
-- [ ] restore drill успешен.
+- [ ] removal WB credential;
+- [ ] monitoring/alerts/logging;
+- [ ] off-host backup;
+- [ ] restore drill;
+- [ ] deploy/rollback evidence;
+- [ ] account lifecycle/support procedures;
+- [ ] non-draft legal documents.
 
 ## Release evidence
 
-Для каждого beta/RC/stable прогона сохраняются:
+Для beta/RC/stable прогона сохраняются:
 
-- commit SHA и version;
+- exact commit SHA и version;
 - environment;
-- дата/время UTC;
-- результат CI workflows;
-- результат `release_smoke.py` без секретов;
+- UTC timestamp;
+- CI results;
+- sanitized `release_smoke.py` result;
+- data-accuracy reconciliation result;
 - WB sync evidence;
-- Sber merchant back-office evidence;
-- backup/restore drill result;
-- список известных release blockers.
+- Sber back-office evidence;
+- backup/restore and deploy/rollback evidence;
+- известные blockers/accepted exceptions.
 
-Секреты, JWT, refresh cookies, seller credentials и merchant passwords в release evidence не сохраняются.
+Release evidence не должно содержать пароли, session values, marketplace access data или merchant credentials.
