@@ -20,6 +20,7 @@ P26 — эксплуатационный hardening: monitoring, alerts, backup/r
 - добавлен isolated restore drill во временную БД;
 - release-integrity CI выполняет реальный encrypted backup/restore roundtrip;
 - добавлен operations runbook и зафиксированы стартовые RPO/RTO targets;
+- исправлен production refresh-cookie contract: единая Secure/SameSite/Domain policy, `Path=/`, удалён legacy `GET /auth/refresh`;
 - расширена подробная история версий проекта.
 
 ## [0.9.0-alpha.2] — 2026-09-15
@@ -33,7 +34,6 @@ P25 — управление версиями и базовый production deplo
 - добавлены production Docker images backend/frontend;
 - добавлена production Compose topology с отдельными migration/API/worker/beat/frontend процессами;
 - добавлен same-origin `/api` gateway;
-- исправлены параметры refresh-cookie для production HTTPS/reverse proxy;
 - добавлены deployment/upgrade/rollback runbook и release-integrity CI.
 
 ## [0.9.0-alpha.1] — 2026-09-15
