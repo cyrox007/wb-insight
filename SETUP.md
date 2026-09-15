@@ -1,570 +1,214 @@
-# 📋 Настройка проекта WB Insight
+# WB Insight — Setup / Operations
 
-Этот документ содержит полные требования к базе данных, переменным окружения и SQL-скрипт инициализации.
+Этот документ описывает текущий способ запуска проекта. Схема PostgreSQL управляется **только Alembic**. Не создавайте таблицы вручную по старым SQL-снимкам.
 
----
+## 1. Требования
 
-## 🔐 1. Файл конфигурации `.env`
+- Python 3.12;
+- Node.js/npm, совместимые с текущим `frontend/package-lock.json`;
+- PostgreSQL 16 рекомендуется;
+- Redis;
+- Linux/container runtime для production.
 
-Создайте файл `.env` в корне backend-приложения (`/workspace/backend/.env`) на основе следующего шаблона:
+## 2. Backend environment
+
+Создайте `backend/.env` на основе `backend/default.env`.
+
+Минимум для development:
 
 ```bash
-# =============================================================================
-# ОБЩИЕ НАСТРОЙКИ
-# =============================================================================
-DEBUG=False
+APP_ENV=development
+DEBUG=false
+
 SERVER_HTTP_PROTOCOL=http://
 SERVER_ADDR=localhost
 SERVER_PORT=9000
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+ALLOWED_ORIGINS=http://localhost:5173
 
-# =============================================================================
-# БАЗА ДАННЫХ (PostgreSQL)
-# =============================================================================
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=wb_insight
+DB_NAME=wb
 DB_USER=postgres
-DB_PASSWORD=your_secure_password_here
+DB_PASSWORD=change-me
 
-# =============================================================================
-# БЕЗОПАСНОСТЬ И ШИФРОВАНИЕ
-# =============================================================================
-# Ключ шифрования для токенов Wildberries (AES-256, 32 байта в base64)
-# Генерация: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-API_TOKEN_ENCRYPTION_KEY=your-32-byte-encryption-key-here
+JWT_SECRET_KEY=replace-with-random-key
+API_TOKEN_ENCRYPTION_KEY=replace-with-generated-key
 
-# JWT Secret Key для генерации токенов доступа
-# Генерация: python -c "import secrets; print(secrets.token_urlsafe(32))"
-JWT_SECRET_KEY=your-jwt-secret-key-here
+COOKIE_SECURE=false
+COOKIE_SAMESITE=lax
+REFRESH_COOKIE_NAME=refresh_token
 
-# =============================================================================
-# REDIS (брокер сообщений для Celery и кэширование)
-# =============================================================================
 REDIS_URL=redis://localhost:6379/0
-
-# =============================================================================
-# WILDBERRIES API (базовые настройки)
-# =============================================================================
-# Эти значения задаются в коде, но могут быть переопределены
-# WB_API_BASE_URL=https://statistics-api.wildberries.ru
-# WB_ADVERT_API_BASE_URL=https://advert-api.wildberries.ru
-
-# =============================================================================
-# CELERY (фоновые задачи)
-# =============================================================================
-# Использует REDIS_URL по умолчанию
-# CELERY_BROKER_URL=redis://localhost:6379/0
-# CELERY_RESULT_BACKEND=redis://localhost:6379/0
+ALLOW_FAKE_BILLING=false
 ```
 
-### 🔑 Генерация ключей безопасности
+Сгенерировать секрет приложения:
 
 ```bash
-# Генерация ключа шифрования для токенов WB
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Сгенерировать Fernet key для marketplace credentials:
+
+```bash
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
-# Генерация JWT секретного ключа
-python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
----
+## 3. Wildberries partner credentials
 
-## 🗄️ 2. Требования к базе данных
-
-### Версия PostgreSQL
-- **Минимальная версия**: PostgreSQL 13+
-- **Рекомендуемая версия**: PostgreSQL 15+
-
-### Расширения (опционально)
-```sql
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- Для полнотекстового поиска
-```
-
-### Кодировка
-- **Кодировка**: UTF8
-- **Collation**: ru_RU.UTF-8 (рекомендуется для русской локализации)
-
----
-
-## 📜 3. SQL-скрипт инициализации базы данных
-
-Полный скрипт создания всех таблиц:
-
-```sql
--- =============================================================================
--- ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ WB INSIGHT
--- =============================================================================
-
--- Создаём базу данных (если не существует)
--- CREATE DATABASE wb_insight 
---     WITH ENCODING 'UTF8' 
---     LC_COLLATE='ru_RU.UTF-8' 
---     LC_CTYPE='ru_RU.UTF-8' 
---     TEMPLATE=template0;
-
--- Подключаемся к базе данных
--- \c wb_insight;
-
--- Включаем расширение для UUID
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- =============================================================================
--- 1. ТАБЛИЦА ПОЛЬЗОВАТЕЛЕЙ (users)
--- =============================================================================
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email VARCHAR(254) NOT NULL UNIQUE,
-    phone VARCHAR(20) NOT NULL UNIQUE,
-    hashed_password VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
-    entity_type VARCHAR(20) NOT NULL CHECK (entity_type IN ('individual', 'self_employed', 'legal_entity')),
-    inn VARCHAR(12),
-    kpp VARCHAR(9),
-    legal_address TEXT,
-    tax_rate FLOAT DEFAULT 0.2,
-    timezone VARCHAR(50) NOT NULL DEFAULT 'Europe/Moscow',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    is_staff BOOLEAN NOT NULL DEFAULT FALSE,
-    staff_id VARCHAR(50) UNIQUE,
-    department VARCHAR(100),
-    position VARCHAR(100)
-);
-
--- Индексы для users
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_phone ON users(phone);
-CREATE INDEX idx_users_entity_type ON users(entity_type);
-CREATE INDEX idx_users_active_entity ON users(is_active, entity_type);
-CREATE INDEX idx_users_legal_info ON users(entity_type, inn, kpp);
-CREATE INDEX idx_users_auth ON users(email, phone, is_active);
-CREATE INDEX idx_users_staff ON users(is_staff, department);
-CREATE INDEX idx_users_staff_id ON users(staff_id);
-CREATE UNIQUE INDEX idx_users_phone_email_unique ON users(phone, email);
-
--- =============================================================================
--- 2. РОЛИ ПОЛЬЗОВАТЕЛЕЙ (user_roles)
--- =============================================================================
-CREATE TABLE user_roles (
-    id SERIAL PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin', 'admin', 'manager', 'support', 'analyst', 'user')),
-    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    assigned_by UUID
-);
-
-CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
-CREATE INDEX idx_user_roles_role ON user_roles(role);
-CREATE UNIQUE INDEX uq_user_role ON user_roles(user_id, role);
-
--- =============================================================================
--- 3. ТАРИФНЫЕ ПЛАНЫ (tariff_plans)
--- =============================================================================
-CREATE TABLE tariff_plans (
-    id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    price_rub NUMERIC(10,2) NOT NULL DEFAULT 0,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- =============================================================================
--- 4. ЛИМИТЫ ТАРИФОВ (tariff_limits)
--- =============================================================================
-CREATE TABLE tariff_limits (
-    tariff_id VARCHAR(50) NOT NULL REFERENCES tariff_plans(id) ON DELETE CASCADE,
-    limit_type VARCHAR(50) NOT NULL,
-    limit_value INTEGER NOT NULL,
-    PRIMARY KEY (tariff_id, limit_type)
-);
-
-CREATE INDEX idx_tariff_limits_tariff ON tariff_limits(tariff_id);
-
--- =============================================================================
--- 5. ПОДПИСКИ (subscriptions)
--- =============================================================================
-CREATE TABLE subscriptions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    tariff_id VARCHAR(50) NOT NULL REFERENCES tariff_plans(id),
-    status VARCHAR(20) NOT NULL CHECK (status IN ('active', 'expired', 'cancelled', 'demo')),
-    current_period_start TIMESTAMPTZ NOT NULL,
-    current_period_end TIMESTAMPTZ NOT NULL,
-    yookassa_payment_id VARCHAR(100),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_subscriptions_user ON subscriptions(user_id);
-CREATE INDEX idx_subscriptions_status ON subscriptions(status);
-CREATE INDEX idx_subscriptions_period ON subscriptions(current_period_start, current_period_end);
-
--- =============================================================================
--- 6. WB-КАБИНЕТЫ (wb_accounts)
--- =============================================================================
-CREATE TABLE wb_accounts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    wb_seller_id UUID NOT NULL,
-    wb_name VARCHAR(255) NOT NULL,
-    wb_token_encrypted BYTEA NOT NULL,
-    token_categories_mask INTEGER NOT NULL DEFAULT 0,
-    is_readonly BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_sync_at TIMESTAMPTZ
-);
-
-CREATE INDEX idx_wb_accounts_user ON wb_accounts(user_id);
-CREATE INDEX idx_wb_accounts_seller ON wb_accounts(wb_seller_id);
-CREATE UNIQUE INDEX idx_wb_accounts_unique ON wb_accounts(user_id, wb_seller_id);
-
--- =============================================================================
--- 7. ПРОФИЛИ СЕБЕСТОИМОСТИ (cost_profiles)
--- =============================================================================
-CREATE TABLE cost_profiles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    wb_account_id UUID NOT NULL REFERENCES wb_accounts(id) ON DELETE CASCADE,
-    nm_id BIGINT,
-    cost_price NUMERIC(12,2) NOT NULL DEFAULT 0,
-    tax_rate NUMERIC(5,2) DEFAULT 0,
-    external_ad_cost NUMERIC(12,2) DEFAULT 0,
-    valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_cost_profiles_account ON cost_profiles(wb_account_id);
-CREATE INDEX idx_cost_profiles_nm ON cost_profiles(nm_id);
-CREATE INDEX idx_cost_profiles_valid ON cost_profiles(valid_from);
-
--- =============================================================================
--- 8. ЕЖЕДНЕВНАЯ АНАЛИТИКА WB (wb_analytics_daily)
--- =============================================================================
-CREATE TABLE wb_analytics_daily (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    wb_account_id UUID NOT NULL REFERENCES wb_accounts(id) ON DELETE CASCADE,
-    date DATE NOT NULL,
-    nm_id BIGINT NOT NULL,
-    name VARCHAR(500),
-    views INTEGER NOT NULL DEFAULT 0,
-    clicks INTEGER NOT NULL DEFAULT 0,
-    cart_adds INTEGER NOT NULL DEFAULT 0,
-    orders INTEGER NOT NULL DEFAULT 0,
-    delivered INTEGER NOT NULL DEFAULT 0,
-    returns INTEGER NOT NULL DEFAULT 0,
-    revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-    commission NUMERIC(12,2) NOT NULL DEFAULT 0,
-    logistics NUMERIC(12,2) NOT NULL DEFAULT 0,
-    storage NUMERIC(12,2) NOT NULL DEFAULT 0,
-    penalties NUMERIC(12,2) NOT NULL DEFAULT 0,
-    ad_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
-    stocks INTEGER NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(wb_account_id, date, nm_id)
-);
-
-CREATE INDEX idx_wb_analytics_account_date ON wb_analytics_daily(wb_account_id, date);
-CREATE INDEX idx_wb_analytics_nm ON wb_analytics_daily(nm_id);
-CREATE INDEX idx_wb_analytics_date ON wb_analytics_daily(date);
-
--- =============================================================================
--- 9. РЕКОМЕНДАЦИИ ИИ (recommendations)
--- =============================================================================
-CREATE TABLE recommendations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    wb_account_id UUID NOT NULL REFERENCES wb_accounts(id) ON DELETE CASCADE,
-    nm_id BIGINT,
-    type VARCHAR(50) NOT NULL,
-    message TEXT NOT NULL,
-    severity VARCHAR(20) NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
-    forecast_impact NUMERIC(14,2) DEFAULT 0,
-    is_read BOOLEAN NOT NULL DEFAULT FALSE,
-    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ
-);
-
-CREATE INDEX idx_recommendations_account ON recommendations(wb_account_id);
-CREATE INDEX idx_recommendations_read ON recommendations(is_read);
-CREATE INDEX idx_recommendations_expires ON recommendations(expires_at);
-
--- =============================================================================
--- 10. ИСТОРИЯ AI-ЧАТА (ai_chat_history)
--- =============================================================================
-CREATE TABLE ai_chat_history (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    wb_account_id UUID REFERENCES wb_accounts(id) ON DELETE SET NULL,
-    query TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    sources JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_ai_chat_user ON ai_chat_history(user_id);
-CREATE INDEX idx_ai_chat_account ON ai_chat_history(wb_account_id);
-CREATE INDEX idx_ai_chat_created ON ai_chat_history(created_at);
-
--- =============================================================================
--- 11. ЗАДАЧИ СИНХРОНИЗАЦИИ (sync_jobs)
--- =============================================================================
-CREATE TABLE sync_jobs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    wb_account_id UUID NOT NULL REFERENCES wb_accounts(id) ON DELETE CASCADE,
-    status VARCHAR(20) NOT NULL CHECK (status IN ('pending', 'running', 'success', 'failed')),
-    started_at TIMESTAMPTZ,
-    finished_at TIMESTAMPTZ,
-    error_message TEXT,
-    data_fetched JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_sync_jobs_account ON sync_jobs(wb_account_id);
-CREATE INDEX idx_sync_jobs_status ON sync_jobs(status);
-CREATE INDEX idx_sync_jobs_created ON sync_jobs(created_at);
-
--- =============================================================================
--- 12. API ТОКЕНЫ (api_tokens)
--- =============================================================================
-CREATE TABLE api_tokens (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash VARCHAR(255) NOT NULL UNIQUE,
-    marketplace VARCHAR(50) NOT NULL,
-    description VARCHAR(255),
-    expires_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_used_at TIMESTAMPTZ
-);
-
-CREATE INDEX idx_api_tokens_user ON api_tokens(user_id);
-CREATE INDEX idx_api_tokens_hash ON api_tokens(token_hash);
-
--- =============================================================================
--- 13. ЗАМЕТКИ ПОЛЬЗОВАТЕЛЯ (notes) - НОВЫЙ МОДУЛЬ
--- =============================================================================
-CREATE TABLE notes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(500),
-    content_encrypted BYTEA,  -- Зашифрованный текст заметки
-    content_type VARCHAR(20) NOT NULL DEFAULT 'text',  -- text, voice, mixed
-    
-    -- Медиа-вложения (храним метаданные, файлы - в S3/file storage)
-    media_attachments JSONB DEFAULT '[]'::jsonb,  -- [{type: 'image'|'audio'|'video', url: '...', size: bytes, duration: sec}]
-    
-    -- Голосовые сообщения
-    voice_messages JSONB DEFAULT '[]'::jsonb,  -- [{url: '...', duration: sec, transcript: '...', created_at: '...'}]
-    
-    -- Метаданные
-    tags VARCHAR(255)[],  -- Массив тегов для поиска
-    is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
-    is_shared BOOLEAN NOT NULL DEFAULT FALSE,  -- Флаг "поделиться через мессенджер"
-    share_link_token VARCHAR(100) UNIQUE,  -- Токен для общего доступа
-    share_expires_at TIMESTAMPTZ,  -- Срок действия ссылки
-    
-    -- Привязка к контексту WB (опционально)
-    wb_account_id UUID REFERENCES wb_accounts(id) ON DELETE SET NULL,
-    nm_id BIGINT,  -- Артикул WB (если заметка привязана к товару)
-    
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_notes_user ON notes(user_id);
-CREATE INDEX idx_notes_favorite ON notes(is_favorite);
-CREATE INDEX idx_notes_shared ON notes(is_shared);
-CREATE INDEX idx_notes_share_token ON notes(share_link_token);
-CREATE INDEX idx_notes_tags ON notes USING GIN(tags);
-CREATE INDEX idx_notes_wb_context ON notes(wb_account_id, nm_id);
-CREATE INDEX idx_notes_created ON notes(created_at);
-CREATE INDEX idx_notes_updated ON notes(updated_at);
-
--- =============================================================================
--- 14. ИСТОРИЯ ПОДЕЛЕННЫХ ЗАМЕТОК (note_share_log)
--- =============================================================================
-CREATE TABLE note_share_log (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    note_id UUID NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
-    shared_via VARCHAR(50) NOT NULL,  -- telegram, whatsapp, email, link
-    recipient_identifier VARCHAR(255),  -- ID получателя или email/phone
-    shared_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    accessed_at TIMESTAMPTZ,
-    access_count INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX idx_note_share_log_note ON note_share_log(note_id);
-CREATE INDEX idx_note_share_log_shared ON note_share_log(shared_at);
-
--- =============================================================================
--- НАЧАЛЬНЫЕ ДАННЫЕ: ТАРИФНЫЕ ПЛАНЫ
--- =============================================================================
-INSERT INTO tariff_plans (id, name, description, price_rub, is_active) VALUES
-('demo', 'Демо', '7 дней бесплатно, без карты', 0.00, TRUE),
-('starter', 'Старт (для ИП)', '1 магазин, 1000 артикулов, обновление 4×/день', 2990.00, TRUE),
-('pro', 'Про', '3 магазина, 10000 артикулов, обновление ежечасно, 200 ИИ-запросов', 6990.00, TRUE),
-('enterprise', 'Бизнес', 'Безлимит магазинов, API-доступ, персональный менеджер', 0.00, TRUE);
-
--- ЛИМИТЫ ДЛЯ ТАРИФА DEMO
-INSERT INTO tariff_limits (tariff_id, limit_type, limit_value) VALUES
-('demo', 'wb_accounts', 1),
-('demo', 'nm_ids', 100),
-('demo', 'sync_frequency_hours', 24),
-('demo', 'ai_queries_per_month', 5),
-('demo', 'retention_days', 7);
-
--- ЛИМИТЫ ДЛЯ ТАРИФА STARTER
-INSERT INTO tariff_limits (tariff_id, limit_type, limit_value) VALUES
-('starter', 'wb_accounts', 1),
-('starter', 'nm_ids', 1000),
-('starter', 'sync_frequency_hours', 6),
-('starter', 'ai_queries_per_month', 20),
-('starter', 'retention_days', 30);
-
--- ЛИМИТЫ ДЛЯ ТАРИФА PRO
-INSERT INTO tariff_limits (tariff_id, limit_type, limit_value) VALUES
-('pro', 'wb_accounts', 3),
-('pro', 'nm_ids', 10000),
-('pro', 'sync_frequency_hours', 1),
-('pro', 'ai_queries_per_month', 200),
-('pro', 'retention_days', 90);
-
--- ЛИМИТЫ ДЛЯ ТАРИФА ENTERPRISE
-INSERT INTO tariff_limits (tariff_id, limit_type, limit_value) VALUES
-('enterprise', 'wb_accounts', 999),
-('enterprise', 'nm_ids', 100000),
-('enterprise', 'sync_frequency_hours', 1),
-('enterprise', 'ai_queries_per_month', 5000),
-('enterprise', 'retention_days', 730);
-
--- =============================================================================
--- КОНЕЦ СКРИПТА ИНИЦИАЛИЗАЦИИ
--- =============================================================================
-```
-
----
-
-## 📦 4. Модель данных для модуля Notes
-
-### Описание полей таблицы `notes`
-
-| Поле | Тип | Описание |
-|------|-----|---------|
-| `id` | UUID | Уникальный ID заметки |
-| `user_id` | UUID (FK) | Владелец заметки |
-| `title` | VARCHAR(500) | Заголовок заметки (nullable) |
-| `content_encrypted` | BYTEA | **Зашифрованный** текст заметки (AES-256-GCM) |
-| `content_type` | VARCHAR(20) | Тип контента: `text`, `voice`, `mixed` |
-| `media_attachments` | JSONB | Массив медиа-вложений: `[{"type": "image\|audio\|video", "url": "...", "size": bytes, "duration": sec}]` |
-| `voice_messages` | JSONB | Массив голосовых сообщений: `[{"url": "...", "duration": sec, "transcript": "...", "created_at": "..."}]` |
-| `tags` | VARCHAR[] | Массив тегов для быстрого поиска |
-| `is_favorite` | BOOLEAN | Избранное |
-| `is_shared` | BOOLEAN | Флаг "поделиться" |
-| `share_link_token` | VARCHAR(100) | Уникальный токен для общей ссылки |
-| `share_expires_at` | TIMESTAMPTZ | Срок действия ссылки |
-| `wb_account_id` | UUID (FK) | Привязка к WB-кабинету (опционально) |
-| `nm_id` | BIGINT | Привязка к артикулу WB (опционально) |
-| `created_at` | TIMESTAMPTZ | Дата создания |
-| `updated_at` | TIMESTAMPTZ | Дата обновления |
-
-### Пример структуры JSONB для медиа-вложений
-
-```json
-{
-  "media_attachments": [
-    {
-      "type": "image",
-      "url": "https://storage.wbinsight.com/notes/user-id/note-id/image-1.jpg",
-      "size": 245678,
-      "mime_type": "image/jpeg",
-      "uploaded_at": "2025-01-15T10:30:00Z"
-    },
-    {
-      "type": "audio",
-      "url": "https://storage.wbinsight.com/notes/user-id/note-id/voice-1.ogg",
-      "size": 123456,
-      "duration": 45.5,
-      "mime_type": "audio/ogg",
-      "uploaded_at": "2025-01-15T10:31:00Z"
-    }
-  ],
-  "voice_messages": [
-    {
-      "url": "https://storage.wbinsight.com/notes/user-id/note-id/voice-2.ogg",
-      "duration": 30.2,
-      "transcript": "Не забыть заказать товар артикул 1234567",
-      "created_at": "2025-01-15T10:32:00Z"
-    }
-  ]
-}
-```
-
----
-
-## 🚀 5. Применение миграций
-
-### Вариант 1: Через Alembic (рекомендуется)
+Для production обязательны обе переменные:
 
 ```bash
-cd /workspace/backend
+WB_SERVICE_ID=<asid WB Insight>
+WB_SERVICE_SECRET=<service secret WB Insight>
+```
 
-# Применить все миграции
+Backend намеренно не стартует в `APP_ENV=production`, если одной из них нет.
+
+`X-Client-Secret` используется совместно с Base и Service seller tokens. Подробный контракт: `docs/WB_ACCESS_TOKEN_REQUIREMENTS.md`.
+
+До готовности к Каталогу partner credentials и лимиты сервиса можно запросить у WB API через `business-solutions@rwb.ru`.
+
+## 4. Установка backend
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+## 5. База данных
+
+Создайте пустую PostgreSQL database и примените миграции:
+
+```bash
+cd backend
 alembic upgrade head
-
-# Проверить статус миграций
 alembic current
+alembic check
 ```
 
-### Вариант 2: Прямое выполнение SQL
+`alembic check` должен завершиться без новых операций. Если metadata и migration history расходятся, release блокируется.
+
+Не используйте ручной SQL для создания application tables.
+
+## 6. Backend API
+
+Development:
 
 ```bash
-# Подключиться к PostgreSQL
-psql -h localhost -U postgres -d wb_insight -f init_db.sql
+cd backend
+uvicorn app:app --reload --host 0.0.0.0 --port 9000
 ```
 
----
+Production должен использовать process manager/container runtime без `--reload`.
 
-## ✅ 6. Проверка установки
+Проверки:
 
 ```bash
-# Проверка подключения к БД
-python -c "from settings import config; from core.database import Database; import asyncio; asyncio.run(Database.health_check())"
-
-# Проверка наличия таблиц
-psql -h localhost -U postgres -d wb_insight -c "\dt"
+curl http://localhost:9000/health/live
+curl http://localhost:9000/health/ready
 ```
 
----
+`/health/ready` возвращает 200 только при доступных PostgreSQL и Redis.
 
-## 📝 7. Дополнительные требования
+## 7. Celery
 
-### Файловое хранилище
-Для хранения медиа-файлов заметок требуется:
-- **S3-совместимое хранилище** (MinIO, AWS S3, Yandex Object Storage)
-- Или локальное хранилище в `/workspace/backend/storage/notes/`
-
-### Переменные окружения для файлового хранилища (добавить в `.env`):
+Worker:
 
 ```bash
-# Хранилище файлов (S3 или локальное)
-STORAGE_TYPE=local  # local | s3
-STORAGE_PATH=/workspace/backend/storage/notes
-
-# Для S3 (если используется)
-S3_ENDPOINT=https://storage.yandexcloud.net
-S3_BUCKET=wb-insight-notes
-S3_ACCESS_KEY=your-access-key
-S3_SECRET_KEY=your-secret-key
-S3_REGION=ru-central1
+cd backend
+celery -A celery_app.celery_app worker --loglevel=INFO
 ```
 
----
+Beat scheduler:
 
-## 🔒 Безопасность модуля Notes
+```bash
+cd backend
+celery -A celery_app.celery_app beat --loglevel=INFO
+```
 
-1. **Шифрование контента**: Текст заметок шифруется перед сохранением в БД
-2. **Доступ к медиа**: URL медиа-файлов генерируются с временными подписями
-3. **Общий доступ**: Ссылки на заметки имеют срок действия и могут быть отозваны
-4. **Аудит**: Все действия по partage записываются в `note_share_log`
+Worker и beat — отдельные production processes. Нельзя запускать два beat-инстанса без distributed scheduler/leader election: это приведёт к дублированию периодических задач.
+
+## 8. Backend tests
+
+```bash
+cd backend
+pytest -q tests
+```
+
+Перед merge CI также поднимает чистый PostgreSQL, выполняет полный `alembic upgrade head` и `alembic check`.
+
+## 9. Frontend
+
+Создайте при необходимости `frontend/.env`:
+
+```bash
+VITE_API_BASE_URL=http://localhost:9000
+```
+
+Development:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Release build:
+
+```bash
+npm run build
+```
+
+## 10. Production security requirements
+
+Обязательно:
+
+```bash
+APP_ENV=production
+DEBUG=false
+COOKIE_SECURE=true
+```
+
+Также обязательны:
+
+- сильные `JWT_SECRET_KEY` и `API_TOKEN_ENCRYPTION_KEY`;
+- `WB_SERVICE_ID` и `WB_SERVICE_SECRET`;
+- точный HTTPS frontend origin в `ALLOWED_ORIGINS`;
+- PostgreSQL/Redis credentials из secret manager или deployment environment;
+- TLS на внешнем endpoint;
+- `ALLOW_FAKE_BILLING=false`.
+
+Не помещайте production secrets в git, Docker image, frontend environment или CI logs.
+
+## 11. Billing
+
+Fake billing разрешён только для локальной разработки:
+
+```bash
+APP_ENV=development
+ALLOW_FAKE_BILLING=true
+```
+
+Публичный production release запрещён до подключения реального acquiring provider. Текущий release plan — Sber acquiring; см. `docs/RELEASE_READINESS.md`.
+
+## 12. Release startup order
+
+1. PostgreSQL доступен.
+2. Redis доступен.
+3. Production secrets injected.
+4. Выполнен backup перед migration для обновляемой среды.
+5. `alembic upgrade head`.
+6. Backend API стартовал, `/health/ready` = 200.
+7. Celery worker стартовал.
+8. Celery beat стартовал ровно в одном экземпляре.
+9. Frontend release build опубликован.
+10. Выполнен release smoke test.
+
+## 13. Что ещё требуется до публичного релиза
+
+Актуальный список блокеров, внешних зависимостей и Definition of Done находится в:
+
+`docs/RELEASE_READINESS.md`.
