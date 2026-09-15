@@ -1,574 +1,619 @@
 <template>
-    <div class="ads-dashboard-container">
-        <!-- Header с датами -->
-        <div class="dashboard-header">
-            <div class="date-range">
-                <span>Дата от</span>
-                <input type="date" class="date-input" v-model="startDate">
-                <span>до</span>
-                <input type="date" class="date-input" v-model="endDate">
-                <button class="btn btn-primary" @click="loadData">Применить</button>
-            </div>
-        </div>
+  <section class="ads-page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Продвижение</p>
+        <h1>Реклама</h1>
+        <p class="page-subtitle">Расходы, воронка и эффективность рекламных заказов без лишних показателей.</p>
+      </div>
 
-        <!-- Состояние загрузки всей страницы -->
-        <div v-if="isLoading && !hasLoadedOnce" class="page-loader">
-            <div class="loading-spinner"></div>
-            <p class="loading-text">Загрузка данных рекламы...</p>
-        </div>
+      <form class="period-filter" @submit.prevent="loadData">
+        <label>
+          <span>С</span>
+          <input v-model="startDate" type="date" :max="endDate" />
+        </label>
+        <label>
+          <span>По</span>
+          <input v-model="endDate" type="date" :min="startDate" />
+        </label>
+        <button type="submit" :disabled="isLoading || !periodIsValid">
+          {{ isLoading ? 'Обновляем…' : 'Применить' }}
+        </button>
+      </form>
+    </header>
 
-        <!-- Пустое состояние -->
-        <div v-else-if="!hasData && hasLoadedOnce" class="empty-state">
-            <div class="empty-icon">📊</div>
-            <p class="empty-text">Нет данных для отображения</p>
-            <p class="empty-hint">Данные появятся после синхронизации рекламной статистики с Wildberries</p>
-        </div>
-
-        <!-- Основной контент -->
-        <div v-else>
-            <!-- Динамика просмотров (график) -->
-            <div class="chart-section">
-                <h3 class="section-title">Динамика просмотров</h3>
-                <BaseCarts :is-loading="isLoading" :chart-data="dynamicsChart" :metrics="[
-                    { key: 'views', name: 'Просмотры', color: '#4caf50', visible: true, type: 'number' },
-                    { key: 'clicks', name: 'Клики', color: '#ff9800', visible: true, type: 'number' },
-                    { key: 'amount', name: 'Расходы, ₽', color: '#f44336', visible: true, type: 'rub' },
-                ]" />
-            </div>
-
-            <!-- Рекламная воронка и Конверсии -->
-            <div class="stats-grid-2">
-                <!-- Рекламная воронка -->
-                <div class="stat-card funnel">
-                    <h3 class="card-title">Рекламная воронка</h3>
-                    <!-- Загрузка -->
-                    <div v-if="isLoading" class="card-loader">
-                        <div class="loading-spinner-small"></div>
-                        <p>Загрузка...</p>
-                    </div>
-                    <!-- Пустое состояние -->
-                    <div v-else-if="!funnelHasData" class="card-empty">
-                        <span>Нет данных</span>
-                    </div>
-                    <!-- Данные -->
-                    <div v-else class="funnel-rows">
-                        <div class="funnel-row">
-                            <span class="label">Просмотров</span>
-                            <span class="value">{{ formatNumber(funnel.views) }}</span>
-                        </div>
-                        <div class="funnel-row">
-                            <span class="label">Переходов</span>
-                            <span class="value">{{ formatNumber(funnel.clicks) }}</span>
-                        </div>
-                        <div class="funnel-row">
-                            <span class="label">Добавлений в корзину</span>
-                            <span class="value">{{ formatNumber(funnel.added_to_cart) }}</span>
-                        </div>
-                        <div class="funnel-row">
-                            <span class="label">Заказов с помощью рекламы</span>
-                            <span class="value">{{ formatNumber(funnel.ad_orders) }}</span>
-                        </div>
-                        <div class="funnel-row highlight">
-                            <span class="label">На сумму</span>
-                            <span class="value">{{ formatNumber(funnel.ad_orders_amount) }} ₽</span>
-                        </div>
-                        <div class="funnel-row">
-                            <span class="label">Общих заказов</span>
-                            <span class="value">{{ formatNumber(funnel.total_orders) }}</span>
-                        </div>
-                        <div class="funnel-row highlight">
-                            <span class="label">На сумму</span>
-                            <span class="value">{{ formatNumber(funnel.total_orders_amount) }} ₽</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Конверсии по воронке -->
-                <div class="stat-card conversions">
-                    <h3 class="card-title">Конверсии по воронке</h3>
-                    <!-- Загрузка -->
-                    <div v-if="isLoading" class="card-loader">
-                        <div class="loading-spinner-small"></div>
-                        <p>Загрузка...</p>
-                    </div>
-                    <!-- Пустое состояние -->
-                    <div v-else-if="!conversionsHasData" class="card-empty">
-                        <span>Нет данных</span>
-                    </div>
-                    <!-- Данные -->
-                    <div v-else class="conversion-rows">
-                        <div class="conversion-row">
-                            <span class="label">Расходы на рекламу</span>
-                            <span class="value">{{ formatNumber(conversions.expenses) }} ₽</span>
-                        </div>
-                        <div class="conversion-row">
-                            <span class="label">CTR</span>
-                            <span class="value">{{ conversions.ctr }}%</span>
-                        </div>
-                        <div class="conversion-row">
-                            <span class="label">CR в корзину</span>
-                            <span class="value">{{ conversions.cr_to_cart }}%</span>
-                        </div>
-                        <div class="conversion-row">
-                            <span class="label">Конверсия из перехода в заказ</span>
-                            <span class="value">{{ conversions.conversion_click_to_order }}%</span>
-                        </div>
-                        <div class="conversion-row">
-                            <span class="label">CPC</span>
-                            <span class="value">{{ formatNumber(conversions.cpc) }} ₽</span>
-                        </div>
-                        <div class="conversion-row">
-                            <span class="label">CPM</span>
-                            <span class="value">{{ formatNumber(conversions.cpm) }} ₽</span>
-                        </div>
-                        <div class="conversion-row">
-                            <span class="label">ДРР</span>
-                            <span class="value">{{ conversions.drr }}%</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Расчет стоимости привлечения -->
-            <div class="stat-card acquisition">
-                <h3 class="card-title">Расчет стоимости привлечения</h3>
-                <!-- Загрузка -->
-                <div v-if="isLoading" class="card-loader">
-                    <div class="loading-spinner-small"></div>
-                    <p>Загрузка...</p>
-                </div>
-                <!-- Пустое состояние -->
-                <div v-else-if="!acquisitionHasData" class="card-empty">
-                    <span>Нет данных</span>
-                </div>
-                <!-- Данные -->
-                <div v-else class="acquisition-grid">
-                    <div class="acquisition-item">
-                        <span class="label">Средняя стоимость заказа</span>
-                        <span class="value">{{ formatNumber(acquisition_cost.avg_order_value) }} ₽</span>
-                    </div>
-                    <div class="acquisition-item">
-                        <span class="label">Стоимость просмотра</span>
-                        <span class="value">{{ formatNumber(acquisition_cost.cost_per_view) }} ₽</span>
-                    </div>
-                    <div class="acquisition-item">
-                        <span class="label">Стоимость перехода</span>
-                        <span class="value">{{ formatNumber(acquisition_cost.cost_per_click) }} ₽</span>
-                    </div>
-                    <div class="acquisition-item">
-                        <span class="label">Стоимость добавления в корзину</span>
-                        <span class="value">{{ formatNumber(acquisition_cost.cost_per_cart) }} ₽</span>
-                    </div>
-                    <div class="acquisition-item highlight">
-                        <span class="label">CPO (стоимость одного заказа)</span>
-                        <span class="value">{{ formatNumber(acquisition_cost.cpo) }} ₽</span>
-                    </div>
-                    <div class="acquisition-item">
-                        <span class="label">Норма ДРР</span>
-                        <span class="value">{{ acquisition_cost.norm_drr }}%</span>
-                    </div>
-                    <div class="acquisition-item highlight">
-                        <span class="label">max Допустимый CPM</span>
-                        <span class="value">{{ formatNumber(acquisition_cost.max_cpm) }} ₽</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Динамика продвижения (CTR, CPM, сумма) -->
-            <div class="chart-section">
-                <h3 class="section-title">Динамика продвижения</h3>
-                <BaseCarts :is-loading="isLoading" :chart-data="promotionDynamics" :metrics="[
-                    { key: 'ctr', name: 'CTR, %', color: '#9c27b0', visible: true, type: 'percent' },
-                    { key: 'cpm', name: 'CPM, ₽', color: '#00bcd4', visible: true, type: 'rub' },
-                    { key: 'amount', name: 'Сумма, ₽', color: '#ff5722', visible: true, type: 'rub' },
-                ]" />
-            </div>
-
-            <!-- Таблица по артикулам -->
-            <div class="table-section">
-                <h3 class="section-title">Статистика по артикулам</h3>
-                <!-- Загрузка -->
-                <div v-if="isLoading" class="table-loader">
-                    <div class="loading-spinner-small"></div>
-                    <p>Загрузка таблицы...</p>
-                </div>
-                <!-- Пустое состояние -->
-                <div v-else-if="!articlesTable.length" class="table-empty">
-                    <div class="empty-icon">📦</div>
-                    <p class="empty-text">Нет данных по артикулам</p>
-                </div>
-                <!-- Данные -->
-                <div v-else class="table-wrapper">
-                    <table class="ads-table">
-                        <thead>
-                            <tr>
-                                <th>Фото</th>
-                                <th>Артикул продавца</th>
-                                <th>nmId</th>
-                                <th>Просмотры</th>
-                                <th>Клики</th>
-                                <th>В корзину</th>
-                                <th>Рекламные заказы</th>
-                                <th>Затраты</th>
-                                <th>Общие заказы</th>
-                                <th>Сумма общих заказов</th>
-                                <th>CTR</th>
-                                <th>CR</th>
-                                <th>Из корзины в заказ</th>
-                                <th>Из перехода в заказ</th>
-                                <th>CPC</th>
-                                <th>Стоимость заказа в РК</th>
-                                <th>ДРР от общих заказов</th>
-                                <th>CPM</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="item in articlesTable" :key="item.nm_id">
-                                <td class="photo-cell">
-                                    <div class="product-photo-placeholder">📷</div>
-                                </td>
-                                <td>{{ item.product_name }}</td>
-                                <td>{{ item.nm_id }}</td>
-                                <td>{{ formatNumber(item.views) }}</td>
-                                <td>{{ formatNumber(item.clicks) }}</td>
-                                <td>{{ formatNumber(item.added_to_cart) }}</td>
-                                <td>{{ formatNumber(item.ad_orders) }}</td>
-                                <td>{{ formatNumber(item.expenses) }} ₽</td>
-                                <td>{{ formatNumber(item.total_orders) }}</td>
-                                <td>{{ formatNumber(item.total_orders_amount) }} ₽</td>
-                                <td>{{ item.ctr }}%</td>
-                                <td>{{ item.cr }}%</td>
-                                <td>{{ item.cart_to_order }}%</td>
-                                <td>{{ item.click_to_order }}%</td>
-                                <td>{{ formatNumber(item.cpc) }} ₽</td>
-                                <td>{{ formatNumber(item.order_cost_in_ads) }} ₽</td>
-                                <td>{{ item.drr_from_orders }}%</td>
-                                <td>{{ formatNumber(item.cpm) }} ₽</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    <div v-if="errorMessage" class="status-banner status-banner--error" role="alert">
+      <strong>Не удалось загрузить рекламу.</strong>
+      <span>{{ errorMessage }}</span>
+      <button type="button" @click="loadData">Повторить</button>
     </div>
+
+    <div v-else-if="!hasData && hasLoadedOnce" class="empty-state">
+      <strong>Пока нет рекламной статистики.</strong>
+      <span>Данные появятся после первой успешной синхронизации Promotion API Wildberries.</span>
+    </div>
+
+    <template v-else>
+      <div class="kpi-grid">
+        <article v-for="item in summaryKpis" :key="item.label" class="kpi-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ formatMetric(item.value, item.type) }}</strong>
+          <small>{{ item.caption }}</small>
+        </article>
+      </div>
+
+      <div class="insight-grid">
+        <article class="section-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Воронка рекламы</p>
+              <h2>От показа до заказа</h2>
+            </div>
+          </div>
+
+          <div class="metric-list">
+            <div class="metric-row"><span>Просмотры</span><strong>{{ formatNumber(funnel.views) }}</strong></div>
+            <div class="metric-row"><span>Клики</span><strong>{{ formatNumber(funnel.clicks) }}</strong></div>
+            <div class="metric-row"><span>В корзину</span><strong>{{ formatNumber(funnel.added_to_cart) }}</strong></div>
+            <div class="metric-row metric-row--accent"><span>Заказы из рекламы</span><strong>{{ formatNumber(funnel.ad_orders) }}</strong></div>
+            <div class="metric-row"><span>Сумма рекламных заказов</span><strong>{{ formatMetric(funnel.ad_orders_amount, 'money') }}</strong></div>
+            <div class="metric-row"><span>Все заказы кабинета</span><strong>{{ formatNumber(funnel.total_orders) }}</strong></div>
+            <div class="metric-row"><span>Сумма всех заказов</span><strong>{{ formatMetric(funnel.total_orders_amount, 'money') }}</strong></div>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Эффективность</p>
+              <h2>Стоимость и конверсия</h2>
+            </div>
+          </div>
+
+          <div class="metric-list">
+            <div class="metric-row"><span>CTR</span><strong>{{ formatMetric(conversions.ctr, 'percent') }}</strong></div>
+            <div class="metric-row"><span>CR в корзину</span><strong>{{ formatMetric(conversions.cr_to_cart, 'percent') }}</strong></div>
+            <div class="metric-row"><span>Клик → заказ</span><strong>{{ formatMetric(conversions.conversion_click_to_order, 'percent') }}</strong></div>
+            <div class="metric-row"><span>CPC</span><strong>{{ formatMetric(conversions.cpc, 'money') }}</strong></div>
+            <div class="metric-row"><span>CPM</span><strong>{{ formatMetric(conversions.cpm, 'money') }}</strong></div>
+            <div class="metric-row metric-row--accent"><span>CPO</span><strong>{{ formatMetric(acquisitionCost.cpo, 'money') }}</strong></div>
+            <div class="metric-row metric-row--accent"><span>ДРР</span><strong>{{ formatMetric(conversions.drr, 'percent') }}</strong></div>
+          </div>
+        </article>
+      </div>
+
+      <section class="section-card chart-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Динамика</p>
+            <h2>Трафик и расходы</h2>
+          </div>
+        </div>
+        <BaseCarts
+          :is-loading="isLoading"
+          :chart-data="dynamicsChart"
+          :metrics="[
+            { key: 'views', name: 'Просмотры', color: '#60a5fa', visible: true, type: 'number' },
+            { key: 'clicks', name: 'Клики', color: '#fbbf24', visible: true, type: 'number' },
+            { key: 'amount', name: 'Расходы, ₽', color: '#fb7185', visible: true, type: 'rub' },
+          ]"
+        />
+      </section>
+
+      <section class="table-card">
+        <div class="section-heading section-heading--table">
+          <div>
+            <p class="eyebrow">Товары</p>
+            <h2>Эффективность по артикулам</h2>
+          </div>
+          <span>{{ articlesTable.length }} позиций</span>
+        </div>
+
+        <div v-if="!articlesTable.length" class="table-empty">Нет данных по артикулам за выбранный период.</div>
+        <div v-else class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Товар</th>
+                <th>nmId</th>
+                <th>Просмотры</th>
+                <th>Клики</th>
+                <th>В корзину</th>
+                <th>Заказы из рекламы</th>
+                <th>Расходы</th>
+                <th>CPC</th>
+                <th>CPO</th>
+                <th>ДРР от всех заказов</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in articlesTable" :key="item.nm_id">
+                <td class="product-cell">{{ item.product_name || 'Без названия' }}</td>
+                <td>{{ item.nm_id }}</td>
+                <td>{{ formatNumber(item.views) }}</td>
+                <td>{{ formatNumber(item.clicks) }}</td>
+                <td>{{ formatNumber(item.added_to_cart) }}</td>
+                <td>{{ formatNumber(item.ad_orders) }}</td>
+                <td>{{ formatMetric(item.expenses, 'money') }}</td>
+                <td>{{ formatMetric(item.cpc, 'money') }}</td>
+                <td>{{ formatMetric(item.order_cost_in_ads, 'money') }}</td>
+                <td>{{ formatMetric(item.drr_from_orders, 'percent') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
+  </section>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import AdsService from '@/API/Dashboard/AdsService.js';
-import { notify } from '@/composables/notification';
-import BaseCarts from '@/components/Diagrams/BaseCarts.vue';
+import { computed, onMounted, ref } from 'vue'
+import AdsService from '@/API/Dashboard/AdsService.js'
+import { notify } from '@/composables/notification'
+import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
 
-const isLoading = ref(false);
-const hasLoadedOnce = ref(false);
+const isLoading = ref(false)
+const hasLoadedOnce = ref(false)
+const errorMessage = ref('')
 
-// Данные
-const funnel = ref({});
-const conversions = ref({});
-const acquisition_cost = ref({});
-const dynamicsChart = ref([]);
-const promotionDynamics = ref([]);
-const articlesTable = ref([]);
+const funnel = ref({})
+const conversions = ref({})
+const acquisitionCost = ref({})
+const dynamicsChart = ref([])
+const articlesTable = ref([])
 
-// Даты
-const startDate = ref('');
-const endDate = ref('');
+const formatDateInput = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
-// Проверка наличия данных для каждого блока
-const funnelHasData = computed(() => {
-    return funnel.value && Object.keys(funnel.value).length > 0;
-});
+const today = new Date()
+const initialStart = new Date(today)
+initialStart.setDate(initialStart.getDate() - 29)
+const startDate = ref(formatDateInput(initialStart))
+const endDate = ref(formatDateInput(today))
+const periodIsValid = computed(() => Boolean(startDate.value && endDate.value && startDate.value <= endDate.value))
 
-const conversionsHasData = computed(() => {
-    return conversions.value && Object.keys(conversions.value).length > 0;
-});
+const hasData = computed(() => Boolean(
+  Object.keys(funnel.value || {}).length ||
+  Object.keys(conversions.value || {}).length ||
+  Object.keys(acquisitionCost.value || {}).length ||
+  dynamicsChart.value.length ||
+  articlesTable.value.length
+))
 
-const acquisitionHasData = computed(() => {
-    return acquisition_cost.value && Object.keys(acquisition_cost.value).length > 0;
-});
+const summaryKpis = computed(() => [
+  {
+    label: 'Расходы',
+    value: conversions.value.expenses,
+    type: 'money',
+    caption: 'Фактический рекламный расход',
+  },
+  {
+    label: 'Заказы из рекламы',
+    value: funnel.value.ad_orders,
+    type: 'number',
+    caption: 'Атрибутированные рекламой',
+  },
+  {
+    label: 'CPO',
+    value: acquisitionCost.value.cpo,
+    type: 'money',
+    caption: 'Стоимость рекламного заказа',
+  },
+  {
+    label: 'ДРР',
+    value: conversions.value.drr,
+    type: 'percent',
+    caption: 'Расходы к рекламным продажам',
+  },
+  {
+    label: 'CTR',
+    value: conversions.value.ctr,
+    type: 'percent',
+    caption: 'Клики относительно показов',
+  },
+  {
+    label: 'CPC',
+    value: conversions.value.cpc,
+    type: 'money',
+    caption: 'Средняя стоимость клика',
+  },
+])
 
-// Общая проверка наличия данных
-const hasData = computed(() => {
-    return funnelHasData.value || conversionsHasData.value || acquisitionHasData.value ||
-        dynamicsChart.value.length > 0 || promotionDynamics.value.length > 0 ||
-        articlesTable.value.length > 0;
-});
+const formatNumber = (value, maximumFractionDigits = 2) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
+  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits }).format(Number(value))
+}
 
-// Форматирование чисел
-const formatNumber = (num) => {
-    if (num === null || num === undefined) return '—';
-    return new Intl.NumberFormat('ru-RU', {
-        minimumFractionDigits: num % 1 === 0 ? 0 : 2,
-        maximumFractionDigits: 2
-    }).format(num);
-};
+const formatMetric = (value, type = 'number') => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
+  if (type === 'money') return `${formatNumber(value)} ₽`
+  if (type === 'percent') return `${formatNumber(value, 1)}%`
+  return formatNumber(value)
+}
 
-// Загрузка данных
 const loadData = async () => {
-    isLoading.value = true;
+  if (!periodIsValid.value) {
+    errorMessage.value = 'Проверьте выбранный диапазон дат.'
+    return
+  }
 
-    try {
-        const params = {};
-        if (startDate.value) params.start_date = startDate.value;
-        if (endDate.value) params.end_date = endDate.value;
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await AdsService.get_ads_stats({
+      start_date: startDate.value,
+      end_date: endDate.value,
+    })
+    const result = response.data
 
-        const response = await AdsService.get_ads_stats(params);
-
-        if (response.status === 200) {
-            const result = response.data;
-
-            if (result.status === "error") {
-                notify.error(result.error.message, 3000);
-                isLoading.value = false;
-                hasLoadedOnce.value = true;
-                return;
-            }
-
-            funnel.value = result.data?.funnel || {};
-            conversions.value = result.data?.conversions || {};
-            acquisition_cost.value = result.data?.acquisition_cost || {};
-            dynamicsChart.value = result.data?.dynamics_chart || [];
-            promotionDynamics.value = result.data?.promotion_dynamics || [];
-            articlesTable.value = result.data?.articles_table || [];
-
-            hasLoadedOnce.value = true;
-        }
-    } catch (error) {
-        console.error('Ошибка загрузки данных рекламы:', error);
-        notify.error('Ошибка загрузки данных рекламы', 3000);
-        hasLoadedOnce.value = true;
-    } finally {
-        isLoading.value = false;
+    if (result.status === 'error') {
+      funnel.value = {}
+      conversions.value = {}
+      acquisitionCost.value = {}
+      dynamicsChart.value = []
+      articlesTable.value = []
+      errorMessage.value = result.error?.message || 'Нет данных рекламы за выбранный период.'
+      return
     }
-};
 
-// Lifecycle
-onMounted(() => {
-    // Устанавливаем даты по умолчанию (последние 30 дней)
-    const today = new Date();
-    const lastMonth = new Date();
-    lastMonth.setDate(today.getDate() - 30);
+    funnel.value = result.data?.funnel || {}
+    conversions.value = result.data?.conversions || {}
+    acquisitionCost.value = result.data?.acquisition_cost || {}
+    dynamicsChart.value = result.data?.dynamics_chart || []
+    articlesTable.value = result.data?.articles_table || []
+  } catch (error) {
+    console.error('Ошибка загрузки данных рекламы:', error)
+    errorMessage.value = error.response?.data?.error?.message || 'Сервис рекламы временно недоступен.'
+    notify.error(errorMessage.value, 3000)
+  } finally {
+    isLoading.value = false
+    hasLoadedOnce.value = true
+  }
+}
 
-    startDate.value = lastMonth.toISOString().split('T')[0];
-    endDate.value = today.toISOString().split('T')[0];
-
-    loadData();
-});
+onMounted(loadData)
 </script>
 
 <style scoped>
-.ads-dashboard-container {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+.ads-page {
+  width: min(100% - 32px, var(--content-width));
+  margin: 0 auto;
+  padding: 22px 0 48px;
 }
 
-.dashboard-header {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    padding: 20px;
-    background-color: var(--card-bg);
-    border-radius: 8px;
-    box-shadow: var(--shadow);
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
 }
 
-.date-range {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14px;
+.page-header h1 {
+  margin-top: 3px;
+  font-size: clamp(26px, 3vw, 36px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
 }
 
-.date-input {
-    background-color: var(--light-bg);
-    border: none;
-    color: var(--text-color);
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-size: 14px;
+.eyebrow {
+  color: #a78bfa;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.date-input:focus {
-    outline: none;
+.page-subtitle {
+  max-width: 680px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
-.btn {
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    border: none;
-    transition: var(--transition);
+.period-filter {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: var(--card-bg);
 }
 
-.btn-primary {
-    background-color: var(--secondary-color);
-    color: white;
+.period-filter label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.btn-primary:hover {
-    background-color: var(--secondary-color-dark);
+.period-filter label span {
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-.section-title {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 15px;
-    color: var(--text-color);
+.period-filter input,
+.period-filter button {
+  min-height: 36px;
+  border-radius: 8px;
 }
 
-.chart-section {
-    background-color: var(--card-bg);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
+.period-filter input {
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  background: var(--light-bg);
+  color: var(--text-color);
 }
 
-.stats-grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
+.period-filter button {
+  padding: 7px 13px;
+  border: 1px solid var(--secondary-color);
+  background: var(--secondary-color);
+  color: #fff;
+  font-weight: 650;
+  cursor: pointer;
 }
 
-.stat-card {
-    background-color: var(--card-bg);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
+.period-filter button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
-.card-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 15px;
-    color: var(--text-color);
+.status-banner,
+.empty-state {
+  padding: 14px 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius);
+  font-size: 13px;
 }
 
-.funnel-rows,
-.conversion-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+.status-banner {
+  border: 1px solid rgba(251, 113, 133, 0.28);
+  background: rgba(251, 113, 133, 0.08);
+  color: #fda4af;
 }
 
-.funnel-row,
-.conversion-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border-color);
+.status-banner span,
+.empty-state span {
+  color: var(--text-muted);
 }
 
-.funnel-row:last-child,
-.conversion-row:last-child {
-    border-bottom: none;
+.status-banner button {
+  margin-left: auto;
+  padding: 6px 9px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 
-.funnel-row.highlight,
-.conversion-row.highlight {
-    background-color: var(--hover-bg);
-    padding: 8px 10px;
-    border-radius: 6px;
-    margin-top: 5px;
+.empty-state {
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
 }
 
-.label {
-    font-size: 14px;
-    color: #aaa;
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.value {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-color);
+.kpi-card,
+.section-card,
+.table-card {
+  border: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(29, 40, 55, 0.96), rgba(24, 33, 46, 0.96));
+  box-shadow: var(--shadow-sm);
 }
 
-.acquisition-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
+.kpi-card {
+  min-height: 120px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
 }
 
-.acquisition-item {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: 10px;
-    background-color: var(--light-bg);
-    border-radius: 6px;
+.kpi-card > span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
 }
 
-.acquisition-item.highlight {
-    background-color: var(--hover-bg);
-    border: 1px solid var(--secondary-color);
+.kpi-card strong {
+  margin-top: 13px;
+  font-size: clamp(20px, 2vw, 26px);
+  letter-spacing: -0.025em;
 }
 
-.acquisition-item .label {
-    font-size: 12px;
+.kpi-card small {
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--text-subtle);
+  font-size: 10px;
+  line-height: 1.35;
 }
 
-.acquisition-item .value {
-    font-size: 16px;
-    font-weight: 700;
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
 }
 
-.table-section {
-    background-color: var(--card-bg);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
+.section-card,
+.table-card {
+  padding: 18px;
+  border-radius: var(--radius-lg);
+}
+
+.chart-card,
+.table-card {
+  margin-top: 12px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.section-heading h2 {
+  margin-top: 2px;
+  font-size: 17px;
+  font-weight: 720;
+}
+
+.section-heading--table > span {
+  color: var(--text-subtle);
+  font-size: 11px;
+}
+
+.metric-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-row {
+  min-height: 42px;
+  padding: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+}
+
+.metric-row:last-child {
+  border-bottom: 0;
+}
+
+.metric-row span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.metric-row strong {
+  font-size: 13px;
+}
+
+.metric-row--accent strong {
+  color: #c4b5fd;
 }
 
 .table-wrapper {
-    overflow-x: auto;
+  overflow-x: auto;
 }
 
-.ads-table {
+table {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+th,
+td {
+  padding: 11px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  text-align: right;
+  white-space: nowrap;
+}
+
+th {
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+.product-cell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-empty {
+  padding: 28px 8px;
+  color: var(--text-subtle);
+  text-align: center;
+  font-size: 12px;
+}
+
+@media (max-width: 1220px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .period-filter {
     width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
+  }
+
+  .period-filter label {
+    flex: 1;
+  }
+
+  .period-filter input {
+    width: 100%;
+  }
+
+  .insight-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.ads-table th,
-.ads-table td {
-    padding: 10px 8px;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
-}
+@media (max-width: 640px) {
+  .ads-page {
+    width: min(100% - 20px, var(--content-width));
+    padding-top: 16px;
+  }
 
-.ads-table th {
-    background-color: var(--light-bg);
-    font-weight: 600;
-    color: var(--text-color);
-    white-space: nowrap;
-}
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 
-.ads-table tr:hover {
-    background-color: var(--hover-bg);
-}
+  .period-filter {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 
-.photo-cell {
-    text-align: center;
-}
+  .period-filter button {
+    grid-column: 1 / -1;
+  }
 
-.product-photo-placeholder {
-    width: 40px;
-    height: 40px;
-    background-color: var(--light-bg);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    margin: 0 auto;
-}
+  .status-banner,
+  .empty-state {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 
-.no-data {
-    text-align: center;
-    padding: 20px;
-    color: #aaa;
+  .status-banner button {
+    margin-left: 0;
+  }
 }
 </style>
