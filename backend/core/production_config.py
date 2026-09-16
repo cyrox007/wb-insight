@@ -2,10 +2,12 @@
 
 Development keeps convenient local defaults. Production must not start with
 sample credentials, weak well-known defaults, malformed encryption material or
-HTTP-only public endpoints copied from a development setup.
+placeholder public endpoints copied from an example environment.
 """
 
 from __future__ import annotations
+
+from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet
 
@@ -19,6 +21,7 @@ _WEAK_SECRET_VALUES = {
     "postgres",
     "secret",
 }
+_RESERVED_EXAMPLE_DOMAINS = ("example.com", "example.org", "example.net")
 
 
 def _looks_like_placeholder(value: str | None) -> bool:
@@ -41,9 +44,20 @@ def _require_secret(name: str, value: str | None, *, min_length: int | None = No
     return value
 
 
+def _is_reserved_example_host(hostname: str | None) -> bool:
+    if not hostname:
+        return True
+    host = hostname.rstrip(".").lower()
+    return any(host == domain or host.endswith(f".{domain}") for domain in _RESERVED_EXAMPLE_DOMAINS)
+
+
 def _require_https(name: str, value: str | None) -> None:
-    if not value or not value.strip().lower().startswith("https://"):
-        raise RuntimeError(f"{name} must use https:// in production")
+    raw = (value or "").strip()
+    parsed = urlparse(raw)
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise RuntimeError(f"{name} must use a valid https:// URL in production")
+    if "replace-with-" in parsed.hostname.lower() or _is_reserved_example_host(parsed.hostname):
+        raise RuntimeError(f"{name} must be replaced with a production URL")
 
 
 def validate_production_config(config) -> None:
@@ -56,12 +70,19 @@ def validate_production_config(config) -> None:
 
     if config.SERVER_HTTP_PROTOCOL.strip().lower() != "https://":
         raise RuntimeError("SERVER_HTTP_PROTOCOL must be https:// in production")
+    _require_https("BASE_URL", config.BASE_URL)
 
     for origin in config.get_allowed_origins:
         _require_https("ALLOWED_ORIGINS", origin)
 
     _require_secret("DB_PASSWORD", config.DB_PASSWORD, min_length=16)
     _require_secret("JWT_SECRET_KEY", config.SECRET_KEY, min_length=32)
+    _require_secret(
+        "LEGAL_EVIDENCE_HMAC_KEY",
+        config.LEGAL_EVIDENCE_HMAC_KEY,
+        min_length=32,
+    )
+
     encryption_key = _require_secret("API_TOKEN_ENCRYPTION_KEY", config.ENCRYPTION_KEY)
     try:
         Fernet(encryption_key.encode("utf-8"))
