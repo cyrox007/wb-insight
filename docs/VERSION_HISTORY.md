@@ -1,6 +1,6 @@
 # WB Insight — подробная история версий
 
-Дата полной ревизии: 15 сентября 2026 года.
+Дата полной ревизии: 16 сентября 2026 года.
 
 Документ фиксирует продуктовые milestones, а не каждый commit. Версии до введения formal release policy являются ретроспективно реконструированными и не означают наличие соответствующего Git tag.
 
@@ -155,14 +155,36 @@ P31 закрыл запланированные code-side lifecycle gaps:
 
 P31 не вводит автоматический hard purge и не объявляет юридически утверждённый retention/refund процесс: это остаётся внешним legal/operator gate.
 
+## 0.9.0-alpha.9 — P32: registration и beta-smoke hardening
+
+**Статус:** кандидат до merge.
+
+P32 появился не как плановая функциональная фаза, а после release-smoke ревизии `alpha.8`, которая обнаружила два code-side дефекта регистрации:
+
+- `create_demo_subscription()` искал `TariffPlan.code == "DEMO"`, хотя ORM и исходная migration фиксируют канонический lowercase `demo`;
+- `insert_user()` проглатывал DB flush exception и возвращал `None`, оставляя request `AsyncSession` в failed transaction перед автоматическим commit dependency.
+
+Исправления P32:
+
+- единый lowercase `demo` contract;
+- DB persistence errors регистрации распространяются до transaction owner;
+- `IntegrityError` явно rollback-ится и возвращает безопасный `409 REGISTRATION_CONFLICT`;
+- ошибка назначения базовой роли откатывает регистрацию;
+- роль, consent evidence и demo subscription остаются в одной request-транзакции;
+- добавлен privacy-safe read-only endpoint собственных consent records без IP/User-Agent HMAC;
+- release smoke автоматически выполняет disposable registration → demo → exact consent evidence → refresh → soft-deactivation → inactive login rejection;
+- disposable smoke запускается по умолчанию и может быть отключён только явным escape hatch для специализированного прогона;
+- regression suite фиксирует transaction, demo-code и consent-privacy contracts.
+
+P32 не является доказательством прохождения production-like smoke: runner только делает этот gate проверяемым и воспроизводимым.
+
 ## Следующая стадия — 0.9.0-beta.1
 
 Допускается только после:
 
-- feature freeze WB Web v1 на текущем `0.9.0-alpha.8` baseline;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` baseline после merge P32;
 - production-like HTTPS deployment из repo;
-- core release smoke;
-- disposable registration/demo/legal evidence;
+- фактического core release smoke, включая disposable registration/demo/legal evidence;
 - реального SMTP/recovery smoke;
 - data-accuracy acceptance на реальном WB seller account и фиксированных периодах;
 - отсутствия необъяснённых существенных денежных расхождений;
