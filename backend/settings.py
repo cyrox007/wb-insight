@@ -3,6 +3,8 @@ from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
+from core.production_config import validate_production_config
+
 
 load_dotenv()
 
@@ -252,3 +254,4 @@ class Config:
 
 
 config = Config()
+validate_production_config(config)
