@@ -7,6 +7,7 @@ import pytest
 from celery_app import celery_app
 from models.mail_delivery import CampaignStatus, MailMessage, MailStatus
 from services import mail_campaign_service as campaigns
+from services import mail_service
 
 
 class _Rows:
@@ -31,6 +32,23 @@ class _Session:
 
     async def flush(self):
         self.flushes += 1
+
+
+class _ScalarRows:
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
+
+
+class _CaptureSession:
+    def __init__(self):
+        self.statement = None
+
+    async def execute(self, statement):
+        self.statement = statement
+        return _ScalarRows()
 
 
 def _campaign(status=CampaignStatus.DRAFT.value):
@@ -107,6 +125,18 @@ async def test_launch_campaign_is_idempotent_for_existing_recipient(monkeypatch)
     assert second.added == []
     assert campaign.queued_count == 1
     assert campaign.status == CampaignStatus.QUEUED.value
+
+
+@pytest.mark.asyncio
+async def test_transactional_scan_excludes_campaign_rows_when_marketing_is_disabled():
+    session = _CaptureSession()
+
+    await mail_service.due_message_ids(session, include_marketing=False)
+
+    sql = str(session.statement)
+    assert "mail_messages.kind" in sql
+    params = session.statement.compile().params
+    assert "transactional" in params.values()
 
 
 def test_celery_beat_registers_campaign_scheduler():
