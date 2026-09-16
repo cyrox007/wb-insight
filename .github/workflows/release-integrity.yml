@@ -110,30 +110,104 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' 'ci-green' > /tmp/ci.txt
+          release_sha="0123456789abcdef0123456789abcdef01234567"
+          printf '%s\n' '0.9.0-beta.1' > /tmp/VERSION-beta
+          printf '%s\n' 'ci-green-exact-head' > /tmp/ci.txt
+          printf '%s\n' 'production-like-deploy-and-rollback-green' > /tmp/deployment.txt
           printf '%s\n' 'core-smoke-green' > /tmp/core-smoke.txt
+          printf '%s\n' 'smtp-recovery-and-account-lifecycle-green' > /tmp/account-lifecycle.txt
+          printf '%s\n' 'desktop-mobile-ux-smoke-green' > /tmp/ux-smoke.txt
+          printf '%s\n' 'frontend-git-log-secrets-review-green' > /tmp/secrets-review.txt
           cp /tmp/data-accuracy.json /tmp/data-accuracy-evidence.json
 
+          complete_args=(
+            --stage beta
+            --environment staging-ci-fixture
+            --commit "$release_sha"
+            --version-file /tmp/VERSION-beta
+            --artifact ci=/tmp/ci.txt
+            --artifact deployment=/tmp/deployment.txt
+            --artifact core_smoke=/tmp/core-smoke.txt
+            --artifact account_lifecycle=/tmp/account-lifecycle.txt
+            --artifact ux_smoke=/tmp/ux-smoke.txt
+            --artifact secrets_review=/tmp/secrets-review.txt
+            --artifact data_accuracy=/tmp/data-accuracy-evidence.json
+          )
+
           python3 ops/release_evidence.py \
-            --stage beta \
-            --environment ci-fixture \
-            --commit ci-fixture-sha \
-            --artifact ci=/tmp/ci.txt \
-            --artifact core_smoke=/tmp/core-smoke.txt \
-            --artifact data_accuracy=/tmp/data-accuracy-evidence.json \
+            "${complete_args[@]}" \
             --output /tmp/release-evidence.json
+          grep -F '"schema_version": 2' /tmp/release-evidence.json
           grep -F '"status": "complete"' /tmp/release-evidence.json
+          grep -F '"account_lifecycle"' /tmp/release-evidence.json
+          grep -F '"deployment"' /tmp/release-evidence.json
+          grep -F '"ux_smoke"' /tmp/release-evidence.json
+          grep -F '"secrets_review"' /tmp/release-evidence.json
 
           if python3 ops/release_evidence.py \
             --stage beta \
-            --environment ci-fixture \
-            --commit ci-fixture-sha \
+            --environment staging-ci-fixture \
+            --commit "$release_sha" \
+            --version-file /tmp/VERSION-beta \
             --artifact ci=/tmp/ci.txt \
+            --artifact core_smoke=/tmp/core-smoke.txt \
+            --artifact data_accuracy=/tmp/data-accuracy-evidence.json \
             --output /tmp/release-evidence-incomplete.json; then
             echo 'Incomplete beta evidence unexpectedly passed' >&2
             exit 1
           fi
           grep -F '"status": "incomplete"' /tmp/release-evidence-incomplete.json
+          grep -F '"deployment"' /tmp/release-evidence-incomplete.json
+          grep -F '"account_lifecycle"' /tmp/release-evidence-incomplete.json
+          grep -F '"ux_smoke"' /tmp/release-evidence-incomplete.json
+          grep -F '"secrets_review"' /tmp/release-evidence-incomplete.json
+
+          if python3 ops/release_evidence.py \
+            --stage beta \
+            --environment staging-ci-fixture \
+            --commit ci-fixture-sha \
+            --version-file /tmp/VERSION-beta \
+            --artifact ci=/tmp/ci.txt; then
+            echo 'Invalid commit unexpectedly passed release evidence validation' >&2
+            exit 1
+          fi
+
+          if python3 ops/release_evidence.py \
+            --stage beta \
+            --environment staging-ci-fixture \
+            --commit "$release_sha" \
+            --version-file VERSION \
+            --artifact ci=/tmp/ci.txt; then
+            echo 'Alpha VERSION unexpectedly accepted for beta evidence' >&2
+            exit 1
+          fi
+
+          : > /tmp/empty.txt
+          if python3 ops/release_evidence.py \
+            --stage beta \
+            --environment staging-ci-fixture \
+            --commit "$release_sha" \
+            --version-file /tmp/VERSION-beta \
+            --artifact ci=/tmp/empty.txt; then
+            echo 'Empty evidence artifact unexpectedly passed validation' >&2
+            exit 1
+          fi
+
+          if python3 ops/release_evidence.py \
+            --stage beta \
+            --environment staging-ci-fixture \
+            --commit "$release_sha" \
+            --version-file /tmp/VERSION-beta \
+            --artifact ci=/tmp/ci.txt \
+            --artifact deployment=/tmp/deployment.txt \
+            --artifact core_smoke=/tmp/core-smoke.txt \
+            --artifact account_lifecycle=/tmp/account-lifecycle.txt \
+            --artifact ux_smoke=/tmp/ux-smoke.txt \
+            --artifact secrets_review=/tmp/secrets-review.txt \
+            --artifact data_accuracy=/tmp/data-accuracy-failing.json; then
+            echo 'Failing data-accuracy evidence unexpectedly passed manifest validation' >&2
+            exit 1
+          fi
 
   docker-build:
     runs-on: ubuntu-latest
