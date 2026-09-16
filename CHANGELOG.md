@@ -6,7 +6,7 @@
 
 ## [0.9.0-alpha.11] — 2026-09-16
 
-P34 — закрытие разрыва между beta readiness и release-evidence contract. Кандидат до merge.
+P34 — закрытие разрыва между beta readiness и release-evidence contract. PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`.
 
 - beta manifest больше не может считаться полным только по `ci + core_smoke + data_accuracy`;
 - обязательный beta evidence set синхронизирован с дорожной картой: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
@@ -17,9 +17,9 @@ P34 — закрытие разрыва между beta readiness и release-evi
 - `data_accuracy` проверяется как machine-readable schema v1 со `status=pass`, ненулевыми periods/metrics и SHA-256 входа/policy;
 - manifest schema поднята до v2;
 - Release integrity содержит positive/negative contract tests для полного beta-набора, старого неполного набора, неверного SHA, alpha-version, пустого artifact и failing data-accuracy evidence;
-- `RELEASE_EVIDENCE.md`, roadmap, readiness и versioning синхронизируются с фактическим contract.
+- `RELEASE_EVIDENCE.md`, roadmap, readiness и versioning синхронизированы с фактическим contract.
 
-P34 не создаёт beta автоматически: production-like deployment, SMTP/lifecycle smoke, UX/secrets review и real-seller data-accuracy evidence по-прежнему должны быть выполнены фактически на exact beta candidate.
+Финальный exact head P34 `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity. P34 не создаёт beta автоматически: production-like deployment, SMTP/lifecycle smoke, UX/secrets review и real-seller data-accuracy evidence по-прежнему должны быть выполнены фактически на exact beta candidate.
 
 ## [0.9.0-alpha.10] — 2026-09-16
 
@@ -86,39 +86,34 @@ P31 закрывает code-side baseline account lifecycle, но не объя�
 
 P30 — beta-readiness acceptance tooling и release evidence. PR #46, merge `77f1ec19cbe565cdbaca2a65a2c4cd7d5199ff5f`.
 
-- добавлена versioned policy сверки ключевых WB Web v1 метрик;
-- денежные значения сравниваются через `Decimal`, без ошибок float-округления;
-- поддерживаются absolute/relative/either/both tolerance modes;
-- обязательное отсутствующее значение и превышение tolerance блокируют acceptance;
-- `ops/data_accuracy_acceptance.py` формирует машинный JSON и Markdown-отчёт с SHA-256 входа и policy;
-- добавлены положительный и отрицательный CI fixtures, чтобы runner не мог «всегда проходить»;
-- `ops/release_evidence.py` связывает stage, exact commit, version, environment и SHA-256 evidence artifacts;
-- определены обязательные evidence kinds отдельно для beta, RC и stable;
-- Release integrity получил отдельный `acceptance-tools` job с positive/negative contract tests;
-- изменение корневого `VERSION` теперь автоматически запускает Backend security и Database migrations, поэтому release-candidate head всегда проходит полный backend/migration gate;
-- добавлены `docs/DATA_ACCURACY_ACCEPTANCE.md` и `docs/RELEASE_EVIDENCE.md`;
-- P30 намеренно не назначает beta: `0.9.0-beta.1` разрешена только после фактического production-like smoke и реальной data-accuracy сверки.
+- добавлена versioned policy сверки ключевых метрик WB Web v1 и их tolerances;
+- deterministic `Decimal` comparator для expected/actual;
+- machine-readable JSON и Markdown data-accuracy report;
+- SHA-256 привязка отчёта к acceptance input и policy;
+- positive/negative CI fixtures;
+- release-evidence manifest, связывающий stage, exact commit, version, environment и hashes artifacts;
+- отдельные evidence contracts для beta/RC/stable;
+- CI self-test успешного и намеренно провального acceptance;
+- изменение `VERSION` запускает backend security и database-migration gates.
+
+P30 делает приёмку воспроизводимой, но сам по себе не является фактом прохождения production-like acceptance.
 
 ## [0.9.0-alpha.6] — 2026-09-15
 
 P29 — dependency/security hardening и полная ревизия документации. PR #44, merge `6a4e754738617085a22e540a84b5c8ee5e0854d1`.
 
-- frontend dependency tree обновлён после фактического security audit;
-- Axios переведён на исправленную release line `^1.18.0`;
-- удалён ошибочно включённый в browser dependencies пакет `node`;
-- безопасные transitive versions закреплены для `follow-redirects`, `form-data`, `nanoid` и `postcss`;
-- CI проверяет production и полный frontend dependency tree через `npm audit`;
-- backend CI дополнен `pip-audit` production requirements;
-- первый backend audit выявил проблемы в `cryptography`, `ecdsa`, `pyasn1`, `python-dotenv`, `starlette`;
-- цепочка `python-jose -> ecdsa` удалена, HS256 JWT переведён на PyJWT;
-- FastAPI/Starlette, cryptography и python-dotenv обновлены до исправленных веток;
-- итоговый backend audit: `No known vulnerabilities found`;
-- route tests переведены с внутренних структур FastAPI на публичный OpenAPI contract;
-- nginx container smoke получил bounded backend-readiness retry;
-- временный self-write lockfile flow отключён, постоянный frontend CI read-only;
-- документация перестроена в единый `docs/`-портал;
-- root README/SETUP и история версий приведены к фактическому состоянию;
-- до beta закреплён обязательный data-accuracy gate.
+- frontend dependency tree очищен по реальному `npm audit`;
+- удалён runtime package `node`, обновлён Axios и закреплены безопасные transitive versions;
+- frontend CI постоянно проверяет production и full dependency tree;
+- backend получил `pip-audit`;
+- уязвимая цепочка `python-jose -> ecdsa` удалена, HS256 JWT переведён на PyJWT;
+- FastAPI/Starlette, cryptography и python-dotenv обновлены до исправленных версий;
+- итоговый production Python audit не нашёл известных vulnerabilities;
+- route regression tests переведены на публичный OpenAPI contract;
+- gateway smoke получил bounded backend readiness;
+- документация проекта полностью перестроена в канонический `docs/`-портал.
+
+`alpha.6` является первым baseline после P28, где frontend и backend dependency audits входят в обязательный CI gate.
 
 ## [0.9.0-alpha.5] — 2026-09-15
 
@@ -242,7 +237,7 @@ PR #1 — первый воспроизводимый backend/frontend baseline.
 
 ## Следующие release stages
 
-- `0.9.0-beta.1` — feature freeze + реальный production-like deployment/core smoke + SMTP recovery smoke + data-accuracy acceptance;
+- `0.9.0-beta.1` — feature freeze + реальный production-like deployment/core smoke + SMTP recovery smoke + UX/secrets review + data-accuracy acceptance;
 - `1.0.0-rc.1` — real WB/Sber/prod/legal/ops gates;
 - `1.0.0` — публичный stable WB Insight Web v1 из проверенного RC.
 
