@@ -3,7 +3,6 @@ import CP_Users from '@/API/ControlPanel/CP_Users'
 import CP_Roles from '@/API/ControlPanel/CP_Roles'
 import DateTransform from '@/utils/date_transform'
 import EditUserModal from '@/components/UserModals/edit_user.vue'
-import ChangePasswordModal from '@/components/UserModals/change_password.vue'
 import AssignRoleModal from '@/components/UserModals/assign_role.vue'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
 import Modal from '@/components/UI/Modal.vue'
@@ -17,7 +16,6 @@ const isLoading = ref(false)
 const loadError = ref('')
 const roleActionLoading = ref(false)
 const showEditModal = ref(false)
-const showChangePasswordModal = ref(false)
 const showAssignRoleModal = ref(false)
 const roleConfirm = ref({ isOpen: false, role: '' })
 
@@ -75,7 +73,7 @@ async function removeRoleConfirmed() {
 			<div>
 				<p class="cp-eyebrow">Пользователи · профиль</p>
 				<h2 class="cp-detail-title">Карточка пользователя</h2>
-				<p class="cp-subtitle">Профиль, статус, роли и действия безопасности.</p>
+				<p class="cp-subtitle">Профиль, статус и роли пользователя.</p>
 			</div>
 			<BaseButton variant="outline" size="small" text="← К списку" @click="router.push({ name: 'control-panel.users' })" />
 		</header>
@@ -183,7 +181,6 @@ async function removeRoleConfirmed() {
 
 			<div class="cp-section cp-actions cp-actions--end">
 				<BaseButton variant="primary" text="Редактировать профиль" @click="showEditModal = true" />
-				<BaseButton variant="outline" text="Сменить пароль" @click="showChangePasswordModal = true" />
 			</div>
 		</article>
 
@@ -194,11 +191,6 @@ async function removeRoleConfirmed() {
 			@close="showEditModal = false"
 			@updated="loadUser"
 		/>
-		<ChangePasswordModal
-			:is-open="showChangePasswordModal"
-			:user-id="targetUser?.id"
-			@close="showChangePasswordModal = false"
-		/>
 		<AssignRoleModal
 			:is-open="showAssignRoleModal"
 			:user-id="targetUser?.id"
@@ -208,13 +200,13 @@ async function removeRoleConfirmed() {
 
 		<Modal v-if="roleConfirm.isOpen" :is-open="true" @close="roleConfirm = { isOpen: false, role: '' }">
 			<template #header>
-				<h3>Удалить роль</h3>
+				<h3 class="cp-modal-title">Удалить роль</h3>
 			</template>
 			<template #body>
-				<p>Удалить роль «{{ roleConfirm.role }}» у пользователя? Доступ изменится сразу после сохранения.</p>
+				<p class="cp-modal-copy">Удалить роль «{{ roleConfirm.role }}» у пользователя? Доступ изменится сразу после сохранения.</p>
 			</template>
 			<template #footer>
-				<div class="cp-actions cp-actions--end">
+				<div class="cp-modal-footer">
 					<BaseButton variant="outline" text="Отмена" @click="roleConfirm = { isOpen: false, role: '' }" />
 					<BaseButton variant="danger" text="Удалить роль" :loading="roleActionLoading" @click="removeRoleConfirmed" />
 				</div>
