@@ -25,6 +25,7 @@ class MailStatus(str, enum.Enum):
 
 class CampaignStatus(str, enum.Enum):
     DRAFT = "draft"
+    SCHEDULED = "scheduled"
     QUEUED = "queued"
     SENDING = "sending"
     COMPLETED = "completed"
