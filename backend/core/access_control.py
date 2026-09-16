@@ -5,12 +5,7 @@ from models.users_model import UserRole
 
 
 class Permission(str, Enum):
-    """Application permissions derived directly from system roles.
-
-    There is deliberately no permissions table and no role_permissions join
-    table. Roles are the source of truth and each role has a fixed capability
-    set defined in code.
-    """
+    """Application permissions derived directly from system roles."""
 
     CONTROL_PANEL_ACCESS = "control_panel:access"
     SYSTEM_MANAGE = "system:manage"
@@ -23,6 +18,8 @@ class Permission(str, Enum):
     PAYMENTS_READ = "payments:read"
     PAYMENTS_WRITE = "payments:write"
     AUDIT_READ = "audit:read"
+    MAIL_READ = "mail:read"
+    MAIL_WRITE = "mail:write"
 
 
 _ALL_CONTROL_PANEL_PERMISSIONS = frozenset(Permission)
@@ -39,11 +36,9 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.TARIFFS_WRITE,
             Permission.PAYMENTS_READ,
             Permission.AUDIT_READ,
+            Permission.MAIL_READ,
         }
     ),
-    # Preserve the current product policy: only admin and super_admin may open
-    # the control panel. Other roles can receive dashboard-level permissions
-    # later without introducing database permission entities.
     UserRole.MANAGER: frozenset(),
     UserRole.SUPPORT: frozenset(),
     UserRole.ANALYST: frozenset(),
@@ -52,7 +47,6 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
 
 
 def permissions_for_role(role: UserRole | str) -> frozenset[Permission]:
-    """Return the fixed permissions assigned to a role code."""
     try:
         normalized_role = role if isinstance(role, UserRole) else UserRole(str(role))
     except ValueError:
@@ -61,7 +55,6 @@ def permissions_for_role(role: UserRole | str) -> frozenset[Permission]:
 
 
 def permissions_for_roles(roles: Iterable[UserRole | str]) -> frozenset[Permission]:
-    """Return the union of permissions for all roles assigned to a user."""
     permissions: set[Permission] = set()
     for role in roles:
         permissions.update(permissions_for_role(role))
