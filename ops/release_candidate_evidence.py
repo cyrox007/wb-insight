@@ -4,13 +4,24 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 from ci_acceptance import CIAcceptanceError, validate_ci_evidence
+from payment_acceptance import PaymentAcceptanceError, validate_payment_evidence
 from release_evidence import SHA40_RE, SHA256_RE, parse_artifact, validate_version_for_stage
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _validate_database_upgrade_binding(
@@ -40,6 +51,27 @@ def _validate_database_upgrade_binding(
         raise ValueError("deployment artifact has invalid database upgrade proof SHA-256")
 
 
+def _bind_candidate_subproof(manifest_path: Path, *, name: str, proof_path: Path) -> None:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("generated release manifest is invalid") from exc
+    if not isinstance(manifest, dict) or manifest.get("status") != "complete":
+        raise ValueError("generated release manifest is not complete")
+    subproofs = manifest.setdefault("candidate_subproofs", {})
+    if not isinstance(subproofs, dict):
+        raise ValueError("generated release manifest has invalid candidate_subproofs")
+    subproofs[name] = {
+        "file": proof_path.name,
+        "size_bytes": proof_path.stat().st_size,
+        "sha256": _sha256(proof_path),
+    }
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", choices=("beta", "rc", "stable"), required=True)
@@ -47,6 +79,11 @@ def main() -> int:
     parser.add_argument("--commit", required=True)
     parser.add_argument("--version-file", type=Path, default=Path("VERSION"))
     parser.add_argument("--artifact", action="append", default=[])
+    parser.add_argument(
+        "--payment-proof",
+        type=Path,
+        default=Path(os.environ["PAYMENT_ISOLATION_PROOF"]) if os.getenv("PAYMENT_ISOLATION_PROOF") else None,
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -87,6 +124,9 @@ def main() -> int:
     if deployment_path is None:
         print("release_candidate_error=structured deployment artifact is required", file=sys.stderr)
         return 2
+    if args.payment_proof is None:
+        print("release_candidate_error=structured payment isolation proof is required", file=sys.stderr)
+        return 2
 
     try:
         validate_ci_evidence(
@@ -101,7 +141,13 @@ def main() -> int:
             commit=commit,
             environment=environment,
         )
-    except (CIAcceptanceError, ValueError) as exc:
+        validate_payment_evidence(
+            args.payment_proof,
+            version=version,
+            commit=commit,
+            environment=environment,
+        )
+    except (CIAcceptanceError, PaymentAcceptanceError, ValueError, OSError) as exc:
         print(f"release_candidate_error={exc}", file=sys.stderr)
         return 2
 
@@ -126,6 +172,15 @@ def main() -> int:
     completed = subprocess.run(command, check=False)
     if completed.returncode != 0:
         return completed.returncode
+    try:
+        _bind_candidate_subproof(
+            args.output,
+            name="payment_isolation",
+            proof_path=args.payment_proof,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"release_candidate_error={exc}", file=sys.stderr)
+        return 2
     print(f"[ok] strict release candidate evidence manifest: {args.output}")
     return 0
 
