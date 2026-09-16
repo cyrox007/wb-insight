@@ -10,12 +10,11 @@ from core.middleware import auth_middle
 from core.session_cookie import clear_refresh_cookie
 from services.account_lifecycle_service import (
     deactivate_account,
-    issue_password_reset_token,
     request_subscription_cancellation,
     reset_password,
     withdraw_subscription_cancellation,
 )
-from services.mail_service import send_password_reset_email
+from services.mail_service import queue_transactional_email
 from services.user_service import get_user_by_email, get_user_by_uuid
 from settings import config
 from utils.responce_helps import response_error, response_success
@@ -36,10 +35,7 @@ async def request_password_reset(
 ) -> dict:
     if not lifecycle_config.PASSWORD_RESET_ENABLED:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        return response_error(
-            code="PASSWORD_RECOVERY_NOT_CONFIGURED",
-            message="Восстановление доступа временно недоступно",
-        )
+        return response_error(code="PASSWORD_RECOVERY_NOT_CONFIGURED", message="Восстановление доступа временно недоступно")
 
     body = await request.json()
     email = str(body.get("email") or "").strip().lower()
@@ -48,19 +44,16 @@ async def request_password_reset(
         return response_error(code="VALIDATION_ERROR", message="Укажите корректный email")
 
     user = await get_user_by_email(db_session, email)
-    if user is not None and user.is_active:
-        raw_token = await issue_password_reset_token(db_session, user)
-        try:
-            await send_password_reset_email(user.email, raw_token)
-        except Exception:
-            # Keep the public response identical for existing/non-existing users.
-            # Roll back the undelivered token so it cannot remain valid.
-            await db_session.rollback()
-            logger.exception("Password reset delivery failed for user_id=%s", user.id)
+    if user is not None and user.is_active and user.email_verified_at is not None:
+        # The worker creates the one-time reset token only immediately before SMTP
+        # delivery. Raw reset secrets therefore never live in the durable mail queue.
+        await queue_transactional_email(
+            db_session,
+            user=user,
+            template_code="password_reset",
+        )
 
-    return response_success(
-        message="Если активный аккаунт с таким email существует, письмо отправлено"
-    )
+    return response_success(message="Если активный аккаунт с таким email существует, письмо отправлено")
 
 
 @auth_router.post("/password-reset/confirm")
@@ -75,24 +68,14 @@ async def confirm_password_reset(
     if not raw_token:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code="VALIDATION_ERROR", message="Не указан reset token")
-
     try:
-        user = await reset_password(
-            db_session,
-            raw_token=raw_token,
-            new_password=new_password,
-        )
+        user = await reset_password(db_session, raw_token=raw_token, new_password=new_password)
     except ValueError as exc:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code="VALIDATION_ERROR", message=str(exc))
-
     if user is None:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(
-            code="RESET_TOKEN_INVALID",
-            message="Ссылка восстановления недействительна или истекла",
-        )
-
+        return response_error(code="RESET_TOKEN_INVALID", message="Ссылка восстановления недействительна или истекла")
     clear_refresh_cookie(response)
     return response_success(message="Пароль изменён. Войдите заново на всех устройствах")
 
@@ -108,19 +91,12 @@ async def deactivate_current_account(
     if user is None:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="USER_NOT_FOUND", message="Пользователь не найден")
-
     body = await request.json()
     reason = str(body.get("reason") or "").strip() or None
-    changed = await deactivate_account(
-        db_session,
-        user,
-        actor_user_id=user_id,
-        reason=reason,
-    )
+    changed = await deactivate_account(db_session, user, actor_user_id=user_id, reason=reason)
     if not changed:
         response.status_code = status.HTTP_409_CONFLICT
         return response_error(code="ACCOUNT_ALREADY_INACTIVE", message="Аккаунт уже деактивирован")
-
     clear_refresh_cookie(response)
     return response_success(
         deactivated=True,
@@ -138,14 +114,11 @@ async def cancel_current_subscription(
     user_id = UUID(str(request.state.user["sub"]))
     body = await request.json()
     subscription = await request_subscription_cancellation(
-        db_session,
-        user_id=user_id,
-        reason=str(body.get("reason") or "").strip() or None,
+        db_session, user_id=user_id, reason=str(body.get("reason") or "").strip() or None
     )
     if subscription is None:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="ACTIVE_SUBSCRIPTION_NOT_FOUND", message="Активная подписка не найдена")
-
     return response_success(
         subscription_id=str(subscription.id),
         cancel_at_period_end=True,
@@ -161,17 +134,10 @@ async def undo_current_subscription_cancellation(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     user_id = UUID(str(request.state.user["sub"]))
-    subscription = await withdraw_subscription_cancellation(
-        db_session,
-        user_id=user_id,
-    )
+    subscription = await withdraw_subscription_cancellation(db_session, user_id=user_id)
     if subscription is None:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(
-            code="CANCELLATION_NOT_FOUND",
-            message="Активная заявка на отмену не найдена",
-        )
-
+        return response_error(code="CANCELLATION_NOT_FOUND", message="Активная заявка на отмену не найдена")
     return response_success(
         subscription_id=str(subscription.id),
         cancel_at_period_end=False,
