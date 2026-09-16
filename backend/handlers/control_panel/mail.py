@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
+from core.lifecycle_config import lifecycle_config
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage, MailStatus
 from services.mail_campaign_service import (
     CampaignStateConflict,
@@ -64,6 +65,16 @@ def _valid_campaign_statuses() -> set[str]:
 
 def _valid_mail_statuses() -> set[str]:
     return {item.value for item in MailStatus}
+
+
+def _require_campaign_delivery(response: Response):
+    if lifecycle_config.MAIL_DELIVERY_ENABLED:
+        return None
+    response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return response_error(
+        code="MAIL_DELIVERY_DISABLED",
+        message="Отправка пользовательских рассылок отключена",
+    )
 
 
 @router.get("/campaigns")
@@ -150,6 +161,9 @@ async def campaign_test_send(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
+    disabled = _require_campaign_delivery(response)
+    if disabled is not None:
+        return disabled
     campaign = await db_session.get(MailCampaign, campaign_id)
     if campaign is None:
         response.status_code = status.HTTP_404_NOT_FOUND
@@ -206,6 +220,9 @@ async def campaign_schedule(
 
 @router.post("/campaigns/{campaign_id}/launch")
 async def campaign_launch(campaign_id: UUID, response: Response, db_session: AsyncSession = Depends(get_db_session)):
+    disabled = _require_campaign_delivery(response)
+    if disabled is not None:
+        return disabled
     campaign_result = await db_session.execute(
         select(MailCampaign).where(MailCampaign.id == campaign_id).with_for_update()
     )
