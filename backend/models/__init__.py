@@ -14,3 +14,5 @@ from .product_cost_price_history import ProductCostPriceHistory
 from .manual_expense import ManualExpense
 from .legal_consent import LegalConsent
 from .account_lifecycle import AccountLifecycleEvent, PasswordResetToken
+from .payments_model import Payment, PaymentEvent
+from .payment_provider_config import PaymentProviderConfig
