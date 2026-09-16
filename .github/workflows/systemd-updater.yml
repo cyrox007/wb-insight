@@ -8,6 +8,8 @@ on:
       - docs/INSTALLATION.md
       - docs/TROUBLESHOOTING.md
       - docs/SYSTEM_REQUIREMENTS.md
+      - docs/PRODUCTION_DEPLOYMENT.md
+      - docs/README.md
       - .github/workflows/systemd-updater.yml
   push:
     branches: [main]
@@ -17,6 +19,8 @@ on:
       - docs/INSTALLATION.md
       - docs/TROUBLESHOOTING.md
       - docs/SYSTEM_REQUIREMENTS.md
+      - docs/PRODUCTION_DEPLOYMENT.md
+      - docs/README.md
       - .github/workflows/systemd-updater.yml
 
 jobs:
@@ -24,9 +28,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
       - name: Validate updater shell syntax
         run: bash -n ops/update_systemd.sh
-      - name: Verify required runtime guards are present
+      - name: Execute updater runtime preflight
+        env:
+          PROJECT_DIR: ${{ github.workspace }}
+          PYTHON_BIN: python3.12
+        run: bash ops/update_systemd.sh --preflight-only
+      - name: Verify required deployment guards are present
         shell: bash
         run: |
           set -euo pipefail
