@@ -2,9 +2,9 @@
 """WB Insight production-like release smoke runner.
 
 The runner intentionally never prints passwords, access tokens, refresh cookies or
-marketplace credentials. Core authenticated smoke uses a pre-provisioned smoke
-user. Optional WB and billing phases are enabled only when their environment
-variables are supplied.
+marketplace credentials. It verifies disposable registration before the core
+pre-provisioned-user smoke unless explicitly disabled. Optional WB and billing
+phases are enabled only when their environment variables are supplied.
 """
 
 from __future__ import annotations
@@ -100,6 +100,13 @@ def _project_version() -> str | None:
     return version_path.read_text(encoding="utf-8").strip() or None
 
 
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def run_public_smoke(client: SmokeClient, expected_version: str | None) -> None:
     live = client.request("GET", "/health/live")
     if live.get("status") != "ok":
@@ -117,6 +124,119 @@ def run_public_smoke(client: SmokeClient, expected_version: str | None) -> None:
         _required_consents(client, context)
 
     print("[ok] public health/readiness and legal document registry")
+
+
+def run_disposable_registration_smoke(base_url: str) -> None:
+    """Prove registration/demo/consent/session lifecycle with an isolated account."""
+    client = SmokeClient(base_url)
+    suffix = uuid4()
+    email = f"release-smoke+{suffix.hex}@smoke.invalid"
+    phone = f"+7{suffix.int % 10_000_000_000:010d}"
+    password = f"Smoke-{suffix.hex[:12]}-A7!"
+    required_consents = _required_consents(client, "registration")
+    expected_evidence = {
+        (item["code"], item["version"], item["sha256"])
+        for item in required_consents
+    }
+
+    registration = client.request(
+        "POST",
+        "/auth/registration",
+        body={
+            "registrationData": {
+                "email": email,
+                "phone": phone,
+                "full_name": "Release Smoke User",
+                "password": password,
+                "entity_type": "individual",
+                "timezone": "Europe/Berlin",
+                "legal_consents": required_consents,
+            }
+        },
+    )
+    if registration.get("status") != "success":
+        raise SmokeFailure("disposable registration did not succeed")
+
+    login = client.request(
+        "POST",
+        "/auth/login",
+        body={"email": email, "password": password},
+    )
+    if login.get("status") != "success" or not login.get("access_token"):
+        raise SmokeFailure("disposable account login did not return access token")
+    client.access_token = login["access_token"]
+    user_id = login.get("user", {}).get("id")
+    if not user_id:
+        raise SmokeFailure("disposable account login did not return user identity")
+
+    deactivated = False
+    try:
+        profile = client.request("GET", "/dashboard/profile/", auth=True)
+        subscription = profile.get("subscription") or {}
+        if subscription.get("status") != "demo" or subscription.get("is_active") is not True:
+            raise SmokeFailure("registration did not create an active demo subscription")
+
+        evidence_payload = client.request("GET", "/legal/consents/me", auth=True)
+        records = evidence_payload.get("consents") or []
+        actual_evidence = {
+            (
+                record.get("document_code"),
+                record.get("document_version"),
+                record.get("document_sha256"),
+            )
+            for record in records
+            if record.get("context") == "registration"
+            and record.get("context_reference") == user_id
+        }
+        if not expected_evidence.issubset(actual_evidence):
+            raise SmokeFailure("registration legal consent evidence was not persisted exactly")
+
+        # Browser reload semantics for a newly registered account as well.
+        client.access_token = None
+        refreshed = client.request("POST", "/auth/refresh", body={})
+        if refreshed.get("status") != "success" or not refreshed.get("access_token"):
+            raise SmokeFailure("disposable account refresh did not restore access token")
+        if refreshed.get("user", {}).get("id") != user_id:
+            raise SmokeFailure("disposable account refresh restored the wrong identity")
+        client.access_token = refreshed["access_token"]
+
+        result = client.request(
+            "POST",
+            "/account/deactivate",
+            auth=True,
+            body={"reason": "release smoke cleanup"},
+        )
+        if result.get("status") != "success" or result.get("deactivated") is not True:
+            raise SmokeFailure("disposable account cleanup did not deactivate account")
+        deactivated = True
+        client.access_token = None
+
+        refresh_after = client.request("POST", "/auth/refresh", body={}, expected=(401,))
+        if refresh_after.get("error", {}).get("code") not in {"INVALID_TOKEN", "SESSION_REVOKED"}:
+            raise SmokeFailure("deactivated account retained a refresh session")
+
+        login_after = client.request(
+            "POST",
+            "/auth/login",
+            body={"email": email, "password": password},
+            expected=(403,),
+        )
+        if login_after.get("error", {}).get("code") != "USER_INACTIVE":
+            raise SmokeFailure("deactivated disposable account can still authenticate")
+    finally:
+        if client.access_token and not deactivated:
+            try:
+                client.request(
+                    "POST",
+                    "/account/deactivate",
+                    auth=True,
+                    body={"reason": "release smoke cleanup after failure"},
+                )
+            except SmokeFailure:
+                pass
+            client.access_token = None
+
+    print("[ok] disposable registration, demo subscription, consent evidence, refresh and deactivation")
 
 
 def run_authenticated_smoke(client: SmokeClient, email: str, password: str) -> None:
@@ -223,6 +343,12 @@ def parse_args() -> argparse.Namespace:
         default=os.getenv("SMOKE_EXPECTED_VERSION") or _project_version(),
     )
     parser.add_argument("--public-only", action="store_true")
+    parser.add_argument(
+        "--skip-disposable-registration",
+        action="store_true",
+        default=_env_flag("SMOKE_SKIP_DISPOSABLE_REGISTRATION"),
+        help="Skip disposable registration/demo/consent lifecycle verification",
+    )
     parser.add_argument("--wb-token", default=os.getenv("SMOKE_WB_TOKEN"))
     parser.add_argument("--billing-tariff", default=os.getenv("SMOKE_BILLING_TARIFF"))
     return parser.parse_args()
@@ -238,6 +364,10 @@ def main() -> int:
 
     if args.public_only:
         return 0
+
+    if not args.skip_disposable_registration:
+        run_disposable_registration_smoke(args.base_url)
+
     if not args.email or not args.password:
         raise SmokeFailure("SMOKE_EMAIL and SMOKE_PASSWORD are required for authenticated smoke")
 
