@@ -44,7 +44,15 @@ async def request_password_reset(
         return response_error(code="VALIDATION_ERROR", message="Укажите корректный email")
 
     user = await get_user_by_email(db_session, email)
-    if user is not None and user.is_active and user.email_verified_at is not None:
+    verified_for_recovery = (
+        user is not None
+        and user.is_active
+        and (
+            not lifecycle_config.EMAIL_VERIFICATION_ENABLED
+            or getattr(user, "email_verified_at", None) is not None
+        )
+    )
+    if verified_for_recovery:
         # The worker creates the one-time reset token only immediately before SMTP
         # delivery. Raw reset secrets therefore never live in the durable mail queue.
         await queue_transactional_email(
