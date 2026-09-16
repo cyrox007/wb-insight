@@ -40,15 +40,19 @@ async def insert_user(session: AsyncSession, user_data: dict):
         is_staff=False,
     )
 
+    session.add(new_user)
     try:
-        session.add(new_user)
         await session.flush()
         await session.refresh(new_user)
-        logger.info(f"Пользователь создан: {new_user.id}")
-        return new_user
-    except Exception as exc:
-        logger.error(f'Ошибка при создании пользователя: {exc}')
-        return None
+    except Exception:
+        # Persistence errors must propagate to the request transaction owner.
+        # Swallowing a flush error leaves AsyncSession in a failed transaction
+        # and makes get_db_session attempt to commit an invalid registration.
+        logger.exception("Ошибка при создании пользователя")
+        raise
+
+    logger.info(f"Пользователь создан: {new_user.id}")
+    return new_user
 
 
 async def get_user_by_uuid(session: AsyncSession, user_id: UUID) -> Optional[User]:
@@ -165,7 +169,7 @@ async def delete_role_association(
         await session.flush()
         return True
     except Exception as exc:
-        logger.error(f"Error deleting role association: {exc}")
+        logger.error(f"Error deleting user role association: {exc}")
         return False
 
 
