@@ -8,6 +8,7 @@ import { useAuthStore } from './stores/auth'
 import './styles/variables.css'
 import './styles/base.css'
 import './styles/control-panel.css'
+import './styles/control-panel-forms.css'
 
 const bootstrap = async () => {
 	const app = createApp(App)
