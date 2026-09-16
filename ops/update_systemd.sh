@@ -168,14 +168,14 @@ from celery_app import celery_app
 print(f"numpy={numpy.__version__} pandas={pandas.__version__} fastapi={fastapi.__version__}")
 print(f"celery_app={celery_app.main}")
 PY
-  "$NEW_VENV/bin/celery" -A celery_app:celery_app report >/dev/null
-  "$NEW_VENV/bin/alembic" --version >/dev/null
+  "$NEW_VENV/bin/python" -m celery -A celery_app:celery_app report >/dev/null
+  "$NEW_VENV/bin/python" -m alembic --version >/dev/null
 )
 
 log "[3/9] Applying database migrations with the new environment..."
 (
   cd "$BACKEND_DIR"
-  "$NEW_VENV/bin/alembic" upgrade head
+  "$NEW_VENV/bin/python" -m alembic upgrade head
 )
 
 log "[4/9] Installing frontend dependencies from lockfile..."
@@ -209,9 +209,13 @@ ln -s "$NEW_VENV" "$VENV_DIR"
 NEW_VENV=""
 ACTIVATED=true
 
-"$VENV_DIR/bin/python" --version
-"$VENV_DIR/bin/celery" -A celery_app:celery_app report >/dev/null
-"$VENV_DIR/bin/alembic" --version >/dev/null
+(
+  cd "$BACKEND_DIR"
+  "$VENV_DIR/bin/python" --version
+  PYTHONPATH=. "$VENV_DIR/bin/python" -c 'from celery_app import celery_app; print(f"celery_app={celery_app.main}")'
+  "$VENV_DIR/bin/python" -m celery -A celery_app:celery_app report >/dev/null
+  "$VENV_DIR/bin/python" -m alembic --version >/dev/null
+)
 
 log "[8/9] Restarting and stabilizing application services..."
 run_root systemctl restart wb-backend
@@ -227,7 +231,7 @@ check_services_stable
 # Verify the worker is not merely 'active' during a restart loop.
 (
   cd "$BACKEND_DIR"
-  "$VENV_DIR/bin/celery" -A celery_app:celery_app inspect ping --timeout=5 >/tmp/wb-insight-celery-ping.txt
+  "$VENV_DIR/bin/python" -m celery -A celery_app:celery_app inspect ping --timeout=5 >/tmp/wb-insight-celery-ping.txt
 )
 grep -q 'pong' /tmp/wb-insight-celery-ping.txt || fail "Celery worker did not answer inspect ping"
 
