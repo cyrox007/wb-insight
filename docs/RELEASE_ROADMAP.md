@@ -13,12 +13,11 @@
 - `main`: **`0.9.0-alpha.11`**;
 - P34 слит PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`;
 - P36 systemd deployment hotfix слит PR #55, merge `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c`, без изменения product version;
+- P35 data-accuracy completeness hardening слит PR #56, merge `d2e782208228fbe60cb92b9e61fbf8d325f0e839`, без изменения product version;
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest v2 являются постоянными release gates;
 - основной WB Web v1 feature/code baseline собран и feature scope заморожен;
-- P31 закрыл account lifecycle baseline, P32 — registration/demo и disposable beta-smoke, P33 — fail-closed production configuration, P34 — beta evidence-contract closure;
-- P35 активен как hardening data-accuracy completeness: обязательные policy-метрики нельзя пропустить/понизить, tolerance override требует документированную причину;
-- P36 добавил безопасный systemd updater с Python 3.12 preflight, fresh venv, Alembic, `npm ci`, restart/readiness и отдельным CI workflow;
-- следующий stage — `0.9.0-beta.1` только после фактического production-like acceptance;
+- P31 закрыл account lifecycle baseline, P32 — registration/demo и disposable beta-smoke, P33 — fail-closed production configuration, P34 — beta evidence-contract closure, P35 — обязательную полноту data-accuracy, P36 — безопасный systemd update;
+- следующий stage — `0.9.0-beta.1`, только после фактического production-like acceptance;
 - переход стадии определяется доказанными gates, а не номером P-задачи.
 
 ## Этап A — P29 / `0.9.0-alpha.6` — закрыт
@@ -149,9 +148,12 @@ P36 добавил:
 
 P36 не менял application behavior/schema и поэтому не повышал product version.
 
-## Этап C6 — P35: обязательное data-accuracy coverage — активен
+## Этап C6 — P35: обязательное data-accuracy coverage — закрыт
 
-P35 закрывает ещё один найденный обход beta data-accuracy gate:
+**PR:** #56  
+**Merge:** `d2e782208228fbe60cb92b9e61fbf8d325f0e839`.
+
+P35 закрыл ещё один найденный обход beta data-accuracy gate:
 
 - каждая policy-required метрика должна присутствовать в каждом acceptance-периоде;
 - отсутствующая обязательная метрика становится явным `missing` и блокирует run;
@@ -160,7 +162,7 @@ P35 закрывает ещё один найденный обход beta data-a
 - отчёт фиксирует required metric/observation counts и причины override;
 - CI содержит full, failing, incomplete и invalid-override scenarios.
 
-P35 не меняет runtime приложения и остаётся на `0.9.0-alpha.11` baseline.
+Exact P35 head `7e88182533f7d3a8baf813bcaeeb19d7442db0d3` прошёл Release integrity полностью зелёным. P35 не менял runtime приложения и остался на `0.9.0-alpha.11` baseline.
 
 ## Этап D — production-like validation → `0.9.0-beta.1`
 
@@ -169,7 +171,7 @@ P35 не меняет runtime приложения и остаётся на `0.9
 Обязательно:
 
 - feature freeze WB Web v1 на текущем `0.9.0-alpha.11` baseline;
-- отсутствие известных необработанных code-side release blockers, включая закрытый P35;
+- отсутствие известных необработанных code-side release blockers;
 - отдельный production-like HTTPS environment из репозитория с реальными non-placeholder secrets/hosts;
 - для systemd deployment фактические процессы backend/Celery/Beat работают из Python 3.12 environment, а frontend build выполняется на поддерживаемой Node-линии (`^20.19` или `>=22.12`);
 - clean working tree перед automated update; локальные helper-файлы вне Git не должны блокировать/подменять deployment procedure;
@@ -259,7 +261,7 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates, deployment tooling и versioning. P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract и P36 systemd deployment hotfix закрыты; P35 data-accuracy completeness — текущая code-side задача.
+Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates, deployment tooling и versioning. P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract, P35 data-accuracy completeness и P36 systemd deployment hotfix закрыты.
 
 Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials/refund procedure, production hosting/domain/TLS, legal approval/requisites/retention, SMTP provider, alert/logging/object-storage providers и фактическое production-like выполнение deployment/smoke.
 
