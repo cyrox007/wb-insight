@@ -7,7 +7,7 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 from urllib.parse import quote
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config as config
@@ -25,6 +25,18 @@ from services.email_verification_service import issue_email_verification_token
 
 
 TRANSACTIONAL_TEMPLATES = {"email_verification": 1, "password_reset": 1}
+
+
+class PermanentMailDeliveryError(RuntimeError):
+    """A safe deterministic failure that must not be retried."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code[:96]
+
+
+def _normalized_email(value: str | None) -> str:
+    return str(value or "").strip().lower()
 
 
 def _token_url(base_url: str, token: str) -> str:
@@ -64,9 +76,13 @@ async def queue_transactional_email(
     user: User,
     template_code: str,
     idempotency_key: str | None = None,
+    recipient_email: str | None = None,
 ) -> MailMessage:
     if template_code not in TRANSACTIONAL_TEMPLATES:
         raise ValueError(f"Unknown transactional template: {template_code}")
+    recipient = _normalized_email(recipient_email or user.email)
+    if not recipient:
+        raise ValueError("transactional_recipient_required")
     key = idempotency_key or f"{template_code}:{user.id}:{uuid.uuid4()}"
     existing = await session.execute(select(MailMessage).where(MailMessage.idempotency_key == key))
     found = existing.scalar_one_or_none()
@@ -74,7 +90,7 @@ async def queue_transactional_email(
         return found
     message = MailMessage(
         user_id=user.id,
-        recipient_email=user.email.strip().lower(),
+        recipient_email=recipient,
         kind=MailKind.TRANSACTIONAL.value,
         template_code=template_code,
         template_version=TRANSACTIONAL_TEMPLATES[template_code],
@@ -112,26 +128,37 @@ async def queue_test_email(
 
 async def _render_transactional(session: AsyncSession, message: MailMessage) -> tuple[str, str]:
     if message.user_id is None:
-        raise RuntimeError("mail_user_missing")
+        raise PermanentMailDeliveryError("mail_user_missing")
     result = await session.execute(select(User).where(User.id == message.user_id).with_for_update())
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
-        raise RuntimeError("mail_user_unavailable")
+        raise PermanentMailDeliveryError("mail_user_unavailable")
 
+    recipient = _normalized_email(message.recipient_email)
     if message.template_code == "email_verification":
-        if user.email_verified_at is not None:
-            raise RuntimeError("email_already_verified")
-        raw_token = await issue_email_verification_token(session, user)
+        try:
+            raw_token = await issue_email_verification_token(session, user, email=recipient)
+        except ValueError as exc:
+            raise PermanentMailDeliveryError(str(exc) or "email_verification_target_stale") from exc
         verify_url = _token_url(config.EMAIL_VERIFICATION_BASE_URL, raw_token)
+        is_change = recipient == _normalized_email(getattr(user, "pending_email", None))
         return (
-            "Подтвердите email в WB Insight",
-            "Подтвердите адрес электронной почты, чтобы завершить регистрацию:\n\n"
-            f"{verify_url}\n\n"
-            f"Ссылка действует {config.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES} минут. "
-            "Если вы не регистрировались в WB Insight, проигнорируйте письмо.",
+            "Подтвердите новый email в WB Insight" if is_change else "Подтвердите email в WB Insight",
+            (
+                "Подтвердите новый адрес электронной почты для аккаунта WB Insight:\n\n"
+                if is_change
+                else "Подтвердите адрес электронной почты, чтобы завершить регистрацию:\n\n"
+            )
+            + f"{verify_url}\n\n"
+            + f"Ссылка действует {config.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES} минут. "
+            + "Если вы не запрашивали это действие, проигнорируйте письмо.",
         )
 
     if message.template_code == "password_reset":
+        # A queued reset must never be delivered to an address that ceased to be
+        # the account identity after the request was queued.
+        if recipient != _normalized_email(user.email):
+            raise PermanentMailDeliveryError("password_reset_target_stale")
         raw_token = await issue_password_reset_token(session, user)
         reset_url = _token_url(config.PASSWORD_RESET_BASE_URL, raw_token)
         return (
@@ -142,14 +169,23 @@ async def _render_transactional(session: AsyncSession, message: MailMessage) -> 
             "Если вы не запрашивали восстановление, проигнорируйте письмо.",
         )
 
-    raise RuntimeError("mail_template_unknown")
+    raise PermanentMailDeliveryError("mail_template_unknown")
 
 
-async def _is_suppressed(session: AsyncSession, email: str) -> bool:
+async def _is_suppressed(
+    session: AsyncSession,
+    email: str,
+    *,
+    user_id=None,
+) -> bool:
+    predicates = [MailSuppression.email == _normalized_email(email)]
+    if user_id is not None:
+        # User-scoped suppression survives a later verified email change.
+        predicates.append(MailSuppression.user_id == user_id)
     result = await session.execute(
         select(MailSuppression.id).where(
-            MailSuppression.email == email.strip().lower(),
             MailSuppression.active.is_(True),
+            or_(*predicates),
         )
     )
     return result.scalar_one_or_none() is not None
@@ -172,7 +208,11 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
     if message.next_attempt_at and message.next_attempt_at > now:
         return "not_due"
 
-    if message.kind == MailKind.CAMPAIGN.value and await _is_suppressed(session, message.recipient_email):
+    if message.kind == MailKind.CAMPAIGN.value and await _is_suppressed(
+        session,
+        message.recipient_email,
+        user_id=message.user_id,
+    ):
         message.status = MailStatus.SUPPRESSED.value
         message.safe_error_code = "suppressed"
         message.last_attempt_at = now
@@ -199,7 +239,13 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
     return message.status
 
 
-async def mark_message_failure(session: AsyncSession, message_id, error_code: str) -> str:
+async def mark_message_failure(
+    session: AsyncSession,
+    message_id,
+    error_code: str,
+    *,
+    terminal: bool = False,
+) -> str:
     result = await session.execute(select(MailMessage).where(MailMessage.id == message_id).with_for_update())
     message = result.scalar_one_or_none()
     if message is None:
@@ -209,8 +255,11 @@ async def mark_message_failure(session: AsyncSession, message_id, error_code: st
     message.attempt_count += 1
     message.last_attempt_at = datetime.now(timezone.utc)
     message.safe_error_code = (error_code or "delivery_error")[:96]
-    if message.attempt_count >= message.max_attempts:
+    if terminal or message.attempt_count >= message.max_attempts:
         message.status = MailStatus.FAILED.value
+        # Prevent deterministic failures from being picked up again by due_message_ids.
+        if terminal:
+            message.attempt_count = message.max_attempts
     else:
         message.status = MailStatus.QUEUED.value
         delay = config.MAIL_RETRY_BASE_SECONDS * (2 ** max(message.attempt_count - 1, 0))
