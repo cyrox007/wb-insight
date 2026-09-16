@@ -283,17 +283,23 @@ async def mark_message_failure(
     return message.status
 
 
-async def due_message_ids(session: AsyncSession, limit: int | None = None) -> list:
+async def due_message_ids(
+    session: AsyncSession,
+    limit: int | None = None,
+    *,
+    include_marketing: bool = True,
+) -> list:
+    """Return due outbox ids without letting disabled campaign mail starve auth mail."""
     now = datetime.now(timezone.utc)
+    query = select(MailMessage.id).where(
+        MailMessage.status.in_([MailStatus.QUEUED.value, MailStatus.FAILED.value]),
+        MailMessage.next_attempt_at <= now,
+        MailMessage.attempt_count < MailMessage.max_attempts,
+    )
+    if not include_marketing:
+        query = query.where(MailMessage.kind == MailKind.TRANSACTIONAL.value)
     result = await session.execute(
-        select(MailMessage.id)
-        .where(
-            MailMessage.status.in_([MailStatus.QUEUED.value, MailStatus.FAILED.value]),
-            MailMessage.next_attempt_at <= now,
-            MailMessage.attempt_count < MailMessage.max_attempts,
-        )
-        .order_by(MailMessage.created_at.asc())
-        .limit(limit or config.MAIL_BATCH_SIZE)
+        query.order_by(MailMessage.created_at.asc()).limit(limit or config.MAIL_BATCH_SIZE)
     )
     return list(result.scalars().all())
 
