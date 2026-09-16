@@ -1,16 +1,12 @@
-import asyncio
-import smtplib
-import ssl
 import uuid
 from datetime import datetime, timedelta, timezone
-from email.message import EmailMessage
-from email.utils import make_msgid
 from urllib.parse import quote
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config as config
+from integrations.mail import mail_provider_registry
 from models.mail_delivery import (
     CampaignStatus,
     MailCampaign,
@@ -43,31 +39,22 @@ def _token_url(base_url: str, token: str) -> str:
     return f"{base_url.rstrip('/')}#token={quote(token, safe='')}"
 
 
-def _send_message(message: EmailMessage) -> None:
-    with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=config.SMTP_TIMEOUT_SECONDS) as smtp:
-        if config.SMTP_STARTTLS:
-            smtp.starttls(context=ssl.create_default_context())
-        if config.SMTP_USERNAME:
-            smtp.login(config.SMTP_USERNAME, config.SMTP_PASSWORD or "")
-        smtp.send_message(message)
-
-
 async def _smtp_send(recipient: str, subject: str, body: str) -> str:
+    """Backward-compatible helper that dispatches through the configured provider."""
     if not (
         config.MAIL_DELIVERY_ENABLED
         or config.PASSWORD_RESET_ENABLED
         or config.EMAIL_VERIFICATION_ENABLED
     ):
         raise RuntimeError("mail_delivery_disabled")
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = config.SMTP_FROM_EMAIL
-    message["To"] = recipient
-    message_id = make_msgid(domain=(config.SMTP_FROM_EMAIL.rpartition("@")[2] or None))
-    message["Message-ID"] = message_id
-    message.set_content(body)
-    await asyncio.to_thread(_send_message, message)
-    return message_id
+    provider = mail_provider_registry.get(config.MAIL_PROVIDER)
+    receipt = await provider.send(
+        sender=config.SMTP_FROM_EMAIL,
+        recipient=recipient,
+        subject=subject,
+        body=body,
+    )
+    return receipt.provider_message_id or ""
 
 
 async def queue_transactional_email(
