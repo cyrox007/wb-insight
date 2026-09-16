@@ -24,10 +24,7 @@ from services.account_lifecycle_service import issue_password_reset_token
 from services.email_verification_service import issue_email_verification_token
 
 
-TRANSACTIONAL_TEMPLATES = {
-    "email_verification": 1,
-    "password_reset": 1,
-}
+TRANSACTIONAL_TEMPLATES = {"email_verification": 1, "password_reset": 1}
 
 
 def _token_url(base_url: str, token: str) -> str:
@@ -44,7 +41,11 @@ def _send_message(message: EmailMessage) -> None:
 
 
 async def _smtp_send(recipient: str, subject: str, body: str) -> str:
-    if not config.MAIL_DELIVERY_ENABLED and not config.PASSWORD_RESET_ENABLED:
+    if not (
+        config.MAIL_DELIVERY_ENABLED
+        or config.PASSWORD_RESET_ENABLED
+        or config.EMAIL_VERIFICATION_ENABLED
+    ):
         raise RuntimeError("mail_delivery_disabled")
     message = EmailMessage()
     message["Subject"] = subject
@@ -118,6 +119,8 @@ async def _render_transactional(session: AsyncSession, message: MailMessage) -> 
         raise RuntimeError("mail_user_unavailable")
 
     if message.template_code == "email_verification":
+        if user.email_verified_at is not None:
+            raise RuntimeError("email_already_verified")
         raw_token = await issue_email_verification_token(session, user)
         verify_url = _token_url(config.EMAIL_VERIFICATION_BASE_URL, raw_token)
         return (
@@ -153,10 +156,14 @@ async def _is_suppressed(session: AsyncSession, email: str) -> bool:
 
 
 async def deliver_message(session: AsyncSession, message_id) -> str:
+    """Deliver one message inside caller-owned transaction.
+
+    Delivery exceptions intentionally escape. The Celery task rolls the transaction
+    back first, which also rolls back a freshly-issued reset/verification token,
+    then records only a safe retry state in a new transaction.
+    """
     now = datetime.now(timezone.utc)
-    result = await session.execute(
-        select(MailMessage).where(MailMessage.id == message_id).with_for_update()
-    )
+    result = await session.execute(select(MailMessage).where(MailMessage.id == message_id).with_for_update())
     message = result.scalar_one_or_none()
     if message is None:
         return "missing"
@@ -165,43 +172,51 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
     if message.next_attempt_at and message.next_attempt_at > now:
         return "not_due"
 
+    if message.kind == MailKind.CAMPAIGN.value and await _is_suppressed(session, message.recipient_email):
+        message.status = MailStatus.SUPPRESSED.value
+        message.safe_error_code = "suppressed"
+        message.last_attempt_at = now
+        await session.flush()
+        return message.status
+
     message.status = MailStatus.SENDING.value
     message.last_attempt_at = now
-    message.attempt_count += 1
     await session.flush()
 
-    try:
-        if message.kind == MailKind.CAMPAIGN.value and await _is_suppressed(session, message.recipient_email):
-            message.status = MailStatus.SUPPRESSED.value
-            message.safe_error_code = "suppressed"
-            await session.flush()
-            return message.status
+    if message.kind == MailKind.TRANSACTIONAL.value:
+        subject, body = await _render_transactional(session, message)
+    else:
+        subject = (message.subject or "WB Insight")[:255]
+        body = message.body or ""
 
-        if message.kind == MailKind.TRANSACTIONAL.value:
-            subject, body = await _render_transactional(session, message)
-        else:
-            subject = (message.subject or "WB Insight")[:255]
-            body = message.body or ""
+    provider_id = await _smtp_send(message.recipient_email, subject, body)
+    message.attempt_count += 1
+    message.provider_message_id = provider_id
+    message.status = MailStatus.SENT.value
+    message.safe_error_code = None
+    message.sent_at = datetime.now(timezone.utc)
+    await session.flush()
+    return message.status
 
-        provider_id = await _smtp_send(message.recipient_email, subject, body)
-        message.provider_message_id = provider_id
-        message.status = MailStatus.SENT.value
-        message.safe_error_code = None
-        message.sent_at = datetime.now(timezone.utc)
-        await session.flush()
+
+async def mark_message_failure(session: AsyncSession, message_id, error_code: str) -> str:
+    result = await session.execute(select(MailMessage).where(MailMessage.id == message_id).with_for_update())
+    message = result.scalar_one_or_none()
+    if message is None:
+        return "missing"
+    if message.status in {MailStatus.SENT.value, MailStatus.CANCELLED.value, MailStatus.SUPPRESSED.value}:
         return message.status
-    except Exception as exc:
-        # Raw exception text is deliberately not persisted: SMTP/provider errors may
-        # contain recipient/provider details. Keep only a stable safe code.
-        message.safe_error_code = type(exc).__name__.lower()[:96]
-        if message.attempt_count >= message.max_attempts:
-            message.status = MailStatus.FAILED.value
-        else:
-            message.status = MailStatus.QUEUED.value
-            delay = config.MAIL_RETRY_BASE_SECONDS * (2 ** max(message.attempt_count - 1, 0))
-            message.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=min(delay, 3600))
-        await session.flush()
-        return message.status
+    message.attempt_count += 1
+    message.last_attempt_at = datetime.now(timezone.utc)
+    message.safe_error_code = (error_code or "delivery_error")[:96]
+    if message.attempt_count >= message.max_attempts:
+        message.status = MailStatus.FAILED.value
+    else:
+        message.status = MailStatus.QUEUED.value
+        delay = config.MAIL_RETRY_BASE_SECONDS * (2 ** max(message.attempt_count - 1, 0))
+        message.next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=min(delay, 3600))
+    await session.flush()
+    return message.status
 
 
 async def due_message_ids(session: AsyncSession, limit: int | None = None) -> list:
@@ -220,9 +235,7 @@ async def due_message_ids(session: AsyncSession, limit: int | None = None) -> li
 
 
 async def refresh_campaign_counters(session: AsyncSession, campaign_id) -> None:
-    campaign_result = await session.execute(
-        select(MailCampaign).where(MailCampaign.id == campaign_id).with_for_update()
-    )
+    campaign_result = await session.execute(select(MailCampaign).where(MailCampaign.id == campaign_id).with_for_update())
     campaign = campaign_result.scalar_one_or_none()
     if campaign is None:
         return
@@ -231,7 +244,7 @@ async def refresh_campaign_counters(session: AsyncSession, campaign_id) -> None:
         .where(MailMessage.campaign_id == campaign_id)
         .group_by(MailMessage.status)
     )
-    counts = {status: int(count) for status, count in rows.all()}
+    counts = {mail_status: int(count) for mail_status, count in rows.all()}
     campaign.queued_count = counts.get(MailStatus.QUEUED.value, 0) + counts.get(MailStatus.SENDING.value, 0)
     campaign.sent_count = counts.get(MailStatus.SENT.value, 0)
     campaign.failed_count = counts.get(MailStatus.FAILED.value, 0)
@@ -244,9 +257,8 @@ async def refresh_campaign_counters(session: AsyncSession, campaign_id) -> None:
     await session.flush()
 
 
-# Backward-compatible direct sender retained only for legacy tests/callers. New
-# request flows enqueue `password_reset` instead of persisting the raw token.
 async def send_password_reset_email(email: str, token: str) -> None:
+    """Compatibility helper for legacy callers/tests; request flow uses the queue."""
     reset_url = _token_url(config.PASSWORD_RESET_BASE_URL, token)
     await _smtp_send(
         email,
