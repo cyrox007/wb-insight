@@ -4,7 +4,8 @@ from sqlalchemy import select
 
 from celery_app import celery_app
 from core.database_celery import get_session
-from models.mail_delivery import MailMessage
+from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage
+from services.mail_campaign_service import due_scheduled_campaign_ids, launch_campaign
 from services.mail_service import (
     PermanentMailDeliveryError,
     deliver_message,
@@ -34,6 +35,45 @@ async def _refresh_campaign(campaign_id) -> None:
         await session.rollback()
     finally:
         await session.close()
+
+
+async def _process_due_campaigns() -> dict[str, int]:
+    if not celery_app.conf.get("mail_delivery_enabled", True):
+        return {"launched": 0, "failed": 0}
+
+    session = await get_session()
+    try:
+        campaign_ids = await due_scheduled_campaign_ids(session)
+    finally:
+        await session.close()
+
+    launched = failed = 0
+    for campaign_id in campaign_ids:
+        session = await get_session()
+        try:
+            result = await session.execute(
+                select(MailCampaign)
+                .where(MailCampaign.id == campaign_id)
+                .with_for_update()
+            )
+            campaign = result.scalar_one_or_none()
+            if (
+                campaign is None
+                or campaign.status != CampaignStatus.SCHEDULED.value
+                or campaign.scheduled_at is None
+            ):
+                await session.rollback()
+                continue
+            await launch_campaign(session, campaign)
+            await session.commit()
+            launched += 1
+        except Exception:
+            await session.rollback()
+            failed += 1
+        finally:
+            await session.close()
+
+    return {"launched": launched, "failed": failed}
 
 
 async def _process_due_mail() -> dict[str, int]:
@@ -78,6 +118,11 @@ async def _process_due_mail() -> dict[str, int]:
         await _refresh_campaign(campaign_id)
 
     return {"processed": processed, "failed": failed}
+
+
+@celery_app.task(name="mail.campaign.scan")
+def scan_scheduled_campaigns():
+    return asyncio.run(_process_due_campaigns())
 
 
 @celery_app.task(name="mail.delivery.scan")
