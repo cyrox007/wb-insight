@@ -3,6 +3,7 @@ name: Systemd updater
 on:
   pull_request:
     paths:
+      - VERSION
       - update.sh
       - ops/update_systemd.sh
       - ops/publish_frontend.sh
@@ -17,6 +18,7 @@ on:
   push:
     branches: [main]
     paths:
+      - VERSION
       - update.sh
       - ops/update_systemd.sh
       - ops/publish_frontend.sh

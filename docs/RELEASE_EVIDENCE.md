@@ -27,9 +27,20 @@ Manifest не копирует содержимое artifacts и не предн
 - каждый artifact должен существовать и быть непустым;
 - `data_accuracy` должен быть JSON-отчётом schema v1 со `status=pass`, ненулевыми period/metric counts и SHA-256 входа/policy.
 
-Начиная с P40 для фактического beta/RC/stable promotion используется дополнительный флаг `--require-structured-runtime-evidence`. Он запрещает подменить ключевые runtime gates произвольными текстовыми файлами и требует machine-readable evidence для `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke` и `secrets_review`.
+Начиная с P40 фактический promotion выполняется через `ops/release_candidate_evidence.py`. Он сначала требует structured exact-head `ci` evidence, а затем вызывает `ops/release_evidence.py --require-structured-runtime-evidence`, поэтому ключевые gates нельзя подменить произвольными текстовыми файлами.
 
 ## Structured runtime evidence
+
+`ci` создаётся `ops/ci_acceptance.py`. Collector обращается к GitHub Actions API либо принимает сохранённый API payload через `--runs-json`, выбирает только runs с exact release SHA и требует successful/completed:
+
+- Backend security;
+- Frontend build;
+- Database migrations;
+- Release integrity;
+- Release smoke contract;
+- Systemd updater.
+
+В report сохраняются только workflow name, run id/attempt, event и итоговый status/conclusion. `GITHUB_TOKEN`, job logs и их содержимое в evidence не копируются. Release-candidate изменение `VERSION` специально запускает все эти контуры, чтобы exact candidate SHA не наследовал зелёный статус от предыдущего commit.
 
 `deployment` создаётся `ops/systemd_acceptance.py`. Строгая проверка связывает его с теми же `VERSION`, commit и environment, что и manifest, и требует:
 
@@ -65,7 +76,7 @@ Manifest не копирует содержимое artifacts и не предн
 
 Для `beta` обязательны все следующие artifacts:
 
-- `ci` — подтверждение green CI exact head;
+- `ci` — structured exact-head GitHub Actions evidence;
 - `deployment` — evidence production-like HTTPS deployment, migration/upgrade и deploy/rollback smoke;
 - `core_smoke` — результат production-like `ops/release_smoke.py` без отключения disposable registration;
 - `account_lifecycle` — login/refresh/logout/deactivation и реальный password-recovery smoke через настроенный SMTP/provider;
@@ -76,8 +87,16 @@ Manifest не копирует содержимое artifacts и не предн
 Канонический P40 пример:
 
 ```bash
+RELEASE_SHA="$(git rev-parse HEAD)"
+export ACCEPTANCE_ENVIRONMENT=staging-eu-1
+
+python3 ops/ci_acceptance.py \
+  --commit "$RELEASE_SHA" \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
+  --output /secure/evidence/ci.json
+
 python3 ops/systemd_acceptance.py \
-  --environment staging-eu-1 \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
   --public-base-url https://staging.example.com \
   --rollback-proof /secure/evidence/rollback-drill.txt \
   --require-rollback-proof \
@@ -91,26 +110,24 @@ python3 ops/release_smoke.py \
   --evidence-output /secure/evidence/release-smoke.json
 
 python3 ops/ux_acceptance.py \
-  --environment staging-eu-1 \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
   --write-template /secure/evidence/ux-review-input.json
 # После фактической desktop/mobile проверки reviewer заполняет template:
 python3 ops/ux_acceptance.py \
-  --environment staging-eu-1 \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
   --input /secure/evidence/ux-review-input.json \
   --output /secure/evidence/ux-smoke.json
 
 python3 ops/secrets_review.py \
-  --environment staging-eu-1 \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
   --env-file /secure/runtime/wb-insight.env \
   --output /secure/evidence/secrets-review.json
 
-RELEASE_SHA="$(git rev-parse HEAD)"
-python3 ops/release_evidence.py \
+python3 ops/release_candidate_evidence.py \
   --stage beta \
-  --environment staging-eu-1 \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
   --commit "$RELEASE_SHA" \
-  --require-structured-runtime-evidence \
-  --artifact ci=/secure/evidence/ci.txt \
+  --artifact ci=/secure/evidence/ci.json \
   --artifact deployment=/secure/evidence/deployment.json \
   --artifact core_smoke=/secure/evidence/release-smoke.json \
   --artifact account_lifecycle=/secure/evidence/release-smoke.json \
@@ -119,6 +136,8 @@ python3 ops/release_evidence.py \
   --artifact data_accuracy=/secure/evidence/data-accuracy.json \
   --output /secure/evidence/release-manifest.json
 ```
+
+Для private repository `ops/ci_acceptance.py` получает `GITHUB_TOKEN` через environment/secret manager. Значение токена в report не попадает. При необходимости GitHub API payload можно заранее сохранить защищённо и передать через `--runs-json`.
 
 Путь к runtime env в примере условный: на конкретном host нужно передать фактический защищённый файл или экспортировать переменные через secret manager. `ops/secrets_review.py` не записывает их значения в evidence.
 

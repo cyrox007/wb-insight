@@ -3,10 +3,13 @@ name: Release smoke contract
 on:
   pull_request:
     paths:
+      - VERSION
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
       - ops/secrets_review.py
       - ops/ux_acceptance.py
+      - ops/ci_acceptance.py
+      - ops/release_candidate_evidence.py
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
       - docs/RELEASE_SMOKE.md
@@ -15,10 +18,13 @@ on:
   push:
     branches: [main]
     paths:
+      - VERSION
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
       - ops/secrets_review.py
       - ops/ux_acceptance.py
+      - ops/ci_acceptance.py
+      - ops/release_candidate_evidence.py
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
       - docs/RELEASE_SMOKE.md
@@ -39,6 +45,8 @@ jobs:
             ops/systemd_acceptance.py \
             ops/secrets_review.py \
             ops/ux_acceptance.py \
+            ops/ci_acceptance.py \
+            ops/release_candidate_evidence.py \
             ops/release_evidence.py \
             ops/acceptance/structured_evidence_selftest.py
           python3 ops/release_smoke.py --help >/dev/null
@@ -49,5 +57,8 @@ jobs:
           python3 ops/secrets_review.py --self-test
           python3 ops/ux_acceptance.py --help >/dev/null
           python3 ops/ux_acceptance.py --self-test
+          python3 ops/ci_acceptance.py --help >/dev/null
+          python3 ops/ci_acceptance.py --self-test
+          python3 ops/release_candidate_evidence.py --help >/dev/null
           python3 ops/release_evidence.py --help >/dev/null
           PYTHONPATH=ops python3 ops/acceptance/structured_evidence_selftest.py
