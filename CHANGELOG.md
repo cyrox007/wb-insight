@@ -6,7 +6,7 @@
 
 ## [0.9.0-alpha.10] — 2026-09-16
 
-P33 — fail-closed production configuration перед beta. Кандидат до merge.
+P33 — fail-closed production configuration перед beta. PR #51, merge `9dacaee426937c7466ac22cedd878e11b53cc472`.
 
 - добавлен единый production preflight, который запускается при импорте `settings` и поэтому одинаково защищает API, Celery worker/beat и Alembic;
 - production больше не стартует с `DEBUG=true`, HTTP base URL/origin, зарезервированными `example.com/.org/.net` hostnames или `replace-with-*` endpoints;
@@ -19,7 +19,7 @@ P33 — fail-closed production configuration перед beta. Кандидат �
 - Release integrity проверяет отрицательный contract: неизменённый production template обязан fail-closed, а CI-only безопасный набор должен успешно импортировать полный FastAPI app;
 - добавлены regression tests на core production preflight, Sber и lifecycle/SMTP validation.
 
-P33 не означает прохождение beta-gates: production-like HTTPS deployment, реальный SMTP delivery smoke, WB seller data-accuracy acceptance и полный beta evidence manifest должны быть подтверждены фактически.
+P33 прошёл exact-head green CI по Backend security, Frontend build, Database migrations и Release integrity. Он не означает прохождение beta-gates: production-like HTTPS deployment, реальный SMTP delivery smoke, WB seller data-accuracy acceptance и полный beta evidence manifest должны быть подтверждены фактически.
 
 ## [0.9.0-alpha.9] — 2026-09-16
 
