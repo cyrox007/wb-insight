@@ -2,15 +2,17 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
-from core.lifecycle_config import lifecycle_config
-from models.mail_delivery import CampaignStatus, MailCampaign, MailKind, MailMessage, MailStatus, MailSuppression
-from models.subscription_model import Subscription
-from models.tariffs_model import TariffPlan
-from models.users_model import User, UserRoleAssociation
+from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage, MailStatus
+from services.mail_campaign_service import (
+    CampaignStateConflict,
+    launch_campaign,
+    preview_campaign_audience,
+    schedule_campaign,
+)
 from services.mail_service import queue_test_email
 from utils.responce_helps import response_error, response_success
 
@@ -56,84 +58,40 @@ def _message_item(item: MailMessage) -> dict:
     }
 
 
-def _apply_segment(query, segment: dict):
-    verified_only = segment.get("verified_only", True) is not False
-    if verified_only:
-        query = query.where(User.email_verified_at.is_not(None))
-    if isinstance(segment.get("active"), bool):
-        query = query.where(User.is_active.is_(segment["active"]))
-
-    roles = [str(v) for v in (segment.get("roles") or []) if v]
-    if roles:
-        query = query.join(UserRoleAssociation, UserRoleAssociation.user_id == User.id).where(
-            UserRoleAssociation.role.in_(roles)
-        )
-
-    tariff_codes = [str(v) for v in (segment.get("tariff_codes") or []) if v]
-    subscription_statuses = [str(v) for v in (segment.get("subscription_statuses") or []) if v]
-    if tariff_codes or subscription_statuses:
-        query = query.join(Subscription, Subscription.user_id == User.id).join(
-            TariffPlan, TariffPlan.id == Subscription.tariff_id
-        )
-        if tariff_codes:
-            query = query.where(TariffPlan.code.in_(tariff_codes))
-        if subscription_statuses:
-            query = query.where(Subscription.status.in_(subscription_statuses))
-    return query
+def _valid_campaign_statuses() -> set[str]:
+    return {item.value for item in CampaignStatus}
 
 
-async def _audience(db: AsyncSession, segment: dict) -> list[User]:
-    query = _apply_segment(select(User).distinct(), segment).order_by(User.created_at.asc())
-    result = await db.execute(query)
-    return list(result.scalars().all())
-
-
-async def _suppressed_audience_keys(
-    db: AsyncSession,
-    users: list[User],
-) -> tuple[set[UUID], set[str]]:
-    if not users:
-        return set(), set()
-    user_ids = [user.id for user in users]
-    emails = [user.email.strip().lower() for user in users]
-    result = await db.execute(
-        select(MailSuppression.user_id, MailSuppression.email).where(
-            MailSuppression.active.is_(True),
-            or_(
-                MailSuppression.user_id.in_(user_ids),
-                MailSuppression.email.in_(emails),
-            ),
-        )
-    )
-    suppressed_user_ids: set[UUID] = set()
-    suppressed_emails: set[str] = set()
-    for user_id, email in result.all():
-        if user_id is not None:
-            suppressed_user_ids.add(user_id)
-        if email:
-            suppressed_emails.add(str(email).strip().lower())
-    return suppressed_user_ids, suppressed_emails
-
-
-def _user_is_suppressed(
-    user: User,
-    suppressed_user_ids: set[UUID],
-    suppressed_emails: set[str],
-) -> bool:
-    return user.id in suppressed_user_ids or user.email.strip().lower() in suppressed_emails
+def _valid_mail_statuses() -> set[str]:
+    return {item.value for item in MailStatus}
 
 
 @router.get("/campaigns")
 async def campaign_list(
+    response: Response,
+    campaign_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db_session: AsyncSession = Depends(get_db_session),
 ):
+    if campaign_status and campaign_status not in _valid_campaign_statuses():
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code="MAIL_CAMPAIGN_STATUS_INVALID", message="Неизвестный статус рассылки")
+    query = select(MailCampaign)
+    count_query = select(func.count(MailCampaign.id))
+    if campaign_status:
+        query = query.where(MailCampaign.status == campaign_status)
+        count_query = count_query.where(MailCampaign.status == campaign_status)
     result = await db_session.execute(
-        select(MailCampaign).order_by(MailCampaign.created_at.desc()).offset(offset).limit(limit)
+        query.order_by(MailCampaign.created_at.desc()).offset(offset).limit(limit)
     )
-    total = await db_session.scalar(select(func.count(MailCampaign.id)))
-    return response_success(campaigns=[_campaign_item(item) for item in result.scalars().all()], total=int(total or 0))
+    total = await db_session.scalar(count_query)
+    return response_success(
+        campaigns=[_campaign_item(item) for item in result.scalars().all()],
+        total=int(total or 0),
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/campaigns")
@@ -181,17 +139,8 @@ async def campaign_preview(campaign_id: UUID, response: Response, db_session: As
     if campaign is None:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="MAIL_CAMPAIGN_NOT_FOUND", message="Рассылка не найдена")
-    users = await _audience(db_session, campaign.segment or {})
-    suppressed_user_ids, suppressed_emails = await _suppressed_audience_keys(db_session, users)
-    suppressed = sum(
-        1 for user in users if _user_is_suppressed(user, suppressed_user_ids, suppressed_emails)
-    )
-    return response_success(
-        audience_count=len(users),
-        deliverable_count=max(len(users) - suppressed, 0),
-        suppressed_count=suppressed,
-        sample=[{"id": str(user.id), "email": user.email} for user in users[:5]],
-    )
+    preview = await preview_campaign_audience(db_session, campaign.segment or {})
+    return response_success(**preview)
 
 
 @router.post("/campaigns/{campaign_id}/test-send")
@@ -220,6 +169,41 @@ async def campaign_test_send(
     return response_success(message_id=str(message.id), status=message.status)
 
 
+@router.post("/campaigns/{campaign_id}/schedule")
+async def campaign_schedule(
+    campaign_id: UUID,
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    campaign_result = await db_session.execute(
+        select(MailCampaign).where(MailCampaign.id == campaign_id).with_for_update()
+    )
+    campaign = campaign_result.scalar_one_or_none()
+    if campaign is None:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(code="MAIL_CAMPAIGN_NOT_FOUND", message="Рассылка не найдена")
+    body = await request.json()
+    raw_scheduled_at = str(body.get("scheduled_at") or "").strip()
+    try:
+        scheduled_at = datetime.fromisoformat(raw_scheduled_at.replace("Z", "+00:00"))
+        schedule_campaign(campaign, scheduled_at)
+    except ValueError:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="MAIL_CAMPAIGN_SCHEDULE_INVALID",
+            message="Укажите будущую дату и время с часовым поясом",
+        )
+    except CampaignStateConflict:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="MAIL_CAMPAIGN_NOT_SCHEDULABLE",
+            message="Эту рассылку уже нельзя планировать",
+        )
+    await db_session.flush()
+    return response_success(campaign=_campaign_item(campaign))
+
+
 @router.post("/campaigns/{campaign_id}/launch")
 async def campaign_launch(campaign_id: UUID, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     campaign_result = await db_session.execute(
@@ -229,44 +213,11 @@ async def campaign_launch(campaign_id: UUID, response: Response, db_session: Asy
     if campaign is None:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="MAIL_CAMPAIGN_NOT_FOUND", message="Рассылка не найдена")
-    if campaign.status != CampaignStatus.DRAFT.value:
+    try:
+        await launch_campaign(db_session, campaign)
+    except CampaignStateConflict:
         response.status_code = status.HTTP_409_CONFLICT
         return response_error(code="MAIL_CAMPAIGN_ALREADY_LAUNCHED", message="Рассылка уже была запущена")
-
-    users = await _audience(db_session, campaign.segment or {})
-    suppressed_user_ids, suppressed_emails = await _suppressed_audience_keys(db_session, users)
-    now = datetime.now(timezone.utc)
-    queued = suppressed = 0
-    for user in users:
-        email = user.email.strip().lower()
-        is_suppressed = _user_is_suppressed(user, suppressed_user_ids, suppressed_emails)
-        db_session.add(
-            MailMessage(
-                user_id=user.id,
-                campaign_id=campaign.id,
-                recipient_email=email,
-                kind=MailKind.CAMPAIGN.value,
-                subject=campaign.subject,
-                body=campaign.body,
-                status=MailStatus.SUPPRESSED.value if is_suppressed else MailStatus.QUEUED.value,
-                max_attempts=lifecycle_config.MAIL_MAX_ATTEMPTS,
-                idempotency_key=f"campaign:{campaign.id}:{user.id}",
-                safe_error_code="suppressed" if is_suppressed else None,
-            )
-        )
-        if is_suppressed:
-            suppressed += 1
-        else:
-            queued += 1
-
-    campaign.audience_count = len(users)
-    campaign.queued_count = queued
-    campaign.suppressed_count = suppressed
-    campaign.status = CampaignStatus.QUEUED.value if queued else CampaignStatus.COMPLETED.value
-    campaign.launched_at = now
-    if not queued:
-        campaign.completed_at = now
-    await db_session.flush()
     return response_success(campaign=_campaign_item(campaign))
 
 
@@ -290,6 +241,7 @@ async def campaign_cancel(campaign_id: UUID, response: Response, db_session: Asy
     for message in messages.scalars().all():
         message.status = MailStatus.CANCELLED.value
     campaign.status = CampaignStatus.CANCELLED.value
+    campaign.scheduled_at = None
     campaign.completed_at = datetime.now(timezone.utc)
     await db_session.flush()
     return response_success(campaign=_campaign_item(campaign))
@@ -298,11 +250,15 @@ async def campaign_cancel(campaign_id: UUID, response: Response, db_session: Asy
 @router.get("/campaigns/{campaign_id}/messages")
 async def campaign_messages(
     campaign_id: UUID,
+    response: Response,
     mail_status: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db_session: AsyncSession = Depends(get_db_session),
 ):
+    if mail_status and mail_status not in _valid_mail_statuses():
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code="MAIL_STATUS_INVALID", message="Неизвестный статус доставки")
     query = select(MailMessage).where(MailMessage.campaign_id == campaign_id)
     count_query = select(func.count(MailMessage.id)).where(MailMessage.campaign_id == campaign_id)
     if mail_status:
@@ -310,4 +266,9 @@ async def campaign_messages(
         count_query = count_query.where(MailMessage.status == mail_status)
     result = await db_session.execute(query.order_by(MailMessage.created_at.desc()).offset(offset).limit(limit))
     total = await db_session.scalar(count_query)
-    return response_success(messages=[_message_item(item) for item in result.scalars().all()], total=int(total or 0))
+    return response_success(
+        messages=[_message_item(item) for item in result.scalars().all()],
+        total=int(total or 0),
+        limit=limit,
+        offset=offset,
+    )
