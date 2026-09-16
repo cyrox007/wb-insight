@@ -4,7 +4,7 @@ WB Insight использует Semantic Versioning:
 
 `MAJOR.MINOR.PATCH[-PRERELEASE]`
 
-Примеры: `0.9.0-alpha.8`, `0.9.0-beta.1`, `1.0.0-rc.1`, `1.0.0`.
+Примеры: `0.9.0-alpha.9`, `0.9.0-beta.1`, `1.0.0-rc.1`, `1.0.0`.
 
 ## Номера версии
 
@@ -30,10 +30,10 @@ Backward-compatible исправления опубликованной capabili
 
 Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускается только когда одновременно:
 
-- P29 dependency/security hardening, P30 acceptance tooling и P31 account-lifecycle code baseline слиты с green CI;
+- P29 dependency/security hardening, P30 acceptance tooling, P31 account-lifecycle baseline и найденные P32 registration/beta-smoke blockers слиты с green CI;
 - известных необработанных code-side release blockers нет;
 - production-like HTTPS environment воспроизводимо разворачивается из репозитория;
-- core end-to-end smoke реально пройден;
+- core end-to-end smoke реально пройден, включая disposable registration/demo/legal evidence;
 - password recovery проверен через фактический SMTP/provider;
 - выполнена приёмочная сверка ключевой аналитики на реальном WB seller account;
 - нет необъяснённых существенных денежных расхождений;
@@ -59,19 +59,20 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` после P31 находится на **`0.9.0-alpha.8`**. P31 слит через PR #47, merge `6cb34aa9b4633e20d1810b6a5edd690056cde986`, после полного green CI exact-head кандидата.
+`main` до merge P32 находится на **`0.9.0-alpha.8`** после P31 / PR #47. Ветка P32 `codex/p32-registration-beta-smoke` использует candidate **`0.9.0-alpha.9`**, потому что release-smoke ревизия нашла реальные code-side дефекты registration/demo flow, которые необходимо закрыть до beta.
 
-`0.9.0-alpha.8` закрывает code-side account lifecycle: password recovery, durable session revocation, cancel-at-period-end, soft deactivation/retention metadata, защищённый Sber/deactivation race и auditable support flow. Следующее повышение стадии — не новая alpha по счётчику задач, а `0.9.0-beta.1` только после фактического production-like acceptance.
+`0.9.0-alpha.9` не является новой продуктовой фазой: это hardening текущего frozen WB Web v1 scope — атомарность регистрации, единый `demo` tariff contract, read-only consent audit и воспроизводимый disposable registration smoke. После green CI/merge P32 следующее повышение стадии должно быть `0.9.0-beta.1` только после фактического production-like acceptance.
 
 Каноническая последовательность:
 
 1. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
-2. `0.9.0-alpha.8` — account-lifecycle code baseline, текущий `main`;
-3. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + data-accuracy acceptance;
-4. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
-5. `1.0.0` — публичный WB Insight Web v1 Stable.
+2. `0.9.0-alpha.8` — account-lifecycle code baseline;
+3. `0.9.0-alpha.9` — registration transaction/demo/beta-smoke hardening;
+4. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + data-accuracy acceptance;
+5. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
+6. `1.0.0` — публичный WB Insight Web v1 Stable.
 
-Stage нельзя повышать только из-за количества commits, номера P-задачи или наличия скрипта проверки. Gates определяются `docs/RELEASE_ROADMAP.md` и `docs/RELEASE_READINESS.md`.
+Stage нельзя повышать только из-за количества commits, номера P-задачи или наличия скрипта проверки. Если перед beta обнаружен реальный release-blocking code defect, он закрывается следующей alpha-итерацией с отдельным CI evidence. Gates определяются `docs/RELEASE_ROADMAP.md` и `docs/RELEASE_READINESS.md`.
 
 ## Source of truth
 
