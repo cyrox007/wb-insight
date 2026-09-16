@@ -27,7 +27,7 @@ Manifest не копирует содержимое artifacts и не предн
 - каждый artifact должен существовать и быть непустым;
 - `data_accuracy` должен быть JSON-отчётом schema v1 со `status=pass`, ненулевыми period/metric counts и SHA-256 входа/policy.
 
-Начиная с P40 для фактического beta/RC/stable promotion используется дополнительный флаг `--require-structured-runtime-evidence`. Он запрещает подменить ключевые runtime gates произвольными текстовыми файлами и требует machine-readable evidence для `deployment`, `core_smoke`, `account_lifecycle` и `secrets_review`.
+Начиная с P40 для фактического beta/RC/stable promotion используется дополнительный флаг `--require-structured-runtime-evidence`. Он запрещает подменить ключевые runtime gates произвольными текстовыми файлами и требует machine-readable evidence для `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke` и `secrets_review`.
 
 ## Structured runtime evidence
 
@@ -49,6 +49,8 @@ Manifest не копирует содержимое artifacts и не предн
 
 Один и тот же sanitized `release-smoke.json` допустимо привязать как `core_smoke` и `account_lifecycle`: manifest всё равно фиксирует его SHA-256 отдельно для каждого kind.
 
+`ux_smoke` создаётся `ops/ux_acceptance.py`. Инструмент не выдаёт автоматическую визуальную оценку: проверку интерфейса выполняет человек, а runner делает эту проверку полной и привязанной к exact build. Контракт требует desktop/mobile evidence для публичных auth-экранов, billing success, основных dashboard-разделов и Control Panel (users/roles/tariffs/payments/mail/audit), а также representative loading/empty/error states. Для каждого required state сохраняются только имя evidence-файла, размер и SHA-256; сами изображения/видео остаются в защищённом evidence storage.
+
 `secrets_review` создаётся `ops/secrets_review.py`. Scanner не сохраняет значения секретов и не копирует совпавшие строки. Он сравнивает реально настроенные secret values с:
 
 - tracked worktree;
@@ -67,7 +69,7 @@ Manifest не копирует содержимое artifacts и не предн
 - `deployment` — evidence production-like HTTPS deployment, migration/upgrade и deploy/rollback smoke;
 - `core_smoke` — результат production-like `ops/release_smoke.py` без отключения disposable registration;
 - `account_lifecycle` — login/refresh/logout/deactivation и реальный password-recovery smoke через настроенный SMTP/provider;
-- `ux_smoke` — подтверждение основных desktop/mobile сценариев и критичных empty/loading/error states;
+- `ux_smoke` — structured human-reviewed desktop/mobile evidence основных экранов и критичных empty/loading/error states;
 - `secrets_review` — machine-readable проверка отсутствия настроенных secrets/JWT в frontend, Git и runtime logs;
 - `data_accuracy` — green JSON-результат `ops/data_accuracy_acceptance.py` на реальном WB seller dataset.
 
@@ -88,6 +90,15 @@ python3 ops/release_smoke.py \
   --audit-smoke \
   --evidence-output /secure/evidence/release-smoke.json
 
+python3 ops/ux_acceptance.py \
+  --environment staging-eu-1 \
+  --write-template /secure/evidence/ux-review-input.json
+# После фактической desktop/mobile проверки reviewer заполняет template:
+python3 ops/ux_acceptance.py \
+  --environment staging-eu-1 \
+  --input /secure/evidence/ux-review-input.json \
+  --output /secure/evidence/ux-smoke.json
+
 python3 ops/secrets_review.py \
   --environment staging-eu-1 \
   --env-file /secure/runtime/wb-insight.env \
@@ -103,7 +114,7 @@ python3 ops/release_evidence.py \
   --artifact deployment=/secure/evidence/deployment.json \
   --artifact core_smoke=/secure/evidence/release-smoke.json \
   --artifact account_lifecycle=/secure/evidence/release-smoke.json \
-  --artifact ux_smoke=/secure/evidence/ux-smoke.txt \
+  --artifact ux_smoke=/secure/evidence/ux-smoke.json \
   --artifact secrets_review=/secure/evidence/secrets-review.json \
   --artifact data_accuracy=/secure/evidence/data-accuracy.json \
   --output /secure/evidence/release-manifest.json
@@ -113,7 +124,9 @@ python3 ops/release_evidence.py \
 
 Переменные `SMOKE_EMAIL`, `SMOKE_PASSWORD`, `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` и `SMOKE_MAIL_TOKEN_COMMAND` в примере предполагаются переданными через environment/secret manager и не должны попадать в evidence.
 
-Наличие файлов само по себе не заменяет реальное выполнение проверок. Manifest обеспечивает полноту набора, stage/version binding и целостность artifacts; factual provenance внешних UX/data-accuracy evidence должна сохраняться владельцем релиза.
+UX template нельзя отмечать `pass` без фактической проверки: `ops/ux_acceptance.py` проверяет полноту, release binding и integrity файлов, но не заменяет человеческую визуальную оценку.
+
+Наличие файлов само по себе не заменяет реальное выполнение проверок. Manifest обеспечивает полноту набора, stage/version binding и целостность artifacts; factual provenance human UX review и real-seller data-accuracy evidence должна сохраняться владельцем релиза.
 
 ## RC evidence
 
