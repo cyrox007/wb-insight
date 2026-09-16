@@ -110,22 +110,72 @@ async def preview_campaign_audience(session: AsyncSession, segment: dict) -> dic
     }
 
 
+def schedule_campaign(
+    campaign: MailCampaign,
+    scheduled_at: datetime,
+    *,
+    now: datetime | None = None,
+) -> MailCampaign:
+    """Move a draft/scheduled campaign to a future UTC launch instant."""
+    if campaign.status not in {CampaignStatus.DRAFT.value, CampaignStatus.SCHEDULED.value}:
+        raise CampaignStateConflict("campaign_not_schedulable")
+    current = now or datetime.now(timezone.utc)
+    if scheduled_at.tzinfo is None:
+        raise ValueError("scheduled_at_timezone_required")
+    launch_at = scheduled_at.astimezone(timezone.utc)
+    if launch_at <= current:
+        raise ValueError("scheduled_at_must_be_future")
+    campaign.status = CampaignStatus.SCHEDULED.value
+    campaign.scheduled_at = launch_at
+    campaign.completed_at = None
+    return campaign
+
+
 async def launch_campaign(
     session: AsyncSession,
     campaign: MailCampaign,
     *,
     now: datetime | None = None,
 ) -> MailCampaign:
-    """Materialize one campaign into idempotent per-user outbox messages."""
+    """Materialize one campaign into idempotent per-user outbox messages.
+
+    Materialization is intentionally safe to retry. Existing per-user rows are
+    reused instead of relying only on the unique constraint, so an operational
+    retry cannot turn a partially materialized campaign into a duplicate-key
+    failure.
+    """
     if campaign.status not in {CampaignStatus.DRAFT.value, CampaignStatus.SCHEDULED.value}:
         raise CampaignStateConflict("campaign_not_launchable")
 
     current = now or datetime.now(timezone.utc)
     users = await campaign_audience(session, campaign.segment or {})
     suppressed_user_ids, suppressed_emails = await suppressed_audience_keys(session, users)
-    queued = suppressed = 0
 
+    existing_result = await session.execute(
+        select(MailMessage.user_id, MailMessage.status).where(
+            MailMessage.campaign_id == campaign.id,
+        )
+    )
+    existing_by_user = {
+        user_id: mail_status
+        for user_id, mail_status in existing_result.all()
+        if user_id is not None
+    }
+
+    queued = sent = failed = suppressed = 0
     for user in users:
+        existing_status = existing_by_user.get(user.id)
+        if existing_status is not None:
+            if existing_status in {MailStatus.QUEUED.value, MailStatus.SENDING.value}:
+                queued += 1
+            elif existing_status == MailStatus.SENT.value:
+                sent += 1
+            elif existing_status == MailStatus.FAILED.value:
+                failed += 1
+            elif existing_status in {MailStatus.SUPPRESSED.value, MailStatus.CANCELLED.value}:
+                suppressed += 1
+            continue
+
         email = user.email.strip().lower()
         is_suppressed = user_is_suppressed(user, suppressed_user_ids, suppressed_emails)
         session.add(
@@ -153,14 +203,19 @@ async def launch_campaign(
 
     campaign.audience_count = len(users)
     campaign.queued_count = queued
-    campaign.sent_count = 0
-    campaign.failed_count = 0
+    campaign.sent_count = sent
+    campaign.failed_count = failed
     campaign.suppressed_count = suppressed
-    campaign.status = (
-        CampaignStatus.QUEUED.value if queued else CampaignStatus.COMPLETED.value
-    )
-    campaign.launched_at = current
-    if not queued:
+    campaign.launched_at = campaign.launched_at or current
+    campaign.scheduled_at = None
+    campaign.completed_at = None
+    if queued:
+        campaign.status = CampaignStatus.QUEUED.value
+    elif failed:
+        campaign.status = CampaignStatus.FAILED.value
+        campaign.completed_at = current
+    else:
+        campaign.status = CampaignStatus.COMPLETED.value
         campaign.completed_at = current
     await session.flush()
     return campaign
