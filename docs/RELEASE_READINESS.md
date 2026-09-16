@@ -4,15 +4,14 @@
 
 ## Текущий статус
 
-- `main`: **`0.9.0-alpha.10`** после P33 / PR #51, merge `9dacaee426937c7466ac22cedd878e11b53cc472`.
-- ветка P34 `codex/p34-beta-evidence-contract` — кандидат **`0.9.0-alpha.11`**.
+- `main`: **`0.9.0-alpha.11`** после P34 / PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`.
 - P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
 - P31 закрыл production-safe code baseline жизненного цикла аккаунта.
 - P32 закрыл найденные перед beta дефекты registration/demo flow и встроил disposable registration evidence в core smoke.
 - P33 закрыл найденный при pre-beta аудите production-config blocker и добавил fail-closed startup contract.
-- P34 закрывает найденный после P33 release-governance gap: старый beta manifest не требовал весь фактический beta evidence set и не связывал stage с prerelease-версией.
-- Финальный P33 head `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл Backend security, Frontend build, Database migrations и Release integrity.
-- Основной WB Web v1 feature/code scope заморожен; следующий stage после green merge P34 — `0.9.0-beta.1` только после фактического production-like, SMTP recovery, UX/secrets review и real-seller acceptance с evidence manifest v2.
+- P34 закрыл найденный после P33 release-governance gap: beta manifest v2 теперь требует весь фактический beta evidence set и связывает stage с версией/commit.
+- Финальный P34 head `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity.
+- Основной WB Web v1 feature/code scope заморожен; следующий stage — `0.9.0-beta.1` только после фактического production-like, SMTP recovery, UX/secrets review и real-seller acceptance с evidence manifest v2.
 
 ## Code-side status
 
@@ -37,7 +36,7 @@
 - browser access token in-memory + refresh restore;
 - release smoke runner;
 - frontend production/full dependency audit gate;
-- backend `pip-audit` gate без известных vulnerabilities на P33 final candidate;
+- backend `pip-audit` gate без известных vulnerabilities на P34 final candidate;
 - versioned data-accuracy comparator и release-evidence manifest tooling;
 - password reset/recovery через email с anti-enumeration response;
 - hashed one-time reset tokens; raw secret передаётся через URL fragment, а не HTTP query;
@@ -60,31 +59,18 @@
 - production startup fail-closed отклоняет template/weak DB/JWT/WB/Sber credentials, malformed Fernet key, HTTP/example public endpoints и небезопасную recovery-конфигурацию;
 - `LEGAL_EVIDENCE_HMAC_KEY` обязателен как отдельный production secret;
 - `.env.production.example` намеренно не запускается как production без замены placeholders, и этот отрицательный contract проверяется CI;
+- beta release-evidence manifest schema v2 требует полный набор `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
+- evidence runner проверяет stage/version binding, полный Git SHA, непустые/известные artifacts и passing machine-readable `data_accuracy`;
+- Release integrity содержит positive/negative self-tests нового evidence contract;
 - полная структурированная документация проекта.
 
-P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy. P32/P33 не означают прохождение production-like acceptance: они делают соответствующие code-side проверки воспроизводимыми и fail-closed.
-
-### P34 candidate / `0.9.0-alpha.11`
-
-P34 приводит технический evidence contract в точное соответствие с beta readiness:
-
-- beta `status=complete` требует `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
-- RC наследует весь beta-набор и добавляет `wb_full_sync`, `sber_payment`, `operations`, `backup_restore`, `legal`;
-- stable наследует RC и добавляет `rc_signoff`;
-- manifest schema v2 связывает beta/RC/stable с соответствующим типом `VERSION`;
-- commit должен быть полным 40-символьным Git SHA;
-- environment не может быть пустым;
-- неизвестные и пустые artifacts блокируют manifest;
-- `data_accuracy` должен быть валидным schema v1 JSON со `status=pass`, ненулевыми period/metric counts и SHA-256 input/policy;
-- Release integrity проверяет positive path и намеренно провальные cases: неполный старый beta-набор, invalid SHA, alpha VERSION для beta, пустой artifact и failing data-accuracy report.
-
-P34 будет считаться закрытым только после полного green CI exact-head и merge. Он не заменяет фактическое выполнение deployment/SMTP/UX/secrets/data-accuracy проверок.
+P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy. P32–P34 не означают прохождение production-like acceptance: они делают code-side проверки воспроизводимыми, fail-closed и согласованными с release governance.
 
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
-- green merge P34 / `0.9.0-alpha.11` и отсутствия известных необработанных code-side release blockers;
+- отсутствия известных необработанных code-side release blockers на текущем `0.9.0-alpha.11` baseline;
 - feature freeze WB Web v1;
 - production-like HTTPS deployment из репозитория с реальными non-placeholder secrets/hosts;
 - миграций на чистой БД и upgrade существующей БД;
