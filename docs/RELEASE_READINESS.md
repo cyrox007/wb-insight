@@ -7,12 +7,14 @@
 - `main`: **`0.9.0-alpha.11`**.
 - P34 закрыт PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`.
 - P36 systemd deployment hotfix закрыт PR #55, merge `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c`, без product version bump.
+- P35 data-accuracy completeness hardening закрыт PR #56, merge `d2e782208228fbe60cb92b9e61fbf8d325f0e839`, без product version bump.
 - P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
 - P31 закрыл production-safe code baseline жизненного цикла аккаунта.
 - P32 закрыл найденные перед beta дефекты registration/demo flow и встроил disposable registration evidence в core smoke.
 - P33 закрыл production-config blocker и добавил fail-closed startup contract.
 - P34 закрыл release-governance gap: beta manifest v2 требует весь фактический beta evidence set и связывает stage с version/commit.
-- P35 активен: hardening обязательного data-accuracy coverage и tolerance overrides.
+- P35 закрыл обход data-accuracy gate через пропущенные required-метрики и undocumented tolerance override.
+- P36 добавил безопасный systemd updater для перехода production-like host на Python 3.12 и поддерживаемую Node-линию.
 - Основной WB Web v1 feature/code scope заморожен; следующий stage — `0.9.0-beta.1` только после фактического production-like, SMTP recovery, UX/secrets review и real-seller acceptance с evidence manifest v2.
 
 ## Code-side status
@@ -64,22 +66,11 @@
 - beta release-evidence manifest schema v2 требует полный набор `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
 - evidence runner проверяет stage/version binding, полный Git SHA, непустые/известные artifacts и passing machine-readable `data_accuracy`;
 - Release integrity содержит positive/negative self-tests evidence contract;
+- P35 требует все policy-required метрики в каждом acceptance-периоде, запрещает `required:false` для policy-required metric и требует `override_reason` при tolerance override;
+- P35 JSON/Markdown report фиксирует required metric/observation counts, `missing` и причины overrides;
 - P36 systemd updater проверяет runtime prerequisites до изменения working deployment, создаёт fresh Python 3.12 venv, применяет Alembic, выполняет `npm ci`/build и bounded readiness check;
 - отдельный `systemd-updater` workflow проверяет updater на Python 3.12 / Node 22.12;
 - полная структурированная документация проекта.
-
-### Активный code-side hardening: P35
-
-P35 закрывает оставшийся обход data-accuracy gate:
-
-- каждая policy-required метрика должна присутствовать в каждом acceptance-периоде;
-- отсутствие метрики становится `missing` и блокирует acceptance;
-- input не может установить `required:false` для policy-required метрики;
-- изменение `tolerance_mode`, absolute/relative tolerance относительно policy требует `override_reason`;
-- JSON/Markdown report фиксирует required coverage и причины overrides;
-- CI отдельно проверяет full, failing, incomplete и invalid-override fixtures.
-
-P35 не меняет runtime приложения и не требует отдельного product version bump: hardening остаётся в `0.9.0-alpha.11` baseline.
 
 P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy. P32–P36 не означают прохождение production-like acceptance: они делают code/deployment/release gates воспроизводимыми и fail-closed.
 
@@ -87,7 +78,7 @@ P31 намеренно не реализует автоматический hard
 
 Полученная с сервера проверка подтверждает:
 
-- repository после `git pull --ff-only origin main`: `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c`;
+- repository после `git pull --ff-only origin main`: `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c` на момент проверки;
 - `VERSION`: `0.9.0-alpha.11`;
 - `wb-backend`, `wb-celery`, `wb-celery-beat` используют `/home/projects/wb/backend/venv`;
 - активный `backend/venv`: **Python 3.10.12**;
@@ -97,18 +88,19 @@ P31 намеренно не реализует автоматический hard
 
 Это **ещё не считается успешным deployment evidence**. Перед beta необходимо:
 
-1. убрать/перенести локальный `update.sh`, чтобы automated deployment начинался из clean working tree;
-2. установить поддерживаемую Node-линию: `^20.19` или `>=22.12`;
-3. выполнить P36 updater/preflight;
-4. подтвердить, что после переключения `backend/venv/bin/python --version` показывает Python 3.12;
-5. подтвердить active systemd services и `/health/ready`;
-6. сохранить deployment/rollback evidence для exact beta candidate commit.
+1. обновить repository до текущего `main` после P35;
+2. убрать/перенести локальный `update.sh`, чтобы automated deployment начинался из clean working tree;
+3. установить поддерживаемую Node-линию: `^20.19` или `>=22.12`;
+4. выполнить P36 updater/preflight;
+5. подтвердить, что после переключения `backend/venv/bin/python --version` показывает Python 3.12;
+6. подтвердить active systemd services и `/health/ready`;
+7. сохранить deployment/rollback evidence для exact beta candidate commit.
 
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
-- P35 слит и на текущем alpha.11 baseline нет известных необработанных code-side release blockers;
+- на текущем alpha.11 baseline нет известных необработанных code-side release blockers;
 - feature freeze WB Web v1;
 - production-like HTTPS deployment из репозитория с реальными non-placeholder secrets/hosts;
 - для systemd deployment backend/Celery/Beat реально работают из Python 3.12 environment;
