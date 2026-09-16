@@ -13,6 +13,7 @@ from models.tariffs_model import TariffPlan, TariffLimit
 from models.subscription_model import Subscription
 from models.payments_model import Payment, PaymentEvent
 from models.payment_provider_config import PaymentProviderConfig
+from models.audit_event import AuditEvent
 from models.tokens_model import APIToken
 from models.wb_report import WbRealizationReport
 from models.wb_product import WbProduct

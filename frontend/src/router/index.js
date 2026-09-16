@@ -129,6 +129,12 @@ const router = createRouter({
 					name: 'control-panel.payments',
 					component: () => import('../pages/ControlPanel/Payments/index.vue'),
 					meta: { title: 'Платежи', requestAuth: true }
+				},
+				{
+					path: 'audit',
+					name: 'control-panel.audit',
+					component: () => import('../pages/ControlPanel/Audit/index.vue'),
+					meta: { title: 'Аудит действий', requestAuth: true }
 				}
 			]
 		},

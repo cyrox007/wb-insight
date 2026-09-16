@@ -52,6 +52,8 @@ def _required_control_panel_permission(request: Request) -> Permission:
         return Permission.TARIFFS_READ if is_read else Permission.TARIFFS_WRITE
     if path.startswith("/control-panel/payments"):
         return Permission.PAYMENTS_READ if is_read else Permission.PAYMENTS_WRITE
+    if path.startswith("/control-panel/audit"):
+        return Permission.AUDIT_READ
 
     return Permission.CONTROL_PANEL_ACCESS
 
