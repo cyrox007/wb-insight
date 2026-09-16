@@ -134,12 +134,13 @@ async def test_password_reset_changes_password_and_revokes_prior_sessions():
 
 
 @pytest.mark.asyncio
-async def test_soft_deactivation_revokes_sessions_credentials_and_reset_links(monkeypatch):
+async def test_soft_deactivation_revokes_sessions_credentials_and_identity_links(monkeypatch):
     monkeypatch.setattr(lifecycle.config, "ACCOUNT_DEACTIVATION_RETENTION_DAYS", 90)
     user = SimpleNamespace(
         id=USER_ID,
         is_active=True,
         session_version=7,
+        pending_email="next@example.com",
         deactivated_at=None,
         deactivation_reason=None,
         retention_until=None,
@@ -156,12 +157,14 @@ async def test_soft_deactivation_revokes_sessions_credentials_and_reset_links(mo
     assert changed is True
     assert user.is_active is False
     assert user.session_version == 8
+    assert user.pending_email is None
     assert user.deactivated_at is not None
     assert user.deactivation_reason == "user request"
     assert user.retention_until > user.deactivated_at
-    assert len(session.statements) == 3
+    assert len(session.statements) == 4
     statement_sql = "\n".join(str(statement) for statement in session.statements)
     assert "password_reset_tokens" in statement_sql
+    assert "email_verification_tokens" in statement_sql
     assert "api_tokens" in statement_sql
     assert "subscriptions" in statement_sql
     assert any(
