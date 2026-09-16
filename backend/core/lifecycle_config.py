@@ -68,13 +68,16 @@ class LifecycleConfig:
         if not production:
             return
 
+        # Preserve the established transport-level failure priority: if TLS is
+        # explicitly disabled, report that before validating endpoint quality.
+        if not self.SMTP_STARTTLS:
+            raise RuntimeError("Production password recovery requires SMTP_STARTTLS=true")
+
         reset_url = urlparse(self.PASSWORD_RESET_BASE_URL)
         if reset_url.scheme.lower() != "https" or not reset_url.hostname:
             raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use https://")
         if "replace-with-" in reset_url.hostname.lower() or _is_reserved_example_host(reset_url.hostname):
             raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use the real service host")
-        if not self.SMTP_STARTTLS:
-            raise RuntimeError("Production password recovery requires SMTP_STARTTLS=true")
 
         smtp_host = self.SMTP_HOST.rstrip(".").lower()
         if "replace-with-" in smtp_host or _is_reserved_example_host(smtp_host):
