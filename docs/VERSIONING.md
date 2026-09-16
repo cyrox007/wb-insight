@@ -30,7 +30,7 @@ Backward-compatible исправления опубликованной capabili
 
 Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускается только когда одновременно:
 
-- P29 dependency/security hardening, P30 acceptance tooling, P31 account-lifecycle baseline и найденные P32 registration/beta-smoke blockers слиты с green CI;
+- P29 dependency/security hardening, P30 acceptance tooling, P31 account-lifecycle baseline и P32 registration/beta-smoke hardening слиты с green CI;
 - известных необработанных code-side release blockers нет;
 - production-like HTTPS environment воспроизводимо разворачивается из репозитория;
 - core end-to-end smoke реально пройден, включая disposable registration/demo/legal evidence;
@@ -59,15 +59,15 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` до merge P32 находится на **`0.9.0-alpha.8`** после P31 / PR #47. Ветка P32 `codex/p32-registration-beta-smoke` использует candidate **`0.9.0-alpha.9`**, потому что release-smoke ревизия нашла реальные code-side дефекты registration/demo flow, которые необходимо закрыть до beta.
+`main` находится на **`0.9.0-alpha.9`** после P32 / PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`. Exact P32 head перед merge прошёл Backend security, Frontend build, Database migrations и Release integrity.
 
-`0.9.0-alpha.9` не является новой продуктовой фазой: это hardening текущего frozen WB Web v1 scope — атомарность регистрации, единый `demo` tariff contract, read-only consent audit и воспроизводимый disposable registration smoke. После green CI/merge P32 следующее повышение стадии должно быть `0.9.0-beta.1` только после фактического production-like acceptance.
+`0.9.0-alpha.9` закрывает найденные перед beta code-side дефекты registration/demo flow и делает disposable registration evidence частью канонического core smoke. Следующее повышение стадии — `0.9.0-beta.1` только после фактического production-like HTTPS deployment, полного smoke, SMTP recovery и real-seller data-accuracy acceptance с evidence manifest.
 
 Каноническая последовательность:
 
 1. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
 2. `0.9.0-alpha.8` — account-lifecycle code baseline;
-3. `0.9.0-alpha.9` — registration transaction/demo/beta-smoke hardening;
+3. `0.9.0-alpha.9` — registration transaction/demo/beta-smoke hardening, текущий `main`;
 4. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + data-accuracy acceptance;
 5. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
 6. `1.0.0` — публичный WB Insight Web v1 Stable.
