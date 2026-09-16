@@ -128,6 +128,61 @@ def _normalized_run(run: dict) -> dict:
     }
 
 
+def validate_ci_report(
+    report: dict,
+    *,
+    version: str,
+    commit: str,
+    environment: str,
+) -> None:
+    if report.get("schema_version") != 1 or report.get("kind") != "ci":
+        raise CIAcceptanceError("CI evidence must use schema_version=1 and kind=ci")
+    if report.get("status") != "pass":
+        raise CIAcceptanceError("CI evidence must report status=pass")
+    if report.get("version") != version:
+        raise CIAcceptanceError("CI evidence version does not match release VERSION")
+    if str(report.get("commit") or "").lower() != commit.lower():
+        raise CIAcceptanceError("CI evidence commit does not match release commit")
+    if report.get("environment") != environment:
+        raise CIAcceptanceError("CI evidence environment does not match release environment")
+    if report.get("failures") != []:
+        raise CIAcceptanceError("CI evidence contains failed or missing workflows")
+
+    required = report.get("required_workflows")
+    if required != list(REQUIRED_WORKFLOWS):
+        raise CIAcceptanceError("CI evidence required workflow contract does not match current release contract")
+    runs = report.get("workflow_runs")
+    if not isinstance(runs, dict):
+        raise CIAcceptanceError("CI evidence must contain workflow_runs")
+    if set(runs) != set(REQUIRED_WORKFLOWS):
+        raise CIAcceptanceError("CI evidence does not contain every required workflow")
+    for name in REQUIRED_WORKFLOWS:
+        run = runs.get(name)
+        if not isinstance(run, dict):
+            raise CIAcceptanceError(f"CI evidence for {name} is invalid")
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            raise CIAcceptanceError(f"CI workflow {name} is not completed/success")
+        if not isinstance(run.get("id"), int) or run["id"] <= 0:
+            raise CIAcceptanceError(f"CI workflow {name} has invalid run id")
+        if not isinstance(run.get("run_attempt"), int) or run["run_attempt"] <= 0:
+            raise CIAcceptanceError(f"CI workflow {name} has invalid run attempt")
+
+
+def validate_ci_evidence(
+    path: Path,
+    *,
+    version: str,
+    commit: str,
+    environment: str,
+) -> None:
+    validate_ci_report(
+        _load_json(path),
+        version=version,
+        commit=commit,
+        environment=environment,
+    )
+
+
 def _write_report(path: Path, report: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -152,14 +207,45 @@ def _fixture(commit: str) -> dict:
 
 def _self_test() -> None:
     commit = "0123456789abcdef0123456789abcdef01234567"
+    version = "0.9.0-beta.1"
+    environment = "staging-ci-fixture"
     selected, failures = _select_successful_runs(_fixture(commit), commit)
     assert not failures
     assert set(selected) == set(REQUIRED_WORKFLOWS)
+    report = {
+        "schema_version": 1,
+        "kind": "ci",
+        "status": "pass",
+        "repository": "cyrox007/wb-insight",
+        "version": version,
+        "commit": commit,
+        "environment": environment,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "required_workflows": list(REQUIRED_WORKFLOWS),
+        "workflow_runs": {name: _normalized_run(selected[name]) for name in REQUIRED_WORKFLOWS},
+        "failures": [],
+    }
+    validate_ci_report(report, version=version, commit=commit, environment=environment)
 
     broken = _fixture(commit)
     broken["workflow_runs"][0]["conclusion"] = "failure"
     _, failures = _select_successful_runs(broken, commit)
     assert failures and failures[0].startswith("Backend security:")
+
+    broken_report = dict(report)
+    broken_report["workflow_runs"] = dict(report["workflow_runs"])
+    broken_report["workflow_runs"].pop("Frontend build")
+    try:
+        validate_ci_report(
+            broken_report,
+            version=version,
+            commit=commit,
+            environment=environment,
+        )
+    except CIAcceptanceError:
+        pass
+    else:
+        raise AssertionError("incomplete CI evidence unexpectedly passed")
     print("[ok] CI acceptance self-test")
 
 
@@ -224,6 +310,7 @@ def main() -> int:
     if failures:
         print("[failed] exact-head CI gates are incomplete or not green", file=sys.stderr)
         return 1
+    validate_ci_report(report, version=version, commit=commit, environment=environment)
     print(f"[ok] structured CI evidence: {args.output}")
     return 0
 
