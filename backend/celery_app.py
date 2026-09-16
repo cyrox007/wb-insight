@@ -21,6 +21,12 @@ celery_app = Celery(
     ],
 )
 
+mail_delivery_enabled = (
+    lifecycle_config.MAIL_DELIVERY_ENABLED
+    or lifecycle_config.PASSWORD_RESET_ENABLED
+    or lifecycle_config.EMAIL_VERIFICATION_ENABLED
+)
+
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
@@ -35,28 +41,13 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,
     task_acks_late=True,
     worker_max_tasks_per_child=100,
-    mail_delivery_enabled=lifecycle_config.MAIL_DELIVERY_ENABLED,
+    mail_delivery_enabled=mail_delivery_enabled,
 )
 
 celery_app.conf.beat_schedule = {
-    "wb-global-sync-scheduler": {
-        "task": "tasks.schedulers.state_scheduler.schedule_sync",
-        "schedule": 60.0,
-    },
-    "wb-global-sync-scheduler-2": {
-        "task": "tasks.schedulers.create_state_scheduler.schedule_sync",
-        "schedule": 600.0,
-    },
-    "wb-job-worker": {
-        "task": "tasks.processors.job_processor.run",
-        "schedule": 300.0,
-    },
-    "operations-monitor": {
-        "task": "tasks.processors.operations_monitor.run",
-        "schedule": float(ops_config.ALERT_CHECK_INTERVAL_SECONDS),
-    },
-    "mail-delivery": {
-        "task": "mail.delivery.scan",
-        "schedule": 15.0,
-    },
+    "wb-global-sync-scheduler": {"task": "tasks.schedulers.state_scheduler.schedule_sync", "schedule": 60.0},
+    "wb-global-sync-scheduler-2": {"task": "tasks.schedulers.create_state_scheduler.schedule_sync", "schedule": 600.0},
+    "wb-job-worker": {"task": "tasks.processors.job_processor.run", "schedule": 300.0},
+    "operations-monitor": {"task": "tasks.processors.operations_monitor.run", "schedule": float(ops_config.ALERT_CHECK_INTERVAL_SECONDS)},
+    "mail-delivery": {"task": "mail.delivery.scan", "schedule": 15.0},
 }
