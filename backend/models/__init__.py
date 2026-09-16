@@ -17,3 +17,4 @@ from .account_lifecycle import AccountLifecycleEvent, PasswordResetToken
 from .payments_model import Payment, PaymentEvent
 from .payment_provider_config import PaymentProviderConfig
 from .audit_event import AuditEvent
+from .mail_delivery import EmailVerificationToken, MailCampaign, MailMessage, MailSuppression

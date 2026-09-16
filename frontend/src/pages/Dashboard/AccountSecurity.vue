@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AccountLifecycleService from '@/API/AccountLifecycleService'
 import AuthService from '@/API/AuthService'
@@ -11,6 +11,49 @@ const authStore = useAuthStore()
 const reason = ref('')
 const confirmText = ref('')
 const loading = ref(false)
+const newEmail = ref('')
+const pendingEmail = ref('')
+const emailBusy = ref(false)
+
+const currentEmail = computed(() => authStore.user?.email || '')
+
+async function requestEmailChange() {
+  const target = newEmail.value.trim().toLowerCase()
+  if (!target || !target.includes('@')) {
+    notify.error('Введите корректный новый email')
+    return
+  }
+  if (target === currentEmail.value.trim().toLowerCase()) {
+    notify.error('Укажите email, отличный от текущего')
+    return
+  }
+
+  emailBusy.value = true
+  try {
+    const response = await AccountLifecycleService.requestEmailChange(target)
+    pendingEmail.value = response.data?.pending_email || target
+    newEmail.value = ''
+    notify.success(response.data?.message || 'Письмо подтверждения отправлено')
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось запросить смену email')
+  } finally {
+    emailBusy.value = false
+  }
+}
+
+async function cancelEmailChange() {
+  if (emailBusy.value) return
+  emailBusy.value = true
+  try {
+    const response = await AccountLifecycleService.cancelEmailChange()
+    pendingEmail.value = ''
+    notify.success(response.data?.message || 'Смена email отменена')
+  } catch (error) {
+    notify.error(error.response?.data?.error?.message || 'Не удалось отменить смену email')
+  } finally {
+    emailBusy.value = false
+  }
+}
 
 async function deactivate() {
   if (confirmText.value !== 'ДЕАКТИВИРОВАТЬ') {
@@ -43,8 +86,27 @@ async function deactivate() {
     <header>
       <p class="eyebrow">Безопасность аккаунта</p>
       <h1>Доступ и деактивация</h1>
-      <p>Смена забытого пароля выполняется через подтверждённый email. Деактивация не удаляет финансовые, legal и audit-данные немедленно.</p>
+      <p>Смена email и восстановление пароля требуют подтверждения через почту. Деактивация не удаляет финансовые, legal и audit-данные немедленно.</p>
     </header>
+
+    <article class="card">
+      <p class="eyebrow">Email для входа</p>
+      <h2>Сменить email</h2>
+      <p>Текущий адрес: <strong>{{ currentEmail || '—' }}</strong>. Новый адрес станет логином только после перехода по одноразовой ссылке. После подтверждения текущие сессии будут отозваны.</p>
+      <label>
+        <span>Новый email</span>
+        <input v-model.trim="newEmail" type="email" autocomplete="email" placeholder="new-email@example.com" @keyup.enter="requestEmailChange" />
+      </label>
+      <div class="email-actions">
+        <button class="secondary" type="button" :disabled="emailBusy || !newEmail" @click="requestEmailChange">
+          {{ emailBusy ? 'Отправляем…' : 'Отправить подтверждение' }}
+        </button>
+        <button v-if="pendingEmail" class="link-button" type="button" :disabled="emailBusy" @click="cancelEmailChange">Отменить запрос</button>
+      </div>
+      <p v-if="pendingEmail" class="pending-note" role="status">
+        Ожидает подтверждения: <strong>{{ pendingEmail }}</strong>. До подтверждения продолжайте входить через {{ currentEmail }}.
+      </p>
+    </article>
 
     <article class="card">
       <h2>Восстановление доступа</h2>
@@ -86,6 +148,9 @@ label span { color: var(--text-muted); font-size: 12px; }
 input, textarea { box-sizing: border-box; width: 100%; padding: 11px 12px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--light-bg); color: var(--text-color); resize: vertical; }
 button { margin-top: 16px; min-height: 38px; padding: 8px 14px; border-radius: 9px; cursor: pointer; font-weight: 650; }
 .secondary { border: 1px solid var(--border-color); background: transparent; color: var(--text-color); }
+.link-button { border: 0; background: transparent; color: var(--text-muted); text-decoration: underline; }
+.email-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pending-note { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--light-bg); }
 .danger-button { border: 1px solid rgba(251,113,133,.45); background: rgba(190,24,93,.18); color: #fecdd3; }
 button:disabled { opacity: .5; cursor: default; }
 </style>

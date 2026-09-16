@@ -27,6 +27,21 @@ class LifecycleConfig:
     PASSWORD_RESET_BASE_URL = os.getenv("PASSWORD_RESET_BASE_URL", "").strip()
     PASSWORD_RESET_TOKEN_TTL_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_TTL_MINUTES", "30"))
 
+    EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "false").lower() == "true"
+    EMAIL_VERIFICATION_BASE_URL = os.getenv("EMAIL_VERIFICATION_BASE_URL", "").strip()
+    EMAIL_VERIFICATION_TOKEN_TTL_MINUTES = int(
+        os.getenv("EMAIL_VERIFICATION_TOKEN_TTL_MINUTES", "60")
+    )
+    EMAIL_VERIFICATION_RESEND_SECONDS = int(
+        os.getenv("EMAIL_VERIFICATION_RESEND_SECONDS", "60")
+    )
+
+    MAIL_DELIVERY_ENABLED = os.getenv("MAIL_DELIVERY_ENABLED", "false").lower() == "true"
+    MAIL_PROVIDER = os.getenv("MAIL_PROVIDER", "smtp").strip().lower() or "smtp"
+    MAIL_BATCH_SIZE = int(os.getenv("MAIL_BATCH_SIZE", "25"))
+    MAIL_MAX_ATTEMPTS = int(os.getenv("MAIL_MAX_ATTEMPTS", "5"))
+    MAIL_RETRY_BASE_SECONDS = int(os.getenv("MAIL_RETRY_BASE_SECONDS", "30"))
+
     SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip() or None
@@ -39,58 +54,89 @@ class LifecycleConfig:
         os.getenv("ACCOUNT_DEACTIVATION_RETENTION_DAYS", "90")
     )
 
-    def validate(self, *, production: bool) -> None:
-        if self.PASSWORD_RESET_TOKEN_TTL_MINUTES <= 0:
-            raise RuntimeError("PASSWORD_RESET_TOKEN_TTL_MINUTES must be positive")
-        if self.SMTP_PORT <= 0 or self.SMTP_TIMEOUT_SECONDS <= 0:
-            raise RuntimeError("SMTP port and timeout must be positive")
-        if self.ACCOUNT_DEACTIVATION_RETENTION_DAYS <= 0:
-            raise RuntimeError("ACCOUNT_DEACTIVATION_RETENTION_DAYS must be positive")
-        if not self.PASSWORD_RESET_ENABLED:
-            return
+    def _validate_https_url(self, name: str, value: str, *, production: bool) -> None:
+        parsed = urlparse(value)
+        if not parsed.scheme or not parsed.hostname:
+            raise RuntimeError(f"{name} must be an absolute URL")
+        if production:
+            if parsed.scheme.lower() != "https":
+                raise RuntimeError(f"Production {name} must use https://")
+            hostname = parsed.hostname.lower()
+            if "replace-with-" in hostname or _is_reserved_example_host(hostname):
+                raise RuntimeError(f"Production {name} must use the real service host")
+
+    def _validate_mail_transport(self, *, production: bool) -> None:
+        if self.MAIL_PROVIDER != "smtp":
+            raise RuntimeError(f"Unsupported MAIL_PROVIDER: {self.MAIL_PROVIDER}")
 
         missing = [
             name
             for name, value in {
-                "PASSWORD_RESET_BASE_URL": self.PASSWORD_RESET_BASE_URL,
                 "SMTP_HOST": self.SMTP_HOST,
                 "SMTP_FROM_EMAIL": self.SMTP_FROM_EMAIL,
             }.items()
             if not value
         ]
         if missing:
-            raise RuntimeError(
-                "PASSWORD_RESET_ENABLED requires: " + ", ".join(missing)
-            )
+            raise RuntimeError("Mail delivery requires: " + ", ".join(missing))
         if bool(self.SMTP_USERNAME) != bool(self.SMTP_PASSWORD):
             raise RuntimeError("SMTP_USERNAME and SMTP_PASSWORD must be configured together")
-
         if not production:
             return
-
-        # Preserve the established transport-level failure priority: if TLS is
-        # explicitly disabled, report that before validating endpoint quality.
         if not self.SMTP_STARTTLS:
-            raise RuntimeError("Production password recovery requires SMTP_STARTTLS=true")
-
-        reset_url = urlparse(self.PASSWORD_RESET_BASE_URL)
-        if reset_url.scheme.lower() != "https" or not reset_url.hostname:
-            raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use https://")
-        if "replace-with-" in reset_url.hostname.lower() or _is_reserved_example_host(reset_url.hostname):
-            raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use the real service host")
-
+            raise RuntimeError("Production mail delivery requires SMTP_STARTTLS=true")
         smtp_host = self.SMTP_HOST.rstrip(".").lower()
         if "replace-with-" in smtp_host or _is_reserved_example_host(smtp_host):
             raise RuntimeError("Production SMTP_HOST must use the real provider host")
-
         from_domain = self.SMTP_FROM_EMAIL.rpartition("@")[2].strip().lower()
         if not from_domain or _is_reserved_example_host(from_domain):
             raise RuntimeError("Production SMTP_FROM_EMAIL must use the real sender domain")
-
         if self.SMTP_USERNAME and _is_placeholder(self.SMTP_USERNAME):
             raise RuntimeError("Production SMTP_USERNAME must be replaced with a provider value")
         if self.SMTP_PASSWORD and _is_placeholder(self.SMTP_PASSWORD):
             raise RuntimeError("Production SMTP_PASSWORD must be replaced with a provider secret")
+
+    def validate(self, *, production: bool) -> None:
+        if self.PASSWORD_RESET_TOKEN_TTL_MINUTES <= 0:
+            raise RuntimeError("PASSWORD_RESET_TOKEN_TTL_MINUTES must be positive")
+        if self.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES <= 0:
+            raise RuntimeError("EMAIL_VERIFICATION_TOKEN_TTL_MINUTES must be positive")
+        if self.EMAIL_VERIFICATION_RESEND_SECONDS <= 0:
+            raise RuntimeError("EMAIL_VERIFICATION_RESEND_SECONDS must be positive")
+        if self.MAIL_BATCH_SIZE <= 0 or self.MAIL_MAX_ATTEMPTS <= 0 or self.MAIL_RETRY_BASE_SECONDS <= 0:
+            raise RuntimeError("Mail queue limits must be positive")
+        if self.SMTP_PORT <= 0 or self.SMTP_TIMEOUT_SECONDS <= 0:
+            raise RuntimeError("SMTP port and timeout must be positive")
+        if self.ACCOUNT_DEACTIVATION_RETENTION_DAYS <= 0:
+            raise RuntimeError("ACCOUNT_DEACTIVATION_RETENTION_DAYS must be positive")
+
+        needs_mail = (
+            self.PASSWORD_RESET_ENABLED
+            or self.EMAIL_VERIFICATION_ENABLED
+            or self.MAIL_DELIVERY_ENABLED
+        )
+        if needs_mail:
+            self._validate_mail_transport(production=production)
+
+        if self.PASSWORD_RESET_ENABLED:
+            if not self.PASSWORD_RESET_BASE_URL:
+                raise RuntimeError("PASSWORD_RESET_ENABLED requires PASSWORD_RESET_BASE_URL")
+            self._validate_https_url(
+                "PASSWORD_RESET_BASE_URL",
+                self.PASSWORD_RESET_BASE_URL,
+                production=production,
+            )
+
+        if self.EMAIL_VERIFICATION_ENABLED:
+            if not self.MAIL_DELIVERY_ENABLED:
+                raise RuntimeError("EMAIL_VERIFICATION_ENABLED requires MAIL_DELIVERY_ENABLED=true")
+            if not self.EMAIL_VERIFICATION_BASE_URL:
+                raise RuntimeError("EMAIL_VERIFICATION_ENABLED requires EMAIL_VERIFICATION_BASE_URL")
+            self._validate_https_url(
+                "EMAIL_VERIFICATION_BASE_URL",
+                self.EMAIL_VERIFICATION_BASE_URL,
+                production=production,
+            )
 
 
 lifecycle_config = LifecycleConfig()

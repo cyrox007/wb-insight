@@ -134,12 +134,13 @@ async def test_password_reset_changes_password_and_revokes_prior_sessions():
 
 
 @pytest.mark.asyncio
-async def test_soft_deactivation_revokes_sessions_credentials_and_reset_links(monkeypatch):
+async def test_soft_deactivation_revokes_sessions_credentials_and_identity_links(monkeypatch):
     monkeypatch.setattr(lifecycle.config, "ACCOUNT_DEACTIVATION_RETENTION_DAYS", 90)
     user = SimpleNamespace(
         id=USER_ID,
         is_active=True,
         session_version=7,
+        pending_email="next@example.com",
         deactivated_at=None,
         deactivation_reason=None,
         retention_until=None,
@@ -156,12 +157,14 @@ async def test_soft_deactivation_revokes_sessions_credentials_and_reset_links(mo
     assert changed is True
     assert user.is_active is False
     assert user.session_version == 8
+    assert user.pending_email is None
     assert user.deactivated_at is not None
     assert user.deactivation_reason == "user request"
     assert user.retention_until > user.deactivated_at
-    assert len(session.statements) == 3
+    assert len(session.statements) == 4
     statement_sql = "\n".join(str(statement) for statement in session.statements)
     assert "password_reset_tokens" in statement_sql
+    assert "email_verification_tokens" in statement_sql
     assert "api_tokens" in statement_sql
     assert "subscriptions" in statement_sql
     assert any(
@@ -253,22 +256,26 @@ async def test_password_reset_request_does_not_disclose_account_existence(monkey
 
 
 @pytest.mark.asyncio
-async def test_reset_delivery_failure_rolls_back_undelivered_token(monkeypatch):
+async def test_password_reset_request_queues_transactional_mail_without_raw_token(monkeypatch):
     monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_ENABLED", True)
-    user = SimpleNamespace(id=USER_ID, email="seller@example.com", is_active=True)
+    monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "EMAIL_VERIFICATION_ENABLED", False)
+    user = SimpleNamespace(
+        id=USER_ID,
+        email="seller@example.com",
+        is_active=True,
+        email_verified_at=None,
+    )
+    queued = {}
 
     async def existing_user(_session, _email):
         return user
 
-    async def issue(_session, _user):
-        return "raw-reset-secret"
-
-    async def fail_delivery(_email, _token):
-        raise RuntimeError("smtp unavailable")
+    async def queue(_session, **kwargs):
+        queued.update(kwargs)
+        return SimpleNamespace(id=uuid4())
 
     monkeypatch.setattr(account_lifecycle_handler, "get_user_by_email", existing_user)
-    monkeypatch.setattr(account_lifecycle_handler, "issue_password_reset_token", issue)
-    monkeypatch.setattr(account_lifecycle_handler, "send_password_reset_email", fail_delivery)
+    monkeypatch.setattr(account_lifecycle_handler, "queue_transactional_email", queue)
 
     session = _FakeSession()
     payload = await account_lifecycle_handler.request_password_reset(
@@ -281,7 +288,10 @@ async def test_reset_delivery_failure_rolls_back_undelivered_token(monkeypatch):
     )
 
     assert payload["status"] == "success"
-    assert session.rollbacks == 1
+    assert queued["user"] is user
+    assert queued["template_code"] == "password_reset"
+    assert "token" not in queued
+    assert session.rollbacks == 0
 
 
 @pytest.mark.asyncio
@@ -361,6 +371,10 @@ def test_account_lifecycle_routes_are_registered():
     paths = app.openapi()["paths"]
     assert "post" in paths["/auth/password-reset/request"]
     assert "post" in paths["/auth/password-reset/confirm"]
+    assert "post" in paths["/auth/email-verification/confirm"]
+    assert "post" in paths["/auth/email-verification/resend"]
+    assert "post" in paths["/account/email/change-request"]
+    assert "delete" in paths["/account/email/change-request"]
     assert "post" in paths["/account/deactivate"]
     assert "post" in paths["/account/subscription/cancel"]
     assert "delete" in paths["/account/subscription/cancel"]
@@ -371,8 +385,8 @@ def test_account_lifecycle_routes_are_registered():
 def test_production_password_reset_requires_https_when_enabled(monkeypatch):
     monkeypatch.setattr(lifecycle_config, "PASSWORD_RESET_ENABLED", True)
     monkeypatch.setattr(lifecycle_config, "PASSWORD_RESET_BASE_URL", "http://example.com/reset-password")
-    monkeypatch.setattr(lifecycle_config, "SMTP_HOST", "smtp.example.com")
-    monkeypatch.setattr(lifecycle_config, "SMTP_FROM_EMAIL", "no-reply@example.com")
+    monkeypatch.setattr(lifecycle_config, "SMTP_HOST", "smtp.company.test")
+    monkeypatch.setattr(lifecycle_config, "SMTP_FROM_EMAIL", "no-reply@company.test")
 
     with pytest.raises(RuntimeError, match="https"):
         lifecycle_config.validate(production=True)

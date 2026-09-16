@@ -22,7 +22,6 @@ def should_audit_request(method: str, path: str) -> bool:
         return False
     if method in _MUTATING_METHODS:
         return True
-    # Administrative reads expose security, user, payment and incident state.
     return method in {"GET", "HEAD"} and path.startswith("/control-panel/")
 
 
@@ -45,16 +44,31 @@ def classify_audit_action(method: str, route_template: str | None, path: str) ->
         "/auth/login": "auth.login",
         "/auth/logout": "auth.logout",
         "/auth/refresh": "auth.refresh",
+        "/auth/registration": "auth.registration",
+        "/auth/email-verification/confirm": "auth.email_verification.confirm",
+        "/auth/email-verification/resend": "auth.email_verification.resend",
     }
     if route in auth_actions:
         return auth_actions[route]
     if route.startswith("/auth/password-reset"):
         return "auth.password_reset"
+    if route.startswith("/account/mail"):
+        return f"account.mail_preferences.{_resource_verb(method)}"
     if route.startswith("/account"):
         return f"account.{_resource_verb(method)}"
 
     if route.startswith("/control-panel/audit"):
         return "admin.audit.read"
+    if route.startswith("/control-panel/mail"):
+        if "test-send" in route:
+            return "admin.mail_campaign.test_send"
+        if "launch" in route:
+            return "admin.mail_campaign.launch"
+        if "cancel" in route:
+            return "admin.mail_campaign.cancel"
+        if method in {"GET", "HEAD"}:
+            return "admin.mail_campaign.read"
+        return "admin.mail_campaign.create_or_update"
     if route.startswith("/control-panel/users"):
         return f"admin.user.{_resource_verb(method)}"
     if route.startswith("/control-panel/roles"):
@@ -110,6 +124,8 @@ def infer_audit_target(route_template: str | None, path_params: dict | None) -> 
         ("payment_id", "payment"),
         ("tariff_id", "tariff"),
         ("subscription_id", "subscription"),
+        ("campaign_id", "mail_campaign"),
+        ("message_id", "mail_message"),
         ("token_id", "wb_credential"),
         ("credential_id", "wb_credential"),
         ("job_id", "sync_job"),
@@ -175,19 +191,14 @@ async def _persist_request_audit(request: Request, status_code: int, request_id:
     actor_id, roles = _actor_context(request)
     target_type, target_id = infer_audit_target(route_template, request.path_params)
     action = str(getattr(request.state, "audit_action", "") or "").strip() or classify_audit_action(
-        request.method,
-        route_template,
-        request.url.path,
+        request.method, route_template, request.url.path
     )
     result = audit_result_for_status(status_code)
     error_code = getattr(request.state, "audit_error_code", None)
     if not error_code and result != "success":
         error_code = f"http_{status_code}"
 
-    metadata = {
-        "route": route_template or request.url.path,
-        "status_code": status_code,
-    }
+    metadata = {"route": route_template or request.url.path, "status_code": status_code}
     extra_metadata = getattr(request.state, "audit_metadata", None)
     if isinstance(extra_metadata, dict):
         metadata.update(extra_metadata)
@@ -230,14 +241,12 @@ class AuditMiddleware(BaseHTTPMiddleware):
         request_id = _request_id(request)
         request.state.request_id = request_id
         should_audit = should_audit_request(request.method, request.url.path)
-
         try:
             response = await call_next(request)
         except Exception:
             if should_audit:
                 await _persist_request_audit(request, 500, request_id)
             raise
-
         response.headers["X-Request-ID"] = request_id
         if should_audit:
             await _persist_request_audit(request, response.status_code, request_id)
