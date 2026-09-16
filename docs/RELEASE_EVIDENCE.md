@@ -27,7 +27,7 @@ Manifest не копирует содержимое artifacts и не предн
 - каждый artifact должен существовать и быть непустым;
 - `data_accuracy` должен быть JSON-отчётом schema v1 со `status=pass`, ненулевыми period/metric counts и SHA-256 входа/policy.
 
-Начиная с P40 для фактического beta/RC/stable promotion используется дополнительный флаг `--require-structured-runtime-evidence`. Он запрещает подменить ключевые runtime gates произвольными текстовыми файлами и требует machine-readable evidence для `deployment`, `core_smoke` и `account_lifecycle`.
+Начиная с P40 для фактического beta/RC/stable promotion используется дополнительный флаг `--require-structured-runtime-evidence`. Он запрещает подменить ключевые runtime gates произвольными текстовыми файлами и требует machine-readable evidence для `deployment`, `core_smoke`, `account_lifecycle` и `secrets_review`.
 
 ## Structured runtime evidence
 
@@ -49,6 +49,16 @@ Manifest не копирует содержимое artifacts и не предн
 
 Один и тот же sanitized `release-smoke.json` допустимо привязать как `core_smoke` и `account_lifecycle`: manifest всё равно фиксирует его SHA-256 отдельно для каждого kind.
 
+`secrets_review` создаётся `ops/secrets_review.py`. Scanner не сохраняет значения секретов и не копирует совпавшие строки. Он сравнивает реально настроенные secret values с:
+
+- tracked worktree;
+- всеми reachable Git blobs;
+- `frontend/dist` текущей сборки;
+- bounded systemd journal backend/Celery/Beat;
+- дополнительными log paths, если они переданы оператором.
+
+Для runtime/frontend дополнительно ищутся JWT-shaped values. Structured gate требует `status=pass`, ноль findings, совпадающие VERSION/commit/environment, выполненные Git-history и journal scans и наличие проверки обязательных production secrets (`DB_PASSWORD`, encryption/JWT/legal-evidence/WB service secrets). Условные SMTP/Sber secrets проверяются автоматически, когда реально настроены.
+
 ## Beta evidence
 
 Для `beta` обязательны все следующие artifacts:
@@ -58,7 +68,7 @@ Manifest не копирует содержимое artifacts и не предн
 - `core_smoke` — результат production-like `ops/release_smoke.py` без отключения disposable registration;
 - `account_lifecycle` — login/refresh/logout/deactivation и реальный password-recovery smoke через настроенный SMTP/provider;
 - `ux_smoke` — подтверждение основных desktop/mobile сценариев и критичных empty/loading/error states;
-- `secrets_review` — проверка отсутствия secrets/JWT/WB credentials в frontend bundle, git и логах;
+- `secrets_review` — machine-readable проверка отсутствия настроенных secrets/JWT в frontend, Git и runtime logs;
 - `data_accuracy` — green JSON-результат `ops/data_accuracy_acceptance.py` на реальном WB seller dataset.
 
 Канонический P40 пример:
@@ -78,6 +88,11 @@ python3 ops/release_smoke.py \
   --audit-smoke \
   --evidence-output /secure/evidence/release-smoke.json
 
+python3 ops/secrets_review.py \
+  --environment staging-eu-1 \
+  --env-file /secure/runtime/wb-insight.env \
+  --output /secure/evidence/secrets-review.json
+
 RELEASE_SHA="$(git rev-parse HEAD)"
 python3 ops/release_evidence.py \
   --stage beta \
@@ -89,14 +104,16 @@ python3 ops/release_evidence.py \
   --artifact core_smoke=/secure/evidence/release-smoke.json \
   --artifact account_lifecycle=/secure/evidence/release-smoke.json \
   --artifact ux_smoke=/secure/evidence/ux-smoke.txt \
-  --artifact secrets_review=/secure/evidence/secrets-review.txt \
+  --artifact secrets_review=/secure/evidence/secrets-review.json \
   --artifact data_accuracy=/secure/evidence/data-accuracy.json \
   --output /secure/evidence/release-manifest.json
 ```
 
+Путь к runtime env в примере условный: на конкретном host нужно передать фактический защищённый файл или экспортировать переменные через secret manager. `ops/secrets_review.py` не записывает их значения в evidence.
+
 Переменные `SMOKE_EMAIL`, `SMOKE_PASSWORD`, `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` и `SMOKE_MAIL_TOKEN_COMMAND` в примере предполагаются переданными через environment/secret manager и не должны попадать в evidence.
 
-Наличие файлов само по себе не заменяет реальное выполнение проверок. Manifest обеспечивает полноту набора, stage/version binding и целостность artifacts; factual provenance внешних UX/secrets/data-accuracy evidence должна сохраняться владельцем релиза.
+Наличие файлов само по себе не заменяет реальное выполнение проверок. Manifest обеспечивает полноту набора, stage/version binding и целостность artifacts; factual provenance внешних UX/data-accuracy evidence должна сохраняться владельцем релиза.
 
 ## RC evidence
 
