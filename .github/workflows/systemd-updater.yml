@@ -64,6 +64,8 @@ jobs:
           grep -F 'systemctl enable wb-backend wb-celery wb-celery-beat' ops/update_systemd.sh
           grep -F -- '-A celery_app:celery_app worker' ops/systemd/wb-celery.service.d/10-wb-insight.conf
           grep -F -- '-A celery_app:celery_app beat' ops/systemd/wb-celery-beat.service.d/10-wb-insight.conf
+          grep -F 'bootstrap_latest_updater' update.sh
+          grep -F 'exec env WB_UPDATE_REEXEC=1' update.sh
           grep -F 'bash "$PROJECT_DIR/ops/publish_frontend.sh"' update.sh
           grep -F 'nginx -T' ops/publish_frontend.sh
           grep -F 'BACKEND_UPSTREAM="${BACKEND_UPSTREAM:-127.0.0.1:9001}"' ops/publish_frontend.sh
