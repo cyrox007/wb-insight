@@ -43,7 +43,7 @@ async def login(login_data: LoginRequest, response: Response, db_session: AsyncS
     if not user.is_active:
         response.status_code = status.HTTP_403_FORBIDDEN
         return response_error(code="USER_INACTIVE", message="Аккаунт деактивирован", details={})
-    if user.email_verified_at is None:
+    if lifecycle_config.EMAIL_VERIFICATION_ENABLED and getattr(user, "email_verified_at", None) is None:
         response.status_code = status.HTTP_403_FORBIDDEN
         return response_error(
             code="EMAIL_NOT_VERIFIED",
