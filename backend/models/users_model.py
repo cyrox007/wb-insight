@@ -70,7 +70,8 @@ class User(Database.Base):
     tax_rate: Mapped[Optional[float]] = mapped_column(Float, default=0.2, nullable=True)
     timezone: Mapped[str] = mapped_column(String(50), default="Europe/Moscow", nullable=False, comment="Часовой пояс")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), nullable=False, comment="Дата регистрации")
-    email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Момент подтверждения владения email")
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Момент подтверждения владения текущим email")
+    pending_email: Mapped[Optional[str]] = mapped_column(String(254), nullable=True, comment="Новый email, ожидающий подтверждения")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="Активен ли аккаунт")
     session_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False, comment="Версия security session; increment отзывает ранее выданные JWT")
     deactivated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -91,6 +92,7 @@ class User(Database.Base):
         Index('idx_users_active_entity', 'is_active', 'entity_type'),
         Index('idx_users_legal_info', 'entity_type', 'inn', 'kpp'),
         Index('idx_users_auth', 'email', 'phone', 'is_active'),
+        Index('idx_users_pending_email', 'pending_email'),
         Index('idx_users_staff', 'is_staff', 'department'),
         Index('idx_users_staff_id', 'staff_id'),
     )
