@@ -32,18 +32,33 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _policy_metrics(policy: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], set[str]]:
+    policies = policy.get("metrics")
+    if not isinstance(policies, dict) or not policies:
+        raise AcceptanceError("policy.metrics must be a non-empty object")
+
+    normalized: dict[str, dict[str, Any]] = {}
+    required: set[str] = set()
+    for raw_metric_id, metric_policy in policies.items():
+        metric_id = str(raw_metric_id).strip()
+        if not metric_id or not isinstance(metric_policy, dict):
+            raise AcceptanceError("every policy metric must have a non-empty id and object definition")
+        normalized[metric_id] = metric_policy
+        if bool(metric_policy.get("required", True)):
+            required.add(metric_id)
+    return normalized, required
+
+
 def evaluate(data: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     dataset_id = str(data.get("dataset_id", "")).strip()
     seller_alias = str(data.get("seller_alias", "")).strip()
     periods = data.get("periods")
-    policies = policy.get("metrics")
     if not dataset_id or not seller_alias:
         raise AcceptanceError("dataset_id and seller_alias are required")
     if not isinstance(periods, list) or not periods:
         raise AcceptanceError("periods must be a non-empty list")
-    if not isinstance(policies, dict):
-        raise AcceptanceError("policy.metrics must be an object")
 
+    policies, required_metric_ids = _policy_metrics(policy)
     rows: list[dict[str, Any]] = []
     seen_periods: set[str] = set()
     for period in periods:
@@ -70,11 +85,27 @@ def evaluate(data: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
                 raise AcceptanceError(f"duplicate metric {metric_id} in {label}")
             seen_metrics.add(metric_id)
             metric_policy = policies.get(metric_id)
-            if not isinstance(metric_policy, dict):
+            if metric_policy is None:
                 raise AcceptanceError(f"metric {metric_id} is absent from policy")
             row = evaluate_metric(metric, metric_policy)
             row.update({"period": label, "start_date": start_date, "end_date": end_date})
             rows.append(row)
+
+        for metric_id in sorted(required_metric_ids - seen_metrics):
+            metric_policy = policies[metric_id]
+            rows.append(
+                {
+                    "metric": metric_id,
+                    "source": "not provided",
+                    "required": True,
+                    "status": "missing",
+                    "unit": metric_policy.get("unit"),
+                    "category": metric_policy.get("category"),
+                    "period": label,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                }
+            )
 
     counts = {status: 0 for status in ("pass", "fail", "missing", "skipped")}
     for row in rows:
@@ -88,6 +119,8 @@ def evaluate(data: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
         "policy_version": str(policy.get("policy_version", "unknown")),
         "evaluated_at": datetime.now(timezone.utc).isoformat(),
         "period_count": len(periods),
+        "required_metric_count": len(required_metric_ids),
+        "required_observation_count": len(required_metric_ids) * len(periods),
         "metric_count": len(rows),
         "counts": counts,
         "results": rows,
@@ -103,13 +136,15 @@ def markdown(report: dict[str, Any]) -> str:
         f"- Seller alias: `{report['seller_alias']}`",
         f"- Policy: `{report['policy_version']}`",
         f"- Evaluated: `{report['evaluated_at']}`",
+        f"- Required metrics per period: `{report['required_metric_count']}`",
+        f"- Missing required observations: `{report['counts']['missing']}`",
         "",
-        "| Period | Metric | Expected | Actual | Abs diff | Status | Source |",
-        "|---|---|---:|---:|---:|---|---|",
+        "| Period | Metric | Expected | Actual | Abs diff | Status | Source | Override reason |",
+        "|---|---|---:|---:|---:|---|---|---|",
     ]
     for row in report["results"]:
         lines.append(
-            "| {period} | {metric} | {expected} | {actual} | {diff} | {status} | {source} |".format(
+            "| {period} | {metric} | {expected} | {actual} | {diff} | {status} | {source} | {reason} |".format(
                 period=row["period"],
                 metric=row["metric"],
                 expected=row.get("expected", "—"),
@@ -117,6 +152,7 @@ def markdown(report: dict[str, Any]) -> str:
                 diff=row.get("absolute_diff", "—"),
                 status=row["status"],
                 source=str(row["source"]).replace("|", "/"),
+                reason=str(row.get("override_reason") or "—").replace("|", "/"),
             )
         )
     return "\n".join(lines) + "\n"

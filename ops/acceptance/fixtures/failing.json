@@ -7,8 +7,27 @@
       "start_date": "2026-08-01",
       "end_date": "2026-08-31",
       "metrics": [
+        {"metric": "ordered_amount", "source": "fixture", "expected": "14000.00", "actual": "14000.00"},
         {"metric": "ordered_units", "source": "fixture", "expected": 120, "actual": 119},
-        {"metric": "revenue", "source": "fixture", "expected": "10000.00", "actual": "9999.90"}
+        {"metric": "sales_amount", "source": "fixture", "expected": "11000.00", "actual": "11000.00"},
+        {"metric": "sales_units", "source": "fixture", "expected": 100, "actual": 100},
+        {"metric": "returns_amount", "source": "fixture", "expected": "500.00", "actual": "500.00"},
+        {"metric": "revenue", "source": "fixture", "expected": "10000.00", "actual": "9999.90"},
+        {"metric": "wb_commission", "source": "fixture", "expected": "1500.00", "actual": "1500.00"},
+        {"metric": "logistics", "source": "fixture", "expected": "700.00", "actual": "700.00"},
+        {"metric": "paid_storage", "source": "fixture", "expected": "120.00", "actual": "120.00"},
+        {"metric": "advertising_spend", "source": "fixture", "expected": "800.00", "actual": "800.00"},
+        {"metric": "cogs", "source": "fixture", "expected": "3500.00", "actual": "3500.00"},
+        {"metric": "seller_expenses", "source": "fixture", "expected": "300.00", "actual": "300.00"},
+        {"metric": "taxes", "source": "fixture", "expected": "600.00", "actual": "600.00"},
+        {"metric": "profit", "source": "fixture", "expected": "2500.00", "actual": "2500.00"},
+        {"metric": "to_pay", "source": "fixture", "expected": "7680.00", "actual": "7680.00"},
+        {"metric": "stock_units", "source": "fixture", "expected": 250, "actual": 250},
+        {"metric": "current_price", "source": "fixture", "expected": "1250.00", "actual": "1250.00"},
+        {"metric": "buyout_rate", "source": "fixture", "expected": "83.33", "actual": "83.33"},
+        {"metric": "marginality", "source": "fixture", "expected": "25.00", "actual": "25.00"},
+        {"metric": "profitability", "source": "fixture", "expected": "33.33", "actual": "33.33"},
+        {"metric": "drr", "source": "fixture", "expected": "8.00", "actual": "8.00"}
       ]
     }
   ]

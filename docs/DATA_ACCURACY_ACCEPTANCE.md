@@ -49,6 +49,23 @@ Policy хранится в `ops/acceptance/wb_v1_metric_policy.json` и вклю
 
 Policy versioned. Изменение tolerance считается изменением release-acceptance contract и должно проходить review.
 
+### Полнота обязательных метрик
+
+Для каждого acceptance-периода должны присутствовать **все метрики**, у которых в policy `required=true` или поле `required` не задано и поэтому действует значение по умолчанию `true`.
+
+Runner сам добавляет отсутствующую policy-required метрику в результат со статусом `missing`. Поэтому входной JSON не может пройти acceptance только потому, что неудобную метрику забыли включить в `metrics`.
+
+Input также не может ослабить policy и передать `"required": false` для policy-required метрики. Такой payload считается ошибкой acceptance contract и завершается кодом `2`.
+
+В JSON/Markdown отчёте фиксируются:
+
+- количество policy-required метрик на период;
+- суммарное количество обязательных наблюдений;
+- число `missing`;
+- итоговый статус каждого наблюдения.
+
+Beta data-accuracy evidence допустимо только при `missing=0` и отсутствии `fail`.
+
 ## Tolerance
 
 Для денежных величин базовая политика — абсолютный tolerance `0.02 RUB`, если конкретная метрика не требует иного правила.
@@ -59,7 +76,30 @@ Policy versioned. Изменение tolerance считается изменен
 
 Для процентных KPI baseline — `0.01` процентного пункта.
 
-Runner также поддерживает `relative`, `either` и `both` modes, но override должен быть явно записан во входном acceptance-файле. Нельзя увеличивать tolerance только ради прохождения релиза без объяснения причины и review.
+Runner поддерживает `absolute`, `relative`, `either` и `both` modes.
+
+### Override tolerance
+
+Входной acceptance-файл может изменить `tolerance_mode`, `absolute_tolerance` или `relative_tolerance_percent` относительно policy только при наличии непустого `override_reason`.
+
+Пример допустимого исключения:
+
+```json
+{
+  "metric": "revenue",
+  "source": "WB financial report",
+  "expected": "125000.42",
+  "actual": "125000.90",
+  "absolute_tolerance": "1.00",
+  "override_reason": "Approved reconciliation difference for this historical period"
+}
+```
+
+Отсутствующий `override_reason` при любом override считается ошибкой acceptance input и завершает runner кодом `2`.
+
+`override_reason` не превращает расхождение автоматически в допустимое: новое значение всё равно должно попадать в указанный tolerance. Само решение об изменении tolerance должно быть reviewable и храниться вместе с release evidence.
+
+Нельзя увеличивать tolerance только ради прохождения релиза без документированной причины и review.
 
 ## Формат входных данных
 
@@ -87,6 +127,8 @@ Runner также поддерживает `relative`, `either` и `both` modes,
 }
 ```
 
+Пример выше демонстрирует форму одной метрики, а не минимально достаточный beta dataset: реальный acceptance-период обязан содержать все policy-required метрики.
+
 Не помещайте в файл WB token, ФИО покупателя, номера телефонов, email, refresh/access JWT или merchant credentials. Для продавца используется нейтральный alias.
 
 ## Запуск
@@ -100,9 +142,9 @@ python3 ops/data_accuracy_acceptance.py \
 
 Exit codes:
 
-- `0` — все обязательные метрики находятся в tolerance;
-- `1` — есть расхождение или отсутствует обязательное значение;
-- `2` — некорректный acceptance input/policy.
+- `0` — все обязательные метрики присутствуют и находятся в tolerance;
+- `1` — есть расхождение или отсутствует обязательная policy-метрика/значение;
+- `2` — некорректный acceptance input/policy, попытка отключить required-метрику или tolerance override без `override_reason`.
 
 Output содержит SHA-256 input и policy, поэтому результат можно связать с точным набором исходных значений без копирования секретных raw reports в Git.
 
@@ -115,6 +157,8 @@ Output содержит SHA-256 input и policy, поэтому результа
 - период, где есть реклама, COGS и ручные расходы.
 
 Если функции paid storage или иные домены отсутствовали в выбранных периодах, нужен дополнительный период с реальными данными соответствующей capability.
+
+Нулевое реальное значение допустимо и должно передаваться как `0`; отсутствие метрики и фактический ноль — разные состояния.
 
 ## Работа с расхождениями
 
@@ -130,7 +174,20 @@ Output содержит SHA-256 input и policy, поэтому результа
 - причиной;
 - решением: bugfix, source correction, documented semantic difference или изменение policy.
 
+Если используется tolerance override, к записи также прикладывается `override_reason` и решение, которым исключение было одобрено.
+
 После исправления acceptance запускается заново. Для beta итоговый canonical run должен быть green; ручное изменение JSON output запрещено.
+
+## CI contract
+
+Release integrity проверяет как минимум четыре класса сценариев:
+
+1. полный fixture со всеми policy-required метриками проходит;
+2. fixture с расхождением не проходит;
+3. fixture с отсутствующими required-метриками получает `missing` и не проходит;
+4. попытка отключить required-метрику или изменить tolerance без `override_reason` блокируется как некорректный input.
+
+Это защищает beta-gate не только от арифметической ошибки, но и от неполной выборки или искусственного расширения tolerance.
 
 ## Spreadsheet reference
 
