@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
+from core.lifecycle_config import lifecycle_config
 from models.mail_delivery import CampaignStatus, MailCampaign, MailKind, MailMessage, MailStatus, MailSuppression
 from models.subscription_model import Subscription
 from models.tariffs_model import TariffPlan
@@ -87,6 +88,41 @@ async def _audience(db: AsyncSession, segment: dict) -> list[User]:
     return list(result.scalars().all())
 
 
+async def _suppressed_audience_keys(
+    db: AsyncSession,
+    users: list[User],
+) -> tuple[set[UUID], set[str]]:
+    if not users:
+        return set(), set()
+    user_ids = [user.id for user in users]
+    emails = [user.email.strip().lower() for user in users]
+    result = await db.execute(
+        select(MailSuppression.user_id, MailSuppression.email).where(
+            MailSuppression.active.is_(True),
+            or_(
+                MailSuppression.user_id.in_(user_ids),
+                MailSuppression.email.in_(emails),
+            ),
+        )
+    )
+    suppressed_user_ids: set[UUID] = set()
+    suppressed_emails: set[str] = set()
+    for user_id, email in result.all():
+        if user_id is not None:
+            suppressed_user_ids.add(user_id)
+        if email:
+            suppressed_emails.add(str(email).strip().lower())
+    return suppressed_user_ids, suppressed_emails
+
+
+def _user_is_suppressed(
+    user: User,
+    suppressed_user_ids: set[UUID],
+    suppressed_emails: set[str],
+) -> bool:
+    return user.id in suppressed_user_ids or user.email.strip().lower() in suppressed_emails
+
+
 @router.get("/campaigns")
 async def campaign_list(
     limit: int = Query(default=50, ge=1, le=200),
@@ -146,13 +182,10 @@ async def campaign_preview(campaign_id: UUID, response: Response, db_session: As
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="MAIL_CAMPAIGN_NOT_FOUND", message="Рассылка не найдена")
     users = await _audience(db_session, campaign.segment or {})
-    suppressed = 0
-    if users:
-        emails = [user.email.strip().lower() for user in users]
-        suppressed_result = await db_session.execute(
-            select(func.count(MailSuppression.id)).where(MailSuppression.active.is_(True), MailSuppression.email.in_(emails))
-        )
-        suppressed = int(suppressed_result.scalar_one() or 0)
+    suppressed_user_ids, suppressed_emails = await _suppressed_audience_keys(db_session, users)
+    suppressed = sum(
+        1 for user in users if _user_is_suppressed(user, suppressed_user_ids, suppressed_emails)
+    )
     return response_success(
         audience_count=len(users),
         deliverable_count=max(len(users) - suppressed, 0),
@@ -201,13 +234,12 @@ async def campaign_launch(campaign_id: UUID, response: Response, db_session: Asy
         return response_error(code="MAIL_CAMPAIGN_ALREADY_LAUNCHED", message="Рассылка уже была запущена")
 
     users = await _audience(db_session, campaign.segment or {})
-    suppression_rows = await db_session.execute(select(MailSuppression.email).where(MailSuppression.active.is_(True)))
-    suppressed_emails = {str(value).lower() for value in suppression_rows.scalars().all()}
+    suppressed_user_ids, suppressed_emails = await _suppressed_audience_keys(db_session, users)
     now = datetime.now(timezone.utc)
     queued = suppressed = 0
     for user in users:
         email = user.email.strip().lower()
-        is_suppressed = email in suppressed_emails
+        is_suppressed = _user_is_suppressed(user, suppressed_user_ids, suppressed_emails)
         db_session.add(
             MailMessage(
                 user_id=user.id,
@@ -217,7 +249,7 @@ async def campaign_launch(campaign_id: UUID, response: Response, db_session: Asy
                 subject=campaign.subject,
                 body=campaign.body,
                 status=MailStatus.SUPPRESSED.value if is_suppressed else MailStatus.QUEUED.value,
-                max_attempts=5,
+                max_attempts=lifecycle_config.MAIL_MAX_ATTEMPTS,
                 idempotency_key=f"campaign:{campaign.id}:{user.id}",
                 safe_error_code="suppressed" if is_suppressed else None,
             )
