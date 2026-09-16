@@ -11,11 +11,13 @@
 ## Текущее состояние
 
 - `main`: **`0.9.0-alpha.10`**, P33 слит PR #51, merge `9dacaee426937c7466ac22cedd878e11b53cc472`;
+- ветка P34 `codex/p34-beta-evidence-contract` — кандидат **`0.9.0-alpha.11`**;
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest являются постоянными release gates;
 - основной WB Web v1 feature/code baseline собран и feature scope заморожен;
 - P31 закрыл account lifecycle baseline, P32 — registration/demo и disposable beta-smoke, P33 — fail-closed production configuration;
+- P34 закрывает обнаруженный после P33 governance gap: beta manifest должен технически требовать весь фактический beta-gate, а не только три artifacts;
 - финальный P33 head `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл все четыре обязательных CI-контура;
-- следующий stage — `0.9.0-beta.1`, только после фактического production-like acceptance;
+- следующий stage после green merge P34 — `0.9.0-beta.1`, только после фактического production-like acceptance;
 - переход стадии определяется доказанными gates, а не номером P-задачи.
 
 ## Этап A — P29 / `0.9.0-alpha.6` — закрыт
@@ -103,13 +105,31 @@ P33 закрыл:
 
 Первый CI P33 поймал regression порядка recovery validation и ошибку Sber test fixture; оба дефекта исправлены до merge. Финальный exact head прошёл Backend security, Frontend build, Database migrations и Release integrity.
 
+## Этап C4 — P34 / `0.9.0-alpha.11` — кандидат
+
+Причина появления этапа — после P33 обнаружено несоответствие между фактическим beta readiness и `ops/release_evidence.py`: старый runner мог выдать `status=complete` для beta только по `ci + core_smoke + data_accuracy`, хотя дорожная карта уже требовала deployment/rollback, SMTP/account lifecycle, desktop/mobile UX и secrets review.
+
+P34 должен закрыть:
+
+- обязательный beta evidence set: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
+- наследование полного beta-набора стадией RC и RC-набора стадией stable;
+- stage/version binding: beta только для `*-beta.N`, RC для `*-rc.N`, stable без prerelease suffix;
+- полный 40-символьный Git SHA вместо произвольной строки;
+- запрет пустых и неизвестных artifacts;
+- machine-readable validation `data_accuracy.status=pass`, schema/version/hash/count invariants;
+- manifest schema v2;
+- positive/negative CI self-tests контракта;
+- синхронизацию `RELEASE_EVIDENCE.md`, `RELEASE_READINESS.md`, `VERSIONING.md` и этой дорожной карты.
+
+P34 является governance/release-hardening этапом, а не новой продуктовой функцией. Он будет считаться закрытым только после exact-head green CI и merge.
+
 ## Этап D — production-like validation → `0.9.0-beta.1`
 
 Цель: доказать работу продукта как единой системы.
 
 Обязательно:
 
-- feature freeze WB Web v1 на текущем `0.9.0-alpha.10` baseline;
+- feature freeze WB Web v1 на фактическом post-P34 baseline;
 - отсутствие известных необработанных code-side release blockers;
 - отдельный production-like HTTPS environment из репозитория с реальными non-placeholder secrets/hosts;
 - миграции на чистой БД и upgrade копии существующей БД;
@@ -121,7 +141,7 @@ P33 закрыл:
 - основные desktop/mobile сценарии и empty/loading/error states;
 - отсутствие secrets/JWT/WB credentials в frontend bundle, git и logs;
 - real-seller data-accuracy acceptance;
-- полный beta evidence manifest для exact candidate commit.
+- полный beta evidence manifest v2 для exact `*-beta.N` candidate commit со всеми обязательными artifact kinds.
 
 ### Data-accuracy gate
 
@@ -197,7 +217,7 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates и versioning. P31 lifecycle, P32 registration/beta-smoke и P33 production-config code baselines закрыты.
+Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates и versioning. P31 lifecycle, P32 registration/beta-smoke и P33 production-config code baselines закрыты; P34 evidence-contract hardening — текущий code-side candidate.
 
 Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials/refund procedure, production hosting/domain/TLS, legal approval/requisites/retention, SMTP provider, alert/logging/object-storage providers.
 
@@ -205,6 +225,6 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Каноническая последовательность
 
-`0.9.0-alpha.10` (текущий main) -> `0.9.0-beta.1` (реальная production-like + SMTP + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
+`0.9.0-alpha.10` (текущий main) -> `0.9.0-alpha.11` (P34 candidate) -> `0.9.0-beta.1` (реальная production-like + SMTP/lifecycle + UX/secrets review + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
 
 Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `ACCOUNT_LIFECYCLE.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
