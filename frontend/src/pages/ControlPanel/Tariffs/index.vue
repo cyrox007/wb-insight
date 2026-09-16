@@ -25,10 +25,14 @@ async function loadTariffs() {
 	loadError.value = ''
 	try {
 		const { data } = await CP_Tariffs.getTariffList()
-		tariffsList.value = data?.tariffs || []
+		if (data?.status !== 'success' || !Array.isArray(data?.tariffs)) {
+			throw new Error('Некорректный ответ API тарифов')
+		}
+		tariffsList.value = data.tariffs
 	} catch (error) {
 		console.error('Ошибка загрузки тарифов:', error)
-		loadError.value = 'Не удалось загрузить тарифные планы.'
+		tariffsList.value = []
+		loadError.value = 'Не удалось загрузить тарифные планы. Проверьте API панели управления.'
 	} finally {
 		isLoading.value = false
 	}

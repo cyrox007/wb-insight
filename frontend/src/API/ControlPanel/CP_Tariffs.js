@@ -2,7 +2,7 @@ import $api from "..";
 
 export default class CP_Tariffs {
     static async getTariffList() {
-		return await $api.get('/control-panel/tariffs')
+		return await $api.get('/control-panel/tariffs/')
 	}
 	static async getTariff(tariffId) {
 		return await $api.get(`/control-panel/tariffs/${tariffId}`)

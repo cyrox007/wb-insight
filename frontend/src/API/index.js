@@ -6,7 +6,11 @@ import {
     setAccessToken,
 } from '@/security/session';
 
-const apiBaseURL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '' : 'http://localhost:9000');
+// Systemd/nginx production exposes the backend under /api. Keep local Vite
+// development on the direct backend port, while still allowing an explicit
+// VITE_API_BASE_URL override for Docker/custom deployments.
+const defaultApiBaseURL = import.meta.env.PROD ? '/api' : 'http://localhost:9000';
+const apiBaseURL = (import.meta.env.VITE_API_BASE_URL || defaultApiBaseURL).replace(/\/$/, '');
 
 const $api = axios.create({
     withCredentials: true,

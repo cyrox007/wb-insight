@@ -11,6 +11,7 @@ const loadError = ref('')
 
 const isOverview = computed(() => route.name === 'control-panel.index')
 const usersActive = computed(() => ['control-panel.users', 'control-panel.edit-user'].includes(route.name))
+const rolesActive = computed(() => route.name === 'control-panel.roles')
 const tariffsActive = computed(() => ['control-panel.tariffs', 'control-panel.edit-tariff'].includes(route.name))
 
 async function loadOverview() {
@@ -18,6 +19,9 @@ async function loadOverview() {
 	loadError.value = ''
 	try {
 		const response = await CP_Main.getControlPanel()
+		if (response.data?.status !== 'success') {
+			throw new Error('Некорректный ответ API панели управления')
+		}
 		userCount.value = Number(response.data?.user_count || 0)
 	} catch (error) {
 		console.error('Ошибка загрузки панели управления:', error)
@@ -41,30 +45,26 @@ onMounted(loadOverview)
 		</header>
 
 		<nav class="cp-nav" aria-label="Разделы панели управления">
-			<router-link :to="{ name: 'control-panel.index' }" class="cp-nav__link">
-				Обзор
-			</router-link>
+			<router-link :to="{ name: 'control-panel.index' }" class="cp-nav__link">Обзор</router-link>
 			<router-link
 				:to="{ name: 'control-panel.users' }"
 				class="cp-nav__link"
 				:class="{ 'router-link-active': usersActive }"
-			>
-				Пользователи
-			</router-link>
+			>Пользователи</router-link>
+			<router-link
+				:to="{ name: 'control-panel.roles' }"
+				class="cp-nav__link"
+				:class="{ 'router-link-active': rolesActive }"
+			>Роли</router-link>
 			<router-link
 				:to="{ name: 'control-panel.tariffs' }"
 				class="cp-nav__link"
 				:class="{ 'router-link-active': tariffsActive }"
-			>
-				Тарифы
-			</router-link>
+			>Тарифы</router-link>
 		</nav>
 
 		<div v-if="isOverview" class="cp-page">
-			<div v-if="isLoading" class="cp-state" role="status">
-				Загружаем административную сводку…
-			</div>
-
+			<div v-if="isLoading" class="cp-state" role="status">Загружаем административную сводку…</div>
 			<div v-else-if="loadError" class="cp-state cp-state--error" role="alert">
 				<div class="cp-state__stack">
 					<strong>{{ loadError }}</strong>
@@ -83,9 +83,18 @@ onMounted(loadOverview)
 					<div>
 						<span class="cp-eyebrow">Аккаунты</span>
 						<h2 class="cp-shortcut-card__title">Управление пользователями</h2>
-						<p class="cp-card-note">Роли, статус, профиль и безопасность аккаунтов.</p>
+						<p class="cp-card-note">Статус, профиль и безопасность аккаунтов.</p>
 					</div>
 					<span class="cp-shortcut-card__action">Открыть пользователей →</span>
+				</router-link>
+
+				<router-link :to="{ name: 'control-panel.roles' }" class="cp-card cp-shortcut-card">
+					<div>
+						<span class="cp-eyebrow">Доступ</span>
+						<h2 class="cp-shortcut-card__title">Роли и права</h2>
+						<p class="cp-card-note">Просмотр назначений и управление системными ролями.</p>
+					</div>
+					<span class="cp-shortcut-card__action">Открыть роли →</span>
 				</router-link>
 
 				<router-link :to="{ name: 'control-panel.tariffs' }" class="cp-card cp-shortcut-card">
