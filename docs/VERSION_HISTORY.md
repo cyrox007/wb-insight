@@ -157,7 +157,8 @@ P31 не вводит автоматический hard purge и не объяв
 
 ## 0.9.0-alpha.9 — P32: registration и beta-smoke hardening
 
-**Статус:** кандидат до merge.
+**PR:** #49  
+**Merge:** `7206df554e6f98c2533160385d9ad7d27c704268`.
 
 P32 появился не как плановая функциональная фаза, а после release-smoke ревизии `alpha.8`, которая обнаружила два code-side дефекта регистрации:
 
@@ -174,15 +175,16 @@ P32 появился не как плановая функциональная �
 - добавлен privacy-safe read-only endpoint собственных consent records без IP/User-Agent HMAC;
 - release smoke автоматически выполняет disposable registration → demo → exact consent evidence → refresh → soft-deactivation → inactive login rejection;
 - disposable smoke запускается по умолчанию и может быть отключён только явным escape hatch для специализированного прогона;
+- cleanup временного аккаунта устойчив к частичному падению smoke;
 - regression suite фиксирует transaction, demo-code и consent-privacy contracts.
 
-P32 не является доказательством прохождения production-like smoke: runner только делает этот gate проверяемым и воспроизводимым.
+P32 прошёл exact-head green CI по Backend security, Frontend build, Database migrations и Release integrity перед merge. Это подтверждает code-side baseline, но не является доказательством прохождения production-like smoke в целевом окружении.
 
 ## Следующая стадия — 0.9.0-beta.1
 
 Допускается только после:
 
-- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` baseline после merge P32;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` baseline;
 - production-like HTTPS deployment из repo;
 - фактического core release smoke, включая disposable registration/demo/legal evidence;
 - реального SMTP/recovery smoke;

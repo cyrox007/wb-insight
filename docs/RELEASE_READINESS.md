@@ -4,12 +4,12 @@
 
 ## Текущий статус
 
-- `main`: **`0.9.0-alpha.8`** после P31 / PR #47, merge `6cb34aa9b4633e20d1810b6a5edd690056cde986`.
-- P32 candidate: **`0.9.0-alpha.9`** на `codex/p32-registration-beta-smoke` — исправляет найденные перед beta дефекты регистрации/demo и встраивает disposable registration evidence в core smoke.
+- `main`: **`0.9.0-alpha.9`** после P32 / PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`.
 - P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
-- P31 закрыл production-safe code baseline жизненного цикла аккаунта с полным green CI exact-head кандидата.
-- P32 не расширяет feature scope WB Web v1: это release-hardening текущего frozen baseline.
-- `0.9.0-beta.1` назначается только после merge P32 с green CI и фактического production-like, SMTP recovery и real-seller acceptance с evidence manifest.
+- P31 закрыл production-safe code baseline жизненного цикла аккаунта.
+- P32 закрыл найденные перед beta дефекты registration/demo flow и встроил disposable registration evidence в core smoke.
+- P32 exact head прошёл Backend security, Frontend build, Database migrations и Release integrity перед merge.
+- Основной WB Web v1 feature scope заморожен; следующий stage — `0.9.0-beta.1` только после фактического production-like, SMTP recovery и real-seller acceptance с evidence manifest.
 
 ## Code-side status
 
@@ -34,7 +34,7 @@
 - browser access token in-memory + refresh restore;
 - release smoke runner;
 - frontend production/full dependency audit gate;
-- backend `pip-audit` gate без известных vulnerabilities на P31 merge candidate;
+- backend `pip-audit` gate без известных vulnerabilities на P32 merge candidate;
 - versioned data-accuracy comparator и release-evidence manifest tooling;
 - password reset/recovery через email с anti-enumeration response;
 - hashed one-time reset tokens; raw secret передаётся через URL fragment, а не HTTP query;
@@ -50,28 +50,19 @@
 - allowlisted support access/payment/refund events без ручного редактирования production DB;
 - `/account/*` закреплён в production same-origin gateway smoke;
 - Alembic `c8e5f1a2b934` проходит clean upgrade и metadata check;
+- канонический demo tariff code выровнен на lowercase `demo`;
+- registration DB failures и ошибка назначения базовой роли откатывают транзакцию безопасно;
+- authenticated read-only `/legal/consents/me` не раскрывает IP/User-Agent evidence hashes;
+- полный core smoke по умолчанию включает disposable registration → demo → exact legal evidence → refresh → self-deactivation → inactive-login rejection;
 - полная структурированная документация проекта.
 
-P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy.
-
-### P32 candidate до merge
-
-- канонический demo tariff code выровнен на lowercase `demo` во всём registration flow;
-- `insert_user()` больше не скрывает DB flush failures от transaction owner;
-- registration явно rollback-ит `IntegrityError` и ошибку назначения базовой роли;
-- добавлен authenticated read-only `/legal/consents/me` без IP/User-Agent evidence hashes;
-- `ops/release_smoke.py` по умолчанию выполняет disposable registration → demo → exact consent evidence → refresh → self-deactivation → inactive-login rejection;
-- добавлены regression tests на transaction/demo/consent privacy contracts;
-- candidate version синхронизирован как `0.9.0-alpha.9`.
-
-P32 должен пройти обычные Backend security, Frontend build, Database migrations и Release integrity на exact PR head. До merge эти пункты не считаются закрытыми в `main`.
+P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy. P32 также не означает прохождение production-like acceptance: он делает соответствующие проверки воспроизводимыми.
 
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
-- merge P32 / `0.9.0-alpha.9` с полным green CI exact-head;
-- feature freeze WB Web v1 на текущем code baseline;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` code baseline;
 - production-like HTTPS deployment из репозитория;
 - миграций на чистой БД и upgrade существующей БД;
 - deploy/rollback smoke;

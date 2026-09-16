@@ -10,11 +10,12 @@
 
 ## Текущее состояние
 
-- `main`: **`0.9.0-alpha.8`**, P31 слит PR #47, merge `6cb34aa9b4633e20d1810b6a5edd690056cde986`;
-- P32 candidate: **`0.9.0-alpha.9`** закрывает найденные перед beta дефекты registration/demo flow и встраивает disposable evidence в core smoke;
+- `main`: **`0.9.0-alpha.9`**, P32 слит PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`;
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest являются постоянными release gates;
-- основной WB Web v1 feature/code baseline собран и feature scope не расширяется;
-- следующий stage после green/merge P32 — `0.9.0-beta.1`, только после фактического production-like acceptance;
+- основной WB Web v1 feature/code baseline собран и feature scope заморожен;
+- P31 закрыл account lifecycle code baseline, P32 — найденные registration/demo release blockers и disposable beta-smoke baseline;
+- P32 exact head прошёл все четыре обязательных CI-контура перед merge;
+- следующий stage — `0.9.0-beta.1`, только после фактического production-like acceptance;
 - переход стадии определяется доказанными gates, а не номером P-задачи.
 
 ## Этап A — P29 / `0.9.0-alpha.6` — закрыт
@@ -58,25 +59,27 @@ P30 сделал процесс приёмки доказуемым, но не �
 
 P31 не вводит автоматический hard purge и не подменяет утверждение legal retention/refund policy.
 
-## Этап C2 — P32 / `0.9.0-alpha.9` — registration/beta-smoke hardening
+## Этап C2 — P32 / `0.9.0-alpha.9` — закрыт
 
-Статус: candidate до merge.
+**PR:** #49  
+**Merge:** `7206df554e6f98c2533160385d9ad7d27c704268`.
 
 Причина появления этапа — release-smoke ревизия после P31 обнаружила два реальных code-side blocker:
 
 - demo subscription искала несовместимый uppercase `DEMO`, хотя канонический tariff code — lowercase `demo`;
 - `insert_user()` скрывал DB flush exception и мог оставлять request transaction в failed-state перед автоматическим commit.
 
-P32 закрывает:
+P32 закрыл:
 
 - единый lowercase `demo` contract;
 - явный rollback registration `IntegrityError` и ошибки назначения базовой роли;
 - атомарный user/role/legal-consent/demo registration flow;
 - privacy-safe authenticated read-only consent evidence endpoint;
 - встроенный disposable registration smoke по умолчанию: registration → demo → exact legal evidence → refresh → soft-deactivation → inactive login rejection;
+- best-effort cleanup временного аккаунта даже при частичном падении smoke;
 - regression tests transaction/demo/consent API contracts.
 
-Это hardening существующего feature scope, а не новая продуктовая функциональность. P32 сам по себе не доказывает, что production-like smoke фактически прошёл.
+Это hardening существующего feature scope, а не новая продуктовая функциональность. Exact P32 head прошёл Backend security, Frontend build, Database migrations и Release integrity перед merge. Фактический production-like smoke всё ещё должен быть выполнен в целевом окружении.
 
 ## Этап D — production-like validation → `0.9.0-beta.1`
 
@@ -84,8 +87,7 @@ P32 закрывает:
 
 Обязательно:
 
-- green merge P32 / `0.9.0-alpha.9`;
-- feature freeze WB Web v1;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` baseline;
 - отдельный production-like HTTPS environment из репозитория;
 - миграции на чистой БД и upgrade копии существующей БД;
 - deploy/rollback smoke без destructive downgrade;
@@ -172,7 +174,7 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates и versioning. P31 lifecycle code baseline закрыт; P32 — текущий registration/beta-smoke hardening candidate.
+Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates и versioning. P31 lifecycle и P32 registration/beta-smoke code baselines уже закрыты.
 
 Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials/refund procedure, production hosting/domain/TLS, legal approval/requisites/retention, SMTP provider, alert/logging/object-storage providers.
 
@@ -180,6 +182,6 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Каноническая последовательность
 
-`0.9.0-alpha.8` (main до merge P32) -> `0.9.0-alpha.9` (registration/beta-smoke hardening) -> `0.9.0-beta.1` (реальная production-like + SMTP + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
+`0.9.0-alpha.9` (текущий main) -> `0.9.0-beta.1` (реальная production-like + SMTP + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
 
 Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `ACCOUNT_LIFECYCLE.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
