@@ -13,7 +13,7 @@
 - Alembic upgrade/check на чистом PostgreSQL;
 - production Docker images;
 - Compose model;
-- реальный nginx container routing для `/auth`, `/dashboard`, `/billing`, `/legal`, `/control-panel`, `/health`;
+- реальный nginx container routing для `/auth`, `/dashboard`, `/billing`, `/legal`, `/account`, `/control-panel`, `/health`;
 - encrypted PostgreSQL backup/restore roundtrip;
 - consistency canonical product version;
 - acceptance-tools positive/negative contracts.
@@ -33,19 +33,32 @@ export SMOKE_PASSWORD='...'
 python3 ops/release_smoke.py
 ```
 
-Runner не должен печатать credentials/session values.
+Runner не должен печатать passwords, access/refresh tokens, marketplace credentials или raw PII test-user values.
+
+По умолчанию полный core smoke состоит из двух изолированных частей:
+
+1. disposable registration lifecycle на отдельном временном аккаунте;
+2. основной smoke через заранее подготовленного пользователя из `SMOKE_EMAIL`/`SMOKE_PASSWORD`.
 
 Core checks:
 
 1. `/health/live` и deployed version;
 2. `/health/ready`;
 3. legal registry для registration/billing/marketplace contexts;
-4. login;
-5. protected profile API;
-6. cookie-only session restore после потери in-memory access token;
-7. dashboard API contract;
-8. logout;
-9. невозможность refresh после logout.
+4. disposable registration с актуальными legal documents;
+5. активная demo subscription после регистрации;
+6. точные persisted consent `document_code/version/SHA-256` через authenticated `/legal/consents/me`;
+7. cookie-only refresh restore disposable account;
+8. soft-deactivation disposable account;
+9. невозможность refresh/login после деактивации;
+10. login основного smoke user;
+11. protected profile API;
+12. cookie-only session restore после потери in-memory access token;
+13. dashboard API contract;
+14. logout;
+15. невозможность refresh после logout.
+
+Disposable account создаётся с уникальными synthetic email/phone и после проверки soft-deactivate-ится. Он не hard-delete-ится, потому что текущая lifecycle policy намеренно сохраняет retention/audit evidence до утверждения окончательной legal policy.
 
 Только public checks:
 
@@ -53,18 +66,32 @@ Core checks:
 python3 ops/release_smoke.py --base-url https://staging.example.com --public-only
 ```
 
-Sanitized output core smoke сохраняется как evidence kind `core_smoke`.
+Для специализированного окружения disposable registration можно **явно** отключить:
 
-## 3. Disposable registration smoke
+```bash
+python3 ops/release_smoke.py --skip-disposable-registration
+```
 
-Для beta/RC в disposable staging environment:
+или `SMOKE_SKIP_DISPOSABLE_REGISTRATION=true`. Такой прогон не закрывает beta gate disposable registration/demo/legal evidence.
 
-1. получить актуальные registration legal requirements;
-2. создать уникального test user;
-3. проверить demo subscription;
-4. проверить точные document version/SHA-256/timestamp в consent evidence;
-5. продолжить session/dashboard smoke;
-6. удалить/деактивировать test account утверждённым способом.
+Sanitized output полного core smoke сохраняется как evidence kind `core_smoke`.
+
+## 3. Disposable registration smoke contract
+
+Начиная с P32 disposable flow встроен в `ops/release_smoke.py` и запускается по умолчанию для любого непубличного полного smoke.
+
+Runner обязан доказать:
+
+1. получение актуальных registration legal requirements;
+2. успешное создание уникального test user;
+3. создание активной `demo` subscription;
+4. наличие immutable consent evidence с точными текущими document version/SHA-256;
+5. cookie-only session restore;
+6. успешную self-service soft-deactivation;
+7. отсутствие действующего refresh session после деактивации;
+8. отказ повторного login с `USER_INACTIVE`.
+
+Read-only `/legal/consents/me` возвращает только consent audit fields и намеренно не возвращает privacy-sensitive `ip_hmac`/`user_agent_hmac`.
 
 ## 4. Wildberries integration smoke
 
