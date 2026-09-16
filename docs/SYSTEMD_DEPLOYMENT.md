@@ -19,6 +19,10 @@
 
 Нужно создать новый venv через `python3.12 -m venv ...`, установить зависимости и только после успешной установки переключить systemd на новый environment/путь.
 
+Также нельзя после `pip install` просто переименовывать созданный venv. Console scripts (`celery`, `alembic`, `uvicorn` и другие) содержат абсолютный shebang до Python по пути, на котором venv был создан. После `mv venv.next venv` такой launcher может существовать на диске, но systemd получит `203/EXEC` / `No such file or directory`, потому что interpreter из shebang уже не существует.
+
+Поэтому updater создаёт неизменяемый release-venv (`venv.release.<timestamp>`) и переключает стабильный путь `backend/venv` через symlink. Сам release-venv после установки не перемещается.
+
 ## Проверка текущего host
 
 ```bash
@@ -71,14 +75,15 @@ Updater:
 1. проверяет Python 3.12 и Node до изменения runtime;
 2. требует чистый `main`;
 3. выполняет `git fetch` + `ff-only` вместо неявного merge;
-4. создаёт свежий Python 3.12 venv рядом со старым;
+4. создаёт свежий Python 3.12 release-venv рядом со старым и не перемещает его после установки;
 5. полностью устанавливает backend requirements до переключения venv;
 6. применяет Alembic migration новым environment;
 7. использует `npm ci`, затем `npm run build`;
-8. только после успешных install/build переключает `backend/venv`;
-9. перезапускает API/worker/beat и reload nginx;
-10. проверяет systemd state и `/health/ready`;
-11. сохраняет предыдущий venv как `venv.previous.<timestamp>` для диагностики.
+8. только после успешных install/build атомарно переключает стабильный `backend/venv` на release-venv через symlink;
+9. проверяет реальные launchers `celery` и `alembic` до рестарта systemd;
+10. перезапускает API/worker/beat и reload nginx;
+11. проверяет systemd state и `/health/ready`;
+12. сохраняет предыдущий venv как `venv.previous.<timestamp>` для диагностики.
 
 ## Восстановление после ошибки `numpy==2.4.6` на Python 3.10
 
@@ -95,15 +100,18 @@ git rev-parse HEAD
 systemctl is-active wb-backend wb-celery wb-celery-beat
 ```
 
-После установки Python 3.12 создайте новый environment:
+После установки Python 3.12 создайте release environment по его окончательному пути:
 
 ```bash
 cd /home/projects/wb/backend
-python3.12 -m venv venv.next
-venv.next/bin/python -m pip install --upgrade pip setuptools wheel
-venv.next/bin/python -m pip install -r requirements.txt
-venv.next/bin/python -c 'import numpy,pandas; print(numpy.__version__, pandas.__version__)'
-venv.next/bin/alembic upgrade head
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+RELEASE_VENV="$PWD/venv.release.$STAMP"
+python3.12 -m venv "$RELEASE_VENV"
+"$RELEASE_VENV/bin/python" -m pip install --upgrade pip setuptools wheel
+"$RELEASE_VENV/bin/python" -m pip install -r requirements.txt
+"$RELEASE_VENV/bin/python" -c 'import numpy,pandas; print(numpy.__version__, pandas.__version__)'
+"$RELEASE_VENV/bin/alembic" upgrade head
+"$RELEASE_VENV/bin/celery" --version
 ```
 
 Frontend:
@@ -114,12 +122,20 @@ npm ci
 npm run build
 ```
 
-После успешных шагов переключите venv:
+После успешных шагов переключите стабильный `backend/venv`, не перемещая release-venv:
 
 ```bash
 cd /home/projects/wb/backend
-mv venv "venv.python310.backup.$(date +%Y%m%d-%H%M%S)"
-mv venv.next venv
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+if [ -L venv ]; then
+  old_target="$(readlink -f venv)"
+  ln -s "$old_target" "venv.previous.$STAMP"
+  rm venv
+elif [ -d venv ]; then
+  mv venv "venv.previous.$STAMP"
+fi
+ln -s "$RELEASE_VENV" venv
+venv/bin/celery --version
 ```
 
 И только затем:
