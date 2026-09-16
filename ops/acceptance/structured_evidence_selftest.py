@@ -12,9 +12,11 @@ from release_evidence import (
     CORE_SMOKE_REQUIRED_CHECKS,
     DEPLOYMENT_REQUIRED_CHECKS,
     SECRETS_REVIEW_CORE_NAMES,
+    UX_REQUIRED_CHECKS,
     validate_deployment_evidence,
     validate_release_smoke_evidence,
     validate_secrets_review_evidence,
+    validate_ux_smoke_evidence,
 )
 
 
@@ -33,6 +35,7 @@ def main() -> int:
         deployment = tmp / "deployment.json"
         smoke = tmp / "release-smoke.json"
         secrets_review = tmp / "secrets-review.json"
+        ux_smoke = tmp / "ux-smoke.json"
 
         _write(
             deployment,
@@ -95,6 +98,36 @@ def main() -> int:
                 },
             },
         )
+        _write(
+            ux_smoke,
+            {
+                "schema_version": 1,
+                "kind": "ux_smoke",
+                "status": "pass",
+                "version": VERSION,
+                "commit": COMMIT,
+                "environment": ENVIRONMENT,
+                "reviewed_at": "2026-09-16T18:30:00+00:00",
+                "reviewer_reference": "ci-human-review-fixture",
+                "required_check_count": len(UX_REQUIRED_CHECKS),
+                "passed_check_count": len(UX_REQUIRED_CHECKS),
+                "evidence": [
+                    {
+                        "scenario": scenario,
+                        "viewport": viewport,
+                        "state": state,
+                        "status": "pass",
+                        "evidence_file": f"{index:03d}.png",
+                        "evidence_size_bytes": 1024 + index,
+                        "evidence_sha256": "b" * 64,
+                        "note": None,
+                    }
+                    for index, (scenario, viewport, state) in enumerate(
+                        sorted(UX_REQUIRED_CHECKS), start=1
+                    )
+                ],
+            },
+        )
 
         validate_deployment_evidence(
             deployment,
@@ -106,6 +139,12 @@ def main() -> int:
         validate_release_smoke_evidence(smoke, version=VERSION, artifact_kind="account_lifecycle")
         validate_secrets_review_evidence(
             secrets_review,
+            version=VERSION,
+            commit=COMMIT,
+            environment=ENVIRONMENT,
+        )
+        validate_ux_smoke_evidence(
+            ux_smoke,
             version=VERSION,
             commit=COMMIT,
             environment=ENVIRONMENT,
@@ -158,6 +197,22 @@ def main() -> int:
             assert "status=pass" in str(exc) or "findings" in str(exc)
         else:
             raise AssertionError("secret leak finding unexpectedly passed")
+
+        broken_ux = json.loads(ux_smoke.read_text(encoding="utf-8"))
+        broken_ux["evidence"] = broken_ux["evidence"][:-1]
+        broken_ux["passed_check_count"] -= 1
+        _write(ux_smoke, broken_ux)
+        try:
+            validate_ux_smoke_evidence(
+                ux_smoke,
+                version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
+            )
+        except ValueError as exc:
+            assert "pass every required UX check" in str(exc) or "incomplete" in str(exc)
+        else:
+            raise AssertionError("incomplete UX evidence unexpectedly passed")
 
     print("[ok] structured runtime evidence self-test")
     return 0
