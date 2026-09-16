@@ -4,7 +4,7 @@
 
 Цель: первый публичный стабильный релиз **WB Insight Web v1 / `1.0.0` для продавцов Wildberries**.
 
-В scope `1.0.0`: регистрация и сессия, роли/admin, тарифы/demo/limits, подключение WB-кабинетов, автоматическая синхронизация, KPI/финансы/остатки/цены/реклама/unit-экономика, COGS, ручные расходы, план выручки, Сбер acquiring, production deployment, monitoring, backup/restore, versioned legal consent и безопасный account lifecycle.
+В scope `1.0.0`: регистрация и сессия, роли/admin, тарифы/demo/limits, подключение WB-кабинетов, автоматическая синхронизация, KPI/финансы/остатки/цены/реклама/unit-экономика, COGS, ручные расходы, план выручки, Сбер acquiring, production deployment, monitoring, backup/restore, versioned legal consent, безопасный account lifecycle и durable audit trail значимых действий пользователей/администраторов.
 
 Не блокируют `1.0.0`: Ozon, AI-аналитик, native mobile и WB OAuth 2.0 onboarding после Catalog readiness.
 
@@ -17,7 +17,8 @@
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest v2 являются постоянными release gates;
 - основной WB Web v1 feature/code baseline собран и feature scope заморожен;
 - P31 закрыл account lifecycle baseline, P32 — registration/demo и disposable beta-smoke, P33 — fail-closed production configuration, P34 — beta evidence-contract closure, P35 — обязательную полноту data-accuracy, P36 — безопасный systemd update;
-- следующий stage — `0.9.0-beta.1`, только после фактического production-like acceptance;
+- P37 (#72) добавлен как code-side blocker перед beta: durable/queryable audit trail значимых пользовательских и административных действий с безопасной корреляцией для incident triage;
+- следующий stage — `0.9.0-beta.1`, только после P37 и фактического production-like acceptance;
 - переход стадии определяется доказанными gates, а не номером P-задачи.
 
 ## Этап A — P29 / `0.9.0-alpha.6` — закрыт
@@ -164,6 +165,29 @@ P35 закрыл ещё один найденный обход beta data-accurac
 
 Exact P35 head `7e88182533f7d3a8baf813bcaeeb19d7442db0d3` прошёл Release integrity полностью зелёным. P35 не менял runtime приложения и остался на `0.9.0-alpha.11` baseline.
 
+## Этап C7 — P37: durable audit trail пользователей и администраторов — открыт
+
+**Issue:** #72.
+
+Цель: до выхода в production-like beta обеспечить возможность восстановить цепочку значимых действий пользователя/администратора при финансовом, доступном или системном перекосе.
+
+P37 должен закрыть:
+
+- append-only durable audit storage, а не только файловый request log;
+- явные action codes для всех state-changing бизнес-действий и security-sensitive reads;
+- actor/role snapshot, target, result, safe error code, request/correlation id, source и privacy-safe client evidence;
+- корреляцию с payment events, account lifecycle events и sync jobs;
+- строгую redaction: без passwords/reset tokens/JWT/WB tokens/payment credentials/raw provider secrets и без сохранения request body целиком;
+- audit coverage auth/session/account/profile/WB credentials/sync/COGS/expenses/plan/tariffs/roles/users/subscriptions/billing/payment-provider/support flows;
+- Control Panel → «Аудит» с фильтрами по периоду, actor, action, target, result и request id;
+- pagination и безопасную карточку события с переходами к связанным user/payment/sync/lifecycle сущностям;
+- regression tests, Alembic migration и production-like smoke representative user/admin flows;
+- retention/archive policy до stable.
+
+Обычные read-only просмотры аналитических графиков могут оставаться в access/HTTP logs: audit trail должен фиксировать семантически значимые действия и security-sensitive reads, а не создавать бесполезный шум из каждого GET.
+
+P37 является code-side blocker перед `0.9.0-beta.1`.
+
 ## Этап D — production-like validation → `0.9.0-beta.1`
 
 Цель: доказать работу продукта как единой системы.
@@ -171,6 +195,7 @@ Exact P35 head `7e88182533f7d3a8baf813bcaeeb19d7442db0d3` прошёл Release i
 Обязательно:
 
 - feature freeze WB Web v1 на текущем `0.9.0-alpha.11` baseline;
+- P37 durable audit trail закрыт и representative user/admin flows подтверждены audit smoke;
 - отсутствие известных необработанных code-side release blockers;
 - отдельный production-like HTTPS environment из репозитория с реальными non-placeholder secrets/hosts;
 - для systemd deployment фактические процессы backend/Celery/Beat работают из Python 3.12 environment, а frontend build выполняется на поддерживаемой Node-линии (`^20.19` или `>=22.12`);
@@ -224,7 +249,7 @@ Exact P35 head `7e88182533f7d3a8baf813bcaeeb19d7442db0d3` прошёл Release i
 
 ### Monitoring и incident readiness
 
-Нужно фактически подключить uptime `/health/ready`, alert destination, centralized logs/error triage и проверить доставку alert.
+Нужно фактически подключить uptime `/health/ready`, alert destination, centralized logs/error triage и проверить доставку alert. Audit trail P37 должен использоваться как один из источников incident investigation и коррелироваться с request/system logs.
 
 ### Backup/restore
 
@@ -242,7 +267,7 @@ P31 закрывает code baseline, но до RC нужны реальный S
 
 RC допускается только после этапов D–E и полного `rc` evidence manifest.
 
-Полный RC smoke включает registration/legal/demo, login/refresh/logout/recovery, account deactivation/support flow, реальный WB credential + full sync, все основные dashboards, COGS/expenses/plan, реальный Sber payment + paid activation/refund reconciliation, idempotency, monitoring, off-host backup, restore drill и deploy/rollback evidence.
+Полный RC smoke включает registration/legal/demo, login/refresh/logout/recovery, account deactivation/support flow, реальный WB credential + full sync, все основные dashboards, COGS/expenses/plan, реальный Sber payment + paid activation/refund reconciliation, idempotency, monitoring, audit trail, off-host backup, restore drill и deploy/rollback evidence.
 
 ## Этап G — `1.0.0` Stable
 
@@ -253,6 +278,7 @@ Stable выпускается из проверенного RC, а не из н�
 - нет необработанных Critical/High security issues;
 - нет необъяснённых финансовых/аналитических расхождений;
 - нет release-blocking RC дефектов;
+- audit retention/archive policy утверждена и журнал пригоден для incident triage;
 - backup актуален, rollback проверен;
 - legal documents non-draft;
 - CHANGELOG/release notes финальны;
@@ -261,7 +287,7 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates, deployment tooling и versioning. P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract, P35 data-accuracy completeness и P36 systemd deployment hotfix закрыты.
+Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates, deployment tooling и versioning. P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract, P35 data-accuracy completeness и P36 systemd deployment hotfix закрыты. P37 durable audit trail открыт и должен быть закрыт до beta.
 
 Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials/refund procedure, production hosting/domain/TLS, legal approval/requisites/retention, SMTP provider, alert/logging/object-storage providers и фактическое production-like выполнение deployment/smoke.
 
@@ -269,6 +295,6 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Каноническая последовательность
 
-`0.9.0-alpha.11` (текущий main/hardening baseline) -> `0.9.0-beta.1` (реальная production-like + SMTP/lifecycle + UX/secrets review + полная data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
+`0.9.0-alpha.11` (текущий main/hardening baseline + P37) -> `0.9.0-beta.1` (P37 + реальная production-like + SMTP/lifecycle + UX/secrets review + полная data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
 
 Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `ACCOUNT_LIFECYCLE.md`, `SYSTEMD_DEPLOYMENT.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
