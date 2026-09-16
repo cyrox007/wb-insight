@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+MODE="${1:-}"
 PROJECT_DIR="${PROJECT_DIR:-/home/projects/wb}"
 BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
@@ -78,6 +79,12 @@ check_node
 [[ -d "$PROJECT_DIR/.git" ]] || fail "Not a Git repository: $PROJECT_DIR"
 [[ -f "$BACKEND_DIR/requirements.txt" ]] || fail "Missing backend/requirements.txt"
 [[ -f "$FRONTEND_DIR/package-lock.json" ]] || fail "Missing frontend/package-lock.json"
+
+if [[ "$MODE" == "--preflight-only" ]]; then
+  ok "Systemd updater preflight passed."
+  exit 0
+fi
+[[ -z "$MODE" ]] || fail "Unknown argument: $MODE"
 
 if [[ -n "$(git -C "$PROJECT_DIR" status --porcelain)" ]]; then
   fail "Working tree is not clean. Commit/stash local changes before deployment."
