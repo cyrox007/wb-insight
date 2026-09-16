@@ -206,29 +206,30 @@ P33 закрывает найденный code-side production-config blocker, �
 
 ## 0.9.0-alpha.11 — P34: beta evidence-contract closure
 
-**Статус:** кандидат, PR/merge ещё не зафиксированы.
+**PR:** #53  
+**Merge:** `2b0ce4522adda642f6af8fa78b30e5440a7469be`.
 
 P34 появился после post-P33 сверки `RELEASE_ROADMAP.md`, `RELEASE_READINESS.md` и `ops/release_evidence.py`. Был найден governance blocker: runner мог формально выдать полный beta manifest по трём artifacts (`ci`, `core_smoke`, `data_accuracy`), хотя beta readiness уже требовал deployment/rollback, реальный SMTP/account-lifecycle smoke, desktop/mobile UX и secrets review.
 
-Кандидат P34:
+P34:
 
-- синхронизирует обязательный beta evidence set с фактическим readiness: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
-- делает RC строгим superset beta и stable — superset RC;
-- вводит manifest schema v2;
-- связывает stage с версией: beta требует `*-beta.N`, RC — `*-rc.N`, stable — версию без prerelease suffix;
+- синхронизировал обязательный beta evidence set с фактическим readiness: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
+- сделал RC строгим superset beta и stable — superset RC;
+- ввёл manifest schema v2;
+- связал stage с версией: beta требует `*-beta.N`, RC — `*-rc.N`, stable — версию без prerelease suffix;
 - требует полный 40-символьный Git SHA и непустой environment;
 - отклоняет неизвестные и пустые artifacts;
 - проверяет `data_accuracy` как schema v1 JSON со `status=pass`, ненулевыми periods/metrics и SHA-256 input/policy;
-- расширяет Release integrity positive/negative tests, включая старый неполный beta-набор, invalid SHA, alpha-version для beta, empty artifact и failing data-accuracy evidence;
-- синхронизирует `RELEASE_EVIDENCE.md`, roadmap/readiness/versioning/CHANGELOG.
+- расширил Release integrity positive/negative tests, включая старый неполный beta-набор, invalid SHA, alpha-version для beta, empty artifact и failing data-accuracy evidence;
+- синхронизировал `RELEASE_EVIDENCE.md`, roadmap/readiness/versioning/CHANGELOG.
 
-P34 не является доказательством прохождения внешней acceptance. После его green merge beta всё ещё требует реальных evidence artifacts из production-like environment.
+Финальный exact head `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity полностью зелёными. P34 не является доказательством прохождения внешней acceptance: beta всё ещё требует реальных evidence artifacts из production-like environment.
 
 ## Следующая стадия — 0.9.0-beta.1
 
 Допускается только после:
 
-- green merge P34 и feature freeze WB Web v1 на фактическом post-P34 baseline;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.11` baseline и отсутствия известных необработанных code-side blockers;
 - production-like HTTPS deployment из repo с реальными non-placeholder secrets/hosts и deploy/rollback evidence;
 - фактического core release smoke, включая disposable registration/demo/legal evidence;
 - реального SMTP/recovery и account-lifecycle smoke;
