@@ -1,6 +1,10 @@
+import hashlib
+import re
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
@@ -8,8 +12,11 @@ from core.lifecycle_config import lifecycle_config
 from core.logger import setup_logger
 from core.middleware import auth_middle
 from core.session_cookie import clear_refresh_cookie
+from models.mail_delivery import EmailVerificationToken, MailMessage, MailStatus
+from models.users_model import User
 from services.account_lifecycle_service import (
     deactivate_account,
+    record_lifecycle_event,
     request_subscription_cancellation,
     reset_password,
     withdraw_subscription_cancellation,
@@ -26,6 +33,16 @@ logger = setup_logger(__name__)
 
 lifecycle_config.validate(production=config.IS_PRODUCTION)
 
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _normalize_email(value) -> str:
+    return str(value or "").strip().lower()
+
+
+def _valid_email(value: str) -> bool:
+    return bool(value and len(value) <= 254 and _EMAIL_RE.fullmatch(value))
+
 
 @auth_router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
 async def request_password_reset(
@@ -38,8 +55,8 @@ async def request_password_reset(
         return response_error(code="PASSWORD_RECOVERY_NOT_CONFIGURED", message="Восстановление доступа временно недоступно")
 
     body = await request.json()
-    email = str(body.get("email") or "").strip().lower()
-    if not email or len(email) > 254:
+    email = _normalize_email(body.get("email"))
+    if not _valid_email(email):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code="VALIDATION_ERROR", message="Укажите корректный email")
 
@@ -86,6 +103,146 @@ async def confirm_password_reset(
         return response_error(code="RESET_TOKEN_INVALID", message="Ссылка восстановления недействительна или истекла")
     clear_refresh_cookie(response)
     return response_success(message="Пароль изменён. Войдите заново на всех устройствах")
+
+
+@account_router.post("/email/change-request", dependencies=[Depends(auth_middle)])
+async def request_email_change(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Stage a new login email and prove ownership before changing identity."""
+    request.state.audit_action = "account.email_change.request"
+    if not lifecycle_config.EMAIL_VERIFICATION_ENABLED:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return response_error(
+            code="EMAIL_VERIFICATION_NOT_CONFIGURED",
+            message="Смена email временно недоступна",
+        )
+
+    user_id = UUID(str(request.state.user["sub"]))
+    user = await get_user_by_uuid(db_session, user_id)
+    if user is None or not user.is_active:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(code="USER_NOT_FOUND", message="Пользователь не найден")
+
+    body = await request.json()
+    target = _normalize_email(body.get("email"))
+    if not _valid_email(target):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code="VALIDATION_ERROR", message="Укажите корректный email")
+    if target == _normalize_email(user.email):
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(code="EMAIL_UNCHANGED", message="Этот email уже используется вашим аккаунтом")
+
+    conflict_result = await db_session.execute(
+        select(User.id)
+        .where(User.id != user.id, func.lower(User.email) == target)
+        .limit(1)
+    )
+    if conflict_result.scalar_one_or_none() is not None:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(code="EMAIL_ALREADY_EXISTS", message="Этот email уже используется")
+
+    previous_pending = _normalize_email(getattr(user, "pending_email", None))
+    target_changed = previous_pending != target
+    if target_changed:
+        now = datetime.now(timezone.utc)
+        user.pending_email = target
+
+        # Immediately invalidate links/messages for an older staged address.
+        await db_session.execute(
+            update(EmailVerificationToken)
+            .where(
+                EmailVerificationToken.user_id == user.id,
+                EmailVerificationToken.used_at.is_(None),
+                EmailVerificationToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+        await db_session.execute(
+            update(MailMessage)
+            .where(
+                MailMessage.user_id == user.id,
+                MailMessage.template_code == "email_verification",
+                MailMessage.status.in_([MailStatus.QUEUED.value, MailStatus.FAILED.value]),
+            )
+            .values(
+                status=MailStatus.CANCELLED.value,
+                safe_error_code="verification_target_replaced",
+            )
+        )
+        await record_lifecycle_event(
+            db_session,
+            user_id=user.id,
+            actor_user_id=user.id,
+            event_type="email_change_requested",
+            event_data={"target_changed": True},
+        )
+
+    bucket = int(
+        datetime.now(timezone.utc).timestamp()
+        // lifecycle_config.EMAIL_VERIFICATION_RESEND_SECONDS
+    )
+    target_digest = hashlib.sha256(target.encode("utf-8")).hexdigest()[:16]
+    await queue_transactional_email(
+        db_session,
+        user=user,
+        template_code="email_verification",
+        recipient_email=target,
+        idempotency_key=f"email-change:{user.id}:{target_digest}:{bucket}",
+    )
+    await db_session.flush()
+
+    return response_success(
+        pending_email=target,
+        message="Письмо подтверждения отправлено на новый адрес. Текущий email действует до подтверждения.",
+    )
+
+
+@account_router.delete("/email/change-request", dependencies=[Depends(auth_middle)])
+async def cancel_email_change(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    request.state.audit_action = "account.email_change.cancel"
+    user_id = UUID(str(request.state.user["sub"]))
+    user = await get_user_by_uuid(db_session, user_id)
+    if user is None:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(code="USER_NOT_FOUND", message="Пользователь не найден")
+    if not getattr(user, "pending_email", None):
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(code="EMAIL_CHANGE_NOT_PENDING", message="Нет email, ожидающего подтверждения")
+
+    now = datetime.now(timezone.utc)
+    user.pending_email = None
+    await db_session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    await db_session.execute(
+        update(MailMessage)
+        .where(
+            MailMessage.user_id == user.id,
+            MailMessage.template_code == "email_verification",
+            MailMessage.status.in_([MailStatus.QUEUED.value, MailStatus.FAILED.value]),
+        )
+        .values(status=MailStatus.CANCELLED.value, safe_error_code="email_change_cancelled")
+    )
+    await record_lifecycle_event(
+        db_session,
+        user_id=user.id,
+        actor_user_id=user.id,
+        event_type="email_change_cancelled",
+    )
+    return response_success(message="Смена email отменена")
 
 
 @account_router.post("/deactivate", dependencies=[Depends(auth_middle)])
