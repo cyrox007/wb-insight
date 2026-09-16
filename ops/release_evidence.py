@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from ux_acceptance import REQUIRED_CHECKS as UX_REQUIRED_CHECKS
+
 
 BETA_REQUIRED = {
     "ci",
@@ -303,6 +305,72 @@ def validate_secrets_review_evidence(
         raise ValueError("secrets_review artifact has invalid journal_bytes")
 
 
+def validate_ux_smoke_evidence(
+    path: Path,
+    *,
+    version: str,
+    commit: str,
+    environment: str,
+) -> None:
+    report = load_json_object(path, artifact_kind="ux_smoke")
+    if report.get("schema_version") != 1 or report.get("kind") != "ux_smoke":
+        raise ValueError("ux_smoke artifact must use schema_version=1 and kind=ux_smoke")
+    if report.get("status") != "pass":
+        raise ValueError("ux_smoke artifact must report status=pass")
+    if report.get("version") != version:
+        raise ValueError("ux_smoke artifact version does not match release VERSION")
+    if str(report.get("commit") or "").lower() != commit.lower():
+        raise ValueError("ux_smoke artifact commit does not match release commit")
+    if report.get("environment") != environment:
+        raise ValueError("ux_smoke artifact environment does not match manifest environment")
+
+    reviewer_reference = str(report.get("reviewer_reference") or "").strip()
+    if not reviewer_reference or reviewer_reference.startswith("replace-with-"):
+        raise ValueError("ux_smoke artifact must identify the completed human review")
+    if not str(report.get("reviewed_at") or "").strip():
+        raise ValueError("ux_smoke artifact must contain reviewed_at")
+
+    if report.get("required_check_count") != len(UX_REQUIRED_CHECKS):
+        raise ValueError("ux_smoke artifact required_check_count does not match current contract")
+    if report.get("passed_check_count") != len(UX_REQUIRED_CHECKS):
+        raise ValueError("ux_smoke artifact must pass every required UX check")
+
+    evidence = report.get("evidence")
+    if not isinstance(evidence, list):
+        raise ValueError("ux_smoke artifact must contain evidence list")
+    seen: set[tuple[str, str, str]] = set()
+    for item in evidence:
+        if not isinstance(item, dict):
+            raise ValueError("ux_smoke evidence entries must be objects")
+        key = (
+            str(item.get("scenario") or "").strip(),
+            str(item.get("viewport") or "").strip(),
+            str(item.get("state") or "").strip(),
+        )
+        if key not in UX_REQUIRED_CHECKS:
+            raise ValueError(f"ux_smoke artifact contains unknown check: {'/'.join(key)}")
+        if key in seen:
+            raise ValueError(f"ux_smoke artifact contains duplicate check: {'/'.join(key)}")
+        seen.add(key)
+        if item.get("status") != "pass":
+            raise ValueError(f"ux_smoke check did not pass: {'/'.join(key)}")
+        evidence_hash = str(item.get("evidence_sha256") or "")
+        if SHA256_RE.fullmatch(evidence_hash) is None:
+            raise ValueError(f"ux_smoke check has invalid evidence SHA-256: {'/'.join(key)}")
+        size = item.get("evidence_size_bytes")
+        if not isinstance(size, int) or size <= 0:
+            raise ValueError(f"ux_smoke check has invalid evidence size: {'/'.join(key)}")
+        if not str(item.get("evidence_file") or "").strip():
+            raise ValueError(f"ux_smoke check is missing evidence filename: {'/'.join(key)}")
+
+    missing = sorted(UX_REQUIRED_CHECKS - seen)
+    if missing:
+        preview = ", ".join("/".join(item) for item in missing[:5])
+        raise ValueError(
+            f"ux_smoke artifact is incomplete ({len(missing)} missing): {preview}"
+        )
+
+
 def validate_artifact(
     kind: str,
     path: Path,
@@ -339,6 +407,13 @@ def validate_artifact(
             commit=commit,
             environment=environment,
         )
+    elif structured_runtime_evidence and kind == "ux_smoke":
+        validate_ux_smoke_evidence(
+            path,
+            version=version,
+            commit=commit,
+            environment=environment,
+        )
     return size
 
 
@@ -353,8 +428,8 @@ def main() -> int:
         "--require-structured-runtime-evidence",
         action="store_true",
         help=(
-            "Require deployment/core_smoke/account_lifecycle/secrets_review JSON evidence "
-            "bound to the exact release version, commit and HTTPS environment"
+            "Require deployment/core_smoke/account_lifecycle/ux_smoke/secrets_review JSON "
+            "evidence bound to the exact release version, commit and environment"
         ),
     )
     parser.add_argument("--output", type=Path)
