@@ -6,12 +6,14 @@ on:
       - VERSION
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
+      - ops/database_upgrade_acceptance.py
       - ops/secrets_review.py
       - ops/ux_acceptance.py
       - ops/ci_acceptance.py
       - ops/release_candidate_evidence.py
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
+      - ops/acceptance/release_candidate_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - .github/workflows/release-smoke-contract.yml
@@ -21,12 +23,14 @@ on:
       - VERSION
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
+      - ops/database_upgrade_acceptance.py
       - ops/secrets_review.py
       - ops/ux_acceptance.py
       - ops/ci_acceptance.py
       - ops/release_candidate_evidence.py
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
+      - ops/acceptance/release_candidate_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - .github/workflows/release-smoke-contract.yml
@@ -43,16 +47,20 @@ jobs:
           python3 -m py_compile \
             ops/release_smoke.py \
             ops/systemd_acceptance.py \
+            ops/database_upgrade_acceptance.py \
             ops/secrets_review.py \
             ops/ux_acceptance.py \
             ops/ci_acceptance.py \
             ops/release_candidate_evidence.py \
             ops/release_evidence.py \
-            ops/acceptance/structured_evidence_selftest.py
+            ops/acceptance/structured_evidence_selftest.py \
+            ops/acceptance/release_candidate_selftest.py
           python3 ops/release_smoke.py --help >/dev/null
           python3 ops/release_smoke.py --self-test
           python3 ops/systemd_acceptance.py --help >/dev/null
           python3 ops/systemd_acceptance.py --self-test
+          python3 ops/database_upgrade_acceptance.py --help >/dev/null
+          python3 ops/database_upgrade_acceptance.py --self-test
           python3 ops/secrets_review.py --help >/dev/null
           python3 ops/secrets_review.py --self-test
           python3 ops/ux_acceptance.py --help >/dev/null
@@ -62,3 +70,4 @@ jobs:
           python3 ops/release_candidate_evidence.py --help >/dev/null
           python3 ops/release_evidence.py --help >/dev/null
           PYTHONPATH=ops python3 ops/acceptance/structured_evidence_selftest.py
+          PYTHONPATH=ops python3 ops/acceptance/release_candidate_selftest.py

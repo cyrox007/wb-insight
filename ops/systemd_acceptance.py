@@ -28,6 +28,13 @@ class AcceptanceError(RuntimeError):
 ASSET_RE = re.compile(r"(?:src|href)=[\"'](?P<path>/assets/[^\"']+)[\"']")
 REVISION_RE = re.compile(r"\b[0-9a-f]{8,40}\b", re.IGNORECASE)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+DB_UPGRADE_REQUIRED_CHECKS = {
+    "backup_integrity",
+    "isolated_restore",
+    "alembic_upgrade",
+    "alembic_current_head",
+    "alembic_metadata_clean",
+}
 
 
 def _run(argv: list[str], *, cwd: Path | None = None, timeout: int = 30) -> str:
@@ -43,8 +50,6 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout: int = 30) -> str:
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise AcceptanceError(f"command failed to start: {argv[0]}") from exc
     if completed.returncode != 0:
-        # Do not surface stdout/stderr: systemd and application commands can expose
-        # operational details. The command name is enough to locate diagnostics.
         raise AcceptanceError(f"command failed: {argv[0]}")
     return completed.stdout.strip()
 
@@ -80,9 +85,9 @@ def _safe_public_origin(value: str) -> str:
 def _json_get(url: str, *, timeout: int = 20) -> dict[str, Any]:
     request = Request(url, headers={"Accept": "application/json", "User-Agent": "wb-insight-acceptance/1"})
     try:
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL is operator supplied and validated where public.
+        with urlopen(request, timeout=timeout) as response:  # noqa: S310
             raw = response.read()
-    except Exception as exc:  # urllib exposes several transport-specific exception types.
+    except Exception as exc:
         raise AcceptanceError("HTTP acceptance endpoint unavailable") from exc
     try:
         payload = json.loads(raw.decode("utf-8"))
@@ -116,6 +121,42 @@ def _alembic_revisions(output: str) -> set[str]:
     return {value.lower() for value in REVISION_RE.findall(output)}
 
 
+def _validate_db_upgrade_proof(
+    path: Path,
+    *,
+    version: str,
+    commit: str,
+    environment: str,
+) -> None:
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise AcceptanceError("database upgrade proof is missing or empty")
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise AcceptanceError("database upgrade proof is not valid UTF-8 JSON") from exc
+    if not isinstance(report, dict):
+        raise AcceptanceError("database upgrade proof must contain a JSON object")
+    if report.get("schema_version") != 1 or report.get("kind") != "database_upgrade":
+        raise AcceptanceError("database upgrade proof has an invalid schema")
+    if report.get("status") != "pass":
+        raise AcceptanceError("database upgrade proof did not pass")
+    if report.get("version") != version:
+        raise AcceptanceError("database upgrade proof VERSION does not match deployment")
+    if str(report.get("commit") or "").lower() != commit.lower():
+        raise AcceptanceError("database upgrade proof commit does not match deployment")
+    if report.get("environment") != environment:
+        raise AcceptanceError("database upgrade proof environment does not match deployment")
+    checks = report.get("checks")
+    if not isinstance(checks, list) or not DB_UPGRADE_REQUIRED_CHECKS.issubset(set(checks)):
+        raise AcceptanceError("database upgrade proof is missing required checks")
+    source_hash = str(report.get("source_backup_sha256") or "")
+    if SHA256_RE.fullmatch(source_hash) is None:
+        raise AcceptanceError("database upgrade proof is missing source backup SHA-256")
+    target_revisions = report.get("target_revisions")
+    if not isinstance(target_revisions, list) or not target_revisions:
+        raise AcceptanceError("database upgrade proof is missing target revisions")
+
+
 def _write_report(path: Path, report: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -142,6 +183,8 @@ def main() -> int:
     parser.add_argument("--health-url", default=os.getenv("HEALTH_URL", "http://127.0.0.1:9001/health/ready"))
     parser.add_argument("--rollback-proof", type=Path, default=Path(os.environ["ROLLBACK_PROOF"]) if os.getenv("ROLLBACK_PROOF") else None)
     parser.add_argument("--require-rollback-proof", action="store_true", default=os.getenv("REQUIRE_ROLLBACK_PROOF", "").lower() in {"1", "true", "yes", "on"})
+    parser.add_argument("--database-upgrade-proof", type=Path, default=Path(os.environ["DATABASE_UPGRADE_PROOF"]) if os.getenv("DATABASE_UPGRADE_PROOF") else None)
+    parser.add_argument("--require-database-upgrade-proof", action="store_true", default=os.getenv("REQUIRE_DATABASE_UPGRADE_PROOF", "").lower() in {"1", "true", "yes", "on"})
     parser.add_argument("--output", type=Path)
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -156,6 +199,7 @@ def main() -> int:
     if args.output is None:
         raise AcceptanceError("--output is required")
 
+    environment = args.environment.strip()
     project = args.project_dir.resolve()
     backend = project / "backend"
     frontend = project / "frontend"
@@ -166,7 +210,7 @@ def main() -> int:
         "schema_version": 1,
         "kind": "deployment",
         "status": "fail",
-        "environment": args.environment.strip(),
+        "environment": environment,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "checks": checks,
     }
@@ -229,6 +273,20 @@ def main() -> int:
             raise AcceptanceError("database Alembic revision does not match repository head")
         checks.append("alembic_at_head")
 
+        database_upgrade_sha = None
+        if args.database_upgrade_proof is not None:
+            proof = args.database_upgrade_proof.resolve()
+            _validate_db_upgrade_proof(
+                proof,
+                version=version,
+                commit=commit,
+                environment=environment,
+            )
+            database_upgrade_sha = _sha256(proof)
+            checks.append("database_upgrade_proof_bound")
+        elif args.require_database_upgrade_proof:
+            raise AcceptanceError("isolated existing-database upgrade proof is required")
+
         _run(["nginx", "-t"])
         checks.append("nginx_config_valid")
 
@@ -274,6 +332,7 @@ def main() -> int:
                     "venv_release": venv_target.name,
                     "alembic_revisions": sorted(current_revisions),
                 },
+                "database_upgrade_proof_sha256": database_upgrade_sha,
                 "rollback_proof_sha256": rollback_sha,
             }
         )

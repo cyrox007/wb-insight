@@ -5,6 +5,7 @@ on:
     paths:
       - 'VERSION'
       - 'backend/**'
+      - 'ops/database_upgrade_acceptance.py'
       - '.github/workflows/database-migrations.yml'
   push:
     branches:
@@ -14,6 +15,7 @@ on:
     paths:
       - 'VERSION'
       - 'backend/**'
+      - 'ops/database_upgrade_acceptance.py'
       - '.github/workflows/database-migrations.yml'
 
 jobs:
@@ -71,3 +73,47 @@ jobs:
 
       - name: Verify database matches SQLAlchemy metadata
         run: alembic check
+
+      - name: Exercise isolated existing-database upgrade acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client >/dev/null
+
+          work=/tmp/wb-db-upgrade-ci
+          rm -rf "$work"
+          mkdir -p "$work"
+          printf '%s\n' 'ci-backup-passphrase-only' > "$work/passphrase"
+          chmod 600 "$work/passphrase"
+
+          export PGPASSWORD="$DB_PASSWORD"
+          pg_dump \
+            --format=custom \
+            --no-owner \
+            --host="$DB_HOST" \
+            --port="$DB_PORT" \
+            --username="$DB_USER" \
+            --dbname="$DB_NAME" \
+            --file="$work/source.dump"
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
+            -pass "file:$work/passphrase" \
+            -in "$work/source.dump" \
+            -out "$work/source.dump.enc"
+          rm -f "$work/source.dump"
+          (
+            cd "$work"
+            sha256sum source.dump.enc > source.dump.enc.sha256
+          )
+
+          mkdir -p venv/bin
+          ln -sf "$(command -v python)" venv/bin/python
+          python ../ops/database_upgrade_acceptance.py \
+            --project-dir .. \
+            --environment ci-db-upgrade \
+            --backup "$work/source.dump.enc" \
+            --passphrase-file "$work/passphrase" \
+            --output "$work/report.json"
+          grep -F '"status": "pass"' "$work/report.json"
+          grep -F '"alembic_metadata_clean"' "$work/report.json"
+          grep -F '"isolated_restore"' "$work/report.json"
