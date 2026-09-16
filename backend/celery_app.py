@@ -49,5 +49,6 @@ celery_app.conf.beat_schedule = {
     "wb-global-sync-scheduler-2": {"task": "tasks.schedulers.create_state_scheduler.schedule_sync", "schedule": 600.0},
     "wb-job-worker": {"task": "tasks.processors.job_processor.run", "schedule": 300.0},
     "operations-monitor": {"task": "tasks.processors.operations_monitor.run", "schedule": float(ops_config.ALERT_CHECK_INTERVAL_SECONDS)},
+    "mail-campaign-scheduler": {"task": "mail.campaign.scan", "schedule": 30.0},
     "mail-delivery": {"task": "mail.delivery.scan", "schedule": 15.0},
 }
