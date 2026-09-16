@@ -4,7 +4,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from models.mail_delivery import EmailVerificationToken, MailStatus
+from integrations.mail.provider import MailDeliveryReceipt, MailProviderRegistry
+from models.mail_delivery import EmailVerificationToken, MailKind, MailStatus
 from services import email_verification_service as verification
 from services import mail_service
 
@@ -262,6 +263,33 @@ async def test_verification_mail_mints_token_for_exact_queue_recipient(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_campaign_message_is_suppressed_if_account_email_changed():
+    now = datetime.now(timezone.utc)
+    message = SimpleNamespace(
+        status=MailStatus.QUEUED.value,
+        next_attempt_at=now - timedelta(seconds=1),
+        kind=MailKind.CAMPAIGN.value,
+        user_id=USER_ID,
+        recipient_email="old@example.com",
+        safe_error_code=None,
+        last_attempt_at=None,
+    )
+    user = SimpleNamespace(
+        id=USER_ID,
+        email="new@example.com",
+        is_active=True,
+        email_verified_at=now - timedelta(days=1),
+    )
+    session = _FakeSession([_Result(message), _Result(user)])
+
+    result = await mail_service.deliver_message(session, uuid4())
+
+    assert result == MailStatus.SUPPRESSED.value
+    assert message.status == MailStatus.SUPPRESSED.value
+    assert message.safe_error_code == "campaign_target_stale"
+
+
+@pytest.mark.asyncio
 async def test_permanent_mail_failure_is_not_retried():
     message = SimpleNamespace(
         status=MailStatus.QUEUED.value,
@@ -284,3 +312,20 @@ async def test_permanent_mail_failure_is_not_retried():
     assert message.status == MailStatus.FAILED.value
     assert message.attempt_count == message.max_attempts
     assert message.safe_error_code == "email_verification_target_stale"
+
+
+def test_mail_provider_registry_is_provider_neutral():
+    class FakeProvider:
+        code = "fake"
+
+        async def send(self, **_kwargs):
+            return MailDeliveryReceipt(provider_message_id="provider-42")
+
+    registry = MailProviderRegistry()
+    provider = FakeProvider()
+    registry.register(provider)
+
+    assert registry.get("FAKE") is provider
+    assert registry.codes == ("fake",)
+    with pytest.raises(RuntimeError, match="mail_provider_not_registered"):
+        registry.get("missing")
