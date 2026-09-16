@@ -1,6 +1,7 @@
 """Модуль аутентификации и регистрации пользователей."""
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
@@ -161,7 +162,17 @@ async def registration(
         for key, value in reg_data.items()
         if key not in {"legal_consents", "agree_terms", "agree_privacy", "agree_data_processing"}
     }
-    user = await insert_user(db_session, user_data)
+
+    try:
+        user = await insert_user(db_session, user_data)
+    except IntegrityError:
+        await db_session.rollback()
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="REGISTRATION_CONFLICT",
+            message="Email, телефон или другие уникальные данные уже используются",
+        )
+
     if not user:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -169,7 +180,14 @@ async def registration(
             message="Ошибка при регистрации",
         )
 
-    await create_user_role_association(db_session, str(user.id), "user")
+    role_created = await create_user_role_association(db_session, str(user.id), "user")
+    if not role_created:
+        await db_session.rollback()
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return response_error(
+            code="INTERNAL_SERVER_ERROR",
+            message="Ошибка при регистрации",
+        )
 
     await record_consents(
         db_session,

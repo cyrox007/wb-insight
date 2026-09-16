@@ -4,6 +4,24 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
+## [0.9.0-alpha.9] — 2026-09-16
+
+P32 — надёжная регистрация и автоматизированный disposable beta-smoke. Кандидат до merge.
+
+- исправлен реальный demo-onboarding bug: `TariffPlan.code` канонически использует lowercase `demo`, а `create_demo_subscription()` больше не ищет несовместимый `DEMO`;
+- `insert_user()` больше не проглатывает ошибку `flush()`: DB failure передаётся владельцу request-транзакции и не оставляет `AsyncSession` в скрытом failed-state;
+- registration handler явно откатывает `IntegrityError` и возвращает стабильный `409 REGISTRATION_CONFLICT` без утечки деталей БД;
+- ошибка создания базовой роли `user` теперь откатывает регистрацию целиком, вместо частично созданного аккаунта;
+- регистрация пользователя, роль, immutable legal consent evidence и demo subscription остаются единым транзакционным сценарием;
+- добавлен authenticated read-only `GET /legal/consents/me`, возвращающий только пользовательскую consent-аудит информацию без `ip_hmac`/`user_agent_hmac`;
+- `ops/release_smoke.py` по умолчанию создаёт disposable user, принимает актуальные registration documents, проверяет активную demo subscription и точные сохранённые document version/SHA-256;
+- disposable smoke дополнительно доказывает cookie-only refresh restore, soft-deactivation, отсутствие refresh после деактивации и запрет повторного login для inactive account;
+- disposable account использует отдельный HTTP client и автоматически деактивируется после проверки; credentials/session values не печатаются;
+- добавлены regression tests на propagation DB failure, rollback duplicate/role failure, lowercase demo lookup и privacy-safe consent API;
+- `--skip-disposable-registration`/`SMOKE_SKIP_DISPOSABLE_REGISTRATION` оставлены только как явный escape hatch для специализированных прогонов.
+
+P32 усиливает code-side beta acceptance baseline, но **не означает прохождение beta-gates**: production-like HTTPS deployment, реальный SMTP recovery smoke, WB seller data-accuracy acceptance и полный beta evidence manifest по-прежнему должны быть выполнены фактически.
+
 ## [0.9.0-alpha.8] — 2026-09-15
 
 P31 — безопасный жизненный цикл аккаунта и support-процедуры перед beta. PR #47, merge `6cb34aa9b4633e20d1810b6a5edd690056cde986`.

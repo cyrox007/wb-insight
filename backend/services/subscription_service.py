@@ -10,6 +10,9 @@ from models.subscription_model import Subscription, SubscriptionStatus
 from models.tariffs_model import TariffPlan
 
 
+DEMO_TARIFF_CODE = "demo"
+
+
 async def create_subscription(
     session: AsyncSession,
     user_id: UUID,
@@ -37,7 +40,7 @@ async def create_demo_subscription(
     user_id: UUID,
 ) -> Subscription:
     result = await db.execute(
-        select(TariffPlan).where(TariffPlan.code == "DEMO")
+        select(TariffPlan).where(TariffPlan.code == DEMO_TARIFF_CODE)
     )
     demo_tariff = result.scalar_one()
     now = datetime.now(timezone.utc)

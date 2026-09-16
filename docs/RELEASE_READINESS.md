@@ -1,14 +1,15 @@
 # WB Insight — Release Readiness
 
-Дата ревизии: 15 сентября 2026 года.
+Дата ревизии: 16 сентября 2026 года.
 
 ## Текущий статус
 
 - `main`: **`0.9.0-alpha.8`** после P31 / PR #47, merge `6cb34aa9b4633e20d1810b6a5edd690056cde986`.
+- P32 candidate: **`0.9.0-alpha.9`** на `codex/p32-registration-beta-smoke` — исправляет найденные перед beta дефекты регистрации/demo и встраивает disposable registration evidence в core smoke.
 - P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
 - P31 закрыл production-safe code baseline жизненного цикла аккаунта с полным green CI exact-head кандидата.
-- Основной WB Web v1 feature baseline собран; следующий stage — не очередная alpha по номеру задачи, а beta только после фактического acceptance.
-- `0.9.0-beta.1` назначается только после production-like, SMTP recovery и real-seller acceptance с evidence manifest.
+- P32 не расширяет feature scope WB Web v1: это release-hardening текущего frozen baseline.
+- `0.9.0-beta.1` назначается только после merge P32 с green CI и фактического production-like, SMTP recovery и real-seller acceptance с evidence manifest.
 
 ## Code-side status
 
@@ -53,16 +54,29 @@
 
 P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy.
 
+### P32 candidate до merge
+
+- канонический demo tariff code выровнен на lowercase `demo` во всём registration flow;
+- `insert_user()` больше не скрывает DB flush failures от transaction owner;
+- registration явно rollback-ит `IntegrityError` и ошибку назначения базовой роли;
+- добавлен authenticated read-only `/legal/consents/me` без IP/User-Agent evidence hashes;
+- `ops/release_smoke.py` по умолчанию выполняет disposable registration → demo → exact consent evidence → refresh → self-deactivation → inactive-login rejection;
+- добавлены regression tests на transaction/demo/consent privacy contracts;
+- candidate version синхронизирован как `0.9.0-alpha.9`.
+
+P32 должен пройти обычные Backend security, Frontend build, Database migrations и Release integrity на exact PR head. До merge эти пункты не считаются закрытыми в `main`.
+
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
+- merge P32 / `0.9.0-alpha.9` с полным green CI exact-head;
 - feature freeze WB Web v1 на текущем code baseline;
 - production-like HTTPS deployment из репозитория;
 - миграций на чистой БД и upgrade существующей БД;
 - deploy/rollback smoke;
-- core `ops/release_smoke.py`;
-- disposable registration + demo subscription + legal evidence;
+- фактического core `ops/release_smoke.py` без `--skip-disposable-registration`;
+- disposable registration + demo subscription + exact persisted legal evidence;
 - login/refresh-cookie restore/logout и lifecycle smoke;
 - реального password-recovery smoke через настроенный SMTP/provider;
 - основных desktop/mobile UX сценариев;
