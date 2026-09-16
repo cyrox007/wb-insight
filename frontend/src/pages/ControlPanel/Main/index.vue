@@ -14,6 +14,7 @@ const usersActive = computed(() => ['control-panel.users', 'control-panel.edit-u
 const rolesActive = computed(() => route.name === 'control-panel.roles')
 const tariffsActive = computed(() => ['control-panel.tariffs', 'control-panel.edit-tariff'].includes(route.name))
 const paymentsActive = computed(() => route.name === 'control-panel.payments')
+const auditActive = computed(() => route.name === 'control-panel.audit')
 
 async function loadOverview() {
 	isLoading.value = true
@@ -41,7 +42,7 @@ onMounted(loadOverview)
 			<div>
 				<p class="cp-eyebrow">WB Insight · управление</p>
 				<h1 class="cp-title">Панель управления</h1>
-				<p class="cp-subtitle">Пользователи, роли, тарифы, платежи и системные настройки в едином административном интерфейсе.</p>
+				<p class="cp-subtitle">Пользователи, роли, тарифы, платежи, аудит и системные настройки в едином административном интерфейсе.</p>
 			</div>
 		</header>
 
@@ -51,6 +52,7 @@ onMounted(loadOverview)
 			<router-link :to="{ name: 'control-panel.roles' }" class="cp-nav__link" :class="{ 'router-link-active': rolesActive }">Роли</router-link>
 			<router-link :to="{ name: 'control-panel.tariffs' }" class="cp-nav__link" :class="{ 'router-link-active': tariffsActive }">Тарифы</router-link>
 			<router-link :to="{ name: 'control-panel.payments' }" class="cp-nav__link" :class="{ 'router-link-active': paymentsActive }">Платежи</router-link>
+			<router-link :to="{ name: 'control-panel.audit' }" class="cp-nav__link" :class="{ 'router-link-active': auditActive }">Аудит</router-link>
 		</nav>
 
 		<div v-if="isOverview" class="cp-page">
@@ -87,6 +89,11 @@ onMounted(loadOverview)
 				<router-link :to="{ name: 'control-panel.payments' }" class="cp-card cp-shortcut-card">
 					<div><span class="cp-eyebrow">Платежи</span><h2 class="cp-shortcut-card__title">Платёжные системы</h2><p class="cp-card-note">Test/live режимы, credentials и журнал оплат тарифов.</p></div>
 					<span class="cp-shortcut-card__action">Открыть платежи →</span>
+				</router-link>
+
+				<router-link :to="{ name: 'control-panel.audit' }" class="cp-card cp-shortcut-card">
+					<div><span class="cp-eyebrow">Инциденты</span><h2 class="cp-shortcut-card__title">Аудит действий</h2><p class="cp-card-note">Кто, когда и что изменил — с результатом и request-корреляцией.</p></div>
+					<span class="cp-shortcut-card__action">Открыть аудит →</span>
 				</router-link>
 			</div>
 		</div>
