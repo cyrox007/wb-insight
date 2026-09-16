@@ -19,107 +19,70 @@ const router = createRouter({
 			path: '/legal/:code',
 			name: 'legal.document',
 			component: () => import('../pages/Legal/DocumentPage.vue'),
-			meta: {
-				title: 'Юридический документ · WB Insight',
-			}
+			meta: { title: 'Юридический документ · WB Insight' }
 		},
-		{
-			path: '/terms',
-			redirect: '/legal/terms',
-		},
-		{
-			path: '/privacy',
-			redirect: '/legal/privacy',
-		},
+		{ path: '/terms', redirect: '/legal/terms' },
+		{ path: '/privacy', redirect: '/legal/privacy' },
 		{
 			path: '/reset-password',
 			name: 'auth.reset-password',
 			component: () => import('../pages/Auth/ResetPassword.vue'),
-			meta: {
-				title: 'Восстановление доступа · WB Insight',
-			}
+			meta: { title: 'Восстановление доступа · WB Insight' }
 		},
 		{
 			path: '/dashboard',
 			name: 'dashboard.home',
 			component: () => import('../pages/Dashboard/Main/index.vue'),
-			meta: {
-				title: 'Обзор · WB Insight',
-				requestAuth: true,
-			},
+			meta: { title: 'Обзор · WB Insight', requestAuth: true },
 			children: [],
 		},
 		{
 			path: '/dashboard/profile',
 			name: 'dashboard.profile',
 			component: () => import('../pages/Dashboard/Profile/index.vue'),
-			meta: {
-				title: 'Настройки продавца · WB Insight',
-				requestAuth: true,
-			}
+			meta: { title: 'Настройки продавца · WB Insight', requestAuth: true }
 		},
 		{
 			path: '/dashboard/account-security',
 			name: 'dashboard.account-security',
 			component: () => import('../pages/Dashboard/AccountSecurity.vue'),
-			meta: {
-				title: 'Безопасность аккаунта · WB Insight',
-				requestAuth: true,
-			}
+			meta: { title: 'Безопасность аккаунта · WB Insight', requestAuth: true }
 		},
 		{
 			path: '/dashboard/unity',
 			name: 'dashboard.unity',
 			component: () => import('../pages/Dashboard/UnityEconomy/index.vue'),
-			meta: {
-				title: 'Юнит-экономика · WB Insight',
-				requestAuth: true,
-			}
+			meta: { title: 'Юнит-экономика · WB Insight', requestAuth: true }
 		},
 		{
 			path: '/dashboard/finance',
 			name: 'dashboard.finance',
 			component: () => import('../pages/Dashboard/Finance/index.vue'),
-			meta: {
-				title: 'Финансы и выплаты · WB Insight',
-				requestAuth: true,
-			}
+			meta: { title: 'Финансы и выплаты · WB Insight', requestAuth: true }
 		},
 		{
 			path: '/dashboard/stocks',
 			name: 'dashboard.stocks',
 			component: () => import('../pages/Dashboard/Inventory/index.vue'),
-			meta: {
-				title: 'Остатки · WB Insight',
-				requestAuth: true,
-			}
+			meta: { title: 'Остатки · WB Insight', requestAuth: true }
 		},
 		{
 			path: '/dashboard/prices',
 			name: 'dashboard.prices',
 			component: () => import('../pages/Dashboard/Prices/index.vue'),
-			meta: {
-				title: 'Цены и скидки · WB Insight',
-				requestAuth: true,
-			}
+			meta: { title: 'Цены и скидки · WB Insight', requestAuth: true }
 		},
 		{
 			path: '/dashboard/ads',
 			name: 'dashboard.ads',
 			component: () => import('../pages/Dashboard/Ads/AdsPage.vue'),
-			meta: {
-				title: 'Реклама · WB Insight',
-				requestAuth: true,
-			}
+			meta: { title: 'Реклама · WB Insight', requestAuth: true }
 		},
 		{
 			path: '/billing/success',
 			name: 'billing.success',
 			component: () => import('../pages/Billing/Success/index.vue'),
-			meta: {
-				title: 'Успешная оплата',
-				requestAuth: true,
-			}
+			meta: { title: 'Успешная оплата', requestAuth: true }
 		},
 		{
 			path: '/control-panel',
@@ -135,37 +98,31 @@ const router = createRouter({
 					path: 'users',
 					name: 'control-panel.users',
 					component: () => import('../pages/ControlPanel/Users/index.vue'),
-					meta: {
-						title: 'Пользователи',
-						requestAuth: true,
-					}
+					meta: { title: 'Пользователи', requestAuth: true }
 				},
 				{
 					path: 'edit-user/:id',
 					name: 'control-panel.edit-user',
 					component: () => import('../pages/ControlPanel/Users/edit.vue'),
-					meta: {
-						title: 'Редактировать пользователя',
-						requestAuth: true,
-					}
+					meta: { title: 'Редактировать пользователя', requestAuth: true }
+				},
+				{
+					path: 'roles',
+					name: 'control-panel.roles',
+					component: () => import('../pages/ControlPanel/Roles/index.vue'),
+					meta: { title: 'Роли и права', requestAuth: true }
 				},
 				{
 					path: 'tariffs',
 					name: 'control-panel.tariffs',
 					component: () => import('../pages/ControlPanel/Tariffs/index.vue'),
-					meta: {
-						title: 'Тарифы',
-						requestAuth: true,
-					}
+					meta: { title: 'Тарифы', requestAuth: true }
 				},
 				{
 					path: 'tariffs/:id/edit-tariff',
 					name: 'control-panel.edit-tariff',
 					component: () => import('../pages/ControlPanel/Tariffs/edit.vue'),
-					meta: {
-						title: 'Редактировать тариф',
-						requestAuth: true,
-					}
+					meta: { title: 'Редактировать тариф', requestAuth: true }
 				}
 			]
 		},
@@ -173,9 +130,7 @@ const router = createRouter({
 			path: '/:pathMatch(.*)*',
 			name: 'not-found',
 			component: () => import('../pages/NotFoundPage/index.vue'),
-			meta: {
-				title: 'Страница не найдена',
-			}
+			meta: { title: 'Страница не найдена' }
 		}
 	],
 })
@@ -187,17 +142,13 @@ const isAdmin = (user) => {
 }
 
 router.beforeEach((to, from, next) => {
-	if (to.meta.title) {
-		document.title = to.meta.title
-	}
+	if (to.meta.title) document.title = to.meta.title
 
 	const authStore = useAuthStore(pinia)
 	const user = authStore.isAuthenticated ? authStore.user : null
 
 	if (to.meta.requestAuth && !user) {
-		if (to.path !== '/') {
-			localStorage.setItem('redirectPath', to.fullPath)
-		}
+		if (to.path !== '/') localStorage.setItem('redirectPath', to.fullPath)
 		next({ name: 'home' })
 		return
 	}
