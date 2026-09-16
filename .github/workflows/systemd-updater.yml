@@ -5,6 +5,7 @@ on:
     paths:
       - update.sh
       - ops/update_systemd.sh
+      - ops/publish_frontend.sh
       - ops/systemd/**
       - docs/SYSTEMD_DEPLOYMENT.md
       - docs/INSTALLATION.md
@@ -18,6 +19,7 @@ on:
     paths:
       - update.sh
       - ops/update_systemd.sh
+      - ops/publish_frontend.sh
       - ops/systemd/**
       - docs/SYSTEMD_DEPLOYMENT.md
       - docs/INSTALLATION.md
@@ -46,6 +48,7 @@ jobs:
         run: |
           bash -n update.sh
           bash -n ops/update_systemd.sh
+          bash -n ops/publish_frontend.sh
       - name: Verify deployment contract
         shell: bash
         run: |
@@ -61,6 +64,11 @@ jobs:
           grep -F 'systemctl enable wb-backend wb-celery wb-celery-beat' ops/update_systemd.sh
           grep -F -- '-A celery_app:celery_app worker' ops/systemd/wb-celery.service.d/10-wb-insight.conf
           grep -F -- '-A celery_app:celery_app beat' ops/systemd/wb-celery-beat.service.d/10-wb-insight.conf
+          grep -F 'bash "$PROJECT_DIR/ops/publish_frontend.sh"' update.sh
+          grep -F 'nginx -T' ops/publish_frontend.sh
+          grep -F 'BACKEND_UPSTREAM="${BACKEND_UPSTREAM:-127.0.0.1:9001}"' ops/publish_frontend.sh
+          grep -F 'FRONTEND_DEPLOY_DIR="${FRONTEND_DEPLOY_DIR:-}"' ops/publish_frontend.sh
+          grep -F 'cmp -s "$BUILD_DIR/index.html" "$DEPLOY_DIR/index.html"' ops/publish_frontend.sh
           if grep -Fq 'mv "$NEW_VENV" "$VENV_DIR"' ops/update_systemd.sh; then
             echo 'release venv must not be renamed after pip install' >&2
             exit 1
