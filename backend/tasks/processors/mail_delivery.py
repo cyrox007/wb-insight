@@ -6,6 +6,7 @@ from celery_app import celery_app
 from core.database_celery import get_session
 from models.mail_delivery import MailMessage
 from services.mail_service import (
+    PermanentMailDeliveryError,
     deliver_message,
     due_message_ids,
     mark_message_failure,
@@ -60,7 +61,14 @@ async def _process_due_mail() -> dict[str, int]:
             await session.close()
             session = await get_session()
             try:
-                await mark_message_failure(session, message_id, type(exc).__name__.lower())
+                terminal = isinstance(exc, PermanentMailDeliveryError)
+                error_code = exc.code if terminal else type(exc).__name__.lower()
+                await mark_message_failure(
+                    session,
+                    message_id,
+                    error_code,
+                    terminal=terminal,
+                )
                 await session.commit()
             except Exception:
                 await session.rollback()
