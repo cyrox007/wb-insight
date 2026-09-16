@@ -4,6 +4,23 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
+## [0.9.0-alpha.10] — 2026-09-16
+
+P33 — fail-closed production configuration перед beta. Кандидат до merge.
+
+- добавлен единый production preflight, который запускается при импорте `settings` и поэтому одинаково защищает API, Celery worker/beat и Alembic;
+- production больше не стартует с `DEBUG=true`, HTTP base URL/origin, зарезервированными `example.com/.org/.net` hostnames или `replace-with-*` endpoints;
+- запрещены известные слабые/шаблонные DB/JWT/WB/Sber secrets; для production DB password требуется минимум 16 символов, для JWT secret — минимум 32;
+- `API_TOKEN_ENCRYPTION_KEY` валидируется как реальный Fernet key до запуска приложения;
+- `LEGAL_EVIDENCE_HMAC_KEY` стал отдельным обязательным production secret длиной минимум 32 символа; шаблонный ключ больше не может незаметно использоваться для consent evidence;
+- при включённом Sber acquiring production требует реальные HTTPS gateway/return/fail URLs и неплейсхолдерные merchant credentials;
+- при включённом password recovery production отклоняет example/reset URL, example SMTP host/sender, отключённый STARTTLS и шаблонные SMTP credentials;
+- `.env.production.example` теперь явно помечен как намеренно неготовый к запуску до замены placeholders;
+- Release integrity проверяет отрицательный contract: неизменённый production template обязан fail-closed, а CI-only безопасный набор должен успешно импортировать полный FastAPI app;
+- добавлены regression tests на core production preflight, Sber и lifecycle/SMTP validation.
+
+P33 не означает прохождение beta-gates: production-like HTTPS deployment, реальный SMTP delivery smoke, WB seller data-accuracy acceptance и полный beta evidence manifest должны быть подтверждены фактически.
+
 ## [0.9.0-alpha.9] — 2026-09-16
 
 P32 — надёжная регистрация и автоматизированный disposable beta-smoke. PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`.

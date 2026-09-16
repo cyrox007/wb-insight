@@ -5,11 +5,11 @@
 ## Текущий статус
 
 - `main`: **`0.9.0-alpha.9`** после P32 / PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`.
+- P33 в ветке `codex/p33-production-config-preflight` — кандидат **`0.9.0-alpha.10`**, закрывающий найденный при pre-beta аудите production-config blocker.
 - P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
 - P31 закрыл production-safe code baseline жизненного цикла аккаунта.
 - P32 закрыл найденные перед beta дефекты registration/demo flow и встроил disposable registration evidence в core smoke.
-- P32 exact head прошёл Backend security, Frontend build, Database migrations и Release integrity перед merge.
-- Основной WB Web v1 feature scope заморожен; следующий stage — `0.9.0-beta.1` только после фактического production-like, SMTP recovery и real-seller acceptance с evidence manifest.
+- Основной WB Web v1 feature scope заморожен; после green merge P33 следующий stage — `0.9.0-beta.1` только после фактического production-like, SMTP recovery и real-seller acceptance с evidence manifest.
 
 ## Code-side status
 
@@ -56,14 +56,31 @@
 - полный core smoke по умолчанию включает disposable registration → demo → exact legal evidence → refresh → self-deactivation → inactive-login rejection;
 - полная структурированная документация проекта.
 
-P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy. P32 также не означает прохождение production-like acceptance: он делает соответствующие проверки воспроизводимыми.
+### P33 candidate / `0.9.0-alpha.10`
+
+P33 добавляет fail-closed production configuration contract:
+
+- startup запрещает `DEBUG=true`, HTTP public endpoints, example hosts и `replace-with-*` placeholders;
+- слабые/шаблонные DB/JWT/WB secrets блокируют production startup;
+- `API_TOKEN_ENCRYPTION_KEY` проверяется как реальный Fernet key;
+- `LEGAL_EVIDENCE_HMAC_KEY` становится отдельным обязательным production secret длиной минимум 32 символа;
+- включённый Sber требует реальные HTTPS gateway/return/fail URLs и merchant credentials;
+- включённый password recovery требует реальный HTTPS reset host, реальный SMTP host/sender, STARTTLS и неплейсхолдерные credentials;
+- `.env.production.example` намеренно не должен проходить startup validation без замены placeholders;
+- Release integrity проверяет отрицательный template contract и положительный CI-only full-app import;
+- regression tests покрывают core/Sber/lifecycle validation.
+
+P33 будет считаться закрытым только после полного green CI exact-head и merge. Он не заменяет фактический production-like deployment или provider smoke.
+
+P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy. P32/P33 также не означают прохождение production-like acceptance: они делают соответствующие code-side проверки воспроизводимыми и fail-closed.
 
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
-- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` code baseline;
-- production-like HTTPS deployment из репозитория;
+- green merge P33 / `0.9.0-alpha.10` и отсутствия известных необработанных code-side release blockers;
+- feature freeze WB Web v1 на фактическом post-P33 code baseline;
+- production-like HTTPS deployment из репозитория с реальными non-placeholder secrets/hosts;
 - миграций на чистой БД и upgrade существующей БД;
 - deploy/rollback smoke;
 - фактического core `ops/release_smoke.py` без `--skip-disposable-registration`;

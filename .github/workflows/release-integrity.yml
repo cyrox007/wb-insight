@@ -6,6 +6,9 @@ on:
       - VERSION
       - CHANGELOG.md
       - backend/app.py
+      - backend/settings.py
+      - backend/core/production_config.py
+      - backend/core/lifecycle_config.py
       - backend/Dockerfile
       - frontend/package.json
       - frontend/package-lock.json
@@ -30,6 +33,9 @@ on:
       - VERSION
       - CHANGELOG.md
       - backend/app.py
+      - backend/settings.py
+      - backend/core/production_config.py
+      - backend/core/lifecycle_config.py
       - backend/Dockerfile
       - frontend/package.json
       - frontend/package-lock.json
@@ -135,6 +141,27 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build backend image
         run: docker build -f backend/Dockerfile -t wb-insight-backend:ci .
+      - name: Verify fail-closed production configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker run --rm --env-file .env.production.example \
+            wb-insight-backend:ci python -c 'import settings'; then
+            echo 'Unmodified production example unexpectedly passed startup validation' >&2
+            exit 1
+          fi
+
+          docker run --rm --env-file .env.production.example \
+            -e SERVER_ADDR=ci.wbinsight.local \
+            -e ALLOWED_ORIGINS=https://ci.wbinsight.local \
+            -e DB_PASSWORD=ci-only-db-password-not-production \
+            -e JWT_SECRET_KEY=ci-only-jwt-secret-key-not-production-1234567890 \
+            -e LEGAL_EVIDENCE_HMAC_KEY=ci-only-legal-evidence-hmac-key-1234567890 \
+            -e API_TOKEN_ENCRYPTION_KEY=2A3k6qmH-9j-jppiuX-2xFvrNEeLp3aKjbIy2Verwxc= \
+            -e WB_SERVICE_ID=ci-service-id \
+            -e WB_SERVICE_SECRET=ci-only-wb-service-secret \
+            wb-insight-backend:ci python -c 'import app; print("production_config=ok")' \
+            | grep -F 'production_config=ok'
       - name: Build frontend image
         run: docker build -f frontend/Dockerfile -t wb-insight-frontend:ci .
       - name: Validate Compose model

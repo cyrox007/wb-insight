@@ -3,6 +3,8 @@ from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
+from core.production_config import validate_production_config
+
 
 load_dotenv()
 
@@ -46,6 +48,7 @@ class Config:
 
     ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY")
     SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    LEGAL_EVIDENCE_HMAC_KEY = os.getenv("LEGAL_EVIDENCE_HMAC_KEY", "").strip() or None
 
     if not SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY is required")
@@ -252,3 +255,4 @@ class Config:
 
 
 config = Config()
+validate_production_config(config)
