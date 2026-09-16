@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -39,6 +39,7 @@ class EmailVerificationToken(Database.Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     expires_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
@@ -53,14 +54,14 @@ class MailCampaign(Database.Base):
     name: Mapped[str] = mapped_column(String(180), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    segment: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default=CampaignStatus.DRAFT.value)
+    segment: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'::json"))
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default=CampaignStatus.DRAFT.value, server_default=CampaignStatus.DRAFT.value)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    audience_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    queued_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    sent_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    suppressed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    audience_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    queued_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    sent_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    suppressed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     scheduled_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
     launched_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[object | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -88,12 +89,12 @@ class MailMessage(Database.Base):
     recipient_email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     template_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    template_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    template_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default=MailStatus.QUEUED.value)
-    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default=MailStatus.QUEUED.value, server_default=MailStatus.QUEUED.value)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=5, server_default="5")
     idempotency_key: Mapped[str] = mapped_column(String(180), nullable=False)
     provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     safe_error_code: Mapped[str | None] = mapped_column(String(96), nullable=True)
@@ -115,7 +116,7 @@ class MailSuppression(Database.Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
-    reason: Mapped[str] = mapped_column(String(32), nullable=False, default="unsubscribe")
-    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False, default="unsubscribe", server_default="unsubscribe")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
