@@ -94,6 +94,14 @@ ACCOUNT_LIFECYCLE_REQUIRED_CHECKS = {
     "logout_session_revoke",
 }
 
+SECRETS_REVIEW_CORE_NAMES = {
+    "DB_PASSWORD",
+    "API_TOKEN_ENCRYPTION_KEY",
+    "JWT_SECRET_KEY",
+    "LEGAL_EVIDENCE_HMAC_KEY",
+    "WB_SERVICE_SECRET",
+}
+
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -243,6 +251,58 @@ def validate_release_smoke_evidence(
     _require_true_checks(report, required, artifact_kind=artifact_kind)
 
 
+def validate_secrets_review_evidence(
+    path: Path,
+    *,
+    version: str,
+    commit: str,
+    environment: str,
+) -> None:
+    report = load_json_object(path, artifact_kind="secrets_review")
+    if report.get("schema_version") != 1 or report.get("kind") != "secrets_review":
+        raise ValueError(
+            "secrets_review artifact must use schema_version=1 and kind=secrets_review"
+        )
+    if report.get("status") != "pass":
+        raise ValueError("secrets_review artifact must report status=pass")
+    if report.get("version") != version:
+        raise ValueError("secrets_review artifact version does not match release VERSION")
+    if str(report.get("commit") or "").lower() != commit.lower():
+        raise ValueError("secrets_review artifact commit does not match release commit")
+    if report.get("environment") != environment:
+        raise ValueError("secrets_review artifact environment does not match manifest environment")
+    if report.get("findings_count") != 0:
+        raise ValueError("secrets_review artifact contains leak findings")
+    findings = report.get("findings")
+    if not isinstance(findings, list) or findings:
+        raise ValueError("secrets_review artifact findings must be an empty list")
+    if report.get("git_history_checked") is not True:
+        raise ValueError("secrets_review artifact must scan reachable Git history")
+    if report.get("journal_checked") is not True:
+        raise ValueError("secrets_review artifact must scan runtime systemd journal")
+
+    checked = report.get("secret_names_checked")
+    if not isinstance(checked, list) or not checked:
+        raise ValueError("secrets_review artifact must list configured secret names checked")
+    missing_names = sorted(SECRETS_REVIEW_CORE_NAMES - {str(item) for item in checked})
+    if missing_names:
+        raise ValueError(
+            "secrets_review artifact did not check required production secrets: "
+            + ", ".join(missing_names)
+        )
+
+    stats = report.get("scan_stats")
+    if not isinstance(stats, dict):
+        raise ValueError("secrets_review artifact must contain scan_stats")
+    for field in ("git_worktree_files", "git_history_blobs", "frontend_files"):
+        value = stats.get(field)
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError(f"secrets_review artifact must scan at least one {field}")
+    journal_bytes = stats.get("journal_bytes")
+    if not isinstance(journal_bytes, int) or journal_bytes < 0:
+        raise ValueError("secrets_review artifact has invalid journal_bytes")
+
+
 def validate_artifact(
     kind: str,
     path: Path,
@@ -272,6 +332,13 @@ def validate_artifact(
             version=version,
             artifact_kind=kind,
         )
+    elif structured_runtime_evidence and kind == "secrets_review":
+        validate_secrets_review_evidence(
+            path,
+            version=version,
+            commit=commit,
+            environment=environment,
+        )
     return size
 
 
@@ -286,8 +353,8 @@ def main() -> int:
         "--require-structured-runtime-evidence",
         action="store_true",
         help=(
-            "Require deployment/core_smoke/account_lifecycle JSON evidence bound to "
-            "the exact release version, commit and HTTPS environment"
+            "Require deployment/core_smoke/account_lifecycle/secrets_review JSON evidence "
+            "bound to the exact release version, commit and HTTPS environment"
         ),
     )
     parser.add_argument("--output", type=Path)
