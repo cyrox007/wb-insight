@@ -10,6 +10,7 @@ from core.dependencies import get_db_session
 from core.lifecycle_config import lifecycle_config
 from core.logger import setup_logger
 from core.session_cookie import set_refresh_cookie
+from models.mail_delivery import MailSuppression
 from schemas.auth import LoginRequest
 from services.legal_service import LegalConsentError, record_consents, validate_consent_payload
 from services.mail_service import queue_transactional_email
@@ -107,7 +108,13 @@ async def registration(request: Request, response: Response, db_session: AsyncSe
     user_data = {
         key: value
         for key, value in reg_data.items()
-        if key not in {"legal_consents", "agree_terms", "agree_privacy", "agree_data_processing"}
+        if key not in {
+            "legal_consents",
+            "agree_terms",
+            "agree_privacy",
+            "agree_data_processing",
+            "newsletter_subscription",
+        }
     }
 
     try:
@@ -137,6 +144,17 @@ async def registration(request: Request, response: Response, db_session: AsyncSe
         context_reference=str(user.id),
     )
 
+    if reg_data.get("newsletter_subscription") is False:
+        db_session.add(
+            MailSuppression(
+                user_id=user.id,
+                email=user.email.strip().lower(),
+                reason="registration_opt_out",
+                active=True,
+            )
+        )
+        await db_session.flush()
+
     demo = await get_tariff_by_code(db_session, "demo")
     if demo is None:
         await db_session.rollback()
@@ -157,7 +175,7 @@ async def registration(request: Request, response: Response, db_session: AsyncSe
             email=user.email,
         )
 
-    # Compatibility for development/staging environments without configured mail.
+    # Compatibility for local/staging environments where mail is intentionally disabled.
     user.email_verified_at = datetime.now(timezone.utc)
     await create_demo_subscription(db=db_session, user_id=user.id)
     return response_success(message="Зарегистрирован", email_verification_required=False)
