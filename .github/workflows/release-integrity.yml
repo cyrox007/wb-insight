@@ -88,7 +88,7 @@ jobs:
             ops/release_evidence.py
           python3 ops/data_accuracy_acceptance.py --help >/dev/null
           python3 ops/release_evidence.py --help >/dev/null
-      - name: Verify data accuracy pass and fail contracts
+      - name: Verify data accuracy completeness and tolerance contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -97,6 +97,8 @@ jobs:
             --output-json /tmp/data-accuracy.json \
             --output-md /tmp/data-accuracy.md
           grep -F '"status": "pass"' /tmp/data-accuracy.json
+          grep -F '"required_metric_count": 21' /tmp/data-accuracy.json
+          grep -F '"missing": 0' /tmp/data-accuracy.json
           test -s /tmp/data-accuracy.md
 
           if python3 ops/data_accuracy_acceptance.py \
@@ -106,6 +108,75 @@ jobs:
             exit 1
           fi
           grep -F '"status": "fail"' /tmp/data-accuracy-failing.json
+          grep -E '"fail": [1-9][0-9]*' /tmp/data-accuracy-failing.json
+
+          if python3 ops/data_accuracy_acceptance.py \
+            --input ops/acceptance/fixtures/incomplete.json \
+            --output-json /tmp/data-accuracy-incomplete.json; then
+            echo 'Incomplete required-metric fixture unexpectedly passed' >&2
+            exit 1
+          fi
+          grep -F '"status": "fail"' /tmp/data-accuracy-incomplete.json
+          grep -F '"missing": 17' /tmp/data-accuracy-incomplete.json
+
+          PYTHONPATH=ops python3 - <<'PY'
+          from acceptance.data_accuracy import AcceptanceError, evaluate_metric
+
+          required_policy = {
+              "required": True,
+              "unit": "RUB",
+              "category": "finance",
+              "tolerance_mode": "absolute",
+              "absolute_tolerance": "0.02",
+          }
+
+          try:
+              evaluate_metric(
+                  {
+                      "metric": "revenue",
+                      "source": "fixture",
+                      "required": False,
+                      "expected": "100.00",
+                      "actual": "100.00",
+                  },
+                  required_policy,
+              )
+          except AcceptanceError as exc:
+              assert "cannot disable" in str(exc)
+          else:
+              raise SystemExit("policy-required metric downgrade unexpectedly succeeded")
+
+          try:
+              evaluate_metric(
+                  {
+                      "metric": "revenue",
+                      "source": "fixture",
+                      "expected": "100.00",
+                      "actual": "100.50",
+                      "absolute_tolerance": "1.00",
+                  },
+                  required_policy,
+              )
+          except AcceptanceError as exc:
+              assert "override_reason" in str(exc)
+          else:
+              raise SystemExit("unexplained tolerance override unexpectedly succeeded")
+
+          row = evaluate_metric(
+              {
+                  "metric": "revenue",
+                  "source": "fixture",
+                  "expected": "100.00",
+                  "actual": "100.50",
+                  "absolute_tolerance": "1.00",
+                  "override_reason": "approved reconciliation difference",
+              },
+              required_policy,
+          )
+          assert row["status"] == "pass"
+          assert row["override_reason"] == "approved reconciliation difference"
+          assert row["absolute_tolerance"] == "1"
+          PY
       - name: Verify beta evidence manifest contract
         shell: bash
         run: |
