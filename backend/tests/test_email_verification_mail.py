@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from models.mail_delivery import EmailVerificationToken, MailKind, MailStatus
+from models.mail_delivery import EmailVerificationToken, MailStatus
 from services import email_verification_service as verification
 from services import mail_service
 
@@ -106,6 +106,33 @@ async def test_registration_verification_grants_demo_once(monkeypatch):
     assert user.pending_email is None
     assert created == [USER_ID]
     assert token.used_at is not None
+
+
+@pytest.mark.asyncio
+async def test_successfully_used_verification_token_is_idempotent():
+    now = datetime.now(timezone.utc)
+    token = SimpleNamespace(
+        id=uuid4(),
+        user_id=USER_ID,
+        email="seller@example.com",
+        used_at=now - timedelta(seconds=5),
+        revoked_at=None,
+        expires_at=now + timedelta(minutes=10),
+    )
+    user = SimpleNamespace(
+        id=USER_ID,
+        email="seller@example.com",
+        pending_email=None,
+        email_verified_at=now - timedelta(seconds=5),
+        is_active=True,
+        session_version=1,
+    )
+    session = _FakeSession([_Result(token), _Result(user)])
+
+    result = await verification.verify_email(session, "already-used-secret")
+
+    assert result is user
+    assert session.flushes == 0
 
 
 @pytest.mark.asyncio
