@@ -6,7 +6,7 @@
 
 ## [0.9.0-alpha.9] — 2026-09-16
 
-P32 — надёжная регистрация и автоматизированный disposable beta-smoke. Кандидат до merge.
+P32 — надёжная регистрация и автоматизированный disposable beta-smoke. PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`.
 
 - исправлен реальный demo-onboarding bug: `TariffPlan.code` канонически использует lowercase `demo`, а `create_demo_subscription()` больше не ищет несовместимый `DEMO`;
 - `insert_user()` больше не проглатывает ошибку `flush()`: DB failure передаётся владельцу request-транзакции и не оставляет `AsyncSession` в скрытом failed-state;
