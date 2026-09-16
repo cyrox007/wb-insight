@@ -5,6 +5,7 @@ on:
     paths:
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
+      - ops/secrets_review.py
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
       - docs/RELEASE_SMOKE.md
@@ -15,6 +16,7 @@ on:
     paths:
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
+      - ops/secrets_review.py
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
       - docs/RELEASE_SMOKE.md
@@ -33,11 +35,14 @@ jobs:
           python3 -m py_compile \
             ops/release_smoke.py \
             ops/systemd_acceptance.py \
+            ops/secrets_review.py \
             ops/release_evidence.py \
             ops/acceptance/structured_evidence_selftest.py
           python3 ops/release_smoke.py --help >/dev/null
           python3 ops/release_smoke.py --self-test
           python3 ops/systemd_acceptance.py --help >/dev/null
           python3 ops/systemd_acceptance.py --self-test
+          python3 ops/secrets_review.py --help >/dev/null
+          python3 ops/secrets_review.py --self-test
           python3 ops/release_evidence.py --help >/dev/null
           PYTHONPATH=ops python3 ops/acceptance/structured_evidence_selftest.py
