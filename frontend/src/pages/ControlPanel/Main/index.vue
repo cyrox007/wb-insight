@@ -13,6 +13,7 @@ const isOverview = computed(() => route.name === 'control-panel.index')
 const usersActive = computed(() => ['control-panel.users', 'control-panel.edit-user'].includes(route.name))
 const rolesActive = computed(() => route.name === 'control-panel.roles')
 const tariffsActive = computed(() => ['control-panel.tariffs', 'control-panel.edit-tariff'].includes(route.name))
+const paymentsActive = computed(() => route.name === 'control-panel.payments')
 
 async function loadOverview() {
 	isLoading.value = true
@@ -40,27 +41,16 @@ onMounted(loadOverview)
 			<div>
 				<p class="cp-eyebrow">WB Insight · управление</p>
 				<h1 class="cp-title">Панель управления</h1>
-				<p class="cp-subtitle">Пользователи, роли, тарифы и системные настройки в едином административном интерфейсе.</p>
+				<p class="cp-subtitle">Пользователи, роли, тарифы, платежи и системные настройки в едином административном интерфейсе.</p>
 			</div>
 		</header>
 
 		<nav class="cp-nav" aria-label="Разделы панели управления">
 			<router-link :to="{ name: 'control-panel.index' }" class="cp-nav__link">Обзор</router-link>
-			<router-link
-				:to="{ name: 'control-panel.users' }"
-				class="cp-nav__link"
-				:class="{ 'router-link-active': usersActive }"
-			>Пользователи</router-link>
-			<router-link
-				:to="{ name: 'control-panel.roles' }"
-				class="cp-nav__link"
-				:class="{ 'router-link-active': rolesActive }"
-			>Роли</router-link>
-			<router-link
-				:to="{ name: 'control-panel.tariffs' }"
-				class="cp-nav__link"
-				:class="{ 'router-link-active': tariffsActive }"
-			>Тарифы</router-link>
+			<router-link :to="{ name: 'control-panel.users' }" class="cp-nav__link" :class="{ 'router-link-active': usersActive }">Пользователи</router-link>
+			<router-link :to="{ name: 'control-panel.roles' }" class="cp-nav__link" :class="{ 'router-link-active': rolesActive }">Роли</router-link>
+			<router-link :to="{ name: 'control-panel.tariffs' }" class="cp-nav__link" :class="{ 'router-link-active': tariffsActive }">Тарифы</router-link>
+			<router-link :to="{ name: 'control-panel.payments' }" class="cp-nav__link" :class="{ 'router-link-active': paymentsActive }">Платежи</router-link>
 		</nav>
 
 		<div v-if="isOverview" class="cp-page">
@@ -80,30 +70,23 @@ onMounted(loadOverview)
 				</article>
 
 				<router-link :to="{ name: 'control-panel.users' }" class="cp-card cp-shortcut-card">
-					<div>
-						<span class="cp-eyebrow">Аккаунты</span>
-						<h2 class="cp-shortcut-card__title">Управление пользователями</h2>
-						<p class="cp-card-note">Статус, профиль и безопасность аккаунтов.</p>
-					</div>
+					<div><span class="cp-eyebrow">Аккаунты</span><h2 class="cp-shortcut-card__title">Управление пользователями</h2><p class="cp-card-note">Статус, профиль и безопасность аккаунтов.</p></div>
 					<span class="cp-shortcut-card__action">Открыть пользователей →</span>
 				</router-link>
 
 				<router-link :to="{ name: 'control-panel.roles' }" class="cp-card cp-shortcut-card">
-					<div>
-						<span class="cp-eyebrow">Доступ</span>
-						<h2 class="cp-shortcut-card__title">Роли и права</h2>
-						<p class="cp-card-note">Просмотр назначений и управление системными ролями.</p>
-					</div>
+					<div><span class="cp-eyebrow">Доступ</span><h2 class="cp-shortcut-card__title">Роли и права</h2><p class="cp-card-note">Просмотр назначений и управление системными ролями.</p></div>
 					<span class="cp-shortcut-card__action">Открыть роли →</span>
 				</router-link>
 
 				<router-link :to="{ name: 'control-panel.tariffs' }" class="cp-card cp-shortcut-card">
-					<div>
-						<span class="cp-eyebrow">Монетизация</span>
-						<h2 class="cp-shortcut-card__title">Тарифные планы</h2>
-						<p class="cp-card-note">Стоимость, доступность и продуктовые лимиты.</p>
-					</div>
+					<div><span class="cp-eyebrow">Монетизация</span><h2 class="cp-shortcut-card__title">Тарифные планы</h2><p class="cp-card-note">Стоимость, доступность и продуктовые лимиты.</p></div>
 					<span class="cp-shortcut-card__action">Открыть тарифы →</span>
+				</router-link>
+
+				<router-link :to="{ name: 'control-panel.payments' }" class="cp-card cp-shortcut-card">
+					<div><span class="cp-eyebrow">Платежи</span><h2 class="cp-shortcut-card__title">Платёжные системы</h2><p class="cp-card-note">Test/live режимы, credentials и журнал оплат тарифов.</p></div>
+					<span class="cp-shortcut-card__action">Открыть платежи →</span>
 				</router-link>
 			</div>
 		</div>

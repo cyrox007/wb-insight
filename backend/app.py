@@ -13,6 +13,7 @@ from handlers.account_lifecycle_handler import account_router, auth_router as ac
 from handlers.auth_handler import router as auth_router
 from handlers.control_panel.home import router as CP_home_router
 from handlers.control_panel.operations import router as CP_operations_router
+from handlers.control_panel.payments import router as CP_payments_router
 from handlers.control_panel.roles import router as CP_roles_router
 from handlers.control_panel.tariffs import router as CP_tariffs_router
 from handlers.control_panel.users import router as CP_users_router
@@ -87,6 +88,7 @@ def _register_routers(app: FastAPI) -> None:
         CP_users_router,
         CP_tariffs_router,
         CP_roles_router,
+        CP_payments_router,
         CP_operations_router,
     ]
     for router in routers:

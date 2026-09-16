@@ -20,6 +20,8 @@ class Permission(str, Enum):
     ROLES_WRITE = "roles:write"
     TARIFFS_READ = "tariffs:read"
     TARIFFS_WRITE = "tariffs:write"
+    PAYMENTS_READ = "payments:read"
+    PAYMENTS_WRITE = "payments:write"
 
 
 _ALL_CONTROL_PANEL_PERMISSIONS = frozenset(Permission)
@@ -34,6 +36,7 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.ROLES_READ,
             Permission.TARIFFS_READ,
             Permission.TARIFFS_WRITE,
+            Permission.PAYMENTS_READ,
         }
     ),
     # Preserve the current product policy: only admin and super_admin may open

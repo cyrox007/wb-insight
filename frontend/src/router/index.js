@@ -123,6 +123,12 @@ const router = createRouter({
 					name: 'control-panel.edit-tariff',
 					component: () => import('../pages/ControlPanel/Tariffs/edit.vue'),
 					meta: { title: 'Редактировать тариф', requestAuth: true }
+				},
+				{
+					path: 'payments',
+					name: 'control-panel.payments',
+					component: () => import('../pages/ControlPanel/Payments/index.vue'),
+					meta: { title: 'Платежи', requestAuth: true }
 				}
 			]
 		},
