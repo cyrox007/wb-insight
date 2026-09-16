@@ -200,6 +200,8 @@ Frontend публикуется на `${PUBLIC_HTTP_PORT:-8080}`. TLS завер
 - проверить health и smoke;
 - при проблеме откатывать application image по runbook. Destructive DB downgrade не является стандартной rollback-стратегией.
 
+Для существующей Ubuntu/systemd-установки используйте [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md) и `ops/update_systemd.sh`. Актуальный backend требует Python **3.12**; старый venv на Python 3.10 необходимо пересоздать, а не обновлять «на месте». Frontend release install выполняется через `npm ci`, не `npm install`.
+
 ## 14. Частые ошибки
 
-См. [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md). Основные категории: PostgreSQL/Redis unavailable, Alembic drift, invalid WB credential/permissions, CORS/cookie mismatch, Celery not running, disabled acquiring и stale sync.
+См. [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md). Основные категории: неподдерживаемая версия Python/Node, PostgreSQL/Redis unavailable, Alembic drift, invalid WB credential/permissions, CORS/cookie mismatch, Celery not running, disabled acquiring и stale sync.

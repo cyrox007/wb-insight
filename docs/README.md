@@ -25,7 +25,8 @@
 
 - [`ADMIN_GUIDE.md`](ADMIN_GUIDE.md) — роли, пользователи, тарифы и control panel.
 - [`OPERATIONS.md`](OPERATIONS.md) — health, monitoring, alerts, backup/restore и incident triage.
-- [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) — production deploy/upgrade/rollback.
+- [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) — канонический container deploy/upgrade/rollback.
+- [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md) — эксплуатация существующей Ubuntu/systemd-установки, безопасное обновление и переход backend venv на Python 3.12.
 - [`ACCOUNT_LIFECYCLE.md`](ACCOUNT_LIFECYCLE.md) — жизненный цикл аккаунта и оставшиеся release-gaps.
 
 ## Интеграции и compliance
@@ -53,4 +54,4 @@
 5. Старые файлы `README-FOR-*` считаются историческими материалами и не являются source of truth.
 6. Acceptance tooling не считается доказательством прохождения acceptance: beta/RC/stable требуют evidence, полученный на соответствующей среде и exact commit.
 
-Дата полной ревизии: 15 сентября 2026 года.
+Дата полной ревизии: 16 сентября 2026 года.

@@ -1,6 +1,6 @@
 # WB Insight — production deployment
 
-Актуальная release-линия: `0.9.0-alpha.N`; P29 готовит `0.9.0-alpha.6`. Документ описывает container baseline, а конкретный cloud/provider выбирается отдельно.
+Текущий `main` находится на release-line **`0.9.0-alpha.11`**. Канонический production baseline проекта — container deployment через Docker Compose; существующие Ubuntu/systemd-инсталляции поддерживаются отдельным runbook [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md).
 
 ## Topology
 
@@ -84,6 +84,8 @@ Frontend/nginx обслуживает SPA и проксирует backend routes
 9. Выполнить release smoke.
 10. Сохранить release evidence и держать previous image доступным до окончания validation.
 
+Для существующей systemd-инсталляции не используйте произвольный `git pull && pip install` скрипт: актуальный backend требует Python **3.12**, а frontend release install должен идти через lockfile. Используйте [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md) и `ops/update_systemd.sh`.
+
 ## Rollback
 
 Обычный rollback — возврат к предыдущему known-good application image/commit. Автоматический destructive Alembic downgrade не является стандартной стратегией.
@@ -102,7 +104,7 @@ Worker масштабируется отдельно с учётом WB rate lim
 
 ## Production validation
 
-Container deploy сам по себе не означает beta/RC readiness. Обязательны:
+Container/systemd deploy сам по себе не означает beta/RC readiness. Обязательны:
 
 - production-like core smoke;
 - deploy/rollback drill;

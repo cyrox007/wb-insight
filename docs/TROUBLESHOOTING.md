@@ -1,5 +1,24 @@
 # WB Insight — troubleshooting
 
+## `pip install` падает на `numpy==2.4.6` / сервер использует Python 3.10
+
+Актуальный backend стандартизирован на Python **3.12**. Если путь pip показывает `venv/lib/python3.10/...`, старый systemd venv несовместим с текущим dependency graph.
+
+Не понижайте NumPy/Pandas вручную в production: это создаст окружение, отличающееся от CI/Docker и зафиксированного `requirements.txt`.
+
+Если `git pull` уже прошёл, а установка зависимостей упала до Alembic/frontend/restart:
+
+1. не перезапускайте API/Celery на незавершённом environment;
+2. установите доступный на host Python 3.12 + `python3.12-venv`;
+3. создайте новый venv через `python3.12 -m venv venv.next`;
+4. установите `requirements.txt` в новый venv;
+5. примените Alembic новым environment;
+6. выполните `npm ci && npm run build`;
+7. переключите `backend/venv` на новый venv;
+8. только затем restart services и проверьте `/health/ready`.
+
+Полный runbook: [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md). Для последующих обновлений используйте `ops/update_systemd.sh`, который выполняет runtime preflight до переключения сервисов.
+
 ## Backend не стартует
 
 Проверьте:
