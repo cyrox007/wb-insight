@@ -11,8 +11,10 @@ from release_evidence import (
     ACCOUNT_LIFECYCLE_REQUIRED_CHECKS,
     CORE_SMOKE_REQUIRED_CHECKS,
     DEPLOYMENT_REQUIRED_CHECKS,
+    SECRETS_REVIEW_CORE_NAMES,
     validate_deployment_evidence,
     validate_release_smoke_evidence,
+    validate_secrets_review_evidence,
 )
 
 
@@ -30,6 +32,7 @@ def main() -> int:
         tmp = Path(raw_tmp)
         deployment = tmp / "deployment.json"
         smoke = tmp / "release-smoke.json"
+        secrets_review = tmp / "secrets-review.json"
 
         _write(
             deployment,
@@ -65,6 +68,33 @@ def main() -> int:
                 },
             },
         )
+        _write(
+            secrets_review,
+            {
+                "schema_version": 1,
+                "kind": "secrets_review",
+                "status": "pass",
+                "version": VERSION,
+                "commit": COMMIT,
+                "environment": ENVIRONMENT,
+                "secret_names_checked": sorted(SECRETS_REVIEW_CORE_NAMES),
+                "findings_count": 0,
+                "findings": [],
+                "git_history_checked": True,
+                "journal_checked": True,
+                "scan_stats": {
+                    "git_worktree_files": 100,
+                    "git_worktree_bytes": 1000,
+                    "git_history_blobs": 200,
+                    "git_history_bytes": 2000,
+                    "frontend_files": 5,
+                    "frontend_bytes": 500,
+                    "extra_log_files": 0,
+                    "extra_log_bytes": 0,
+                    "journal_bytes": 0,
+                },
+            },
+        )
 
         validate_deployment_evidence(
             deployment,
@@ -74,6 +104,12 @@ def main() -> int:
         )
         validate_release_smoke_evidence(smoke, version=VERSION, artifact_kind="core_smoke")
         validate_release_smoke_evidence(smoke, version=VERSION, artifact_kind="account_lifecycle")
+        validate_secrets_review_evidence(
+            secrets_review,
+            version=VERSION,
+            commit=COMMIT,
+            environment=ENVIRONMENT,
+        )
 
         broken = json.loads(deployment.read_text(encoding="utf-8"))
         broken["commit"] = "f" * 40
@@ -103,6 +139,25 @@ def main() -> int:
             assert "password_reset" in str(exc)
         else:
             raise AssertionError("missing lifecycle check unexpectedly passed")
+
+        broken_secrets = json.loads(secrets_review.read_text(encoding="utf-8"))
+        broken_secrets["status"] = "fail"
+        broken_secrets["findings_count"] = 1
+        broken_secrets["findings"] = [
+            {"secret_name": "JWT_SECRET_KEY", "scopes": ["frontend_dist"]}
+        ]
+        _write(secrets_review, broken_secrets)
+        try:
+            validate_secrets_review_evidence(
+                secrets_review,
+                version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
+            )
+        except ValueError as exc:
+            assert "status=pass" in str(exc) or "findings" in str(exc)
+        else:
+            raise AssertionError("secret leak finding unexpectedly passed")
 
     print("[ok] structured runtime evidence self-test")
     return 0
