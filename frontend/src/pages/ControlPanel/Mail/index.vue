@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import CP_Mail from '@/API/ControlPanel/CP_Mail'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
+import Modal from '@/components/UI/Modal.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -23,6 +24,7 @@ const creating = ref(false)
 const preview = ref(null)
 const testEmail = ref('')
 const scheduleAt = ref('')
+const confirmAction = ref(null)
 
 const form = reactive({
 	name: '',
@@ -43,6 +45,10 @@ const minScheduleAt = computed(() => {
 	const date = new Date(Date.now() + 60_000)
 	return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 })
+const confirmTitle = computed(() => confirmAction.value === 'cancel' ? 'Остановить рассылку?' : 'Запустить рассылку?')
+const confirmText = computed(() => confirmAction.value === 'cancel'
+	? 'Все ещё неотправленные письма этой кампании будут отменены. Уже отправленные письма отозвать нельзя.'
+	: 'Кампания будет материализована на текущую аудиторию и поставлена в очередь доставки.')
 
 const statusLabel = (value) => ({
 	draft: 'Черновик', scheduled: 'Запланирована', queued: 'В очереди', sending: 'Отправляется', completed: 'Завершена', failed: 'С ошибками', cancelled: 'Отменена',
@@ -184,8 +190,13 @@ async function scheduleCampaign() {
 	}
 }
 
+function requestConfirmation(action) {
+	if (!selected.value) return
+	confirmAction.value = action
+}
+
 async function launchCampaign() {
-	if (!selected.value || !confirm('Запустить рассылку на рассчитанную аудиторию?')) return
+	if (!selected.value) return
 	actionError.value = ''
 	try {
 		const { data } = await CP_Mail.launch(selected.value.id)
@@ -199,7 +210,7 @@ async function launchCampaign() {
 }
 
 async function cancelCampaign() {
-	if (!selected.value || !confirm('Остановить неотправленные письма этой кампании?')) return
+	if (!selected.value) return
 	try {
 		const { data } = await CP_Mail.cancel(selected.value.id)
 		if (data?.campaign) selected.value = data.campaign
@@ -209,6 +220,13 @@ async function cancelCampaign() {
 	} catch (e) {
 		actionError.value = e.response?.data?.error?.message || 'Не удалось остановить рассылку.'
 	}
+}
+
+async function confirmPendingAction() {
+	const action = confirmAction.value
+	confirmAction.value = null
+	if (action === 'launch') await launchCampaign()
+	if (action === 'cancel') await cancelCampaign()
 }
 
 onMounted(loadCampaigns)
@@ -268,13 +286,13 @@ onMounted(loadCampaigns)
 				<pre class="mail-body">{{ selected.body }}</pre>
 				<div v-if="canManage && ['draft','scheduled'].includes(selected.status)" class="cp-actions mail-launch-actions">
 					<BaseButton variant="outline" text="Рассчитать аудиторию" @click="previewCampaign" />
-					<BaseButton variant="primary" text="Запустить сейчас" @click="launchCampaign" />
+					<BaseButton variant="primary" text="Запустить сейчас" @click="requestConfirmation('launch')" />
 				</div>
 				<div v-if="canManage && ['draft','scheduled'].includes(selected.status)" class="mail-schedule">
 					<label>Запланировать запуск<input v-model="scheduleAt" type="datetime-local" :min="minScheduleAt"></label>
 					<BaseButton variant="outline" text="Запланировать" :disabled="!scheduleAt" @click="scheduleCampaign" />
 				</div>
-				<div v-if="canManage && !['draft','completed','cancelled','failed'].includes(selected.status)" class="cp-actions"><BaseButton variant="outline" text="Остановить" @click="cancelCampaign" /></div>
+				<div v-if="canManage && !['draft','completed','cancelled','failed'].includes(selected.status)" class="cp-actions"><BaseButton variant="outline" text="Остановить" @click="requestConfirmation('cancel')" /></div>
 				<div v-if="canManage" class="mail-test"><input v-model.trim="testEmail" type="email" placeholder="Email для теста"><BaseButton variant="outline" text="Тестовое письмо" :disabled="!testEmail" @click="sendTest" /></div>
 				<div v-if="preview" class="mail-preview"><strong>{{ preview.deliverable_count }}</strong> получателей после suppression <span>({{ preview.suppressed_count }} исключено)</span></div>
 
@@ -285,6 +303,12 @@ onMounted(loadCampaigns)
 			</div>
 			<div v-else class="cp-state">Выберите рассылку слева.</div>
 		</div>
+
+		<Modal :is-open="Boolean(confirmAction)" size="small" :close-on-overlay-click="true" @close="confirmAction = null">
+			<template #header><div class="mail-confirm__header"><h3>{{ confirmTitle }}</h3></div></template>
+			<template #body><p class="mail-confirm__text">{{ confirmText }}</p></template>
+			<template #footer><div class="cp-actions"><BaseButton variant="outline" text="Отмена" @click="confirmAction = null" /><BaseButton variant="primary" :text="confirmAction === 'cancel' ? 'Остановить' : 'Запустить'" @click="confirmPendingAction" /></div></template>
+		</Modal>
 	</section>
 </template>
 
@@ -315,5 +339,7 @@ onMounted(loadCampaigns)
 .mail-preview { margin: 12px 0 20px; padding: 12px; border-radius: 9px; background: rgba(129,73,255,.09); }
 .mail-pagination { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; color: #9fb0c8; }
 .mail-delivery-head { align-items: center; margin-top: 18px; }
+.mail-confirm__header h3 { margin: 0 0 10px; }
+.mail-confirm__text { margin: 0; color: #b9c6d8; line-height: 1.5; }
 @media (max-width: 900px) { .mail-layout { grid-template-columns: 1fr; } .mail-stats { grid-template-columns: repeat(2, 1fr); } .mail-header { align-items: flex-start; flex-direction: column; } .mail-schedule { align-items: stretch; flex-direction: column; } }
 </style>
