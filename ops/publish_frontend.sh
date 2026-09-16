@@ -103,7 +103,7 @@ for block in server_blocks:
 
 unique = []
 for value in roots:
-    value = value.strip().strip('"\'')
+    value = value.strip().strip('"').strip("'")
     if value not in unique:
         unique.append(value)
 
