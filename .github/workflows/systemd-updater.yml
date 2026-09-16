@@ -34,13 +34,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.12.0'
+      - name: Verify updater is executable
+        run: test -x ops/update_systemd.sh
       - name: Validate updater shell syntax
         run: bash -n ops/update_systemd.sh
       - name: Execute updater runtime preflight
         env:
           PROJECT_DIR: ${{ github.workspace }}
           PYTHON_BIN: python3.12
-        run: bash ops/update_systemd.sh --preflight-only
+        run: ./ops/update_systemd.sh --preflight-only
       - name: Verify required deployment guards are present
         shell: bash
         run: |
