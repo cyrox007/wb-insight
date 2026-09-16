@@ -10,6 +10,7 @@ Optional WB, billing and durable-audit phases are enabled only when requested.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 from http.cookiejar import CookieJar
 from pathlib import Path
 import json
@@ -109,6 +110,32 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _safe_base_origin(value: str) -> str:
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise SmokeFailure("SMOKE_BASE_URL must be an http(s) origin")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise SmokeFailure("SMOKE_BASE_URL must not contain credentials, query or fragment")
+    if parsed.path not in {"", "/"}:
+        raise SmokeFailure("SMOKE_BASE_URL must not contain a path")
+    port = f":{parsed.port}" if parsed.port else ""
+    return f"{parsed.scheme}://{parsed.hostname}{port}"
+
+
+def _write_evidence(path: Path, *, args: argparse.Namespace, checks: dict[str, bool]) -> None:
+    report = {
+        "schema_version": 1,
+        "kind": "release_smoke",
+        "status": "pass",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "version": args.expected_version,
+        "base_origin": _safe_base_origin(args.base_url),
+        "checks": checks,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _disposable_email(template: str | None, suffix: UUID) -> str:
@@ -244,7 +271,7 @@ def run_disposable_registration_smoke(
     mail_token_timeout: int = 180,
     require_email_verification: bool = False,
     require_password_reset: bool = False,
-) -> None:
+) -> dict[str, bool]:
     """Prove registration, real mail, demo, consent and session lifecycle."""
     client = SmokeClient(base_url)
     suffix = uuid4()
@@ -263,6 +290,7 @@ def run_disposable_registration_smoke(
 
     registered = False
     deactivated = False
+    verification_required = False
     try:
         registration = client.request(
             "POST",
@@ -426,12 +454,22 @@ def run_disposable_registration_smoke(
                     pass
             client.access_token = None
 
-    mail_note = ", real email verification" if require_email_verification else ""
+    mail_note = ", real email verification" if verification_required else ""
     reset_note = ", real password reset" if require_password_reset else ""
     print(
         "[ok] disposable registration"
         f"{mail_note}{reset_note}, demo subscription, consent evidence, refresh and deactivation"
     )
+    return {
+        "disposable_registration": True,
+        "email_verification": verification_required,
+        "password_reset": require_password_reset,
+        "demo_activation": True,
+        "legal_consent_evidence": True,
+        "refresh_restore": True,
+        "deactivation": True,
+        "inactive_login_rejected": True,
+    }
 
 
 def run_authenticated_smoke(client: SmokeClient, email: str, password: str) -> None:
@@ -565,6 +603,7 @@ def _self_test() -> None:
     assert _extract_mail_token(
         "https://app.example.com/verify-email#token=abcdefghijklmnop"
     ) == "abcdefghijklmnop"
+    assert _safe_base_origin("https://example.com/") == "https://example.com"
     try:
         _extract_mail_token("https://app.example.com/verify-email?token=abcdefghijklmnop")
     except SmokeFailure:
@@ -626,6 +665,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--wb-token", default=os.getenv("SMOKE_WB_TOKEN"))
     parser.add_argument("--billing-tariff", default=os.getenv("SMOKE_BILLING_TARIFF"))
+    parser.add_argument(
+        "--evidence-output",
+        type=Path,
+        default=Path(os.environ["SMOKE_EVIDENCE_OUTPUT"]) if os.getenv("SMOKE_EVIDENCE_OUTPUT") else None,
+        help="Write a sanitized machine-readable pass report",
+    )
     return parser.parse_args()
 
 
@@ -636,6 +681,7 @@ def main() -> int:
         return 0
     if not args.base_url:
         raise SmokeFailure("SMOKE_BASE_URL or --base-url is required")
+    _safe_base_origin(args.base_url)
     if args.mail_token_timeout <= 0 or args.mail_token_timeout > 1800:
         raise SmokeFailure("mail token timeout must be between 1 and 1800 seconds")
     if args.skip_disposable_registration and (
@@ -645,14 +691,36 @@ def main() -> int:
             "required email verification/password reset cannot be combined with skipped disposable registration"
         )
 
+    checks: dict[str, bool] = {
+        "public_health_legal": False,
+        "disposable_registration": False,
+        "email_verification": False,
+        "password_reset": False,
+        "demo_activation": False,
+        "legal_consent_evidence": False,
+        "disposable_refresh_restore": False,
+        "deactivation": False,
+        "inactive_login_rejected": False,
+        "authenticated_profile": False,
+        "authenticated_refresh_restore": False,
+        "dashboard_contract": False,
+        "audit_correlation": False,
+        "wb_credential": False,
+        "billing_init": False,
+        "logout_session_revoke": False,
+    }
+
     client = SmokeClient(args.base_url)
     run_public_smoke(client, args.expected_version)
+    checks["public_health_legal"] = True
 
     if args.public_only:
+        if args.evidence_output:
+            _write_evidence(args.evidence_output, args=args, checks=checks)
         return 0
 
     if not args.skip_disposable_registration:
-        run_disposable_registration_smoke(
+        disposable = run_disposable_registration_smoke(
             args.base_url,
             email_template=args.disposable_email_template,
             mail_token_command=args.mail_token_command,
@@ -660,18 +728,32 @@ def main() -> int:
             require_email_verification=args.require_email_verification,
             require_password_reset=args.require_password_reset,
         )
+        checks.update(disposable)
+        checks["disposable_refresh_restore"] = disposable["refresh_restore"]
+        checks.pop("refresh_restore", None)
 
     if not args.email or not args.password:
         raise SmokeFailure("SMOKE_EMAIL and SMOKE_PASSWORD are required for authenticated smoke")
 
     run_authenticated_smoke(client, args.email, args.password)
+    checks["authenticated_profile"] = True
+    checks["authenticated_refresh_restore"] = True
+    checks["dashboard_contract"] = True
     if args.audit_smoke:
         run_audit_correlation_smoke(client)
+        checks["audit_correlation"] = True
     if args.wb_token:
         run_wb_credential_smoke(client, args.wb_token)
+        checks["wb_credential"] = True
     if args.billing_tariff:
         run_billing_init_smoke(client, args.billing_tariff)
+        checks["billing_init"] = True
     run_logout_smoke(client)
+    checks["logout_session_revoke"] = True
+
+    if args.evidence_output:
+        _write_evidence(args.evidence_output, args=args, checks=checks)
+        print(f"[ok] structured release smoke evidence: {args.evidence_output}")
     return 0
 
 
