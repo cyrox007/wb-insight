@@ -79,7 +79,12 @@ async def issue_email_verification_token(
 
 
 async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
-    """Verify registration email or atomically apply a pending email change."""
+    """Verify registration email or atomically apply a pending email change.
+
+    Replaying the same successfully-used token is idempotent while that verified
+    address is still the account's current identity. Revoked, expired or stale
+    target tokens remain invalid.
+    """
     now = datetime.now(timezone.utc)
     result = await session.execute(
         select(EmailVerificationToken)
@@ -87,12 +92,7 @@ async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
         .with_for_update()
     )
     token = result.scalar_one_or_none()
-    if (
-        token is None
-        or token.used_at is not None
-        or token.revoked_at is not None
-        or token.expires_at <= now
-    ):
+    if token is None or token.revoked_at is not None or token.expires_at <= now:
         return None
 
     user_result = await session.execute(
@@ -105,6 +105,11 @@ async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
     target = _normalized_email(token.email)
     current = _normalized_email(user.email)
     pending = _normalized_email(getattr(user, "pending_email", None))
+
+    if token.used_at is not None:
+        if target == current and user.email_verified_at is not None:
+            return user
+        return None
 
     if target == current and user.email_verified_at is None:
         # Initial registration: grant demo access only after ownership is proven.
