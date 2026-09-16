@@ -24,6 +24,16 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _load_json(path: Path, *, label: str) -> dict:
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} must be valid UTF-8 JSON") from exc
+    if not isinstance(report, dict):
+        raise ValueError(f"{label} must contain a JSON object")
+    return report
+
+
 def _validate_database_upgrade_binding(
     deployment_path: Path,
     *,
@@ -31,12 +41,7 @@ def _validate_database_upgrade_binding(
     commit: str,
     environment: str,
 ) -> None:
-    try:
-        report = json.loads(deployment_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError("deployment artifact must be valid UTF-8 JSON") from exc
-    if not isinstance(report, dict):
-        raise ValueError("deployment artifact must contain a JSON object")
+    report = _load_json(deployment_path, label="deployment artifact")
     if report.get("version") != version:
         raise ValueError("deployment artifact version does not match release VERSION")
     if str(report.get("commit") or "").lower() != commit.lower():
@@ -51,12 +56,33 @@ def _validate_database_upgrade_binding(
         raise ValueError("deployment artifact has invalid database upgrade proof SHA-256")
 
 
+def _validate_wb_credential_binding(
+    core_smoke_path: Path,
+    deployment_path: Path,
+    payment_path: Path,
+    *,
+    version: str,
+) -> None:
+    core = _load_json(core_smoke_path, label="core_smoke artifact")
+    deployment = _load_json(deployment_path, label="deployment artifact")
+    payment = _load_json(payment_path, label="payment isolation proof")
+    if core.get("schema_version") != 1 or core.get("kind") != "release_smoke":
+        raise ValueError("core_smoke artifact has an invalid schema")
+    if core.get("status") != "pass" or core.get("version") != version:
+        raise ValueError("core_smoke artifact does not match passing release VERSION")
+    checks = core.get("checks")
+    if not isinstance(checks, dict) or checks.get("wb_credential") is not True:
+        raise ValueError("core_smoke must prove live WB credential validation and cleanup")
+    core_origin = str(core.get("base_origin") or "").rstrip("/")
+    deployment_origin = str(deployment.get("public_origin") or "").rstrip("/")
+    payment_origin = str(payment.get("base_origin") or "").rstrip("/")
+    if not core_origin or core_origin != deployment_origin or core_origin != payment_origin:
+        raise ValueError("core smoke, deployment and payment proof must target the same public origin")
+
+
 def _bind_candidate_subproof(manifest_path: Path, *, name: str, proof_path: Path) -> None:
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError("generated release manifest is invalid") from exc
-    if not isinstance(manifest, dict) or manifest.get("status") != "complete":
+    manifest = _load_json(manifest_path, label="generated release manifest")
+    if manifest.get("status") != "complete":
         raise ValueError("generated release manifest is not complete")
     subproofs = manifest.setdefault("candidate_subproofs", {})
     if not isinstance(subproofs, dict):
@@ -104,6 +130,7 @@ def main() -> int:
 
     ci_path: Path | None = None
     deployment_path: Path | None = None
+    core_smoke_path: Path | None = None
     try:
         for raw in args.artifact:
             kind, path = parse_artifact(raw)
@@ -115,6 +142,10 @@ def main() -> int:
                 if deployment_path is not None:
                     raise ValueError("duplicate deployment artifact")
                 deployment_path = path
+            elif kind == "core_smoke":
+                if core_smoke_path is not None:
+                    raise ValueError("duplicate core_smoke artifact")
+                core_smoke_path = path
     except ValueError as exc:
         print(f"release_candidate_error={exc}", file=sys.stderr)
         return 2
@@ -123,6 +154,9 @@ def main() -> int:
         return 2
     if deployment_path is None:
         print("release_candidate_error=structured deployment artifact is required", file=sys.stderr)
+        return 2
+    if core_smoke_path is None:
+        print("release_candidate_error=structured core_smoke artifact is required", file=sys.stderr)
         return 2
     if args.payment_proof is None:
         print("release_candidate_error=structured payment isolation proof is required", file=sys.stderr)
@@ -146,6 +180,12 @@ def main() -> int:
             version=version,
             commit=commit,
             environment=environment,
+        )
+        _validate_wb_credential_binding(
+            core_smoke_path,
+            deployment_path,
+            args.payment_proof,
+            version=version,
         )
     except (CIAcceptanceError, PaymentAcceptanceError, ValueError, OSError) as exc:
         print(f"release_candidate_error={exc}", file=sys.stderr)
