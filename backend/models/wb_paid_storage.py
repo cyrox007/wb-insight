@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date as dt_date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID as UUIDType, uuid4
@@ -37,7 +37,7 @@ class WbPaidStorage(Database.Base):
     )
     source_task_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
-    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    date: Mapped[dt_date] = mapped_column(Date, nullable=False, index=True)
     log_warehouse_coef: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
     office_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     warehouse: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -56,10 +56,10 @@ class WbPaidStorage(Database.Base):
     barcodes_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     pallet_place_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     pallet_count: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 6), nullable=True)
-    original_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    original_date: Mapped[Optional[dt_date]] = mapped_column(Date, nullable=True)
     loyalty_discount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
-    tariff_fix_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    tariff_lower_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    tariff_fix_date: Mapped[Optional[dt_date]] = mapped_column(Date, nullable=True)
+    tariff_lower_date: Mapped[Optional[dt_date]] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
