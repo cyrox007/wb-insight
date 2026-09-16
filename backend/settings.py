@@ -48,6 +48,7 @@ class Config:
 
     ENCRYPTION_KEY = os.getenv("API_TOKEN_ENCRYPTION_KEY")
     SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    LEGAL_EVIDENCE_HMAC_KEY = os.getenv("LEGAL_EVIDENCE_HMAC_KEY", "").strip() or None
 
     if not SECRET_KEY:
         raise RuntimeError("JWT_SECRET_KEY is required")
