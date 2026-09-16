@@ -11,8 +11,11 @@ from core.session_security import SessionSecurityMiddleware
 from core.version import APP_VERSION
 from handlers.account_lifecycle_handler import account_router, auth_router as account_auth_router
 from handlers.auth_handler import router as auth_router
+from handlers.email_verification_handler import router as email_verification_router
+from handlers.mail_preferences_handler import router as mail_preferences_router
 from handlers.control_panel.audit import router as CP_audit_router
 from handlers.control_panel.home import router as CP_home_router
+from handlers.control_panel.mail import router as CP_mail_router
 from handlers.control_panel.operations import router as CP_operations_router
 from handlers.control_panel.payments import router as CP_payments_router
 from handlers.control_panel.roles import router as CP_roles_router
@@ -40,10 +43,7 @@ from settings import config
 
 ALLOWED_ORIGINS = config.get_allowed_origins
 ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
-STATIC_DIRECTORIES = {
-    "static": "/static",
-    "uploads": "/uploads",
-}
+STATIC_DIRECTORIES = {"static": "/static", "uploads": "/uploads"}
 
 
 def _setup_cors(app: FastAPI) -> None:
@@ -70,7 +70,9 @@ def _register_routers(app: FastAPI) -> None:
         user_router,
         auth_router,
         account_auth_router,
+        email_verification_router,
         account_router,
+        mail_preferences_router,
         session_router,
         D_main_router,
         D_user_profile_router,
@@ -91,6 +93,7 @@ def _register_routers(app: FastAPI) -> None:
         CP_roles_router,
         CP_payments_router,
         CP_audit_router,
+        CP_mail_router,
         CP_operations_router,
     ]
     for router in routers:
@@ -98,12 +101,7 @@ def _register_routers(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(
-        title="WB Insight API",
-        description="Seller analytics API for WB Insight",
-        version=APP_VERSION,
-    )
-
+    app = FastAPI(title="WB Insight API", description="Seller analytics API for WB Insight", version=APP_VERSION)
     app.add_middleware(HTTPMetricsMiddleware)
     app.add_middleware(SessionSecurityMiddleware)
     app.add_middleware(AuditMiddleware)
