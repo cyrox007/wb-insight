@@ -6,7 +6,7 @@
 
 ## [0.9.0-alpha.11] — 2026-09-16
 
-P34 — закрытие разрыва между beta readiness и release-evidence contract. Кандидат до merge.
+P34 — закрытие разрыва между beta readiness и release-evidence contract. PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`.
 
 - beta manifest больше не может считаться полным только по `ci + core_smoke + data_accuracy`;
 - обязательный beta evidence set синхронизирован с дорожной картой: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
@@ -17,9 +17,9 @@ P34 — закрытие разрыва между beta readiness и release-evi
 - `data_accuracy` проверяется как machine-readable schema v1 со `status=pass`, ненулевыми periods/metrics и SHA-256 входа/policy;
 - manifest schema поднята до v2;
 - Release integrity содержит positive/negative contract tests для полного beta-набора, старого неполного набора, неверного SHA, alpha-version, пустого artifact и failing data-accuracy evidence;
-- `RELEASE_EVIDENCE.md`, roadmap, readiness и versioning синхронизируются с фактическим contract.
+- `RELEASE_EVIDENCE.md`, roadmap, readiness и versioning синхронизированы с фактическим contract.
 
-P34 не создаёт beta автоматически: production-like deployment, SMTP/lifecycle smoke, UX/secrets review и real-seller data-accuracy evidence по-прежнему должны быть выполнены фактически на exact beta candidate.
+Финальный exact head P34 `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity. P34 не создаёт beta автоматически: production-like deployment, SMTP/lifecycle smoke, UX/secrets review и real-seller data-accuracy evidence по-прежнему должны быть выполнены фактически на exact beta candidate.
 
 ## [0.9.0-alpha.10] — 2026-09-16
 
@@ -242,7 +242,7 @@ PR #1 — первый воспроизводимый backend/frontend baseline.
 
 ## Следующие release stages
 
-- `0.9.0-beta.1` — feature freeze + реальный production-like deployment/core smoke + SMTP recovery smoke + data-accuracy acceptance;
+- `0.9.0-beta.1` — feature freeze + реальный production-like deployment/core smoke + SMTP recovery smoke + UX/secrets review + data-accuracy acceptance;
 - `1.0.0-rc.1` — real WB/Sber/prod/legal/ops gates;
 - `1.0.0` — публичный stable WB Insight Web v1 из проверенного RC.
 

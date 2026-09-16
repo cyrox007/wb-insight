@@ -61,21 +61,19 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` находится на **`0.9.0-alpha.10`** после P33 / PR #51, merge `9dacaee426937c7466ac22cedd878e11b53cc472`. Финальный exact head P33 `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл Backend security, Frontend build, Database migrations и Release integrity.
+`main` находится на **`0.9.0-alpha.11`** после P34 / PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`. Финальный exact head P34 `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity.
 
-Ветка P34 `codex/p34-beta-evidence-contract` является кандидатом **`0.9.0-alpha.11`**. Она закрывает найденный после P33 governance blocker: старый beta manifest мог формально считаться полным без deployment, SMTP/account-lifecycle, UX и secrets-review evidence и не связывал stage с prerelease-версией.
+`0.9.0-alpha.11` закрывает найденный после P33 governance blocker: release-evidence manifest v2 синхронизирован с фактическим beta readiness, требует полный beta evidence set, валидирует stage/version, полный Git SHA, непустые artifacts и machine-readable passing `data_accuracy`.
 
-P34 переводит release-evidence manifest на schema v2, синхронизирует обязательный beta evidence set с `RELEASE_ROADMAP.md`/`RELEASE_READINESS.md`, валидирует полный Git SHA, непустые artifacts и machine-readable passing `data_accuracy`, а также связывает `beta/rc/stable` со соответствующим типом `VERSION`.
-
-После green merge P34 следующее повышение стадии — `0.9.0-beta.1` только после фактического production-like HTTPS deployment, полного smoke, SMTP recovery, UX/secrets review и real-seller data-accuracy acceptance с evidence manifest. Новая alpha-итерация создаётся только если до beta обнаружится ещё один реальный code-side release blocker.
+Следующее повышение стадии — `0.9.0-beta.1` только после фактического production-like HTTPS deployment, полного smoke, SMTP recovery, UX/secrets review и real-seller data-accuracy acceptance с evidence manifest v2. Новая alpha-итерация создаётся только если до beta обнаружится ещё один реальный code-side release blocker.
 
 Каноническая последовательность:
 
 1. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
 2. `0.9.0-alpha.8` — account-lifecycle code baseline;
 3. `0.9.0-alpha.9` — registration transaction/demo/beta-smoke hardening;
-4. `0.9.0-alpha.10` — production configuration fail-closed hardening, текущий `main` до merge P34;
-5. `0.9.0-alpha.11` — beta evidence-contract closure, P34 candidate;
+4. `0.9.0-alpha.10` — production configuration fail-closed hardening;
+5. `0.9.0-alpha.11` — beta evidence-contract closure, текущий `main`;
 6. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + UX/secrets review + data-accuracy acceptance;
 7. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
 8. `1.0.0` — публичный WB Insight Web v1 Stable.
