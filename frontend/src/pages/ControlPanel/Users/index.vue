@@ -38,10 +38,14 @@ async function loadUsers() {
 	loadError.value = ''
 	try {
 		const response = await CP_Users.getUserList()
-		users.value = response.data?.user_list || []
+		if (response.data?.status !== 'success' || !Array.isArray(response.data?.user_list)) {
+			throw new Error('Некорректный ответ API пользователей')
+		}
+		users.value = response.data.user_list
 	} catch (error) {
 		console.error('Error fetching users:', error)
-		loadError.value = 'Не удалось загрузить список пользователей.'
+		users.value = []
+		loadError.value = 'Не удалось загрузить список пользователей. Проверьте API панели управления.'
 	} finally {
 		isLoading.value = false
 	}
