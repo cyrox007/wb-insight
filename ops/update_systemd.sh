@@ -6,9 +6,10 @@ PROJECT_DIR="${PROJECT_DIR:-/home/projects/wb}"
 BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 PYTHON_BIN="${PYTHON_BIN:-python3.12}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:9000/health/ready}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:9001/health/ready}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
-VENV_DIR="$BACKEND_DIR/venv"
+VENV_LINK="$BACKEND_DIR/venv"
+VENV_RELEASES_DIR="$BACKEND_DIR/venv.releases"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 PREVIOUS_COMMIT=""
 NEW_VENV=""
@@ -86,6 +87,10 @@ if [[ "$MODE" == "--preflight-only" ]]; then
 fi
 [[ -z "$MODE" ]] || fail "Unknown argument: $MODE"
 
+for service in wb-backend wb-celery wb-celery-beat; do
+  systemctl cat "$service" >/dev/null 2>&1 || fail "Missing required systemd unit: $service"
+done
+
 if [[ -n "$(git -C "$PROJECT_DIR" status --porcelain)" ]]; then
   fail "Working tree is not clean. Commit/stash local changes before deployment."
 fi
@@ -102,7 +107,8 @@ NEW_COMMIT="$(git -C "$PROJECT_DIR" rev-parse HEAD)"
 log "Target commit:  $NEW_COMMIT"
 
 log "[2/8] Building a fresh Python 3.12 virtual environment..."
-NEW_VENV="$BACKEND_DIR/venv.next.$STAMP"
+mkdir -p "$VENV_RELEASES_DIR"
+NEW_VENV="$VENV_RELEASES_DIR/$STAMP"
 "$PYTHON_BIN" -m venv "$NEW_VENV"
 "$NEW_VENV/bin/python" -m pip install --upgrade pip setuptools wheel
 "$NEW_VENV/bin/python" -m pip install --requirement "$BACKEND_DIR/requirements.txt"
@@ -110,6 +116,15 @@ NEW_VENV="$BACKEND_DIR/venv.next.$STAMP"
 import numpy, pandas, fastapi
 print(f"numpy={numpy.__version__} pandas={pandas.__version__} fastapi={fastapi.__version__}")
 PY
+
+for executable in python alembic uvicorn celery; do
+  [[ -x "$NEW_VENV/bin/$executable" ]] || fail "Fresh virtual environment is missing executable: $executable"
+done
+"$NEW_VENV/bin/celery" --version >/dev/null
+(
+  cd "$BACKEND_DIR"
+  PYTHONPATH=. "$NEW_VENV/bin/python" -c 'import models; print("models import OK")'
+)
 
 log "[3/8] Applying database migrations with the new environment..."
 (
@@ -130,11 +145,26 @@ log "[5/8] Building frontend..."
 )
 
 log "[6/8] Activating the new virtual environment..."
-if [[ -d "$VENV_DIR" ]]; then
-  mv "$VENV_DIR" "$BACKEND_DIR/venv.previous.$STAMP"
+# Never rename a populated venv after pip has generated console scripts.
+# Their shebangs contain the absolute interpreter path. Build each release at
+# its final immutable path and expose it through the stable backend/venv symlink.
+if [[ -L "$VENV_LINK" ]]; then
+  NEXT_LINK="$BACKEND_DIR/.venv-link.$STAMP"
+  ln -s "$NEW_VENV" "$NEXT_LINK"
+  mv -Tf "$NEXT_LINK" "$VENV_LINK"
+elif [[ -e "$VENV_LINK" ]]; then
+  LEGACY_BACKUP="$BACKEND_DIR/venv.previous.$STAMP"
+  mv "$VENV_LINK" "$LEGACY_BACKUP"
+  ln -s "$NEW_VENV" "$VENV_LINK"
+  log "Previous directory venv preserved at: $LEGACY_BACKUP"
+else
+  ln -s "$NEW_VENV" "$VENV_LINK"
 fi
-mv "$NEW_VENV" "$VENV_DIR"
+ACTIVE_VENV="$NEW_VENV"
 NEW_VENV=""
+
+[[ -x "$VENV_LINK/bin/celery" ]] || fail "Activated venv does not expose celery"
+"$VENV_LINK/bin/celery" --version >/dev/null
 
 log "[7/8] Restarting application services..."
 run_root systemctl restart wb-backend
@@ -169,5 +199,6 @@ printf '\n'
 ok "WB Insight update completed successfully."
 ok "Previous commit: $PREVIOUS_COMMIT"
 ok "Current commit:  $NEW_COMMIT"
-ok "Backend Python:  $($VENV_DIR/bin/python --version 2>&1)"
+ok "Backend release: $ACTIVE_VENV"
+ok "Backend Python:  $($VENV_LINK/bin/python --version 2>&1)"
 ok "Product version:  $(tr -d '\r\n' < "$PROJECT_DIR/VERSION")"
