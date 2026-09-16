@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from celery_app import celery_app
 from core.database_celery import get_session
+from core.lifecycle_config import lifecycle_config
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage
 from services.mail_campaign_service import due_scheduled_campaign_ids, launch_campaign
 from services.mail_service import (
@@ -39,7 +40,7 @@ async def _refresh_campaign(campaign_id) -> None:
 
 
 async def _process_due_campaigns() -> dict[str, int]:
-    if not celery_app.conf.get("mail_delivery_enabled", True):
+    if not lifecycle_config.MAIL_DELIVERY_ENABLED:
         return {"launched": 0, "failed": 0}
 
     session = await get_session()
@@ -85,7 +86,10 @@ async def _process_due_mail() -> dict[str, int]:
 
     session = await get_session()
     try:
-        ids = await due_message_ids(session)
+        ids = await due_message_ids(
+            session,
+            include_marketing=lifecycle_config.MAIL_DELIVERY_ENABLED,
+        )
     finally:
         await session.close()
 
