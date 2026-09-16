@@ -4,6 +4,23 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
+## [0.9.0-alpha.11] — 2026-09-16
+
+P34 — закрытие разрыва между beta readiness и release-evidence contract. Кандидат до merge.
+
+- beta manifest больше не может считаться полным только по `ci + core_smoke + data_accuracy`;
+- обязательный beta evidence set синхронизирован с дорожной картой: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
+- RC наследует весь beta-набор и добавляет `wb_full_sync`, `sber_payment`, `operations`, `backup_restore`, `legal`; stable наследует RC и добавляет `rc_signoff`;
+- release stage теперь связан с канонической версией: beta требует `*-beta.N`, RC — `*-rc.N`, stable — версию без prerelease suffix;
+- `--commit` обязан быть полным 40-символьным Git SHA, environment — непустым;
+- неизвестные и пустые evidence artifacts отклоняются;
+- `data_accuracy` проверяется как machine-readable schema v1 со `status=pass`, ненулевыми periods/metrics и SHA-256 входа/policy;
+- manifest schema поднята до v2;
+- Release integrity содержит positive/negative contract tests для полного beta-набора, старого неполного набора, неверного SHA, alpha-version, пустого artifact и failing data-accuracy evidence;
+- `RELEASE_EVIDENCE.md`, roadmap, readiness и versioning синхронизируются с фактическим contract.
+
+P34 не создаёт beta автоматически: production-like deployment, SMTP/lifecycle smoke, UX/secrets review и real-seller data-accuracy evidence по-прежнему должны быть выполнены фактически на exact beta candidate.
+
 ## [0.9.0-alpha.10] — 2026-09-16
 
 P33 — fail-closed production configuration перед beta. PR #51, merge `9dacaee426937c7466ac22cedd878e11b53cc472`.
