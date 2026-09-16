@@ -1,17 +1,18 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
-import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs';
-import Modal from '@/components/UI/Modal.vue';
-import TextInput from '@/components/UI/TextInput.vue';
-import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue';
-import ButtonPrimary from '@/components/UI/Buttons/ButtonPrimary.vue';
+import { ref, watch } from 'vue'
+import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs'
+import Modal from '@/components/UI/Modal.vue'
+import TextInput from '@/components/UI/TextInput.vue'
+import TextareaInput from '@/components/UI/TextareaInput.vue'
+import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
+import FormMessage from '@/components/UI/FormMessage.vue'
 
 const props = defineProps({
 	isOpen: Boolean,
 	currentTariff: Object
-});
+})
 
-const emit = defineEmits(['close', 'updated']);
+const emit = defineEmits(['close', 'updated'])
 const tariffData = ref({
 	name: '',
 	description: '',
@@ -19,147 +20,106 @@ const tariffData = ref({
 	is_active: false,
 	is_public: false
 })
-const modalLoadedBtn = ref(false);
+const isSaving = ref(false)
+const formMessage = ref('')
+const messageType = ref('')
 
 watch(
 	() => props.currentTariff,
 	(newTariff) => {
-		if (newTariff && newTariff.id) {
-			tariffData.value = {
-				name: newTariff.name || '',
-				description: newTariff.description || '',
-				price_rub: String(newTariff.price_rub ?? ''),
-				is_active: Boolean(newTariff.is_active),
-				is_public: Boolean(newTariff.is_public)
-			}
+		if (!newTariff?.id) return
+		tariffData.value = {
+			name: newTariff.name || '',
+			description: newTariff.description || '',
+			price_rub: String(newTariff.price_rub ?? ''),
+			is_active: Boolean(newTariff.is_active),
+			is_public: Boolean(newTariff.is_public)
 		}
+		formMessage.value = ''
+		messageType.value = ''
 	},
 	{ immediate: true }
 )
 
-const editTariff = async () => {
-	modalLoadedBtn.value = true;
+async function editTariff() {
+	formMessage.value = ''
+	messageType.value = ''
+
+	if (!tariffData.value.name.trim()) {
+		formMessage.value = 'Название тарифа обязательно.'
+		messageType.value = 'error'
+		return
+	}
+
+	const price = Number(String(tariffData.value.price_rub).replace(',', '.'))
+	if (!Number.isFinite(price) || price < 0) {
+		formMessage.value = 'Цена должна быть неотрицательным числом.'
+		messageType.value = 'error'
+		return
+	}
+
+	isSaving.value = true
 	try {
 		const payload = {
-			name: tariffData.value.name,
-			description: tariffData.value.description,
-			price_rub: parseFloat(tariffData.value.price_rub) || 0,
+			name: tariffData.value.name.trim(),
+			description: tariffData.value.description.trim(),
+			price_rub: Number(price.toFixed(2)),
 			is_active: tariffData.value.is_active,
 			is_public: tariffData.value.is_public
-		};
-
-		const response = await CP_Tariffs.editTariff(props.currentTariff.id, payload);
-		if (response.data.status === 'success') {
-			emit('updated');
-			setTimeout(() => {
-				modalLoadedBtn.value = false;
-				emit('close')
-			}, 1000);
 		}
+
+		const response = await CP_Tariffs.editTariff(props.currentTariff.id, payload)
+		if (response.data?.status !== 'success') {
+			throw new Error(response.data?.message || 'Не удалось сохранить тариф')
+		}
+
+		emit('updated')
+		emit('close')
 	} catch (error) {
-		console.error('Ошибка редактирования тарифа:', error);
-		modalLoadedBtn.value = false;
+		console.error('Ошибка редактирования тарифа:', error)
+		formMessage.value = error.response?.data?.error?.message || error.message || 'Ошибка при сохранении тарифа'
+		messageType.value = 'error'
+	} finally {
+		isSaving.value = false
 	}
 }
 </script>
 
 <template>
-	<Modal :is-open="isOpen" @close="$emit('close')">
+	<Modal :is-open="isOpen" size="large" @close="$emit('close')">
 		<template #header>
-			<h3>Редактировать тариф</h3>
+			<h3 class="cp-modal-title">Редактировать тариф</h3>
 		</template>
 		<template #body>
-			<TextInput label="Название тарифа" v-model="tariffData.name" />
-			<TextInput label="Описание тарифа" v-model="tariffData.description" />
-			<TextInput v-model="tariffData.price_rub" label="Цена" placeholder="Введите цену тарифа" type="number" />
+			<div class="cp-form-grid">
+				<TextInput label="Название тарифа" v-model="tariffData.name" />
+				<TextareaInput label="Описание" v-model="tariffData.description" :rows="3" />
+				<TextInput v-model="tariffData.price_rub" label="Цена, ₽/мес" type="number" />
 
-			<div class="form-group">
-				<label class="toggle-label">
-					Активен ли тариф?
-					<div class="toggle-switch" @click="tariffData.is_active = !tariffData.is_active">
-						<div class="toggle-slider" :class="{ 'toggle-on': tariffData.is_active }"></div>
+				<div class="cp-toggle-row">
+					<div class="cp-toggle-row__copy">
+						<div class="cp-toggle-row__label">Активный тариф</div>
+						<div class="cp-toggle-row__hint">{{ tariffData.is_active ? 'Доступен для подключения' : 'Отключён для подключения' }}</div>
 					</div>
-				</label>
-				<div class="toggle-hint">{{ typeof tariffData.is_active }}
-					{{ tariffData.is_active ? 'Тариф доступен для подключения' : 'Тариф неактивен' }}
+					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': tariffData.is_active }" :aria-pressed="tariffData.is_active" @click="tariffData.is_active = !tariffData.is_active"></button>
+				</div>
+
+				<div class="cp-toggle-row">
+					<div class="cp-toggle-row__copy">
+						<div class="cp-toggle-row__label">Публичный тариф</div>
+						<div class="cp-toggle-row__hint">{{ tariffData.is_public ? 'Показывается пользователям' : 'Скрыт из публичного списка' }}</div>
+					</div>
+					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': tariffData.is_public }" :aria-pressed="tariffData.is_public" @click="tariffData.is_public = !tariffData.is_public"></button>
 				</div>
 			</div>
-			<div class="form-group">
-				<label class="toggle-label">
-					Опубликован ли тариф?
-					<div class="toggle-switch" @click="tariffData.is_public = !tariffData.is_public">
-						<div class="toggle-slider" :class="{ 'toggle-on': tariffData.is_public }"></div>
-					</div>
-				</label>
-				<div class="toggle-hint">
-					{{ tariffData.is_public ? 'Тариф опубликован' : 'Тариф скрыт' }}
-				</div>
-			</div>
+
+			<FormMessage v-if="formMessage" :message="formMessage" :message-type="messageType" />
 		</template>
 		<template #footer>
-			<ButtonCancel @click="$emit('close')" :text="'Отмена'" />
-			<ButtonPrimary @click="editTariff" :loading="modalLoadedBtn" :text="'Сохранить'" />
+			<div class="cp-modal-footer">
+				<BaseButton variant="outline" text="Отмена" @click="$emit('close')" />
+				<BaseButton variant="primary" text="Сохранить" :loading="isSaving" @click="editTariff" />
+			</div>
 		</template>
 	</Modal>
 </template>
-
-<style scoped>
-.form-group {
-	margin-bottom: 20px;
-}
-
-.toggle-label {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	font-weight: 500;
-	color: var(--text-color);
-	cursor: pointer;
-	user-select: none;
-}
-
-.toggle-switch {
-	position: relative;
-	width: 50px;
-	height: 26px;
-}
-
-.toggle-slider {
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background-color: #555;
-	border-radius: 13px;
-	transition: var(--transition);
-	cursor: pointer;
-}
-
-.toggle-slider::before {
-	content: '';
-	position: absolute;
-	height: 22px;
-	width: 22px;
-	left: 2px;
-	bottom: 2px;
-	background-color: white;
-	border-radius: 50%;
-	transition: var(--transition);
-}
-
-.toggle-slider.toggle-on {
-	background-color: var(--success-color);
-}
-
-.toggle-slider.toggle-on::before {
-	transform: translateX(24px);
-}
-
-.toggle-hint {
-	font-size: 0.85rem;
-	color: #aaa;
-	margin-top: 6px;
-	text-align: right;
-}
-</style>

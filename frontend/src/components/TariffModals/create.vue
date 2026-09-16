@@ -1,236 +1,125 @@
 <script setup>
-import { ref } from 'vue';
-import Modal from '../UI/Modal.vue';
-import TextInput from '../UI/TextInput.vue';
-import ButtonCancel from '../UI/Buttons/ButtonCancel.vue';
-import ButtonPrimary from '../UI/Buttons/ButtonPrimary.vue';
-import StringTransform from '@/utils/string_transform.js';
-import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs';
+import { ref, watch } from 'vue'
+import Modal from '../UI/Modal.vue'
+import TextInput from '../UI/TextInput.vue'
+import TextareaInput from '../UI/TextareaInput.vue'
+import BaseButton from '../UI/Buttons/BaseButton.vue'
+import FormMessage from '../UI/FormMessage.vue'
+import StringTransform from '@/utils/string_transform.js'
+import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs'
 
 const props = defineProps({
-    isOpen: Boolean
-});
+	isOpen: Boolean
+})
 
 const emit = defineEmits(['close', 'created'])
+const isSaving = ref(false)
+const tariffCode = ref('')
+const tariffName = ref('')
+const tariffPrice = ref('')
+const tariffDescription = ref('')
+const isActive = ref(true)
+const formMessage = ref('')
+const messageType = ref('')
 
-const modalLoadedBtn = ref(false)
-
-const tariffCode = ref('');
-const tariffName = ref('');
-const tariffPrice = ref('');
-const tariffDescription = ref('');
-const isActive = ref(true);
-const isPublic = ref(true);
-
-const formError = ref('')
-
-const createTariff = async () => {
-    modalLoadedBtn.value = true;
-    formError.value = '';
-    try {
-        if (!tariffCode.value.trim()) {
-            return formError.value = 'Поле "Ключ код" обязательно';
-        }
-
-        const codeToSend = StringTransform.containsCyrillic(tariffCode.value)
-            ? transliterate(tariffCode.value)
-            : tariffCode.value;
-
-        if (!tariffName.value.trim()) {
-            return formError.value = 'Поле "Название" обязательно';
-        }
-
-        // Проверка цены
-        const priceStr = tariffPrice.value.trim();
-        if (!priceStr) {
-            return formError.value = 'Поле "Цена" обязательно';
-        }
-
-        // Преобразуем в число (поддерживаем запятую и точку)
-        const priceNum = parseFloat(priceStr.replace(',', '.'));
-        if (isNaN(priceNum)) {
-            return formError.value = 'Цена должна быть числом';
-        }
-        if (priceNum < 0) {
-            return formError.value = 'Цена не может быть отрицательной';
-        }
-        if (!isFinite(priceNum)) {
-            return formError.value = 'Некорректное значение цены';
-        }
-
-        // Опционально: округляем до 2 знаков (как в БД NUMERIC(10,2))
-        const priceRounded = Number(priceNum.toFixed(2));
-
-        const response = await CP_Tariffs.createTariff({
-            code: codeToSend.trim(),
-            name: tariffName.value.trim(),
-            price: priceRounded,
-            description: tariffDescription.value.trim(),
-            isActive: isActive.value,
-            isPublic: isPublic.value
-        });
-
-        if (response.data?.status === 'success') {
-            formError.value = 'Тариф успешно создан!';
-            setTimeout(() => {
-                emit('close');
-            }, 1000);
-        } else if (response.data?.status === 'error') {
-            formError.value = response.data.message || 'Ошибка при создании тарифа';
-        } else {
-            formError.value = 'Неожиданный ответ от сервера';
-        }
-    } catch {
-        console.error('Ошибка создания тарифа:', error);
-        formError.value = 'Ошибка подключения к серверу';
-    } finally {
-        modalLoadedBtn.value = false;
-    }
+function resetForm() {
+	tariffCode.value = ''
+	tariffName.value = ''
+	tariffPrice.value = ''
+	tariffDescription.value = ''
+	isActive.value = true
+	formMessage.value = ''
+	messageType.value = ''
 }
 
+watch(() => props.isOpen, (isOpen) => {
+	if (isOpen) resetForm()
+})
+
+async function createTariff() {
+	formMessage.value = ''
+	messageType.value = ''
+
+	if (!tariffCode.value.trim()) {
+		formMessage.value = 'Укажите код тарифа.'
+		messageType.value = 'error'
+		return
+	}
+	if (!tariffName.value.trim()) {
+		formMessage.value = 'Укажите название тарифа.'
+		messageType.value = 'error'
+		return
+	}
+
+	const priceStr = tariffPrice.value.trim()
+	const priceNum = Number(priceStr.replace(',', '.'))
+	if (!priceStr || !Number.isFinite(priceNum) || priceNum < 0) {
+		formMessage.value = 'Цена должна быть неотрицательным числом.'
+		messageType.value = 'error'
+		return
+	}
+
+	isSaving.value = true
+	try {
+		const codeToSend = StringTransform.containsCyrillic(tariffCode.value)
+			? StringTransform.transliterate(tariffCode.value)
+			: tariffCode.value
+
+		const response = await CP_Tariffs.createTariff({
+			code: codeToSend.trim(),
+			name: tariffName.value.trim(),
+			price: Number(priceNum.toFixed(2)),
+			description: tariffDescription.value.trim(),
+			isActive: isActive.value
+		})
+
+		if (response.data?.status !== 'success') {
+			throw new Error(response.data?.message || 'Не удалось создать тариф')
+		}
+
+		emit('created')
+		emit('close')
+	} catch (error) {
+		console.error('Ошибка создания тарифа:', error)
+		formMessage.value = error.response?.data?.error?.message || error.message || 'Ошибка подключения к серверу'
+		messageType.value = 'error'
+	} finally {
+		isSaving.value = false
+	}
+}
 </script>
 
 <template>
-    <Modal :is-open="isOpen" @close="$emit('close')">
-        <template #header>
-            <div class="modal-header">
-                <h3 class="modal-title">Создать тариф</h3>
-                <button class="modal-close" @click="$emit('close')">&times;</button>
-            </div>
-        </template>
+	<Modal :is-open="isOpen" size="large" @close="$emit('close')">
+		<template #header>
+			<h3 class="cp-modal-title">Создать тариф</h3>
+		</template>
 
-        <template #body>
-            <div class="modal-body">
-                <TextInput v-model="tariffCode" label="Ключ код" placeholder="Параметр должен быть уникальным"
-                    type="text" />
-                <TextInput v-model="tariffName" label="Название" placeholder="Введите название тарифа" type="text" />
-                <TextInput v-model="tariffPrice" label="Цена" placeholder="Введите цену тарифа" type="number" />
-                <TextInput v-model="tariffDescription" label="Описание" placeholder="Введите описание тарифа"
-                    type="text" />
+		<template #body>
+			<div class="cp-form-grid">
+				<TextInput v-model="tariffCode" label="Код тарифа" placeholder="Например: business" />
+				<TextInput v-model="tariffName" label="Название" placeholder="Введите название тарифа" />
+				<TextInput v-model="tariffPrice" label="Цена, ₽/мес" placeholder="0" type="number" />
+				<TextareaInput v-model="tariffDescription" label="Описание" placeholder="Кратко опишите тариф" :rows="3" />
 
-                <div class="form-group">
-                    <label class="toggle-label">
-                        Активен ли тариф?
-                        <div class="toggle-switch" @click="isActive = !isActive">
-                            <div class="toggle-slider" :class="{ 'toggle-on': isActive }"></div>
-                        </div>
-                    </label>
-                    <div class="toggle-hint">
-                        {{ isActive ? 'Тариф доступен для подключения' : 'Тариф скрыт и недоступен' }}
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label class="toggle-label">
-                        Публичен ли тариф? (виден ли в списке тарифов и доступен)
-                        <div class="toggle-switch" @click="isPublic = !isPublic">
-                            <div class="toggle-slider" :class="{ 'toggle-on': isPublic }"></div>
-                        </div>
-                    </label>
-                    <div class="toggle-hint">
-                        {{ isPublic ? 'Тариф опубликован' : 'Тариф скрыт и недоступен' }}
-                    </div>
-                </div>
-            </div>
-            <div class="modal-error" v-if="formError !== ''" style="color: red;">{{ formError }}</div>
-        </template>
+				<div class="cp-toggle-row">
+					<div class="cp-toggle-row__copy">
+						<div class="cp-toggle-row__label">Активный тариф</div>
+						<div class="cp-toggle-row__hint">{{ isActive ? 'Доступен для подключения' : 'Отключён для подключения' }}</div>
+					</div>
+					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': isActive }" :aria-pressed="isActive" @click="isActive = !isActive"></button>
+				</div>
+				<p class="cp-muted">Публичность тарифа можно изменить после создания в карточке тарифа.</p>
+			</div>
 
-        <template #footer>
-            <div class="modal-footer">
-                <ButtonCancel @click="$emit('close')" />
-                <ButtonPrimary @click="createTariff" text="Создать тариф" :loading="modalLoadedBtn"
-                    :disabled="modalLoadedBtn" />
-            </div>
-        </template>
-    </Modal>
+			<FormMessage v-if="formMessage" :message="formMessage" :message-type="messageType" />
+		</template>
+
+		<template #footer>
+			<div class="cp-modal-footer">
+				<BaseButton variant="outline" text="Отмена" @click="$emit('close')" />
+				<BaseButton variant="primary" text="Создать тариф" :loading="isSaving" @click="createTariff" />
+			</div>
+		</template>
+	</Modal>
 </template>
-
-<style scoped>
-.modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.modal-title {
-    font-size: 20px;
-    font-weight: 600;
-}
-
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: #aaa;
-}
-
-.modal-body {
-    margin-bottom: 20px;
-}
-
-.modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-.form-group {
-    margin-bottom: 20px;
-}
-
-.toggle-label {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-weight: 500;
-    color: var(--text-color);
-    cursor: pointer;
-    user-select: none;
-}
-
-.toggle-switch {
-    position: relative;
-    width: 50px;
-    height: 26px;
-}
-
-.toggle-slider {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #555;
-    border-radius: 13px;
-    transition: var(--transition);
-    cursor: pointer;
-}
-
-.toggle-slider::before {
-    content: '';
-    position: absolute;
-    height: 22px;
-    width: 22px;
-    left: 2px;
-    bottom: 2px;
-    background-color: white;
-    border-radius: 50%;
-    transition: var(--transition);
-}
-
-.toggle-slider.toggle-on {
-    background-color: var(--success-color);
-}
-
-.toggle-slider.toggle-on::before {
-    transform: translateX(24px);
-}
-
-.toggle-hint {
-    font-size: 0.85rem;
-    color: #aaa;
-    margin-top: 6px;
-    text-align: right;
-}
-</style>
