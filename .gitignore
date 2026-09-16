@@ -6,7 +6,8 @@ __pycache__/
 .DS_Store
 
 # Deployment/runtime virtualenv artifacts created by update/rollback flows.
-backend/venv.broken.*/
-backend/venv.previous.*/
-backend/venv.release.*/
-backend/venv.releases/
+# No trailing slash here: some artifacts are symlinks, not directories.
+backend/venv.broken.*
+backend/venv.previous.*
+backend/venv.release.*
+backend/venv.releases
