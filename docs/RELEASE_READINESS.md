@@ -5,184 +5,116 @@
 ## Текущий статус
 
 - `main`: **`0.9.0-alpha.11`**.
-- P34 закрыт PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`.
-- P36 systemd deployment hotfix закрыт PR #55, merge `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c`, без product version bump.
-- P35 data-accuracy completeness hardening закрыт PR #56, merge `d2e782208228fbe60cb92b9e61fbf8d325f0e839`, без product version bump.
-- P30 закрепил воспроизводимую data-accuracy acceptance и release-evidence baseline.
-- P31 закрыл production-safe code baseline жизненного цикла аккаунта.
-- P32 закрыл найденные перед beta дефекты registration/demo flow и встроил disposable registration evidence в core smoke.
-- P33 закрыл production-config blocker и добавил fail-closed startup contract.
-- P34 закрыл release-governance gap: beta manifest v2 требует весь фактический beta evidence set и связывает stage с version/commit.
-- P35 закрыл обход data-accuracy gate через пропущенные required-метрики и undocumented tolerance override.
-- P36 добавил безопасный systemd updater для перехода production-like host на Python 3.12 и поддерживаемую Node-линию.
-- Основной WB Web v1 feature/code scope заморожен; следующий stage — `0.9.0-beta.1` только после фактического production-like, SMTP recovery, UX/secrets review и real-seller acceptance с evidence manifest v2.
+- P31–P36 release-hardening baseline закрыт.
+- P37 durable audit trail закрыт PR #74, merge `31434c26e98960c0f591bdcb969ba12d96af8263`.
+- payment administration foundation закрыт PR #71, merge `e42c691eaa2f75d7149e78222ae605d039f2eabd`.
+- P38/P39 verified email identity + durable/provider-neutral mail delivery закрыты PR #77, merge `5733ebd2b74a2947ce583dfa78734bdeb1335357`.
+- основной WB Web v1 feature scope **заморожен**;
+- текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
+- `0.9.0-beta.1` разрешён только после фактического P40 acceptance на exact candidate commit.
 
-## Code-side status
+## Code-side status: закрыто в main
 
-### Закрыто в main
-
-- auth/session/RBAC baseline;
+- auth/session/RBAC, роли и Control Panel;
 - account-scoped durable WB sync;
-- orders/sales/returns;
-- advertising/funnel;
-- products/stocks/prices;
-- paid storage;
-- finance/reconciliation;
-- historical COGS/manual expenses/revenue plan;
+- orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
+- finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
-- marketplace adapter foundation;
-- WB credential policy/live validation;
-- Sber acquiring code baseline;
-- production Docker/Compose baseline;
+- marketplace credential policy/live validation;
+- acquiring baseline + управляемые payment-provider test/live configs и payment journal;
+- production Docker/Compose + hardened systemd updater;
 - monitoring/alerts code baseline;
 - encrypted backup/restore + CI drill;
 - versioned legal-consent technical baseline;
-- browser access token in-memory + refresh restore;
-- release smoke runner;
-- frontend production/full dependency audit gate;
-- backend `pip-audit` gate без известных vulnerabilities на последнем release-hardening baseline;
-- versioned data-accuracy comparator и release-evidence manifest tooling;
-- password reset/recovery через email с anti-enumeration response;
-- hashed one-time reset tokens; raw secret передаётся через URL fragment, а не HTTP query;
-- production recovery требует HTTPS и SMTP STARTTLS с проверкой сертификата;
-- durable `session_version` для немедленного отзыва access/refresh JWT;
-- paid subscription cancel-at-period-end и undo без обрыва оплаченного периода;
-- demo исключён из paid cancellation semantics;
-- self-service soft deactivation с retention metadata;
-- деактивация отзывает sessions, marketplace credentials и reset links;
-- Sber paid callback/account deactivation race сериализован блокировкой строки пользователя;
-- admin lifecycle mutations над `super_admin` ограничены `super_admin`;
-- append-only account lifecycle audit trail;
-- allowlisted support access/payment/refund events без ручного редактирования production DB;
-- `/account/*` закреплён в production same-origin gateway smoke;
-- Alembic `c8e5f1a2b934` проходит clean upgrade и metadata check;
-- канонический demo tariff code выровнен на lowercase `demo`;
-- registration DB failures и ошибка назначения базовой роли откатывают транзакцию безопасно;
-- authenticated read-only `/legal/consents/me` не раскрывает IP/User-Agent evidence hashes;
-- полный core smoke по умолчанию включает disposable registration → demo → exact legal evidence → refresh → self-deactivation → inactive-login rejection;
-- production startup fail-closed отклоняет template/weak DB/JWT/WB/Sber credentials, malformed Fernet key, HTTP/example public endpoints и небезопасную recovery-конфигурацию;
-- `LEGAL_EVIDENCE_HMAC_KEY` обязателен как отдельный production secret;
-- `.env.production.example` намеренно не запускается как production без замены placeholders, и этот отрицательный contract проверяется CI;
-- beta release-evidence manifest schema v2 требует полный набор `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
-- evidence runner проверяет stage/version binding, полный Git SHA, непустые/известные artifacts и passing machine-readable `data_accuracy`;
-- Release integrity содержит positive/negative self-tests evidence contract;
-- P35 требует все policy-required метрики в каждом acceptance-периоде, запрещает `required:false` для policy-required metric и требует `override_reason` при tolerance override;
-- P35 JSON/Markdown report фиксирует required metric/observation counts, `missing` и причины overrides;
-- P36 systemd updater проверяет runtime prerequisites до изменения working deployment, создаёт fresh Python 3.12 venv, применяет Alembic, выполняет `npm ci`/build и bounded readiness check;
-- отдельный `systemd-updater` workflow проверяет updater на Python 3.12 / Node 22.12;
-- полная структурированная документация проекта.
+- access JWT in-memory + HttpOnly refresh restore;
+- password reset/recovery через durable transactional mail;
+- digest-only reset/verification tokens, raw secrets только в URL fragment;
+- durable `session_version`, paid cancel-at-period-end/undo, self-service soft deactivation;
+- durable append-only P37 audit trail + Control Panel «Аудит»;
+- P38 email verification: new account login/demo gated by ownership proof when enabled;
+- безопасная смена email через `pending_email`, session/reset invalidation после подтверждения;
+- provider-neutral mail registry, SMTP initial adapter;
+- durable Celery mail outbox с retry/backoff/idempotency;
+- campaign draft/preview/test/immediate/scheduled launch/cancel, segmentation, suppression и delivery history;
+- campaign scheduling с row lock/due-time recheck и retry-safe materialization;
+- mail failure-rate/stale-queue operational checks;
+- Control Panel «Рассылки» с фильтрами/pagination/scheduling;
+- versioned data-accuracy comparator и evidence manifest tooling;
+- beta manifest v2 требует `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
+- production startup fail-closed для слабых/template secrets, unsafe endpoints и некорректных provider configs.
 
-P31 намеренно не реализует автоматический hard purge и не придумывает юридический срок retention/refund rules. Эти решения требуют утверждённой policy. P32–P36 не означают прохождение production-like acceptance: они делают code/deployment/release gates воспроизводимыми и fail-closed.
+Все существующие пользователи при P38 schema upgrade сохраняют доступ: migration backfill-ит их verified-state. Новые registrations требуют подтверждения только после явного production включения verification вместе с рабочим mail transport.
 
-## Фактическое состояние production-like systemd host на 16 сентября 2026
+## Production-like host
 
-Полученная с сервера проверка подтверждает:
+Исторические snapshots Python 3.10/Node 18 и локального helper updater больше не являются каноническим release state: deployment tooling после P36 неоднократно harden-илось. Для beta evidence не используется старый снимок хоста — состояние должно быть **заново зафиксировано на exact beta candidate commit**.
 
-- repository после `git pull --ff-only origin main`: `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c` на момент проверки;
-- `VERSION`: `0.9.0-alpha.11`;
-- `wb-backend`, `wb-celery`, `wb-celery-beat` используют `/home/projects/wb/backend/venv`;
-- активный `backend/venv`: **Python 3.10.12**;
-- системный Python 3.12 установлен: **Python 3.12.13** + `python3.12-venv`;
-- Node на хосте: **18.20.8**;
-- working tree содержит untracked `update.sh`.
+P40 deployment evidence обязан подтвердить:
 
-Это **ещё не считается успешным deployment evidence**. Перед beta необходимо:
-
-1. обновить repository до текущего `main` после P35;
-2. убрать/перенести локальный `update.sh`, чтобы automated deployment начинался из clean working tree;
-3. установить поддерживаемую Node-линию: `^20.19` или `>=22.12`;
-4. выполнить P36 updater/preflight;
-5. подтвердить, что после переключения `backend/venv/bin/python --version` показывает Python 3.12;
-6. подтвердить active systemd services и `/health/ready`;
-7. сохранить deployment/rollback evidence для exact beta candidate commit.
+1. clean working tree и штатный `./update.sh`;
+2. активный immutable Python 3.12 release environment;
+3. поддерживаемую Node-линию;
+4. backend/Celery worker/Celery Beat/nginx после стабилизационных checks;
+5. Alembic current/head и metadata consistency;
+6. `/health/ready` на deployed version;
+7. rollback procedure/evidence;
+8. фактически опубликованный frontend bundle того же candidate commit.
 
 ## Gate до `0.9.0-beta.1`
 
 Beta разрешена только после:
 
-- на текущем alpha.11 baseline нет известных необработанных code-side release blockers;
-- feature freeze WB Web v1;
-- production-like HTTPS deployment из репозитория с реальными non-placeholder secrets/hosts;
-- для systemd deployment backend/Celery/Beat реально работают из Python 3.12 environment;
-- frontend build выполняется на поддерживаемом Node (`^20.19` или `>=22.12`), а не Node 18;
-- automated update начинается с clean Git working tree;
-- миграций на чистой БД и upgrade существующей БД;
+- feature freeze и отсутствия известных необработанных code-side release blockers;
+- production-like HTTPS deployment с реальными non-placeholder secrets/hosts;
+- миграций clean DB + upgrade копии существующей БД;
 - deploy/rollback smoke;
-- фактического core `ops/release_smoke.py` без `--skip-disposable-registration`;
-- disposable registration + demo subscription + exact persisted legal evidence;
-- login/refresh-cookie restore/logout и lifecycle smoke;
-- реального password-recovery smoke через настроенный SMTP/provider;
-- основных desktop/mobile UX сценариев;
-- проверки отсутствия secrets в frontend bundle/git/logs;
-- приёмочной сверки аналитики минимум на одном реальном WB seller account;
-- для каждого acceptance-периода присутствуют все policy-required метрики;
-- `missing=0`, нет необъяснённых существенных денежных расхождений;
-- каждый tolerance override имеет `override_reason` и review evidence;
-- полного `beta` manifest v2 от `ops/release_evidence.py` для exact `*-beta.N` candidate commit со всеми обязательными artifacts.
+- полного `ops/release_smoke.py` без `--skip-disposable-registration`;
+- **реального email verification smoke** на deliverable disposable/catch-all адресе;
+- demo activation только после verification ownership proof;
+- **реального password reset** через настроенный mail provider;
+- login/refresh-cookie restore/logout/deactivation;
+- representative durable P37 audit correlation по request id;
+- desktop/mobile UX для client screens и Control Panel users/roles/tariffs/payments/audit/mail;
+- secrets review frontend bundle/git/logs/audit/mail/payment metadata;
+- real-seller data-accuracy на фиксированных периодах: все required metrics, `missing=0`, нет необъяснённых существенных денежных расхождений;
+- каждый tolerance override имеет `override_reason` + review evidence;
+- backup + isolated restore evidence;
+- полного beta manifest v2 для exact `0.9.0-beta.N` candidate.
 
-Подробности data-accuracy: `DATA_ACCURACY_ACCEPTANCE.md`. Формат evidence: `RELEASE_EVIDENCE.md`. Systemd deployment: `SYSTEMD_DEPLOYMENT.md`.
+До включения реальной почты `EMAIL_VERIFICATION_ENABLED=false` и `MAIL_DELIVERY_ENABLED=false` остаются безопасными deployment defaults; это позволяет выкатывать код/миграции без внезапной блокировки текущих пользователей, но **не закрывает beta acceptance**.
 
 ## Внешние blockers до RC
 
 ### Wildberries
 
-Нужны фактические production partner/service credentials, разрешённые лимиты и реальный seller smoke. Проверяется полный sync всех заявленных доменов без необъяснённых auth/rate-limit ошибок.
+Нужны фактические production partner/service credentials, разрешённые лимиты и real seller full-sync smoke без необъяснённых auth/rate-limit ошибок.
 
-### Сбер
+### Acquiring
 
-Нужны merchant onboarding, sandbox/production credentials, HTTPS callback/return/fail URLs и реальные smoke-сценарии success/decline/cancel/retry/duplicate callback с back-office reconciliation. Для refund требуется утверждённая процедура и фактическая проверка у провайдера.
+Нужны merchant onboarding, sandbox/production credentials, HTTPS callback/return/fail URLs и реальные success/decline/cancel/retry/duplicate callback/refund/reconciliation scenarios. Code-side test/live isolation и journal уже есть.
 
 ### Production infrastructure
 
-Нужны фактические domain/DNS/TLS, secret management, production PostgreSQL/Redis topology и подтверждённый deploy/rollback.
+Нужны domain/DNS/TLS, secret management, production PostgreSQL/Redis topology и подтверждённый deploy/rollback.
 
 ### Operations
 
-Нужно реально подключить uptime monitor, alert destination, centralized logs/error triage и проверить alert delivery на production-like трафике.
+Нужно реально подключить uptime monitor, alert destination, centralized logs/error triage и проверить alert delivery. Audit trail должен участвовать в incident triage.
 
 ### Backup/restore
 
-Нужно включить регулярный schedule, off-host storage и выполнить production-like restore drill с измеренными RPO/RTO.
+Нужно включить schedule/off-host storage и выполнить production-like restore drill с измеренными RPO/RTO.
 
 ### Legal
 
-Текущие встроенные документы остаются draft. Перед RC должны быть утверждены и опубликованы non-draft версии: terms/offer, privacy, personal-data consent, marketplace credential policy, refund/cancellation policy, retention/deletion policy и реквизиты оператора.
-
-### Account lifecycle — внешняя активация после P31
-
-После code baseline P31 остаются доказательства среды:
-
-- реальный SMTP/provider и recovery-delivery smoke;
-- утверждённый retention срок и hard-delete procedure;
-- утверждённая refund/cancellation policy;
-- проверенная Sber refund/reconciliation procedure;
-- production-like lifecycle smoke и evidence.
+До RC должны быть утверждены и опубликованы non-draft terms/offer, privacy, personal-data consent, marketplace credential policy, refund/cancellation policy, retention/deletion policy и реквизиты оператора.
 
 ## Gate до `1.0.0-rc.1`
 
-Все beta-gates плюс:
-
-- реальный WB seller credential + full sync;
-- реальный Sber payment/refund smoke;
-- production deployment/TLS;
-- monitoring/alerts/logging active;
-- off-host backup + restore evidence;
-- non-draft legal documents;
-- account lifecycle проверен в production-like окружении;
-- полный release smoke;
-- полный `rc` evidence manifest для exact commit.
+Все beta gates плюс реальный WB full sync, acquiring/refund smoke, active monitoring/logging, off-host backup/restore evidence, non-draft legal documents и полный `rc` evidence manifest exact commit.
 
 ## Gate до `1.0.0`
 
-Stable выпускается из проверенного RC, если:
+Stable выпускается из проверенного RC, если нет release-blocking defects, необработанных Critical/High security issues и необъяснённых финансовых расхождений; backup/rollback/legal доказаны; CHANGELOG/release notes финальны; stable evidence manifest сохранён; exact commit получает `VERSION=1.0.0` и tag `v1.0.0`.
 
-- нет release-blocking дефектов;
-- нет необработанных Critical/High security issues;
-- нет необъяснённых финансовых/аналитических расхождений;
-- backup актуален и rollback plan проверен;
-- legal published;
-- CHANGELOG/release notes финальны;
-- полный `stable` evidence manifest сохранён;
-- exact stable commit получает `VERSION=1.0.0` и tag `v1.0.0`.
-
-Полная последовательность и ownership задач: [`RELEASE_ROADMAP.md`](RELEASE_ROADMAP.md). Smoke contract: [`RELEASE_SMOKE.md`](RELEASE_SMOKE.md).
+Полная последовательность: [`RELEASE_ROADMAP.md`](RELEASE_ROADMAP.md). Smoke contract: [`RELEASE_SMOKE.md`](RELEASE_SMOKE.md). Evidence contract: [`RELEASE_EVIDENCE.md`](RELEASE_EVIDENCE.md).

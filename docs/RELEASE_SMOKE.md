@@ -4,61 +4,26 @@
 
 ## 1. CI smoke
 
-На release PR автоматически проверяются:
+На release PR автоматически проверяются backend/frontend dependency audits и test suites, frontend production build, Alembic clean upgrade/check, production images/Compose/gateway routing, encrypted PostgreSQL backup/restore, canonical version metadata, data-accuracy/evidence contracts и синтаксис release tooling.
 
-- backend dependency audit и test suite;
-- frontend production/full dependency audits;
-- frontend production build;
-- запрет persistent browser storage для `access_token`;
-- Alembic upgrade/check на чистом PostgreSQL;
-- production Docker images;
-- Compose model;
-- реальный nginx container routing для `/auth`, `/dashboard`, `/billing`, `/legal`, `/account`, `/control-panel`, `/health`;
-- encrypted PostgreSQL backup/restore roundtrip;
-- consistency canonical product version;
-- acceptance-tools positive/negative contracts.
-
-Изменение `VERSION` запускает backend security и database migrations, поэтому release-candidate metadata не обходит эти gates.
-
-CI smoke не доказывает доступность WB/Сбер из production environment и не доказывает корректность денежных показателей на реальном кабинете.
+CI не доказывает доступность Wildberries/эквайринга/mail provider из production-like environment и не заменяет сверку денежных показателей на реальном seller account.
 
 ## 2. Production-like core smoke
 
-Runner: `ops/release_smoke.py`. Запускается против отдельного HTTPS environment.
+Канонический runner: `ops/release_smoke.py`. Он запускается только против отдельного HTTPS environment и не должен печатать passwords, access/refresh tokens, marketplace credentials, mail verification/reset tokens или содержимое тестовых писем.
+
+Базовый запуск:
 
 ```bash
 export SMOKE_BASE_URL=https://staging.example.com
-export SMOKE_EMAIL=release-smoke@example.com
+export SMOKE_EMAIL=release-admin@example.com
 export SMOKE_PASSWORD='...'
 python3 ops/release_smoke.py
 ```
 
-Runner не должен печатать passwords, access/refresh tokens, marketplace credentials или raw PII test-user values.
+`SMOKE_EMAIL`/`SMOKE_PASSWORD` — заранее подготовленный smoke user. Для `SMOKE_AUDIT=true` этот пользователь должен иметь `AUDIT_READ` (`admin`/`super_admin`).
 
-По умолчанию полный core smoke состоит из двух изолированных частей:
-
-1. disposable registration lifecycle на отдельном временном аккаунте;
-2. основной smoke через заранее подготовленного пользователя из `SMOKE_EMAIL`/`SMOKE_PASSWORD`.
-
-Core checks:
-
-1. `/health/live` и deployed version;
-2. `/health/ready`;
-3. legal registry для registration/billing/marketplace contexts;
-4. disposable registration с актуальными legal documents;
-5. активная demo subscription после регистрации;
-6. точные persisted consent `document_code/version/SHA-256` через authenticated `/legal/consents/me`;
-7. cookie-only refresh restore disposable account;
-8. soft-deactivation disposable account;
-9. невозможность refresh/login после деактивации;
-10. login основного smoke user;
-11. protected profile API;
-12. cookie-only session restore после потери in-memory access token;
-13. dashboard API contract;
-14. logout;
-15. невозможность refresh после logout.
-
-Disposable account создаётся с уникальными synthetic email/phone и после проверки soft-deactivate-ится. Он не hard-delete-ится, потому что текущая lifecycle policy намеренно сохраняет retention/audit evidence до утверждения окончательной legal policy.
+Полный core smoke состоит из двух изолированных частей: disposable registration lifecycle и основной authenticated smoke. Проверяются health/readiness/version, legal registry, registration/legal evidence/demo, login/refresh/logout, dashboard contract, deactivation и невозможность использовать отозванную сессию.
 
 Только public checks:
 
@@ -66,134 +31,111 @@ Disposable account создаётся с уникальными synthetic email/
 python3 ops/release_smoke.py --base-url https://staging.example.com --public-only
 ```
 
-Для специализированного окружения disposable registration можно **явно** отключить:
+`--skip-disposable-registration` / `SMOKE_SKIP_DISPOSABLE_REGISTRATION=true` разрешён только для диагностики. Такой прогон не закрывает beta gate.
+
+## 3. P40: реальная email verification и password recovery
+
+После P38/P39 beta smoke обязан доказать реальную доставку писем. Нельзя закрывать beta с `EMAIL_VERIFICATION_ENABLED=false` или адресом `@smoke.invalid`.
+
+Runner поддерживает provider-neutral inbox hook. Нужны:
 
 ```bash
-python3 ops/release_smoke.py --skip-disposable-registration
+export SMOKE_DISPOSABLE_EMAIL_TEMPLATE='release-smoke+{uuid}@qa.example.com'
+export SMOKE_MAIL_TOKEN_COMMAND='/opt/wb-smoke/read-mail-token'
+export SMOKE_REQUIRE_EMAIL_VERIFICATION=true
+export SMOKE_REQUIRE_PASSWORD_RESET=true
 ```
 
-или `SMOKE_SKIP_DISPOSABLE_REGISTRATION=true`. Такой прогон не закрывает beta gate disposable registration/demo/legal evidence.
+`SMOKE_DISPOSABLE_EMAIL_TEMPLATE` обязан содержать `{uuid}` и формировать реально доставляемый уникальный адрес/catch-all mailbox.
 
-Sanitized output полного core smoke сохраняется как evidence kind `core_smoke`.
+`SMOKE_MAIL_TOKEN_COMMAND` запускается **без shell**. Runner передаёт ему два последних argv: `KIND EMAIL`; те же значения доступны как `WB_SMOKE_MAIL_KIND` и `WB_SMOKE_EMAIL`. `KIND` сейчас принимает `email_verification` или `password_reset`. Helper должен дождаться соответствующего письма и вывести в stdout ровно одно значение: raw token либо полный URL, где secret находится только во fragment `#token=...`.
 
-## 3. Disposable registration smoke contract
+Runner захватывает stdout/stderr helper-а и никогда не печатает их при ошибке. URL с `?token=` отвергается. Таймаут регулируется `SMOKE_MAIL_TOKEN_TIMEOUT_SECONDS` (по умолчанию 180 секунд, максимум 1800).
 
-Начиная с P32 disposable flow встроен в `ops/release_smoke.py` и запускается по умолчанию для любого непубличного полного smoke.
+Beta disposable flow доказывает:
 
-Runner обязан доказать:
+1. registration возвращает `email_verification_required=true`;
+2. письмо реально доставлено на уникальный адрес;
+3. `/auth/email-verification/confirm` подтверждает адрес;
+4. login разрешается только после подтверждения;
+5. session identity содержит `email_verified=true`;
+6. demo активируется после ownership proof;
+7. exact legal consent evidence сохранён;
+8. password reset проходит через тот же реальный mail transport;
+9. новый пароль работает, старые sessions отозваны;
+10. refresh lifecycle и soft-deactivation остаются корректными.
 
-1. получение актуальных registration legal requirements;
-2. успешное создание уникального test user;
-3. создание активной `demo` subscription;
-4. наличие immutable consent evidence с точными текущими document version/SHA-256;
-5. cookie-only session restore;
-6. успешную self-service soft-deactivation;
-7. отсутствие действующего refresh session после деактивации;
-8. отказ повторного login с `USER_INACTIVE`.
+Для локального smoke контракта без сети:
 
-Read-only `/legal/consents/me` возвращает только consent audit fields и намеренно не возвращает privacy-sensitive `ip_hmac`/`user_agent_hmac`.
+```bash
+python3 ops/release_smoke.py --self-test
+```
 
-## 4. Wildberries integration smoke
+## 4. Durable audit correlation smoke
 
-В dedicated seller account runner может использовать отдельно переданный `SMOKE_WB_TOKEN`.
+P37 считается подтверждённым на production-like environment только после representative durable audit smoke:
 
-Проверяется:
+```bash
+export SMOKE_AUDIT=true
+python3 ops/release_smoke.py
+```
 
-- актуальный marketplace legal requirement;
-- live credential validation;
-- успешное сохранение подключения;
-- cleanup созданного credential;
-- затем полный Celery sync: orders/sales, products/stocks, prices, ads, funnel, paid storage, finance;
-- отсутствие необъяснённых auth/permission/rate-limit ошибок.
+Runner отправляет security-sensitive Control Panel read с уникальным `X-Request-ID`, затем ищет событие через `/control-panel/audit/` и требует совпадение request id, успешный result и audit path. Raw secrets/PII в evidence не выводятся.
+
+## 5. Wildberries integration smoke
+
+В dedicated seller account runner может использовать отдельно переданный `SMOKE_WB_TOKEN`. Проверяется актуальный marketplace legal requirement, live credential validation, storage/cleanup credential, затем полный Celery sync заявленных доменов и отсутствие необъяснённых auth/permission/rate-limit ошибок.
 
 Для RC sanitized результат полного sync сохраняется как evidence kind `wb_full_sync`.
 
-## 5. Data-accuracy acceptance
+## 6. Data-accuracy acceptance
 
 До beta выбираются фиксированные периоды реального seller account и сравниваются WB Insight, официальные WB-источники и, где применимо, исходная spreadsheet-модель.
 
-Минимум сверяются:
+Канонический runner: `ops/data_accuracy_acceptance.py`; policy: `ops/acceptance/wb_v1_metric_policy.json`. Все policy-required метрики должны присутствовать в каждом периоде, `missing=0`, а tolerance override требует `override_reason`. Необъяснённое существенное денежное расхождение блокирует повышение release stage.
 
-- orders/sales/returns;
-- revenue;
-- commissions;
-- logistics/storage;
-- advertising;
-- COGS/manual expenses/taxes;
-- profit;
-- payout/reconciliation;
-- inventory/prices;
-- unit-economy ratios.
+Green JSON сохраняется как evidence kind `data_accuracy`.
 
-Канонический runner: `ops/data_accuracy_acceptance.py`. Policy: `ops/acceptance/wb_v1_metric_policy.json`. Подробности: `DATA_ACCURACY_ACCEPTANCE.md`.
+## 7. Эквайринг
 
-Для каждого существенного расхождения сохраняется причина или bug reference. Необъяснённое денежное расхождение блокирует повышение release stage. Green JSON output сохраняется как evidence kind `data_accuracy`.
-
-## 6. Сбер acquiring smoke
-
-Для sandbox или заранее согласованного production test:
+Для sandbox/согласованного production test:
 
 ```bash
 export SMOKE_BILLING_TARIFF=pro
 python3 ops/release_smoke.py
 ```
 
-Проверяются:
-
-- payment attempt;
-- provider payment page;
-- server-side status confirmation;
-- paid subscription activation;
-- duplicate callback/status refresh без второй subscription;
-- decline/cancel/retry;
-- сверка с merchant back office.
+Проверяются payment attempt, provider page, server-side confirmation, paid subscription activation, idempotency/duplicate callback, decline/cancel/retry и merchant back-office reconciliation. Test/live события должны оставаться различимыми в payment journal.
 
 Для RC sanitized proof сохраняется как evidence kind `sber_payment`.
 
-## 7. Operations smoke
+## 8. Operations smoke
 
-Перед RC дополнительно подтверждаются:
+Перед beta/RC по соответствующему gate подтверждаются deployment/rollback, active backend/Celery/Beat, `/health/ready`, secrets review, desktop/mobile UX, mail delivery, durable audit, backup/restore. Перед RC дополнительно подключаются внешний uptime monitor, alert destination, centralized logs, off-host encrypted backup и измеренный restore drill/RPO/RTO.
 
-- внешний uptime monitor видит `/health/ready`;
-- alert destination получает test signal;
-- structured logs доступны для incident triage;
-- encrypted backup создан и перенесён off-host;
-- isolated restore drill успешен;
-- фактические RPO/RTO записаны;
-- deploy/rollback procedure проверена.
+## WB Web v1 checklist
 
-Результаты входят в evidence kinds `operations`, `backup_restore` и `deployment`.
-
-## Полный WB Web v1 RC checklist
-
-- [ ] disposable registration;
+- [ ] HTTPS production-like deployment на exact candidate commit;
+- [ ] real email verification + demo activation;
+- [ ] real password reset;
 - [ ] legal consent evidence;
-- [ ] demo subscription;
-- [ ] login/refresh/logout без persistent access JWT;
-- [ ] реальный WB seller connection;
-- [ ] полный WB sync;
+- [ ] login/refresh/logout/deactivation;
+- [ ] durable audit correlation;
+- [ ] Control Panel users/roles/tariffs/payments/audit/mail desktop/mobile;
+- [ ] real WB seller connection + full sync;
 - [ ] data-accuracy acceptance;
-- [ ] Overview;
-- [ ] Unit Economy;
-- [ ] Finance/Reconciliation;
-- [ ] Inventory;
-- [ ] Prices;
-- [ ] Ads;
+- [ ] Overview / Unit Economy / Finance / Inventory / Prices / Ads;
 - [ ] COGS/manual expenses/revenue plan;
-- [ ] Sber success/decline/cancel/retry/idempotency;
-- [ ] paid subscription activation;
-- [ ] removal WB credential;
+- [ ] acquiring success/decline/cancel/retry/idempotency;
 - [ ] monitoring/alerts/logging;
-- [ ] off-host backup;
-- [ ] restore drill;
+- [ ] off-host backup + restore drill;
 - [ ] deploy/rollback evidence;
-- [ ] account lifecycle/support procedures;
-- [ ] non-draft legal documents.
+- [ ] non-draft legal documents before RC.
 
 ## Release evidence
 
-После фактического прогона evidence связывается с exact commit/version командой `ops/release_evidence.py`; contract описан в `RELEASE_EVIDENCE.md`.
+После фактического прогона evidence связывается с exact commit/version через `ops/release_evidence.py`; contract описан в `RELEASE_EVIDENCE.md`.
 
-Для beta обязательны как минимум `ci`, `core_smoke`, `data_accuracy`. RC и stable требуют расширенный набор согласно manifest contract.
+Для beta manifest v2 обязательны `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`. Real email verification/password reset и P37 audit smoke входят в sanitized `core_smoke`/`account_lifecycle` evidence, а не создают обход существующего manifest contract.
 
-Release evidence не должно содержать пароли, session values, marketplace access data, merchant credentials или raw customer PII.
+Release evidence не должно содержать passwords, session values, mail tokens, marketplace credentials, merchant credentials или raw customer PII.
