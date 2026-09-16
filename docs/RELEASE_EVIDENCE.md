@@ -27,6 +27,28 @@ Manifest не копирует содержимое artifacts и не предн
 - каждый artifact должен существовать и быть непустым;
 - `data_accuracy` должен быть JSON-отчётом schema v1 со `status=pass`, ненулевыми period/metric counts и SHA-256 входа/policy.
 
+Начиная с P40 для фактического beta/RC/stable promotion используется дополнительный флаг `--require-structured-runtime-evidence`. Он запрещает подменить ключевые runtime gates произвольными текстовыми файлами и требует machine-readable evidence для `deployment`, `core_smoke` и `account_lifecycle`.
+
+## Structured runtime evidence
+
+`deployment` создаётся `ops/systemd_acceptance.py`. Строгая проверка связывает его с теми же `VERSION`, commit и environment, что и manifest, и требует:
+
+- clean exact-head checkout целевой ветки;
+- immutable `venv.release.*` и Python 3.12;
+- поддерживаемый Node;
+- active/enabled backend, Celery worker и Beat;
+- Celery ping;
+- Alembic current=head;
+- валидный nginx config;
+- local readiness;
+- публичный HTTPS readiness;
+- опубликованный frontend bundle текущей сборки;
+- SHA-256 отдельного rollback-drill proof.
+
+`core_smoke` и `account_lifecycle` создаются одним полным прогоном `ops/release_smoke.py --evidence-output ...`. Строгая проверка требует HTTPS origin и подтверждённые flags disposable registration, реального email verification, demo activation, legal evidence, refresh/deactivation, authenticated flow, P37 audit correlation и logout. Для `account_lifecycle` дополнительно обязателен реальный password reset через почтовый provider.
+
+Один и тот же sanitized `release-smoke.json` допустимо привязать как `core_smoke` и `account_lifecycle`: manifest всё равно фиксирует его SHA-256 отдельно для каждого kind.
+
 ## Beta evidence
 
 Для `beta` обязательны все следующие artifacts:
@@ -39,24 +61,42 @@ Manifest не копирует содержимое artifacts и не предн
 - `secrets_review` — проверка отсутствия secrets/JWT/WB credentials в frontend bundle, git и логах;
 - `data_accuracy` — green JSON-результат `ops/data_accuracy_acceptance.py` на реальном WB seller dataset.
 
-Пример:
+Канонический P40 пример:
 
 ```bash
+python3 ops/systemd_acceptance.py \
+  --environment staging-eu-1 \
+  --public-base-url https://staging.example.com \
+  --rollback-proof /secure/evidence/rollback-drill.txt \
+  --require-rollback-proof \
+  --output /secure/evidence/deployment.json
+
+python3 ops/release_smoke.py \
+  --base-url https://staging.example.com \
+  --require-email-verification \
+  --require-password-reset \
+  --audit-smoke \
+  --evidence-output /secure/evidence/release-smoke.json
+
+RELEASE_SHA="$(git rev-parse HEAD)"
 python3 ops/release_evidence.py \
   --stage beta \
   --environment staging-eu-1 \
   --commit "$RELEASE_SHA" \
+  --require-structured-runtime-evidence \
   --artifact ci=/secure/evidence/ci.txt \
-  --artifact deployment=/secure/evidence/deployment.txt \
-  --artifact core_smoke=/secure/evidence/core-smoke.txt \
-  --artifact account_lifecycle=/secure/evidence/account-lifecycle.txt \
+  --artifact deployment=/secure/evidence/deployment.json \
+  --artifact core_smoke=/secure/evidence/release-smoke.json \
+  --artifact account_lifecycle=/secure/evidence/release-smoke.json \
   --artifact ux_smoke=/secure/evidence/ux-smoke.txt \
   --artifact secrets_review=/secure/evidence/secrets-review.txt \
   --artifact data_accuracy=/secure/evidence/data-accuracy.json \
   --output /secure/evidence/release-manifest.json
 ```
 
-Наличие файлов само по себе не заменяет реальное выполнение проверок. Manifest обеспечивает полноту набора, stage/version binding и целостность artifacts; factual provenance внешних smoke/evidence должна сохраняться владельцем релиза.
+Переменные `SMOKE_EMAIL`, `SMOKE_PASSWORD`, `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` и `SMOKE_MAIL_TOKEN_COMMAND` в примере предполагаются переданными через environment/secret manager и не должны попадать в evidence.
+
+Наличие файлов само по себе не заменяет реальное выполнение проверок. Manifest обеспечивает полноту набора, stage/version binding и целостность artifacts; factual provenance внешних UX/secrets/data-accuracy evidence должна сохраняться владельцем релиза.
 
 ## RC evidence
 
