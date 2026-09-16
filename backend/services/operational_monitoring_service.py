@@ -4,8 +4,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.http_metrics import read_http_counters
+from core.lifecycle_config import lifecycle_config
 from core.ops_config import ops_config
 from core.version import APP_VERSION
+from models.mail_delivery import MailMessage, MailStatus
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from models.user_sync_state_model import UserSyncState
@@ -73,6 +75,80 @@ def _wb_service_secret_check(current: datetime, warning_days: int) -> dict:
 async def _count(session: AsyncSession, statement) -> int:
     result = await session.execute(statement)
     return int(result.scalar_one() or 0)
+
+
+async def _mail_checks(session: AsyncSession, current: datetime) -> tuple[dict, dict]:
+    mail_enabled = (
+        lifecycle_config.MAIL_DELIVERY_ENABLED
+        or lifecycle_config.PASSWORD_RESET_ENABLED
+        or lifecycle_config.EMAIL_VERIFICATION_ENABLED
+    )
+    if not mail_enabled:
+        disabled = _check("not_applicable", enabled=False)
+        return disabled, disabled.copy()
+
+    failure_cutoff = current - timedelta(minutes=ops_config.MAIL_FAILURE_LOOKBACK_MINUTES)
+    stale_cutoff = current - timedelta(minutes=ops_config.MAIL_QUEUE_STALE_MINUTES)
+    terminal_statuses = [MailStatus.SENT.value, MailStatus.FAILED.value]
+
+    total_terminal = await _count(
+        session,
+        select(func.count())
+        .select_from(MailMessage)
+        .where(
+            MailMessage.status.in_(terminal_statuses),
+            MailMessage.last_attempt_at.is_not(None),
+            MailMessage.last_attempt_at >= failure_cutoff,
+        ),
+    )
+    failed_terminal = await _count(
+        session,
+        select(func.count())
+        .select_from(MailMessage)
+        .where(
+            MailMessage.status == MailStatus.FAILED.value,
+            MailMessage.last_attempt_at.is_not(None),
+            MailMessage.last_attempt_at >= failure_cutoff,
+        ),
+    )
+    failure_rate = failed_terminal / total_terminal if total_terminal else 0.0
+    failure_status = "ok"
+    if (
+        total_terminal >= ops_config.MAIL_FAILURE_MIN_MESSAGES
+        and failure_rate >= ops_config.MAIL_FAILURE_RATE_THRESHOLD
+    ):
+        failure_status = "critical"
+
+    stale_queued = await _count(
+        session,
+        select(func.count())
+        .select_from(MailMessage)
+        .where(
+            MailMessage.status == MailStatus.QUEUED.value,
+            MailMessage.created_at <= stale_cutoff,
+            MailMessage.next_attempt_at <= current,
+        ),
+    )
+    queue_status = "warning" if stale_queued else "ok"
+
+    return (
+        _check(
+            failure_status,
+            enabled=True,
+            messages=total_terminal,
+            errors=failed_terminal,
+            rate=round(failure_rate, 4),
+            lookback_minutes=ops_config.MAIL_FAILURE_LOOKBACK_MINUTES,
+            threshold=ops_config.MAIL_FAILURE_RATE_THRESHOLD,
+            min_messages=ops_config.MAIL_FAILURE_MIN_MESSAGES,
+        ),
+        _check(
+            queue_status,
+            enabled=True,
+            count=stale_queued,
+            stale_after_minutes=ops_config.MAIL_QUEUE_STALE_MINUTES,
+        ),
+    )
 
 
 async def build_operational_snapshot(
@@ -168,6 +244,12 @@ async def build_operational_snapshot(
             enabled=ops_config.HTTP_METRICS_ENABLED,
         )
 
+    try:
+        mail_failure_rate, mail_queue_stale = await _mail_checks(session, current)
+    except Exception:
+        mail_failure_rate = _check("error", reason="mail_metrics_unavailable")
+        mail_queue_stale = _check("error", reason="mail_metrics_unavailable")
+
     checks = {
         "failed_sync_jobs": _check(
             "critical" if failed_jobs else "ok",
@@ -197,6 +279,8 @@ async def build_operational_snapshot(
             ops_config.WB_SERVICE_SECRET_EXPIRY_WARNING_DAYS,
         ),
         "http_5xx": http_5xx,
+        "mail_failure_rate": mail_failure_rate,
+        "mail_queue_stale": mail_queue_stale,
     }
 
     return {
