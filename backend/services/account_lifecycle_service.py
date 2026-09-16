@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config as config
 from models.account_lifecycle import AccountLifecycleEvent, PasswordResetToken
+from models.mail_delivery import EmailVerificationToken
 from models.subscription_model import Subscription, SubscriptionStatus
 from models.tokens_model import APIToken
 from models.users_model import User
@@ -152,10 +153,12 @@ async def deactivate_account(
     user.deactivation_reason = clean_reason
     user.retention_until = now + timedelta(days=config.ACCOUNT_DEACTIVATION_RETENTION_DAYS)
     user.session_version += 1
+    # Never let a pending identity change survive deactivation/reactivation.
+    user.pending_email = None
 
-    # Deactivation invalidates every previously issued recovery capability too.
-    # Otherwise an old reset link could become usable again after an admin
-    # later reactivates the account within the token TTL.
+    # Deactivation invalidates every previously issued recovery/identity capability.
+    # Otherwise an old link could become usable again if an admin reactivates the
+    # account before the original token TTL elapsed.
     await session.execute(
         update(PasswordResetToken)
         .where(
@@ -163,6 +166,15 @@ async def deactivate_account(
             PasswordResetToken.used_at.is_(None),
         )
         .values(used_at=now)
+    )
+    await session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
     )
 
     # Persist/lock the inactive user row before touching credentials and
