@@ -21,6 +21,10 @@ export default class CP_Mail {
 		return await $api.post(`/control-panel/mail/campaigns/${id}/test-send`, { email })
 	}
 
+	static async schedule(id, scheduledAt) {
+		return await $api.post(`/control-panel/mail/campaigns/${id}/schedule`, { scheduled_at: scheduledAt })
+	}
+
 	static async launch(id) {
 		return await $api.post(`/control-panel/mail/campaigns/${id}/launch`)
 	}
