@@ -10,11 +10,11 @@
 
 ## Текущее состояние
 
-- `main`: **`0.9.0-alpha.9`**, P32 слит PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`;
+- `main`: **`0.9.0-alpha.10`**, P33 слит PR #51, merge `9dacaee426937c7466ac22cedd878e11b53cc472`;
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest являются постоянными release gates;
 - основной WB Web v1 feature/code baseline собран и feature scope заморожен;
-- P31 закрыл account lifecycle code baseline, P32 — найденные registration/demo release blockers и disposable beta-smoke baseline;
-- P32 exact head прошёл все четыре обязательных CI-контура перед merge;
+- P31 закрыл account lifecycle baseline, P32 — registration/demo и disposable beta-smoke, P33 — fail-closed production configuration;
+- финальный P33 head `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл все четыре обязательных CI-контура;
 - следующий stage — `0.9.0-beta.1`, только после фактического production-like acceptance;
 - переход стадии определяется доказанными gates, а не номером P-задачи.
 
@@ -79,7 +79,29 @@ P32 закрыл:
 - best-effort cleanup временного аккаунта даже при частичном падении smoke;
 - regression tests transaction/demo/consent API contracts.
 
-Это hardening существующего feature scope, а не новая продуктовая функциональность. Exact P32 head прошёл Backend security, Frontend build, Database migrations и Release integrity перед merge. Фактический production-like smoke всё ещё должен быть выполнен в целевом окружении.
+Это hardening существующего feature scope, а не новая продуктовая функциональность. Exact P32 head прошёл Backend security, Frontend build, Database migrations и Release integrity перед merge.
+
+## Этап C3 — P33 / `0.9.0-alpha.10` — закрыт
+
+**PR:** #51  
+**Merge:** `9dacaee426937c7466ac22cedd878e11b53cc472`.
+
+Причина появления этапа — финальный pre-beta audit выявил, что production runtime мог формально стартовать с template/weak values из `.env.production.example`.
+
+P33 закрыл:
+
+- единый fail-closed production preflight на общем `settings` import path для API/Alembic/Celery;
+- запрет `DEBUG=true`, HTTP public endpoints, reserved example hosts и `replace-with-*` placeholders;
+- minimum/weak-secret validation для production DB/JWT/legal-evidence/WB/Sber credentials;
+- реальную Fernet validation для `API_TOKEN_ENCRYPTION_KEY`;
+- отдельный обязательный production `LEGAL_EVIDENCE_HMAC_KEY`;
+- conditional fail-closed Sber gateway/merchant validation;
+- conditional fail-closed SMTP/reset URL/sender/STARTTLS validation;
+- намеренно неготовый к production запуску `.env.production.example`;
+- CI contract: template обязан упасть, CI-only безопасные overrides обязаны импортировать полный FastAPI app;
+- regression tests production/Sber/lifecycle validation.
+
+Первый CI P33 поймал regression порядка recovery validation и ошибку Sber test fixture; оба дефекта исправлены до merge. Финальный exact head прошёл Backend security, Frontend build, Database migrations и Release integrity.
 
 ## Этап D — production-like validation → `0.9.0-beta.1`
 
@@ -87,8 +109,9 @@ P32 закрыл:
 
 Обязательно:
 
-- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` baseline;
-- отдельный production-like HTTPS environment из репозитория;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.10` baseline;
+- отсутствие известных необработанных code-side release blockers;
+- отдельный production-like HTTPS environment из репозитория с реальными non-placeholder secrets/hosts;
 - миграции на чистой БД и upgrade копии существующей БД;
 - deploy/rollback smoke без destructive downgrade;
 - полный core `ops/release_smoke.py` без отключения disposable registration;
@@ -174,7 +197,7 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates и versioning. P31 lifecycle и P32 registration/beta-smoke code baselines уже закрыты.
+Внутри репозитория закрываем acceptance tooling, smoke bugfixes, CI gates и versioning. P31 lifecycle, P32 registration/beta-smoke и P33 production-config code baselines закрыты.
 
 Внешние действия владельца/инфраструктуры: WB partner credentials/limits, Сбер merchant credentials/refund procedure, production hosting/domain/TLS, legal approval/requisites/retention, SMTP provider, alert/logging/object-storage providers.
 
@@ -182,6 +205,6 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Каноническая последовательность
 
-`0.9.0-alpha.9` (текущий main) -> `0.9.0-beta.1` (реальная production-like + SMTP + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
+`0.9.0-alpha.10` (текущий main) -> `0.9.0-beta.1` (реальная production-like + SMTP + data accuracy) -> `1.0.0-rc.1` -> `1.0.0`.
 
 Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `ACCOUNT_LIFECYCLE.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
