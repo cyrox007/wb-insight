@@ -183,6 +183,20 @@ async def _is_suppressed(
     return result.scalar_one_or_none() is not None
 
 
+async def _campaign_target_is_current(session: AsyncSession, message: MailMessage) -> bool:
+    """Never send queued marketing mail to an address no longer owned by user."""
+    if message.user_id is None:
+        return False
+    result = await session.execute(select(User).where(User.id == message.user_id))
+    user = result.scalar_one_or_none()
+    return bool(
+        user is not None
+        and user.is_active
+        and user.email_verified_at is not None
+        and _normalized_email(user.email) == _normalized_email(message.recipient_email)
+    )
+
+
 async def deliver_message(session: AsyncSession, message_id) -> str:
     """Deliver one message inside caller-owned transaction.
 
@@ -200,16 +214,25 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
     if message.next_attempt_at and message.next_attempt_at > now:
         return "not_due"
 
-    if message.kind == MailKind.CAMPAIGN.value and await _is_suppressed(
-        session,
-        message.recipient_email,
-        user_id=message.user_id,
-    ):
-        message.status = MailStatus.SUPPRESSED.value
-        message.safe_error_code = "suppressed"
-        message.last_attempt_at = now
-        await session.flush()
-        return message.status
+    if message.kind == MailKind.CAMPAIGN.value:
+        # A campaign can sit in the outbox while the user changes email or loses
+        # eligibility. Treat that as a suppression rather than sending to stale PII.
+        if not await _campaign_target_is_current(session, message):
+            message.status = MailStatus.SUPPRESSED.value
+            message.safe_error_code = "campaign_target_stale"
+            message.last_attempt_at = now
+            await session.flush()
+            return message.status
+        if await _is_suppressed(
+            session,
+            message.recipient_email,
+            user_id=message.user_id,
+        ):
+            message.status = MailStatus.SUPPRESSED.value
+            message.safe_error_code = "suppressed"
+            message.last_attempt_at = now
+            await session.flush()
+            return message.status
 
     message.status = MailStatus.SENDING.value
     message.last_attempt_at = now
