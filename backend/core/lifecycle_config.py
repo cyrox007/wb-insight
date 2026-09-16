@@ -1,4 +1,25 @@
 import os
+from urllib.parse import urlparse
+
+
+_RESERVED_EXAMPLE_DOMAINS = ("example.com", "example.org", "example.net")
+_WEAK_SECRET_VALUES = {"admin", "changeme", "change-me", "password", "secret"}
+
+
+def _is_reserved_example_host(hostname: str | None) -> bool:
+    if not hostname:
+        return True
+    host = hostname.rstrip(".").lower()
+    return any(host == domain or host.endswith(f".{domain}") for domain in _RESERVED_EXAMPLE_DOMAINS)
+
+
+def _is_placeholder(value: str | None) -> bool:
+    normalized = (value or "").strip().lower()
+    return (
+        not normalized
+        or "replace-with-" in normalized
+        or normalized in _WEAK_SECRET_VALUES
+    )
 
 
 class LifecycleConfig:
@@ -27,6 +48,7 @@ class LifecycleConfig:
             raise RuntimeError("ACCOUNT_DEACTIVATION_RETENTION_DAYS must be positive")
         if not self.PASSWORD_RESET_ENABLED:
             return
+
         missing = [
             name
             for name, value in {
@@ -40,12 +62,32 @@ class LifecycleConfig:
             raise RuntimeError(
                 "PASSWORD_RESET_ENABLED requires: " + ", ".join(missing)
             )
-        if production and not self.PASSWORD_RESET_BASE_URL.startswith("https://"):
-            raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use https://")
-        if production and not self.SMTP_STARTTLS:
-            raise RuntimeError("Production password recovery requires SMTP_STARTTLS=true")
         if bool(self.SMTP_USERNAME) != bool(self.SMTP_PASSWORD):
             raise RuntimeError("SMTP_USERNAME and SMTP_PASSWORD must be configured together")
+
+        if not production:
+            return
+
+        reset_url = urlparse(self.PASSWORD_RESET_BASE_URL)
+        if reset_url.scheme.lower() != "https" or not reset_url.hostname:
+            raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use https://")
+        if "replace-with-" in reset_url.hostname.lower() or _is_reserved_example_host(reset_url.hostname):
+            raise RuntimeError("Production PASSWORD_RESET_BASE_URL must use the real service host")
+        if not self.SMTP_STARTTLS:
+            raise RuntimeError("Production password recovery requires SMTP_STARTTLS=true")
+
+        smtp_host = self.SMTP_HOST.rstrip(".").lower()
+        if "replace-with-" in smtp_host or _is_reserved_example_host(smtp_host):
+            raise RuntimeError("Production SMTP_HOST must use the real provider host")
+
+        from_domain = self.SMTP_FROM_EMAIL.rpartition("@")[2].strip().lower()
+        if not from_domain or _is_reserved_example_host(from_domain):
+            raise RuntimeError("Production SMTP_FROM_EMAIL must use the real sender domain")
+
+        if self.SMTP_USERNAME and _is_placeholder(self.SMTP_USERNAME):
+            raise RuntimeError("Production SMTP_USERNAME must be replaced with a provider value")
+        if self.SMTP_PASSWORD and _is_placeholder(self.SMTP_PASSWORD):
+            raise RuntimeError("Production SMTP_PASSWORD must be replaced with a provider secret")
 
 
 lifecycle_config = LifecycleConfig()
