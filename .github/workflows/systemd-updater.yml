@@ -1,0 +1,37 @@
+name: Systemd updater
+
+on:
+  pull_request:
+    paths:
+      - ops/update_systemd.sh
+      - docs/SYSTEMD_DEPLOYMENT.md
+      - docs/INSTALLATION.md
+      - docs/TROUBLESHOOTING.md
+      - docs/SYSTEM_REQUIREMENTS.md
+      - .github/workflows/systemd-updater.yml
+  push:
+    branches: [main]
+    paths:
+      - ops/update_systemd.sh
+      - docs/SYSTEMD_DEPLOYMENT.md
+      - docs/INSTALLATION.md
+      - docs/TROUBLESHOOTING.md
+      - docs/SYSTEM_REQUIREMENTS.md
+      - .github/workflows/systemd-updater.yml
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate updater shell syntax
+        run: bash -n ops/update_systemd.sh
+      - name: Verify required runtime guards are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'PYTHON_BIN="${PYTHON_BIN:-python3.12}"' ops/update_systemd.sh
+          grep -F 'merge --ff-only' ops/update_systemd.sh
+          grep -F 'npm ci' ops/update_systemd.sh
+          grep -F 'health/ready' ops/update_systemd.sh
+          grep -F 'Python **3.12**' docs/SYSTEMD_DEPLOYMENT.md
