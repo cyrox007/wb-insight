@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -57,14 +58,16 @@ async def _process_due_campaigns() -> dict[str, int]:
                 .with_for_update()
             )
             campaign = result.scalar_one_or_none()
+            now = datetime.now(timezone.utc)
             if (
                 campaign is None
                 or campaign.status != CampaignStatus.SCHEDULED.value
                 or campaign.scheduled_at is None
+                or campaign.scheduled_at > now
             ):
                 await session.rollback()
                 continue
-            await launch_campaign(session, campaign)
+            await launch_campaign(session, campaign, now=now)
             await session.commit()
             launched += 1
         except Exception:
