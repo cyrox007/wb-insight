@@ -24,6 +24,18 @@ class OpsConfig:
         os.getenv("OPS_HTTP_5XX_RATE_THRESHOLD", "0.05")
     )
     HTTP_MIN_REQUESTS = int(os.getenv("OPS_HTTP_MIN_REQUESTS", "20"))
+    MAIL_FAILURE_LOOKBACK_MINUTES = int(
+        os.getenv("OPS_MAIL_FAILURE_LOOKBACK_MINUTES", "60")
+    )
+    MAIL_FAILURE_RATE_THRESHOLD = float(
+        os.getenv("OPS_MAIL_FAILURE_RATE_THRESHOLD", "0.20")
+    )
+    MAIL_FAILURE_MIN_MESSAGES = int(
+        os.getenv("OPS_MAIL_FAILURE_MIN_MESSAGES", "10")
+    )
+    MAIL_QUEUE_STALE_MINUTES = int(
+        os.getenv("OPS_MAIL_QUEUE_STALE_MINUTES", "15")
+    )
     ALERT_CHECK_INTERVAL_SECONDS = int(
         os.getenv("OPS_ALERT_CHECK_INTERVAL_SECONDS", "900")
     )
@@ -49,6 +61,14 @@ class OpsConfig:
         raise RuntimeError("OPS_HTTP_5XX_RATE_THRESHOLD must be between 0 and 1")
     if HTTP_MIN_REQUESTS <= 0:
         raise RuntimeError("OPS_HTTP_MIN_REQUESTS must be positive")
+    if MAIL_FAILURE_LOOKBACK_MINUTES <= 0:
+        raise RuntimeError("OPS_MAIL_FAILURE_LOOKBACK_MINUTES must be positive")
+    if not 0 <= MAIL_FAILURE_RATE_THRESHOLD <= 1:
+        raise RuntimeError("OPS_MAIL_FAILURE_RATE_THRESHOLD must be between 0 and 1")
+    if MAIL_FAILURE_MIN_MESSAGES <= 0:
+        raise RuntimeError("OPS_MAIL_FAILURE_MIN_MESSAGES must be positive")
+    if MAIL_QUEUE_STALE_MINUTES <= 0:
+        raise RuntimeError("OPS_MAIL_QUEUE_STALE_MINUTES must be positive")
     if ALERT_CHECK_INTERVAL_SECONDS < 60:
         raise RuntimeError("OPS_ALERT_CHECK_INTERVAL_SECONDS must be at least 60")
     if ALERT_REPEAT_SECONDS < ALERT_CHECK_INTERVAL_SECONDS:
