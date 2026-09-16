@@ -22,11 +22,11 @@ def _conflict(error_type: str) -> HTTPException:
 
 
 def _forbidden(permission: Permission) -> HTTPException:
-    # Keep the existing API error types for frontend/backward compatibility,
-    # while exposing the concrete missing permission for diagnostics.
+    # Mutating roles and payment provider credentials/configuration are reserved
+    # for super_admin. Admins may still inspect payment state and the journal.
     error_type = (
         "super_admin_required"
-        if permission == Permission.ROLES_WRITE
+        if permission in {Permission.ROLES_WRITE, Permission.PAYMENTS_WRITE}
         else "admin_required"
     )
     return HTTPException(
@@ -50,6 +50,8 @@ def _required_control_panel_permission(request: Request) -> Permission:
         return Permission.ROLES_READ if is_read else Permission.ROLES_WRITE
     if path.startswith("/control-panel/tariffs"):
         return Permission.TARIFFS_READ if is_read else Permission.TARIFFS_WRITE
+    if path.startswith("/control-panel/payments"):
+        return Permission.PAYMENTS_READ if is_read else Permission.PAYMENTS_WRITE
 
     return Permission.CONTROL_PANEL_ACCESS
 
