@@ -50,5 +50,9 @@ jobs:
           grep -F 'PYTHON_BIN="${PYTHON_BIN:-python3.12}"' ops/update_systemd.sh
           grep -F 'merge --ff-only' ops/update_systemd.sh
           grep -F 'npm ci' ops/update_systemd.sh
-          grep -F 'health/ready' ops/update_systemd.sh
+          grep -F 'venv.releases' ops/update_systemd.sh
+          grep -F 'celery" --version' ops/update_systemd.sh
+          grep -F 'import models' ops/update_systemd.sh
+          grep -F '127.0.0.1:9001/health/ready' ops/update_systemd.sh
           grep -F 'Python **3.12**' docs/SYSTEMD_DEPLOYMENT.md
+          grep -F 'status=203/EXEC' docs/SYSTEMD_DEPLOYMENT.md
