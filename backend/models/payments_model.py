@@ -86,6 +86,12 @@ class Payment(Database.Base):
         nullable=False,
         default=PaymentProvider.FAKE,
     )
+    mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="live",
+        comment="Provider mode snapshot at payment creation: test or live",
+    )
     idempotency_key: Mapped[str | None] = mapped_column(
         String(128),
         nullable=True,
