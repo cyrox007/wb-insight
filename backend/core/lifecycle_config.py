@@ -37,6 +37,7 @@ class LifecycleConfig:
     )
 
     MAIL_DELIVERY_ENABLED = os.getenv("MAIL_DELIVERY_ENABLED", "false").lower() == "true"
+    MAIL_PROVIDER = os.getenv("MAIL_PROVIDER", "smtp").strip().lower() or "smtp"
     MAIL_BATCH_SIZE = int(os.getenv("MAIL_BATCH_SIZE", "25"))
     MAIL_MAX_ATTEMPTS = int(os.getenv("MAIL_MAX_ATTEMPTS", "5"))
     MAIL_RETRY_BASE_SECONDS = int(os.getenv("MAIL_RETRY_BASE_SECONDS", "30"))
@@ -65,6 +66,9 @@ class LifecycleConfig:
                 raise RuntimeError(f"Production {name} must use the real service host")
 
     def _validate_mail_transport(self, *, production: bool) -> None:
+        if self.MAIL_PROVIDER != "smtp":
+            raise RuntimeError(f"Unsupported MAIL_PROVIDER: {self.MAIL_PROVIDER}")
+
         missing = [
             name
             for name, value in {
