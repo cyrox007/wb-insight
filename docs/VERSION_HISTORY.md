@@ -180,12 +180,36 @@ P32 появился не как плановая функциональная �
 
 P32 прошёл exact-head green CI по Backend security, Frontend build, Database migrations и Release integrity перед merge. Это подтверждает code-side baseline, но не является доказательством прохождения production-like smoke в целевом окружении.
 
+## 0.9.0-alpha.10 — P33: fail-closed production configuration
+
+**PR:** #51  
+**Merge:** `9dacaee426937c7466ac22cedd878e11b53cc472`.
+
+P33 появился после финального pre-beta code audit, который обнаружил, что production runtime формально мог стартовать с шаблонными или слабыми значениями из `.env.production.example`.
+
+Исправления P33:
+
+- единый production preflight запускается при импорте `settings`, поэтому применяется к API, Alembic и Celery-процессам;
+- запрещены `DEBUG=true`, HTTP public URLs/origins, зарезервированные example-hosts и `replace-with-*` endpoints;
+- production DB/JWT/WB/Sber secrets проверяются на известные weak/template значения, а критичные DB/JWT/legal-evidence keys имеют минимальную длину;
+- API-token encryption key проверяется реальным `Fernet(...)` до запуска runtime;
+- `LEGAL_EVIDENCE_HMAC_KEY` стал отдельным обязательным production secret;
+- включённый Sber требует реальные HTTPS gateway/return/fail URLs и merchant credentials;
+- включённый password recovery требует реальный HTTPS reset host, реальный SMTP host/sender domain, STARTTLS и неплейсхолдерные credentials;
+- `.env.production.example` намеренно не проходит startup validation до замены placeholders;
+- Release integrity проверяет одновременно fail-closed template и успешный full-app import с CI-only безопасными overrides;
+- regression suite закрепляет production/Sber/lifecycle validation contracts.
+
+Первый CI-прогон P33 поймал несовместимость порядка recovery-validation и ошибку тестового Sber fixture; они были исправлены до merge. Финальный exact head `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл Backend security, Frontend build, Database migrations и Release integrity полностью зелёными.
+
+P33 закрывает найденный code-side production-config blocker, но не является фактом production-like deployment или внешней acceptance.
+
 ## Следующая стадия — 0.9.0-beta.1
 
 Допускается только после:
 
-- feature freeze WB Web v1 на текущем `0.9.0-alpha.9` baseline;
-- production-like HTTPS deployment из repo;
+- feature freeze WB Web v1 на текущем `0.9.0-alpha.10` baseline;
+- production-like HTTPS deployment из repo с реальными non-placeholder secrets/hosts;
 - фактического core release smoke, включая disposable registration/demo/legal evidence;
 - реального SMTP/recovery smoke;
 - data-accuracy acceptance на реальном WB seller account и фиксированных периодах;
