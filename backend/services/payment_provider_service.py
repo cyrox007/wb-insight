@@ -34,6 +34,7 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
         "description": "Адаптер зарезервирован и будет подключён отдельно",
     },
 }
+SBER_TEST_API_BASE_URL = "https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1"
 
 
 @dataclass(frozen=True)
@@ -107,17 +108,27 @@ def _effective_runtime(row: PaymentProviderConfig | None, provider: str, mode: s
     secrets = _read_secrets(row)
 
     if provider == "sber":
-        env = _sber_environment_values()
-        api_base_url = (row.api_base_url if row and row.api_base_url else env["api_base_url"])
-        return_url = (row.return_url if row and row.return_url else env["return_url"])
-        fail_url = (row.fail_url if row and row.fail_url else env["fail_url"])
-        currency_code = (row.currency_code if row and row.currency_code else env["currency_code"])
+        # The legacy ENV settings remain a backwards-compatible live fallback.
+        # Test configuration is isolated and never inherits live credentials.
+        env = _sber_environment_values() if mode == "live" else {
+            "api_base_url": SBER_TEST_API_BASE_URL,
+            "return_url": None,
+            "fail_url": None,
+            "currency_code": "643",
+            "timeout_seconds": config.SBER_HTTP_TIMEOUT_SECONDS,
+            "username": None,
+            "password": None,
+        }
+        api_base_url = row.api_base_url if row and row.api_base_url else env["api_base_url"]
+        return_url = row.return_url if row and row.return_url else env["return_url"]
+        fail_url = row.fail_url if row and row.fail_url else env["fail_url"]
+        currency_code = row.currency_code if row and row.currency_code else env["currency_code"]
         timeout_seconds = float(row.timeout_seconds if row else env["timeout_seconds"])
         username = str(secrets.get("username") or env["username"] or "") or None
         password = str(secrets.get("password") or env["password"] or "") or None
         enabled = bool(row.enabled) if row else bool(config.SBER_ACQUIRING_ENABLED and mode == "live")
         is_default = bool(row.is_default) if row else bool(config.SBER_ACQUIRING_ENABLED and mode == "live")
-        source = "database" if row else ("environment" if config.SBER_ACQUIRING_ENABLED else "unconfigured")
+        source = "database" if row else ("environment" if config.SBER_ACQUIRING_ENABLED and mode == "live" else "unconfigured")
         ready = bool(adapter_available and api_base_url and return_url and fail_url and username and password)
         return PaymentProviderRuntime(
             provider=provider,
@@ -154,7 +165,7 @@ def _effective_runtime(row: PaymentProviderConfig | None, provider: str, mode: s
         mode=mode,
         enabled=bool(row.enabled) if row else False,
         is_default=bool(row.is_default) if row else False,
-        ready=adapter_available,
+        ready=False,
         source="database" if row else "unconfigured",
         api_base_url=row.api_base_url if row else None,
         return_url=row.return_url if row else None,
@@ -168,12 +179,14 @@ def _effective_runtime(row: PaymentProviderConfig | None, provider: str, mode: s
 
 
 async def get_provider_config(
-    session: AsyncSession,
+    session: AsyncSession | None,
     provider: str,
     mode: str,
 ) -> PaymentProviderConfig | None:
     provider = _normalize_provider(provider)
     mode = _normalize_mode(mode)
+    if session is None:
+        return None
     result = await session.execute(
         select(PaymentProviderConfig).where(
             PaymentProviderConfig.provider == provider,
@@ -184,7 +197,7 @@ async def get_provider_config(
 
 
 async def get_provider_runtime(
-    session: AsyncSession,
+    session: AsyncSession | None,
     provider: str,
     mode: str,
 ) -> PaymentProviderRuntime:
@@ -194,21 +207,22 @@ async def get_provider_runtime(
     return _effective_runtime(row, provider, mode)
 
 
-async def resolve_checkout_provider(session: AsyncSession) -> PaymentProviderRuntime | None:
+async def resolve_checkout_provider(session: AsyncSession | None) -> PaymentProviderRuntime | None:
     allowed_modes = {"live"} if config.IS_PRODUCTION else PAYMENT_MODES
-    result = await session.execute(
-        select(PaymentProviderConfig)
-        .where(
-            PaymentProviderConfig.enabled.is_(True),
-            PaymentProviderConfig.is_default.is_(True),
-            PaymentProviderConfig.mode.in_(allowed_modes),
+    if session is not None:
+        result = await session.execute(
+            select(PaymentProviderConfig)
+            .where(
+                PaymentProviderConfig.enabled.is_(True),
+                PaymentProviderConfig.is_default.is_(True),
+                PaymentProviderConfig.mode.in_(allowed_modes),
+            )
+            .order_by(PaymentProviderConfig.updated_at.desc())
         )
-        .order_by(PaymentProviderConfig.updated_at.desc())
-    )
-    for row in result.scalars().all():
-        runtime = _effective_runtime(row, row.provider, row.mode)
-        if runtime.ready:
-            return runtime
+        for row in result.scalars().all():
+            runtime = _effective_runtime(row, row.provider, row.mode)
+            if runtime.ready:
+                return runtime
 
     if config.SBER_ACQUIRING_ENABLED:
         runtime = _effective_runtime(None, "sber", "live")
