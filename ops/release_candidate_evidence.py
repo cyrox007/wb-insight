@@ -4,12 +4,40 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 from ci_acceptance import CIAcceptanceError, validate_ci_evidence
-from release_evidence import SHA40_RE, parse_artifact, validate_version_for_stage
+from release_evidence import SHA40_RE, SHA256_RE, parse_artifact, validate_version_for_stage
+
+
+def _validate_database_upgrade_binding(
+    deployment_path: Path,
+    *,
+    version: str,
+    commit: str,
+    environment: str,
+) -> None:
+    try:
+        report = json.loads(deployment_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("deployment artifact must be valid UTF-8 JSON") from exc
+    if not isinstance(report, dict):
+        raise ValueError("deployment artifact must contain a JSON object")
+    if report.get("version") != version:
+        raise ValueError("deployment artifact version does not match release VERSION")
+    if str(report.get("commit") or "").lower() != commit.lower():
+        raise ValueError("deployment artifact commit does not match release commit")
+    if report.get("environment") != environment:
+        raise ValueError("deployment artifact environment does not match release environment")
+    checks = report.get("checks")
+    if not isinstance(checks, list) or "database_upgrade_proof_bound" not in checks:
+        raise ValueError("deployment artifact is missing isolated existing-database upgrade proof")
+    proof_hash = str(report.get("database_upgrade_proof_sha256") or "")
+    if SHA256_RE.fullmatch(proof_hash) is None:
+        raise ValueError("deployment artifact has invalid database upgrade proof SHA-256")
 
 
 def main() -> int:
@@ -38,6 +66,7 @@ def main() -> int:
         return 2
 
     ci_path: Path | None = None
+    deployment_path: Path | None = None
     try:
         for raw in args.artifact:
             kind, path = parse_artifact(raw)
@@ -45,11 +74,18 @@ def main() -> int:
                 if ci_path is not None:
                     raise ValueError("duplicate ci artifact")
                 ci_path = path
+            elif kind == "deployment":
+                if deployment_path is not None:
+                    raise ValueError("duplicate deployment artifact")
+                deployment_path = path
     except ValueError as exc:
         print(f"release_candidate_error={exc}", file=sys.stderr)
         return 2
     if ci_path is None:
         print("release_candidate_error=structured ci artifact is required", file=sys.stderr)
+        return 2
+    if deployment_path is None:
+        print("release_candidate_error=structured deployment artifact is required", file=sys.stderr)
         return 2
 
     try:
@@ -59,7 +95,13 @@ def main() -> int:
             commit=commit,
             environment=environment,
         )
-    except CIAcceptanceError as exc:
+        _validate_database_upgrade_binding(
+            deployment_path,
+            version=version,
+            commit=commit,
+            environment=environment,
+        )
+    except (CIAcceptanceError, ValueError) as exc:
         print(f"release_candidate_error={exc}", file=sys.stderr)
         return 2
 
