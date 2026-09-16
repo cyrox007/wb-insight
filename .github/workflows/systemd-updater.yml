@@ -3,7 +3,9 @@ name: Systemd updater
 on:
   pull_request:
     paths:
+      - update.sh
       - ops/update_systemd.sh
+      - ops/systemd/**
       - docs/SYSTEMD_DEPLOYMENT.md
       - docs/INSTALLATION.md
       - docs/TROUBLESHOOTING.md
@@ -14,7 +16,9 @@ on:
   push:
     branches: [main]
     paths:
+      - update.sh
       - ops/update_systemd.sh
+      - ops/systemd/**
       - docs/SYSTEMD_DEPLOYMENT.md
       - docs/INSTALLATION.md
       - docs/TROUBLESHOOTING.md
@@ -34,26 +38,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.12.0'
-      - name: Verify updater is executable
-        run: test -x ops/update_systemd.sh
+      - name: Verify updater entrypoints are executable
+        run: |
+          test -x update.sh
+          test -x ops/update_systemd.sh
       - name: Validate updater shell syntax
-        run: bash -n ops/update_systemd.sh
-      - name: Execute updater runtime preflight
-        env:
-          PROJECT_DIR: ${{ github.workspace }}
-          PYTHON_BIN: python3.12
-        run: ./ops/update_systemd.sh --preflight-only
-      - name: Verify required deployment guards are present
+        run: |
+          bash -n update.sh
+          bash -n ops/update_systemd.sh
+      - name: Verify deployment contract
         shell: bash
         run: |
           set -euo pipefail
           grep -F 'PYTHON_BIN="${PYTHON_BIN:-python3.12}"' ops/update_systemd.sh
+          grep -F 'HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:9001/health/ready}"' ops/update_systemd.sh
           grep -F 'merge --ff-only' ops/update_systemd.sh
           grep -F 'npm ci' ops/update_systemd.sh
-          grep -F 'health/ready' ops/update_systemd.sh
           grep -F 'venv.release.$STAMP' ops/update_systemd.sh
           grep -F 'ln -s "$NEW_VENV" "$VENV_DIR"' ops/update_systemd.sh
-          grep -F '"$VENV_DIR/bin/celery" --version' ops/update_systemd.sh
+          grep -F 'celery_app:celery_app report' ops/update_systemd.sh
+          grep -F 'inspect ping --timeout=5' ops/update_systemd.sh
+          grep -F 'systemctl enable wb-backend wb-celery wb-celery-beat' ops/update_systemd.sh
+          grep -F -- '-A celery_app:celery_app worker' ops/systemd/wb-celery.service.d/10-wb-insight.conf
+          grep -F -- '-A celery_app:celery_app beat' ops/systemd/wb-celery-beat.service.d/10-wb-insight.conf
           if grep -Fq 'mv "$NEW_VENV" "$VENV_DIR"' ops/update_systemd.sh; then
             echo 'release venv must not be renamed after pip install' >&2
             exit 1
