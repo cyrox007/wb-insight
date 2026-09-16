@@ -5,6 +5,8 @@ on:
     paths:
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
+      - ops/release_evidence.py
+      - ops/acceptance/structured_evidence_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - .github/workflows/release-smoke-contract.yml
@@ -13,6 +15,8 @@ on:
     paths:
       - ops/release_smoke.py
       - ops/systemd_acceptance.py
+      - ops/release_evidence.py
+      - ops/acceptance/structured_evidence_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - .github/workflows/release-smoke-contract.yml
@@ -26,8 +30,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile ops/release_smoke.py ops/systemd_acceptance.py
+          python3 -m py_compile \
+            ops/release_smoke.py \
+            ops/systemd_acceptance.py \
+            ops/release_evidence.py \
+            ops/acceptance/structured_evidence_selftest.py
           python3 ops/release_smoke.py --help >/dev/null
           python3 ops/release_smoke.py --self-test
           python3 ops/systemd_acceptance.py --help >/dev/null
           python3 ops/systemd_acceptance.py --self-test
+          python3 ops/release_evidence.py --help >/dev/null
+          PYTHONPATH=ops python3 ops/acceptance/structured_evidence_selftest.py
