@@ -19,7 +19,6 @@ const tariffName = ref('')
 const tariffPrice = ref('')
 const tariffDescription = ref('')
 const isActive = ref(true)
-const isPublic = ref(true)
 const formMessage = ref('')
 const messageType = ref('')
 
@@ -29,7 +28,6 @@ function resetForm() {
 	tariffPrice.value = ''
 	tariffDescription.value = ''
 	isActive.value = true
-	isPublic.value = true
 	formMessage.value = ''
 	messageType.value = ''
 }
@@ -72,16 +70,13 @@ async function createTariff() {
 			name: tariffName.value.trim(),
 			price: Number(priceNum.toFixed(2)),
 			description: tariffDescription.value.trim(),
-			isActive: isActive.value,
-			isPublic: isPublic.value
+			isActive: isActive.value
 		})
 
 		if (response.data?.status !== 'success') {
 			throw new Error(response.data?.message || 'Не удалось создать тариф')
 		}
 
-		formMessage.value = 'Тариф создан.'
-		messageType.value = 'success'
 		emit('created')
 		emit('close')
 	} catch (error) {
@@ -114,14 +109,7 @@ async function createTariff() {
 					</div>
 					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': isActive }" :aria-pressed="isActive" @click="isActive = !isActive"></button>
 				</div>
-
-				<div class="cp-toggle-row">
-					<div class="cp-toggle-row__copy">
-						<div class="cp-toggle-row__label">Публичный тариф</div>
-						<div class="cp-toggle-row__hint">{{ isPublic ? 'Показывается пользователям' : 'Скрыт из публичного списка' }}</div>
-					</div>
-					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': isPublic }" :aria-pressed="isPublic" @click="isPublic = !isPublic"></button>
-				</div>
+				<p class="cp-muted">Публичность тарифа можно изменить после создания в карточке тарифа.</p>
 			</div>
 
 			<FormMessage v-if="formMessage" :message="formMessage" :message-type="messageType" />
