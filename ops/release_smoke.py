@@ -139,38 +139,40 @@ def run_disposable_registration_smoke(base_url: str) -> None:
         for item in required_consents
     }
 
-    registration = client.request(
-        "POST",
-        "/auth/registration",
-        body={
-            "registrationData": {
-                "email": email,
-                "phone": phone,
-                "full_name": "Release Smoke User",
-                "password": password,
-                "entity_type": "individual",
-                "timezone": "Europe/Berlin",
-                "legal_consents": required_consents,
-            }
-        },
-    )
-    if registration.get("status") != "success":
-        raise SmokeFailure("disposable registration did not succeed")
-
-    login = client.request(
-        "POST",
-        "/auth/login",
-        body={"email": email, "password": password},
-    )
-    if login.get("status") != "success" or not login.get("access_token"):
-        raise SmokeFailure("disposable account login did not return access token")
-    client.access_token = login["access_token"]
-    user_id = login.get("user", {}).get("id")
-    if not user_id:
-        raise SmokeFailure("disposable account login did not return user identity")
-
+    registered = False
     deactivated = False
     try:
+        registration = client.request(
+            "POST",
+            "/auth/registration",
+            body={
+                "registrationData": {
+                    "email": email,
+                    "phone": phone,
+                    "full_name": "Release Smoke User",
+                    "password": password,
+                    "entity_type": "individual",
+                    "timezone": "Europe/Berlin",
+                    "legal_consents": required_consents,
+                }
+            },
+        )
+        if registration.get("status") != "success":
+            raise SmokeFailure("disposable registration did not succeed")
+        registered = True
+
+        login = client.request(
+            "POST",
+            "/auth/login",
+            body={"email": email, "password": password},
+        )
+        if login.get("status") != "success" or not login.get("access_token"):
+            raise SmokeFailure("disposable account login did not return access token")
+        client.access_token = login["access_token"]
+        user_id = login.get("user", {}).get("id")
+        if not user_id:
+            raise SmokeFailure("disposable account login did not return user identity")
+
         profile = client.request("GET", "/dashboard/profile/", auth=True)
         subscription = profile.get("subscription") or {}
         if subscription.get("status") != "demo" or subscription.get("is_active") is not True:
@@ -224,16 +226,34 @@ def run_disposable_registration_smoke(base_url: str) -> None:
         if login_after.get("error", {}).get("code") != "USER_INACTIVE":
             raise SmokeFailure("deactivated disposable account can still authenticate")
     finally:
-        if client.access_token and not deactivated:
-            try:
-                client.request(
-                    "POST",
-                    "/account/deactivate",
-                    auth=True,
-                    body={"reason": "release smoke cleanup after failure"},
-                )
-            except SmokeFailure:
-                pass
+        if registered and not deactivated:
+            if not client.access_token:
+                try:
+                    cleanup_login = client.request(
+                        "POST",
+                        "/auth/login",
+                        body={"email": email, "password": password},
+                    )
+                    token = cleanup_login.get("access_token")
+                    if cleanup_login.get("status") == "success" and token:
+                        client.access_token = token
+                except SmokeFailure:
+                    pass
+
+            if client.access_token:
+                try:
+                    cleanup_result = client.request(
+                        "POST",
+                        "/account/deactivate",
+                        auth=True,
+                        body={"reason": "release smoke cleanup after failure"},
+                    )
+                    deactivated = (
+                        cleanup_result.get("status") == "success"
+                        and cleanup_result.get("deactivated") is True
+                    )
+                except SmokeFailure:
+                    pass
             client.access_token = None
 
     print("[ok] disposable registration, demo subscription, consent evidence, refresh and deactivation")
