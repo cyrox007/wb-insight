@@ -18,8 +18,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("users", sa.Column("email_verified_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("users", sa.Column("pending_email", sa.String(length=254), nullable=True))
+    op.add_column(
+        "users",
+        sa.Column(
+            "email_verified_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+            comment="Момент подтверждения владения текущим email",
+        ),
+    )
+    op.add_column(
+        "users",
+        sa.Column(
+            "pending_email",
+            sa.String(length=254),
+            nullable=True,
+            comment="Новый email, ожидающий подтверждения",
+        ),
+    )
     op.create_index("idx_users_pending_email", "users", ["pending_email"], unique=False)
     # Existing accounts pre-date mandatory verification and keep access after upgrade.
     op.execute("UPDATE users SET email_verified_at = now() WHERE email_verified_at IS NULL")
@@ -36,9 +52,10 @@ def upgrade() -> None:
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("token_hash"),
     )
     op.create_index(op.f("ix_email_verification_tokens_user_id"), "email_verification_tokens", ["user_id"], unique=False)
+    # mapped_column(unique=True, index=True) is represented by one unique index,
+    # not by a redundant UNIQUE constraint plus an index.
     op.create_index(op.f("ix_email_verification_tokens_token_hash"), "email_verification_tokens", ["token_hash"], unique=True)
     op.create_index(op.f("ix_email_verification_tokens_expires_at"), "email_verification_tokens", ["expires_at"], unique=False)
 
