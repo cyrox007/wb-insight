@@ -39,6 +39,11 @@ def _token_url(base_url: str, token: str) -> str:
     return f"{base_url.rstrip('/')}#token={quote(token, safe='')}"
 
 
+def _password_reset_url(token: str) -> str:
+    """Compatibility helper: raw reset secrets stay in the URL fragment."""
+    return _token_url(config.PASSWORD_RESET_BASE_URL, token)
+
+
 async def _smtp_send(recipient: str, subject: str, body: str) -> str:
     """Backward-compatible helper that dispatches through the configured provider."""
     if not (
@@ -147,7 +152,7 @@ async def _render_transactional(session: AsyncSession, message: MailMessage) -> 
         if recipient != _normalized_email(user.email):
             raise PermanentMailDeliveryError("password_reset_target_stale")
         raw_token = await issue_password_reset_token(session, user)
-        reset_url = _token_url(config.PASSWORD_RESET_BASE_URL, raw_token)
+        reset_url = _password_reset_url(raw_token)
         return (
             "Восстановление доступа к WB Insight",
             "Для установки нового пароля откройте ссылку:\n\n"
@@ -295,7 +300,7 @@ async def refresh_campaign_counters(session: AsyncSession, campaign_id) -> None:
 
 async def send_password_reset_email(email: str, token: str) -> None:
     """Compatibility helper for legacy callers/tests; request flow uses the queue."""
-    reset_url = _token_url(config.PASSWORD_RESET_BASE_URL, token)
+    reset_url = _password_reset_url(token)
     await _smtp_send(
         email,
         "Восстановление доступа к WB Insight",
