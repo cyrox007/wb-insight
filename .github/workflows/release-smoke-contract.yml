@@ -1,0 +1,27 @@
+name: Release smoke contract
+
+on:
+  pull_request:
+    paths:
+      - ops/release_smoke.py
+      - docs/RELEASE_SMOKE.md
+      - .github/workflows/release-smoke-contract.yml
+  push:
+    branches: [main]
+    paths:
+      - ops/release_smoke.py
+      - docs/RELEASE_SMOKE.md
+      - .github/workflows/release-smoke-contract.yml
+
+jobs:
+  smoke-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release smoke CLI and secret-safe helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile ops/release_smoke.py
+          python3 ops/release_smoke.py --help >/dev/null
+          python3 ops/release_smoke.py --self-test
