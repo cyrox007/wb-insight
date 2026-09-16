@@ -59,18 +59,18 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` находится на **`0.9.0-alpha.9`** после P32 / PR #49, merge `7206df554e6f98c2533160385d9ad7d27c704268`. Exact P32 head перед merge прошёл Backend security, Frontend build, Database migrations и Release integrity.
+`main` находится на **`0.9.0-alpha.10`** после P33 / PR #51, merge `9dacaee426937c7466ac22cedd878e11b53cc472`. Финальный exact head P33 `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл Backend security, Frontend build, Database migrations и Release integrity.
 
-Ветка P33 `codex/p33-production-config-preflight` является кандидатом **`0.9.0-alpha.10`**. Она закрывает найденный при pre-beta аудите production-config blocker: приложение должно fail-closed при template/weak secrets, malformed Fernet key, example hosts и небезопасной recovery/Sber конфигурации. Повышение `main` до alpha.10 произойдёт только после полного green CI exact-head P33.
+`0.9.0-alpha.10` закрывает найденный при pre-beta аудите production-config blocker: runtime fail-closed отклоняет template/weak secrets, malformed Fernet key, example hosts и небезопасную recovery/Sber конфигурацию до запуска production процессов.
 
-После merge P33 следующее повышение стадии — `0.9.0-beta.1` только после фактического production-like HTTPS deployment, полного smoke, SMTP recovery и real-seller data-accuracy acceptance с evidence manifest.
+Следующее повышение стадии — `0.9.0-beta.1` только после фактического production-like HTTPS deployment, полного smoke, SMTP recovery и real-seller data-accuracy acceptance с evidence manifest. Новая alpha-итерация создаётся только если до beta обнаружится новый реальный code-side release blocker.
 
 Каноническая последовательность:
 
 1. `0.9.0-alpha.7` — acceptance tooling + release evidence baseline;
 2. `0.9.0-alpha.8` — account-lifecycle code baseline;
-3. `0.9.0-alpha.9` — registration transaction/demo/beta-smoke hardening, текущий `main` до merge P33;
-4. `0.9.0-alpha.10` — production configuration fail-closed hardening, P33 candidate;
+3. `0.9.0-alpha.9` — registration transaction/demo/beta-smoke hardening;
+4. `0.9.0-alpha.10` — production configuration fail-closed hardening, текущий `main`;
 5. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + data-accuracy acceptance;
 6. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
 7. `1.0.0` — публичный WB Insight Web v1 Stable.
