@@ -19,6 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.add_column("users", sa.Column("email_verified_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column("users", sa.Column("pending_email", sa.String(length=254), nullable=True))
+    op.create_index("idx_users_pending_email", "users", ["pending_email"], unique=False)
     # Existing accounts pre-date mandatory verification and keep access after upgrade.
     op.execute("UPDATE users SET email_verified_at = now() WHERE email_verified_at IS NULL")
 
@@ -26,6 +28,7 @@ def upgrade() -> None:
         "email_verification_tokens",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("token_hash", sa.String(length=64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
@@ -122,4 +125,6 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_email_verification_tokens_token_hash"), table_name="email_verification_tokens")
     op.drop_index(op.f("ix_email_verification_tokens_user_id"), table_name="email_verification_tokens")
     op.drop_table("email_verification_tokens")
+    op.drop_index("idx_users_pending_email", table_name="users")
+    op.drop_column("users", "pending_email")
     op.drop_column("users", "email_verified_at")
