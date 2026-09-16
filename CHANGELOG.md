@@ -19,7 +19,30 @@ P34 — закрытие разрыва между beta readiness и release-evi
 - Release integrity содержит positive/negative contract tests для полного beta-набора, старого неполного набора, неверного SHA, alpha-version, пустого artifact и failing data-accuracy evidence;
 - `RELEASE_EVIDENCE.md`, roadmap, readiness и versioning синхронизированы с фактическим contract.
 
-Финальный exact head P34 `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity. P34 не создаёт beta автоматически: production-like deployment, SMTP/lifecycle smoke, UX/secrets review и real-seller data-accuracy evidence по-прежнему должны быть выполнены фактически на exact beta candidate.
+Финальный exact head P34 `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity.
+
+Дополнительный hardening той же `alpha.11` baseline:
+
+**P36 — systemd deployment hotfix. PR #55, merge `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c`.**
+
+- добавлен `ops/update_systemd.sh` для безопасного обновления Ubuntu/systemd deployment;
+- updater fail-closed проверяет Python 3.12 и Node `^20.19` или `>=22.12` до изменения окружения;
+- полный update требует clean Git tree и fast-forward-only `main`;
+- backend разворачивается в fresh Python 3.12 venv, затем выполняются requirements, Alembic, frontend `npm ci`/build, controlled venv swap, restart backend/Celery/Beat и readiness check;
+- предыдущий venv сохраняется для диагностики;
+- добавлены `--preflight-only`, CI workflow `systemd-updater` и `docs/SYSTEMD_DEPLOYMENT.md`.
+
+**P35 — обязательное data-accuracy coverage. PR #56, merge `d2e782208228fbe60cb92b9e61fbf8d325f0e839`.**
+
+- каждая policy-required метрика теперь обязана присутствовать в каждом acceptance-периоде;
+- пропущенная обязательная метрика становится `missing` и блокирует acceptance;
+- input не может понизить обязательность через `required:false`;
+- любое изменение tolerance/mode относительно policy требует `override_reason`;
+- отчёт фиксирует required metric/observation counts и причины overrides;
+- Release integrity проверяет passing, failing, incomplete, required-downgrade и tolerance-override scenarios;
+- exact P35 head `7e88182533f7d3a8baf813bcaeeb19d7442db0d3` прошёл Release integrity полностью зелёным.
+
+P35 и P36 не добавляют новую runtime capability и поэтому не создают отдельный product version: они усиливают существующий `0.9.0-alpha.11` pre-beta baseline. Beta всё ещё требует фактических production-like deployment/rollback, SMTP/lifecycle, UX/secrets review и real-seller data-accuracy evidence.
 
 ## [0.9.0-alpha.10] — 2026-09-16
 

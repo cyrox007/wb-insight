@@ -147,11 +147,11 @@ P31 закрыл запланированные code-side lifecycle gaps:
 - admin reactivation не восстанавливает старые marketplace credentials;
 - lifecycle/support действия сохраняются в append-only audit events;
 - support review/refund evidence доступно через allowlisted control-panel API без ручной правки production DB;
-- late Sber callback и account deactivation сериализованы блокировкой строки пользователя: подтверждённый payment остаётся финансовым фактом, но inactive account не получает subscription из race-condition;
-- обычный `admin` не может выполнять reactivation/revoke-sessions над `super_admin`; security-sensitive lifecycle mutation такого аккаунта требует `super_admin`;
+- late Sber callback и account deactivation сериализованы блокировкой строки пользователя;
+- обычный `admin` не может выполнять reactivation/revoke-sessions над `super_admin`;
 - `/account/*` включён в production same-origin nginx gateway и проверяется container smoke-тестом;
 - добавлены recovery/security UI и regression tests lifecycle/session/payment/RBAC/transport invariants;
-- Alembic revision `c8e5f1a2b934` после `b7d4e6f8a921`; clean upgrade и metadata check прошли CI exact-head кандидата.
+- Alembic revision `c8e5f1a2b934` проходит clean upgrade и metadata check.
 
 P31 не вводит автоматический hard purge и не объявляет юридически утверждённый retention/refund процесс: это остаётся внешним legal/operator gate.
 
@@ -160,10 +160,7 @@ P31 не вводит автоматический hard purge и не объяв
 **PR:** #49  
 **Merge:** `7206df554e6f98c2533160385d9ad7d27c704268`.
 
-P32 появился не как плановая функциональная фаза, а после release-smoke ревизии `alpha.8`, которая обнаружила два code-side дефекта регистрации:
-
-- `create_demo_subscription()` искал `TariffPlan.code == "DEMO"`, хотя ORM и исходная migration фиксируют канонический lowercase `demo`;
-- `insert_user()` проглатывал DB flush exception и возвращал `None`, оставляя request `AsyncSession` в failed transaction перед автоматическим commit dependency.
+P32 появился после release-smoke ревизии `alpha.8`, которая обнаружила два code-side дефекта регистрации: несовместимый uppercase `DEMO` и проглатывание DB flush exception в `insert_user()`.
 
 Исправления P32:
 
@@ -172,69 +169,105 @@ P32 появился не как плановая функциональная �
 - `IntegrityError` явно rollback-ится и возвращает безопасный `409 REGISTRATION_CONFLICT`;
 - ошибка назначения базовой роли откатывает регистрацию;
 - роль, consent evidence и demo subscription остаются в одной request-транзакции;
-- добавлен privacy-safe read-only endpoint собственных consent records без IP/User-Agent HMAC;
+- добавлен privacy-safe read-only endpoint собственных consent records;
 - release smoke автоматически выполняет disposable registration → demo → exact consent evidence → refresh → soft-deactivation → inactive login rejection;
-- disposable smoke запускается по умолчанию и может быть отключён только явным escape hatch для специализированного прогона;
 - cleanup временного аккаунта устойчив к частичному падению smoke;
 - regression suite фиксирует transaction, demo-code и consent-privacy contracts.
 
-P32 прошёл exact-head green CI по Backend security, Frontend build, Database migrations и Release integrity перед merge. Это подтверждает code-side baseline, но не является доказательством прохождения production-like smoke в целевом окружении.
+P32 прошёл exact-head green CI по Backend security, Frontend build, Database migrations и Release integrity перед merge.
 
 ## 0.9.0-alpha.10 — P33: fail-closed production configuration
 
 **PR:** #51  
 **Merge:** `9dacaee426937c7466ac22cedd878e11b53cc472`.
 
-P33 появился после финального pre-beta code audit, который обнаружил, что production runtime формально мог стартовать с шаблонными или слабыми значениями из `.env.production.example`.
+P33 появился после pre-beta code audit, который обнаружил, что production runtime формально мог стартовать с шаблонными или слабыми значениями из `.env.production.example`.
 
 Исправления P33:
 
-- единый production preflight запускается при импорте `settings`, поэтому применяется к API, Alembic и Celery-процессам;
-- запрещены `DEBUG=true`, HTTP public URLs/origins, зарезервированные example-hosts и `replace-with-*` endpoints;
-- production DB/JWT/WB/Sber secrets проверяются на известные weak/template значения, а критичные DB/JWT/legal-evidence keys имеют минимальную длину;
-- API-token encryption key проверяется реальным `Fernet(...)` до запуска runtime;
-- `LEGAL_EVIDENCE_HMAC_KEY` стал отдельным обязательным production secret;
-- включённый Sber требует реальные HTTPS gateway/return/fail URLs и merchant credentials;
-- включённый password recovery требует реальный HTTPS reset host, реальный SMTP host/sender domain, STARTTLS и неплейсхолдерные credentials;
-- `.env.production.example` намеренно не проходит startup validation до замены placeholders;
-- Release integrity проверяет одновременно fail-closed template и успешный full-app import с CI-only безопасными overrides;
-- regression suite закрепляет production/Sber/lifecycle validation contracts.
+- единый production preflight для API, Alembic и Celery;
+- запрет `DEBUG=true`, HTTP public URLs/origins, reserved example-hosts и `replace-with-*` endpoints;
+- weak/template validation production DB/JWT/WB/Sber secrets;
+- Fernet validation для `API_TOKEN_ENCRYPTION_KEY`;
+- отдельный обязательный production `LEGAL_EVIDENCE_HMAC_KEY`;
+- conditional Sber и SMTP/recovery validation;
+- CI проверяет одновременно fail-closed template и успешный full-app import с безопасными CI overrides.
 
-Первый CI-прогон P33 поймал несовместимость порядка recovery-validation и ошибку тестового Sber fixture; они были исправлены до merge. Финальный exact head `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл Backend security, Frontend build, Database migrations и Release integrity полностью зелёными.
+Первый CI-прогон P33 поймал regression порядка recovery-validation и ошибку тестового Sber fixture; они были исправлены до merge. Финальный exact head `272dabc04f16290bca71bd1030ffe24b8a2186bd` прошёл Backend security, Frontend build, Database migrations и Release integrity.
 
-P33 закрывает найденный code-side production-config blocker, но не является фактом production-like deployment или внешней acceptance.
+## 0.9.0-alpha.11 — P34/P35/P36: финальный pre-beta hardening
 
-## 0.9.0-alpha.11 — P34: beta evidence-contract closure
+`0.9.0-alpha.11` объединяет release-governance, data-accuracy и systemd deployment hardening. P35/P36 не меняли runtime capability и поэтому не создавали новый product version.
+
+### P34 — beta evidence-contract closure
 
 **PR:** #53  
 **Merge:** `2b0ce4522adda642f6af8fa78b30e5440a7469be`.
 
-P34 появился после post-P33 сверки `RELEASE_ROADMAP.md`, `RELEASE_READINESS.md` и `ops/release_evidence.py`. Был найден governance blocker: runner мог формально выдать полный beta manifest по трём artifacts (`ci`, `core_smoke`, `data_accuracy`), хотя beta readiness уже требовал deployment/rollback, реальный SMTP/account-lifecycle smoke, desktop/mobile UX и secrets review.
+P34 синхронизировал release-evidence contract с фактическим beta readiness:
 
-P34:
+- обязательный beta set: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
+- RC — строгий superset beta, stable — superset RC;
+- manifest schema v2;
+- stage/version binding;
+- полный 40-символьный Git SHA;
+- запрет пустых/неизвестных artifacts;
+- machine-readable проверка passing `data_accuracy`;
+- positive/negative CI contract tests.
 
-- синхронизировал обязательный beta evidence set с фактическим readiness: `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
-- сделал RC строгим superset beta и stable — superset RC;
-- ввёл manifest schema v2;
-- связал stage с версией: beta требует `*-beta.N`, RC — `*-rc.N`, stable — версию без prerelease suffix;
-- требует полный 40-символьный Git SHA и непустой environment;
-- отклоняет неизвестные и пустые artifacts;
-- проверяет `data_accuracy` как schema v1 JSON со `status=pass`, ненулевыми periods/metrics и SHA-256 input/policy;
-- расширил Release integrity positive/negative tests, включая старый неполный beta-набор, invalid SHA, alpha-version для beta, empty artifact и failing data-accuracy evidence;
-- синхронизировал `RELEASE_EVIDENCE.md`, roadmap/readiness/versioning/CHANGELOG.
+Финальный exact head P34 `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity.
 
-Финальный exact head `0d0d3d6c7c9f17f569f816bd79d9577b7fc226e6` прошёл Backend security, Frontend build, Database migrations и Release integrity полностью зелёными. P34 не является доказательством прохождения внешней acceptance: beta всё ещё требует реальных evidence artifacts из production-like environment.
+### P36 — systemd deployment Python 3.12 hotfix
+
+**PR:** #55  
+**Merge:** `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c`.
+
+P36 появился после реального production-like обновления Ubuntu/systemd, где существующий `/home/projects/wb/backend/venv` оказался на Python 3.10.
+
+Добавлено:
+
+- `ops/update_systemd.sh` с Python 3.12/Node preflight;
+- clean-tree и fast-forward-only contract;
+- fresh Python 3.12 venv перед переключением;
+- dependency install и Alembic в новом environment;
+- frontend `npm ci` + build;
+- controlled venv swap с сохранением предыдущего venv;
+- restart backend/Celery/Beat, nginx reload и bounded readiness;
+- `--preflight-only`;
+- отдельный `systemd-updater` CI workflow;
+- `docs/SYSTEMD_DEPLOYMENT.md` и troubleshooting/install updates.
+
+P36 не менял `VERSION`: это deployment hardening существующего `alpha.11`.
+
+### P35 — required data-accuracy coverage
+
+**PR:** #56  
+**Merge:** `d2e782208228fbe60cb92b9e61fbf8d325f0e839`.  
+**Exact PR head:** `7e88182533f7d3a8baf813bcaeeb19d7442db0d3`.
+
+P35 закрыл обход acceptance gate:
+
+- policy-required metric должна присутствовать в каждом периоде;
+- отсутствующая required metric становится `missing` и блокирует acceptance;
+- input не может ослабить policy через `required:false`;
+- изменение tolerance/mode относительно policy требует `override_reason`;
+- JSON/Markdown report фиксирует required metric/observation counts и override reason;
+- CI содержит passing, failing, incomplete, required-downgrade и tolerance-override scenarios.
+
+Release integrity exact-head P35 прошёл полностью зелёным: version, acceptance-tools, Docker/gateway и backup/restore. P35 не затрагивал runtime code, dependencies, migrations или product `VERSION`, поэтому отдельный product version bump не создавался.
 
 ## Следующая стадия — 0.9.0-beta.1
 
 Допускается только после:
 
 - feature freeze WB Web v1 на текущем `0.9.0-alpha.11` baseline и отсутствия известных необработанных code-side blockers;
-- production-like HTTPS deployment из repo с реальными non-placeholder secrets/hosts и deploy/rollback evidence;
+- production-like HTTPS deployment из repo с реальными non-placeholder secrets/hosts;
+- systemd backend/Celery/Beat фактически работают из Python 3.12 environment, frontend build — на поддерживаемом Node;
+- clean-tree deploy/rollback evidence;
 - фактического core release smoke, включая disposable registration/demo/legal evidence;
 - реального SMTP/recovery и account-lifecycle smoke;
 - desktop/mobile UX smoke и secrets review;
-- data-accuracy acceptance на реальном WB seller account и фиксированных периодах;
+- data-accuracy acceptance на реальном WB seller account: все policy-required metrics, `missing=0`, tolerance overrides только с `override_reason`;
 - отсутствия необъяснённых существенных денежных расхождений;
 - сохранённого beta release-evidence manifest v2 для exact `*-beta.N` commit.
 
