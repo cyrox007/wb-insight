@@ -36,11 +36,13 @@ Working tree перед deployment должен быть чистым.
 
 ## Канонический updater для существующей systemd-установки
 
-В репозитории есть:
+В репозитории есть executable-скрипт:
 
 ```bash
 ops/update_systemd.sh
 ```
+
+Executable bit хранится в Git и проверяется CI. Не выполняйте локальный `chmod +x`: изменение mode tracked-файла делает working tree dirty и блокирует clean-tree guard updater-а. Если mode уже был изменён локально, восстановите его через `git restore -- ops/update_systemd.sh`, обновите `main` и только затем запускайте updater.
 
 По умолчанию он ожидает проект в `/home/projects/wb` и сервисы:
 
@@ -53,7 +55,6 @@ ops/update_systemd.sh
 
 ```bash
 cd /home/projects/wb
-chmod +x ops/update_systemd.sh
 ./ops/update_systemd.sh
 ```
 
