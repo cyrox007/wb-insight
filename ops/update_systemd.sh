@@ -102,7 +102,10 @@ NEW_COMMIT="$(git -C "$PROJECT_DIR" rev-parse HEAD)"
 log "Target commit:  $NEW_COMMIT"
 
 log "[2/8] Building a fresh Python 3.12 virtual environment..."
-NEW_VENV="$BACKEND_DIR/venv.next.$STAMP"
+# Keep the release venv at the path where it was created. Python console scripts
+# (celery, alembic, uvicorn, ...) contain an absolute shebang to that interpreter;
+# renaming the venv after pip install makes those executables fail with 203/EXEC.
+NEW_VENV="$BACKEND_DIR/venv.release.$STAMP"
 "$PYTHON_BIN" -m venv "$NEW_VENV"
 "$NEW_VENV/bin/python" -m pip install --upgrade pip setuptools wheel
 "$NEW_VENV/bin/python" -m pip install --requirement "$BACKEND_DIR/requirements.txt"
@@ -130,11 +133,21 @@ log "[5/8] Building frontend..."
 )
 
 log "[6/8] Activating the new virtual environment..."
-if [[ -d "$VENV_DIR" ]]; then
-  mv "$VENV_DIR" "$BACKEND_DIR/venv.previous.$STAMP"
+PREVIOUS_VENV="$BACKEND_DIR/venv.previous.$STAMP"
+if [[ -L "$VENV_DIR" ]]; then
+  PREVIOUS_VENV_TARGET="$(readlink -f "$VENV_DIR")"
+  ln -s "$PREVIOUS_VENV_TARGET" "$PREVIOUS_VENV"
+  rm "$VENV_DIR"
+elif [[ -d "$VENV_DIR" ]]; then
+  mv "$VENV_DIR" "$PREVIOUS_VENV"
 fi
-mv "$NEW_VENV" "$VENV_DIR"
+ln -s "$NEW_VENV" "$VENV_DIR"
 NEW_VENV=""
+
+# Validate the exact executables used by systemd before restarting services.
+"$VENV_DIR/bin/python" --version
+"$VENV_DIR/bin/celery" --version >/dev/null
+"$VENV_DIR/bin/alembic" --version >/dev/null
 
 log "[7/8] Restarting application services..."
 run_root systemctl restart wb-backend
