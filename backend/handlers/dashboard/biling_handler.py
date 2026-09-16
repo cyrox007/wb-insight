@@ -16,6 +16,11 @@ from services.legal_service import (
     record_consents,
     validate_consent_payload,
 )
+from services.payment_provider_service import (
+    PaymentProviderRuntime,
+    get_provider_runtime,
+    resolve_checkout_provider,
+)
 from services.payment_service import (
     apply_sber_status,
     create_or_get_payment,
@@ -31,7 +36,6 @@ from services.subscription_service import (
     deactivate_active_subscriptions,
     get_subscription_by_payment_id,
 )
-from settings import config
 from utils.responce_helps import response_error, response_success
 
 
@@ -50,12 +54,12 @@ def _amount_to_kopecks(amount: Decimal) -> int:
     return int((amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
-def _sber_client() -> SberAcquiringClient:
+def _sber_client(runtime: PaymentProviderRuntime) -> SberAcquiringClient:
     return SberAcquiringClient(
-        base_url=config.SBER_API_BASE_URL,
-        username=config.SBER_USERNAME or "",
-        password=config.SBER_PASSWORD or "",
-        timeout_seconds=config.SBER_HTTP_TIMEOUT_SECONDS,
+        base_url=runtime.api_base_url or "",
+        username=runtime.username or "",
+        password=runtime.password or "",
+        timeout_seconds=runtime.timeout_seconds,
     )
 
 
@@ -64,6 +68,7 @@ def _payment_payload(payment, *, confirmation_url: str | None = None) -> dict:
         "payment_id": str(payment.id),
         "payment_status": payment.status.value,
         "provider": payment.provider.value,
+        "mode": payment.mode,
         "provider_status": payment.provider_status,
         "amount": str(payment.amount),
         "currency": payment.currency,
@@ -95,7 +100,14 @@ async def _confirm_sber_payment(
     if not payment.external_payment_id:
         raise ValueError("Платёж ещё не зарегистрирован в Сбере")
 
-    async with _sber_client() as client:
+    runtime = await get_provider_runtime(session, "sber", payment.mode or "live")
+    if not runtime.ready:
+        raise SberAcquiringError(
+            "Конфигурация Сбер-эквайринга недоступна для проверки платежа",
+            code="SBER_CONFIG_NOT_READY",
+        )
+
+    async with _sber_client(runtime) as client:
         bank_status = await client.get_order_status(order_id=payment.external_payment_id)
 
     return await apply_sber_status(
@@ -131,7 +143,8 @@ async def create_payment_handler(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    if not config.SBER_ACQUIRING_ENABLED and not config.ALLOW_FAKE_BILLING:
+    runtime = await resolve_checkout_provider(db_session)
+    if runtime is None:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return response_error(
             code="BILLING_NOT_CONFIGURED",
@@ -168,7 +181,7 @@ async def create_payment_handler(
 
     user_id = UUID(str(request.state.user["sub"]))
 
-    if config.SBER_ACQUIRING_ENABLED:
+    if runtime.provider == "sber":
         idempotency_key = str(request.headers.get("Idempotency-Key") or "").strip()
         if not 8 <= len(idempotency_key) <= 128:
             response.status_code = status.HTTP_400_BAD_REQUEST
@@ -191,12 +204,19 @@ async def create_payment_handler(
             return response_error(code="IDEMPOTENCY_CONFLICT", message=str(exc))
 
         if created:
+            payment.mode = runtime.mode
             await _record_billing_consents(
                 db_session,
                 request=request,
                 user_id=user_id,
                 documents=legal_documents,
                 payment_id=payment.id,
+            )
+        elif payment.mode != runtime.mode:
+            response.status_code = status.HTTP_409_CONFLICT
+            return response_error(
+                code="IDEMPOTENCY_CONFLICT",
+                message="Idempotency-Key уже использован в другом режиме оплаты",
             )
 
         existing_url = (payment.provider_data or {}).get("form_url")
@@ -212,23 +232,23 @@ async def create_payment_handler(
             )
 
         return_url = _append_query(
-            config.SBER_RETURN_URL or "",
+            runtime.return_url or "",
             payment_id=str(payment.id),
             result="return",
         )
         fail_url = _append_query(
-            config.SBER_FAIL_URL or "",
+            runtime.fail_url or "",
             payment_id=str(payment.id),
             result="fail",
         )
         order_number = f"WBI-{payment.id.hex}"
 
         try:
-            async with _sber_client() as client:
+            async with _sber_client(runtime) as client:
                 registered = await client.register_order(
                     order_number=order_number,
                     amount_kopecks=_amount_to_kopecks(amount),
-                    currency=config.SBER_CURRENCY_CODE,
+                    currency=runtime.currency_code,
                     return_url=return_url,
                     fail_url=fail_url,
                     description=f"WB Insight: тариф {tariff.name}",
@@ -239,7 +259,7 @@ async def create_payment_handler(
                 payment_id=payment.id,
                 event_type="registration_error",
                 provider_status=exc.code,
-                provider_data={"retryable": exc.retryable},
+                provider_data={"retryable": exc.retryable, "mode": runtime.mode},
             )
             response.status_code = (
                 status.HTTP_503_SERVICE_UNAVAILABLE
@@ -253,6 +273,7 @@ async def create_payment_handler(
         payment.provider_data = {
             "order_number": order_number,
             "form_url": registered.form_url,
+            "mode": runtime.mode,
             "registration": safe_sber_provider_data(registered.raw),
         }
         await record_payment_event(
@@ -263,11 +284,19 @@ async def create_payment_handler(
             provider_data={
                 "order_id": registered.order_id,
                 "order_number": order_number,
+                "mode": runtime.mode,
             },
         )
         await db_session.flush()
         return response_success(
             **_payment_payload(payment, confirmation_url=registered.form_url)
+        )
+
+    if runtime.provider != "fake":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return response_error(
+            code="PAYMENT_PROVIDER_UNAVAILABLE",
+            message="Адаптер выбранного платёжного провайдера ещё не подключён",
         )
 
     payment = await create_payment(
@@ -277,6 +306,7 @@ async def create_payment_handler(
         amount=amount,
         provider=PaymentProvider.FAKE,
     )
+    payment.mode = "test"
     await _record_billing_consents(
         db_session,
         request=request,
@@ -364,10 +394,6 @@ async def sber_callback_handler(
     db_session: AsyncSession = Depends(get_db_session),
 ):
     """Treat the callback only as a trigger; bank status is re-queried server-side."""
-    if not config.SBER_ACQUIRING_ENABLED:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-        return response_error(code="BILLING_NOT_CONFIGURED", message="Sber acquiring отключён")
-
     params = await _callback_params(request)
     external_id = str(params.get("mdOrder") or params.get("orderId") or "").strip()
     if not external_id:
@@ -417,7 +443,8 @@ async def pay_now(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    if not config.ALLOW_FAKE_BILLING:
+    runtime = await get_provider_runtime(db_session, "fake", "test")
+    if not runtime.enabled or not runtime.ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return response_error(
             code="BILLING_NOT_CONFIGURED",
