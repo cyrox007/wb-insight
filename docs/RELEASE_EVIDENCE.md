@@ -27,7 +27,7 @@ Manifest не копирует содержимое artifacts и не предн
 - каждый artifact должен существовать и быть непустым;
 - `data_accuracy` должен быть JSON-отчётом schema v1 со `status=pass`, ненулевыми period/metric counts и SHA-256 входа/policy.
 
-Начиная с P40 фактический promotion выполняется через `ops/release_candidate_evidence.py`. Он сначала требует structured exact-head `ci` evidence, а затем вызывает `ops/release_evidence.py --require-structured-runtime-evidence`, поэтому ключевые gates нельзя подменить произвольными текстовыми файлами.
+Начиная с P40 фактический promotion выполняется через `ops/release_candidate_evidence.py`. Он сначала требует structured exact-head `ci` evidence, затем обязательную привязку isolated existing-database upgrade proof к deployment evidence и только после этого вызывает `ops/release_evidence.py --require-structured-runtime-evidence`.
 
 ## Structured runtime evidence
 
@@ -42,14 +42,17 @@ Manifest не копирует содержимое artifacts и не предн
 
 В report сохраняются только workflow name, run id/attempt, event и итоговый status/conclusion. `GITHUB_TOKEN`, job logs и их содержимое в evidence не копируются. Release-candidate изменение `VERSION` специально запускает все эти контуры, чтобы exact candidate SHA не наследовал зелёный статус от предыдущего commit.
 
-`deployment` создаётся `ops/systemd_acceptance.py`. Строгая проверка связывает его с теми же `VERSION`, commit и environment, что и manifest, и требует:
+`ops/database_upgrade_acceptance.py` доказывает upgrade **копии существующей БД**, а не только clean-schema migration. Он проверяет checksum encrypted backup, расшифровывает backup только во временный файл, восстанавливает его в отдельную временную PostgreSQL БД, выполняет `alembic upgrade head`, сверяет `current == heads`, выполняет `alembic check` и затем удаляет временную БД. Исходная БД не изменяется. В evidence не сохраняются пароль БД, passphrase или содержимое dump; сохраняются только release binding, SHA-256 encrypted backup, revisions, table counts и статусы проверок.
+
+`deployment` создаётся `ops/systemd_acceptance.py`. Для beta он получает structured database-upgrade proof через `--database-upgrade-proof ... --require-database-upgrade-proof`, проверяет совпадение VERSION/commit/environment и связывает proof по SHA-256. Далее deployment evidence требует:
 
 - clean exact-head checkout целевой ветки;
 - immutable `venv.release.*` и Python 3.12;
 - поддерживаемый Node;
 - active/enabled backend, Celery worker и Beat;
 - Celery ping;
-- Alembic current=head;
+- Alembic current=head на развернутой БД;
+- привязанный isolated existing-database upgrade proof;
 - валидный nginx config;
 - local readiness;
 - публичный HTTPS readiness;
@@ -77,7 +80,7 @@ Manifest не копирует содержимое artifacts и не предн
 Для `beta` обязательны все следующие artifacts:
 
 - `ci` — structured exact-head GitHub Actions evidence;
-- `deployment` — evidence production-like HTTPS deployment, migration/upgrade и deploy/rollback smoke;
+- `deployment` — evidence production-like HTTPS deployment, isolated existing-DB upgrade и deploy/rollback smoke;
 - `core_smoke` — результат production-like `ops/release_smoke.py` без отключения disposable registration;
 - `account_lifecycle` — login/refresh/logout/deactivation и реальный password-recovery smoke через настроенный SMTP/provider;
 - `ux_smoke` — structured human-reviewed desktop/mobile evidence основных экранов и критичных empty/loading/error states;
@@ -95,9 +98,18 @@ python3 ops/ci_acceptance.py \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --output /secure/evidence/ci.json
 
+python3 ops/database_upgrade_acceptance.py \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
+  --backup /secure/backups/wb-before-candidate.dump.enc \
+  --env-file /secure/runtime/wb-insight.env \
+  --passphrase-file /secure/runtime/backup-passphrase \
+  --output /secure/evidence/database-upgrade.json
+
 python3 ops/systemd_acceptance.py \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --public-base-url https://staging.example.com \
+  --database-upgrade-proof /secure/evidence/database-upgrade.json \
+  --require-database-upgrade-proof \
   --rollback-proof /secure/evidence/rollback-drill.txt \
   --require-rollback-proof \
   --output /secure/evidence/deployment.json
@@ -139,7 +151,7 @@ python3 ops/release_candidate_evidence.py \
 
 Для private repository `ops/ci_acceptance.py` получает `GITHUB_TOKEN` через environment/secret manager. Значение токена в report не попадает. При необходимости GitHub API payload можно заранее сохранить защищённо и передать через `--runs-json`.
 
-Путь к runtime env в примере условный: на конкретном host нужно передать фактический защищённый файл или экспортировать переменные через secret manager. `ops/secrets_review.py` не записывает их значения в evidence.
+Путь к runtime env в примере условный: на конкретном host нужно передать фактический защищённый файл или экспортировать переменные через secret manager. `ops/database_upgrade_acceptance.py` и `ops/secrets_review.py` не записывают значения этих секретов в evidence.
 
 Переменные `SMOKE_EMAIL`, `SMOKE_PASSWORD`, `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` и `SMOKE_MAIL_TOKEN_COMMAND` в примере предполагаются переданными через environment/secret manager и не должны попадать в evidence.
 
@@ -201,5 +213,7 @@ Release evidence должно храниться отдельно от applicati
 - `backup_restore`
 - `legal`
 - `rc_signoff`
+
+`database-upgrade.json` остаётся sub-proof deployment gate и поэтому не добавляется отдельным top-level artifact kind: `deployment.json` связывает его SHA-256 и strict release-candidate entrypoint требует эту связь.
 
 Новый обязательный gate добавляется в runner, `RELEASE_READINESS.md`, `RELEASE_ROADMAP.md` и этот документ одним PR.
