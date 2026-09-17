@@ -14,7 +14,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import sys
 from datetime import datetime, timezone
 from http.cookiejar import CookieJar
@@ -160,7 +159,7 @@ def _validate_accuracy_pair(
     report_path: Path,
     *,
     account_fingerprint: str,
-) -> tuple[dict, dict]:
+) -> dict:
     input_data = _load_object(input_path, label="data-accuracy input")
     report = _load_object(report_path, label="data-accuracy report")
     try:
@@ -168,8 +167,7 @@ def _validate_accuracy_pair(
     except ValueError as exc:
         raise WBLiveDataAcceptanceError(str(exc)) from exc
 
-    input_hash = _sha256(input_path)
-    if str(report.get("input_sha256") or "").lower() != input_hash.lower():
+    if str(report.get("input_sha256") or "").lower() != _sha256(input_path).lower():
         raise WBLiveDataAcceptanceError("data-accuracy report is not bound to the supplied input")
     if str(input_data.get("wb_account_fingerprint") or "").lower() != account_fingerprint.lower():
         raise WBLiveDataAcceptanceError(
@@ -183,9 +181,12 @@ def _validate_accuracy_pair(
         raise WBLiveDataAcceptanceError("beta live data acceptance requires at least three periods")
     if report.get("period_count") != len(periods):
         raise WBLiveDataAcceptanceError("data-accuracy report period count does not match its input")
-    if int(report.get("missing_count") or 0) != 0 or int(report.get("failed_count") or 0) != 0:
+    counts = report.get("counts")
+    if not isinstance(counts, dict):
+        raise WBLiveDataAcceptanceError("data-accuracy report is missing result counts")
+    if int(counts.get("missing") or 0) != 0 or int(counts.get("fail") or 0) != 0:
         raise WBLiveDataAcceptanceError("data-accuracy report contains missing or failed observations")
-    return input_data, report
+    return report
 
 
 def validate_wb_live_data_evidence(
@@ -320,7 +321,7 @@ def main() -> int:
 
         if account_fingerprint is None or not cleanup_complete:
             raise WBLiveDataAcceptanceError("live WB validation did not complete safely")
-        _input, accuracy = _validate_accuracy_pair(
+        accuracy = _validate_accuracy_pair(
             args.accuracy_input,
             args.data_accuracy,
             account_fingerprint=account_fingerprint,
@@ -348,14 +349,11 @@ def main() -> int:
                 "minimum_period_coverage": True,
             },
         }
-        validate_wb_live_data_evidence(
-            args.output.parent / args.output.name if False else Path("/dev/null"),
-            version=version,
-            commit=commit,
-            environment=environment,
-        ) if False else None
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        args.output.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         validate_wb_live_data_evidence(
             args.output,
             version=version,
