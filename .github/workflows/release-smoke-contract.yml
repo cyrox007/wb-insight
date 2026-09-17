@@ -8,6 +8,8 @@ on:
       - ops/systemd_acceptance.py
       - ops/database_upgrade_acceptance.py
       - ops/payment_acceptance.py
+      - ops/backup_restore_acceptance.py
+      - ops/beta_release_evidence.py
       - ops/secrets_review.py
       - ops/ux_acceptance.py
       - ops/ci_acceptance.py
@@ -26,6 +28,8 @@ on:
       - ops/systemd_acceptance.py
       - ops/database_upgrade_acceptance.py
       - ops/payment_acceptance.py
+      - ops/backup_restore_acceptance.py
+      - ops/beta_release_evidence.py
       - ops/secrets_review.py
       - ops/ux_acceptance.py
       - ops/ci_acceptance.py
@@ -51,6 +55,8 @@ jobs:
             ops/systemd_acceptance.py \
             ops/database_upgrade_acceptance.py \
             ops/payment_acceptance.py \
+            ops/backup_restore_acceptance.py \
+            ops/beta_release_evidence.py \
             ops/secrets_review.py \
             ops/ux_acceptance.py \
             ops/ci_acceptance.py \
@@ -66,6 +72,9 @@ jobs:
           python3 ops/database_upgrade_acceptance.py --self-test
           PYTHONPATH=ops python3 ops/payment_acceptance.py --help >/dev/null
           PYTHONPATH=ops python3 ops/payment_acceptance.py --self-test
+          PYTHONPATH=ops python3 ops/backup_restore_acceptance.py --help >/dev/null
+          PYTHONPATH=ops python3 ops/backup_restore_acceptance.py --self-test
+          PYTHONPATH=ops python3 ops/beta_release_evidence.py --help >/dev/null
           python3 ops/secrets_review.py --help >/dev/null
           python3 ops/secrets_review.py --self-test
           python3 ops/ux_acceptance.py --help >/dev/null
