@@ -48,19 +48,28 @@ async function loadUser() {
 }
 
 function askRemoveRole(roleCode) {
+	if (roleActionLoading.value) return
 	roleConfirm.value = { isOpen: true, role: roleCode }
 }
 
+function closeRoleConfirm() {
+	if (roleActionLoading.value) return
+	roleConfirm.value = { isOpen: false, role: '' }
+}
+
 async function removeRoleConfirmed() {
-	if (!targetUser.value || !roleConfirm.value.role) return
+	if (roleActionLoading.value || !targetUser.value || !roleConfirm.value.role) return
 	roleActionLoading.value = true
 	try {
-		await CP_Roles.deleteRoleFromUser(targetUser.value.id, roleConfirm.value.role)
+		const response = await CP_Roles.deleteRoleFromUser(targetUser.value.id, roleConfirm.value.role)
+		if (response.data?.status !== 'success') {
+			throw new Error(response.data?.message || 'Не удалось удалить роль')
+		}
 		roleConfirm.value = { isOpen: false, role: '' }
 		await loadUser()
 	} catch (error) {
 		console.error('Ошибка удаления роли:', error)
-		loadError.value = 'Не удалось удалить роль. Повторите действие.'
+		loadError.value = error.response?.data?.error?.message || error.message || 'Не удалось удалить роль. Повторите действие.'
 	} finally {
 		roleActionLoading.value = false
 	}
@@ -103,46 +112,16 @@ async function removeRoleConfirmed() {
 			</div>
 
 			<div class="cp-info-grid">
-				<div class="cp-info-item">
-					<span class="cp-info-label">ID</span>
-					<code class="cp-info-value cp-code">{{ targetUser.id }}</code>
-				</div>
-				<div class="cp-info-item">
-					<span class="cp-info-label">Тип аккаунта</span>
-					<span class="cp-info-value">{{ ENTITY_LABELS[targetUser.entity_type] || targetUser.entity_type || '—' }}</span>
-				</div>
-				<div class="cp-info-item">
-					<span class="cp-info-label">Создан</span>
-					<span class="cp-info-value">{{ DateTransform.formatDate(targetUser.created_at) }}</span>
-				</div>
-				<div class="cp-info-item">
-					<span class="cp-info-label">Часовой пояс</span>
-					<span class="cp-info-value">{{ targetUser.timezone || '—' }}</span>
-				</div>
-				<div v-if="targetUser.inn" class="cp-info-item">
-					<span class="cp-info-label">ИНН</span>
-					<span class="cp-info-value">{{ targetUser.inn }}</span>
-				</div>
-				<div v-if="targetUser.kpp" class="cp-info-item">
-					<span class="cp-info-label">КПП</span>
-					<span class="cp-info-value">{{ targetUser.kpp }}</span>
-				</div>
-				<div v-if="targetUser.legal_address" class="cp-info-item">
-					<span class="cp-info-label">Юр. адрес</span>
-					<span class="cp-info-value">{{ targetUser.legal_address }}</span>
-				</div>
-				<div v-if="targetUser.department" class="cp-info-item">
-					<span class="cp-info-label">Отдел</span>
-					<span class="cp-info-value">{{ targetUser.department }}</span>
-				</div>
-				<div v-if="targetUser.position" class="cp-info-item">
-					<span class="cp-info-label">Должность</span>
-					<span class="cp-info-value">{{ targetUser.position }}</span>
-				</div>
-				<div class="cp-info-item">
-					<span class="cp-info-label">Сотрудник</span>
-					<span class="cp-info-value">{{ targetUser.is_staff ? 'Да' : 'Нет' }}</span>
-				</div>
+				<div class="cp-info-item"><span class="cp-info-label">ID</span><code class="cp-info-value cp-code">{{ targetUser.id }}</code></div>
+				<div class="cp-info-item"><span class="cp-info-label">Тип аккаунта</span><span class="cp-info-value">{{ ENTITY_LABELS[targetUser.entity_type] || targetUser.entity_type || '—' }}</span></div>
+				<div class="cp-info-item"><span class="cp-info-label">Создан</span><span class="cp-info-value">{{ DateTransform.formatDate(targetUser.created_at) }}</span></div>
+				<div class="cp-info-item"><span class="cp-info-label">Часовой пояс</span><span class="cp-info-value">{{ targetUser.timezone || '—' }}</span></div>
+				<div v-if="targetUser.inn" class="cp-info-item"><span class="cp-info-label">ИНН</span><span class="cp-info-value">{{ targetUser.inn }}</span></div>
+				<div v-if="targetUser.kpp" class="cp-info-item"><span class="cp-info-label">КПП</span><span class="cp-info-value">{{ targetUser.kpp }}</span></div>
+				<div v-if="targetUser.legal_address" class="cp-info-item"><span class="cp-info-label">Юр. адрес</span><span class="cp-info-value">{{ targetUser.legal_address }}</span></div>
+				<div v-if="targetUser.department" class="cp-info-item"><span class="cp-info-label">Отдел</span><span class="cp-info-value">{{ targetUser.department }}</span></div>
+				<div v-if="targetUser.position" class="cp-info-item"><span class="cp-info-label">Должность</span><span class="cp-info-value">{{ targetUser.position }}</span></div>
+				<div class="cp-info-item"><span class="cp-info-label">Сотрудник</span><span class="cp-info-value">{{ targetUser.is_staff ? 'Да' : 'Нет' }}</span></div>
 			</div>
 
 			<section class="cp-section">
@@ -151,15 +130,13 @@ async function removeRoleConfirmed() {
 						<h3 class="cp-section-title">Роли и доступ</h3>
 						<p class="cp-muted">Роль пользователя нельзя удалить; дополнительные роли можно отозвать.</p>
 					</div>
-					<BaseButton variant="success" size="small" text="Назначить роль" @click="showAssignRoleModal = true" />
+					<BaseButton variant="success" size="small" text="Назначить роль" :disabled="roleActionLoading" @click="showAssignRoleModal = true" />
 				</div>
 
 				<div v-if="targetUser.roles?.length" class="cp-list">
 					<div v-for="roleItem in targetUser.roles" :key="roleItem.role" class="cp-list-row">
 						<div class="cp-list-row__main">
-							<div class="cp-chip-row">
-								<span class="cp-chip cp-chip--accent">{{ roleItem.role }}</span>
-							</div>
+							<div class="cp-chip-row"><span class="cp-chip cp-chip--accent">{{ roleItem.role }}</span></div>
 							<p class="cp-list-row__meta">
 								Назначена: {{ DateTransform.formatDate(roleItem.assigned_at) }}
 								<span v-if="roleItem.assigned_by"> · {{ roleItem.assigned_by }}</span>
@@ -169,46 +146,37 @@ async function removeRoleConfirmed() {
 							v-if="roleItem.role !== 'user'"
 							class="cp-icon-button cp-icon-button--danger"
 							title="Удалить роль"
-							aria-label="Удалить роль"
+							:aria-label="`Удалить роль ${roleItem.role}`"
+							:disabled="roleActionLoading"
 							@click="askRemoveRole(roleItem.role)"
-						>
-							×
-						</button>
+						>×</button>
 					</div>
 				</div>
 				<div v-else class="cp-state">Роли не назначены.</div>
 			</section>
 
 			<div class="cp-section cp-actions cp-actions--end">
-				<BaseButton variant="primary" text="Редактировать профиль" @click="showEditModal = true" />
+				<BaseButton variant="primary" text="Редактировать профиль" :disabled="roleActionLoading" @click="showEditModal = true" />
 			</div>
 		</article>
 
-		<EditUserModal
-			v-if="showEditModal"
-			:is-open="true"
-			:current-user="targetUser"
-			@close="showEditModal = false"
-			@updated="loadUser"
-		/>
-		<AssignRoleModal
-			:is-open="showAssignRoleModal"
-			:user-id="targetUser?.id"
-			@close="showAssignRoleModal = false"
-			@assigned="loadUser"
-		/>
+		<EditUserModal v-if="showEditModal" :is-open="true" :current-user="targetUser" @close="showEditModal = false" @updated="loadUser" />
+		<AssignRoleModal :is-open="showAssignRoleModal" :user-id="targetUser?.id" @close="showAssignRoleModal = false" @assigned="loadUser" />
 
-		<Modal v-if="roleConfirm.isOpen" :is-open="true" @close="roleConfirm = { isOpen: false, role: '' }">
-			<template #header>
-				<h3 class="cp-modal-title">Удалить роль</h3>
-			</template>
-			<template #body>
-				<p class="cp-modal-copy">Удалить роль «{{ roleConfirm.role }}» у пользователя? Доступ изменится сразу после сохранения.</p>
-			</template>
+		<Modal
+			v-if="roleConfirm.isOpen"
+			:is-open="true"
+			aria-label="Подтверждение удаления роли"
+			:close-on-overlay-click="!roleActionLoading"
+			:close-on-escape="!roleActionLoading"
+			@close="closeRoleConfirm"
+		>
+			<template #header><h3 class="cp-modal-title">Удалить роль</h3></template>
+			<template #body><p class="cp-modal-copy">Удалить роль «{{ roleConfirm.role }}» у пользователя? Доступ изменится сразу после сохранения.</p></template>
 			<template #footer>
 				<div class="cp-modal-footer">
-					<BaseButton variant="outline" text="Отмена" @click="roleConfirm = { isOpen: false, role: '' }" />
-					<BaseButton variant="danger" text="Удалить роль" :loading="roleActionLoading" @click="removeRoleConfirmed" />
+					<BaseButton variant="outline" text="Отмена" :disabled="roleActionLoading" @click="closeRoleConfirm" />
+					<BaseButton variant="danger" text="Удалить роль" loading-text="Удаляем…" :loading="roleActionLoading" @click="removeRoleConfirmed" />
 				</div>
 			</template>
 		</Modal>
