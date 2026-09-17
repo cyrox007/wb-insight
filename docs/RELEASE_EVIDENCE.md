@@ -27,7 +27,7 @@ Manifest не копирует содержимое artifacts и не предн
 - каждый artifact должен существовать и быть непустым;
 - `data_accuracy` должен быть JSON-отчётом schema v1 со `status=pass`, ненулевыми period/metric counts и SHA-256 входа/policy.
 
-Начиная с P40 фактический promotion выполняется через `ops/release_candidate_evidence.py`. Он сначала требует structured exact-head `ci` evidence, затем обязательную привязку isolated existing-database upgrade proof к deployment evidence и только после этого вызывает `ops/release_evidence.py --require-structured-runtime-evidence`.
+Начиная с P40 фактический promotion выполняется через `ops/release_candidate_evidence.py`. Он сначала требует structured exact-head `ci` evidence, обязательную привязку isolated existing-database upgrade proof к deployment evidence и отдельный payment-isolation proof, и только после этого вызывает `ops/release_evidence.py --require-structured-runtime-evidence`.
 
 ## Structured runtime evidence
 
@@ -63,6 +63,18 @@ Manifest не копирует содержимое artifacts и не предн
 
 Один и тот же sanitized `release-smoke.json` допустимо привязать как `core_smoke` и `account_lifecycle`: manifest всё равно фиксирует его SHA-256 отдельно для каждого kind.
 
+`ops/payment_acceptance.py` закрывает beta-gate **test/live isolation** в read-only режиме. Он авторизуется существующим Control Panel аккаунтом, проверяет provider catalog и payment journal filters, но ничего не меняет и не создаёт платежи. Proof требует:
+
+- уникальные `(provider, mode)` пары;
+- отдельные `sber/test` и `sber/live`, причём test не наследует live ENV credentials;
+- `fake/test` выключен, не ready и не default в production-like acceptance;
+- default provider, если задан, только один и только `live`;
+- provider URLs не содержат userinfo/query/fragment;
+- API payload не раскрывает secret-like поля;
+- `journal?mode=test` не возвращает live rows, а `journal?mode=live` не возвращает test rows.
+
+В payment evidence не сохраняются пароль Control Panel, JWT/cookies, credential hints, provider URLs/credentials или payment PII — только release binding, количество конфигураций/проверенных строк и итоговые checks. `ops/release_candidate_evidence.py --payment-proof ...` валидирует этот proof и добавляет его SHA-256 в `candidate_subproofs.payment_isolation` итогового manifest.
+
 `ux_smoke` создаётся `ops/ux_acceptance.py`. Инструмент не выдаёт автоматическую визуальную оценку: проверку интерфейса выполняет человек, а runner делает эту проверку полной и привязанной к exact build. Контракт требует desktop/mobile evidence для публичных auth-экранов, billing success, основных dashboard-разделов и Control Panel (users/roles/tariffs/payments/mail/audit), а также representative loading/empty/error states. Для каждого required state сохраняются только имя evidence-файла, размер и SHA-256; сами изображения/видео остаются в защищённом evidence storage.
 
 `secrets_review` создаётся `ops/secrets_review.py`. Scanner не сохраняет значения секретов и не копирует совпавшие строки. Он сравнивает реально настроенные secret values с:
@@ -86,6 +98,8 @@ Manifest не копирует содержимое artifacts и не предн
 - `ux_smoke` — structured human-reviewed desktop/mobile evidence основных экранов и критичных empty/loading/error states;
 - `secrets_review` — machine-readable проверка отсутствия настроенных secrets/JWT в frontend, Git и runtime logs;
 - `data_accuracy` — green JSON-результат `ops/data_accuracy_acceptance.py` на реальном WB seller dataset.
+
+Дополнительно strict candidate entrypoint требует `payment-isolation.json` как обязательный sub-proof beta gate и привязывает его hash к manifest.
 
 Канонический P40 пример:
 
@@ -121,6 +135,11 @@ python3 ops/release_smoke.py \
   --audit-smoke \
   --evidence-output /secure/evidence/release-smoke.json
 
+python3 ops/payment_acceptance.py \
+  --base-url https://staging.example.com \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
+  --output /secure/evidence/payment-isolation.json
+
 python3 ops/ux_acceptance.py \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --write-template /secure/evidence/ux-review-input.json
@@ -139,6 +158,7 @@ python3 ops/release_candidate_evidence.py \
   --stage beta \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --commit "$RELEASE_SHA" \
+  --payment-proof /secure/evidence/payment-isolation.json \
   --artifact ci=/secure/evidence/ci.json \
   --artifact deployment=/secure/evidence/deployment.json \
   --artifact core_smoke=/secure/evidence/release-smoke.json \
@@ -153,7 +173,7 @@ python3 ops/release_candidate_evidence.py \
 
 Путь к runtime env в примере условный: на конкретном host нужно передать фактический защищённый файл или экспортировать переменные через secret manager. `ops/database_upgrade_acceptance.py` и `ops/secrets_review.py` не записывают значения этих секретов в evidence.
 
-Переменные `SMOKE_EMAIL`, `SMOKE_PASSWORD`, `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` и `SMOKE_MAIL_TOKEN_COMMAND` в примере предполагаются переданными через environment/secret manager и не должны попадать в evidence.
+`SMOKE_EMAIL`/`SMOKE_PASSWORD` используются и core smoke, и read-only payment acceptance; они предполагаются переданными через environment/secret manager. `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` и `SMOKE_MAIL_TOKEN_COMMAND` также не должны попадать в evidence.
 
 UX template нельзя отмечать `pass` без фактической проверки: `ops/ux_acceptance.py` проверяет полноту, release binding и integrity файлов, но не заменяет человеческую визуальную оценку.
 
@@ -214,6 +234,6 @@ Release evidence должно храниться отдельно от applicati
 - `legal`
 - `rc_signoff`
 
-`database-upgrade.json` остаётся sub-proof deployment gate и поэтому не добавляется отдельным top-level artifact kind: `deployment.json` связывает его SHA-256 и strict release-candidate entrypoint требует эту связь.
+`database-upgrade.json` и `payment-isolation.json` остаются обязательными sub-proofs P40, а не отдельными top-level artifact kinds. Первый SHA-256-bound внутри `deployment.json`; второй валидируется strict candidate entrypoint и записывается в `candidate_subproofs.payment_isolation` итогового manifest.
 
 Новый обязательный gate добавляется в runner, `RELEASE_READINESS.md`, `RELEASE_ROADMAP.md` и этот документ одним PR.
