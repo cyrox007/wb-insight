@@ -31,7 +31,11 @@ class SmokeFailure(RuntimeError):
 
 class SmokeClient:
     def __init__(self, base_url: str):
-        self.base_url = base_url.rstrip("/")
+        # Production-like smoke exercises the same public nginx contract as the
+        # browser. Nginx exposes backend routes under /api while proxying them to
+        # the FastAPI root, so callers may pass either the public origin or its
+        # explicit /api root and requests are normalized to /api exactly once.
+        self.base_url = _public_api_base(base_url)
         self.cookies = CookieJar()
         self.opener = build_opener(HTTPCookieProcessor(self.cookies))
         self.access_token: str | None = None
@@ -115,13 +119,19 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
 def _safe_base_origin(value: str) -> str:
     parsed = urlparse(value.strip())
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise SmokeFailure("SMOKE_BASE_URL must be an http(s) origin")
+        raise SmokeFailure("SMOKE_BASE_URL must be an http(s) origin or public /api root")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise SmokeFailure("SMOKE_BASE_URL must not contain credentials, query or fragment")
-    if parsed.path not in {"", "/"}:
-        raise SmokeFailure("SMOKE_BASE_URL must not contain a path")
+    normalized_path = parsed.path.rstrip("/")
+    if normalized_path not in {"", "/api"}:
+        raise SmokeFailure("SMOKE_BASE_URL path must be empty or /api")
     port = f":{parsed.port}" if parsed.port else ""
     return f"{parsed.scheme}://{parsed.hostname}{port}"
+
+
+def _public_api_base(value: str) -> str:
+    """Return the public API root while keeping evidence bound to the bare origin."""
+    return f"{_safe_base_origin(value)}/api"
 
 
 def _write_evidence(path: Path, *, args: argparse.Namespace, checks: dict[str, bool]) -> None:
@@ -553,9 +563,13 @@ def run_wb_credential_smoke(client: SmokeClient, wb_token: str) -> None:
         )
         if created.get("status") != "success":
             raise SmokeFailure("WB credential creation did not succeed")
-        created_id = created.get("data", {}).get("id")
+        data = created.get("data") if isinstance(created.get("data"), dict) else {}
+        # Cleanup endpoint accepts the internal credential UUID (`token.id`).
+        # `external_account_id` identifies the seller and must never be used as
+        # the delete path parameter.
+        created_id = data.get("id") or created.get("id")
         if not created_id:
-            raise SmokeFailure("WB credential smoke did not return credential id")
+            raise SmokeFailure("WB credential smoke did not return internal credential id")
         print("[ok] WB credential live validation and storage")
     finally:
         if created_id:
@@ -604,6 +618,15 @@ def _self_test() -> None:
         "https://app.example.com/verify-email#token=abcdefghijklmnop"
     ) == "abcdefghijklmnop"
     assert _safe_base_origin("https://example.com/") == "https://example.com"
+    assert _safe_base_origin("https://example.com/api") == "https://example.com"
+    assert _public_api_base("https://example.com") == "https://example.com/api"
+    assert _public_api_base("https://example.com/api/") == "https://example.com/api"
+    try:
+        _safe_base_origin("https://example.com/backend")
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("unexpected public API path accepted")
     try:
         _extract_mail_token("https://app.example.com/verify-email?token=abcdefghijklmnop")
     except SmokeFailure:
@@ -615,7 +638,11 @@ def _self_test() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run WB Insight production-like release smoke")
-    parser.add_argument("--base-url", default=os.getenv("SMOKE_BASE_URL"))
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("SMOKE_BASE_URL"),
+        help="Public HTTPS origin or its /api root; backend requests are sent through /api",
+    )
     parser.add_argument("--email", default=os.getenv("SMOKE_EMAIL"))
     parser.add_argument("--password", default=os.getenv("SMOKE_PASSWORD"))
     parser.add_argument(

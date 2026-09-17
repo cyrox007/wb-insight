@@ -21,6 +21,8 @@ export SMOKE_PASSWORD='...'
 python3 ops/release_smoke.py
 ```
 
+`SMOKE_BASE_URL` — публичный HTTPS origin production-like окружения. Допустимо также передать `https://staging.example.com/api`; runner нормализует оба варианта и отправляет backend-запросы через публичный nginx prefix `/api` ровно один раз. Произвольные path в `SMOKE_BASE_URL` отвергаются, а sanitized evidence по-прежнему привязывается к чистому HTTPS origin без `/api`.
+
 `SMOKE_EMAIL`/`SMOKE_PASSWORD` — заранее подготовленный smoke user. Для `SMOKE_AUDIT=true` этот пользователь должен иметь `AUDIT_READ` (`admin`/`super_admin`).
 
 Полный core smoke состоит из двух изолированных частей: disposable registration lifecycle и основной authenticated smoke. Проверяются health/readiness/version, legal registry, registration/legal evidence/demo, login/refresh/logout, dashboard contract, deactivation и невозможность использовать отозванную сессию.

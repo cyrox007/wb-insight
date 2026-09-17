@@ -296,7 +296,7 @@ def main() -> int:
         checks.append("local_readiness")
 
         public_origin = _safe_public_origin(args.public_base_url)
-        public_ready = _json_get(f"{public_origin}/health/ready")
+        public_ready = _json_get(f"{public_origin}/api/health/ready")
         if public_ready.get("status") != "ok" or public_ready.get("version") != version:
             raise AcceptanceError("public HTTPS readiness/version check failed")
         checks.append("public_https_readiness")
