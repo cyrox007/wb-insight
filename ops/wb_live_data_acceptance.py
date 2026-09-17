@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Prove that beta data-accuracy evidence belongs to a live WB account.
 
-The runner performs a temporary production-like WB credential validation through the
-public API, derives a keyed HMAC fingerprint from the returned external account id,
-removes the temporary credential, and binds that fingerprint to a passing
- data-accuracy input/report pair.
+The runner validates a temporary Wildberries credential through the same public API
+used by the web client, derives a keyed HMAC fingerprint from the returned external
+account id, removes the temporary credential, and binds that fingerprint to a passing
+data-accuracy input/report pair.
 
 Passwords, JWTs, WB tokens, fingerprint keys, external account ids and seller values
 are never written to the evidence artifact. Secret inputs are accepted from
@@ -35,9 +35,64 @@ class WBLiveDataAcceptanceError(RuntimeError):
     pass
 
 
+def _public_https_origin(value: str) -> str:
+    """Return a canonical public HTTPS origin with no application path."""
+    parsed = urlparse(str(value or "").strip())
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise WBLiveDataAcceptanceError("base URL contains an invalid port") from exc
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+    ):
+        raise WBLiveDataAcceptanceError("public origin must be an HTTPS origin without a path")
+    suffix = f":{port}" if port else ""
+    return f"https://{parsed.hostname}{suffix}"
+
+
+def _api_base(value: str) -> tuple[str, str]:
+    """Normalize a public origin or explicit /api URL to (origin, API base URL).
+
+    Production nginx exposes FastAPI under /api while evidence is bound to the
+    public site origin. Accepting both forms keeps the operator CLI unambiguous and
+    prevents accidental requests to the SPA document root.
+    """
+    parsed = urlparse(str(value or "").strip())
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise WBLiveDataAcceptanceError("base URL contains an invalid port") from exc
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise WBLiveDataAcceptanceError("base URL must use public HTTPS without credentials/query/fragment")
+    path = (parsed.path or "").rstrip("/")
+    if path not in {"", "/api"}:
+        raise WBLiveDataAcceptanceError("base URL path must be empty or /api")
+    suffix = f":{port}" if port else ""
+    origin = f"https://{parsed.hostname}{suffix}"
+    return origin, f"{origin}/api"
+
+
+# Kept as the evidence-origin validator used by the manifest binding code.
+def _https_origin(value: str) -> str:
+    return _public_https_origin(value)
+
+
 class _Client:
-    def __init__(self, base_origin: str):
-        self.base_origin = _https_origin(base_origin)
+    def __init__(self, base_url: str):
+        self.public_origin, self.api_base = _api_base(base_url)
         self.cookies = CookieJar()
         self.opener = build_opener(HTTPCookieProcessor(self.cookies))
         self.access_token: str | None = None
@@ -51,6 +106,8 @@ class _Client:
         auth: bool = False,
         expected: tuple[int, ...] = (200,),
     ) -> dict:
+        if not path.startswith("/"):
+            raise WBLiveDataAcceptanceError("API path must start with /")
         headers = {"Accept": "application/json"}
         data = None
         if body is not None:
@@ -60,7 +117,12 @@ class _Client:
             if not self.access_token:
                 raise WBLiveDataAcceptanceError("authenticated request has no access token")
             headers["Authorization"] = f"Bearer {self.access_token}"
-        request = Request(f"{self.base_origin}{path}", data=data, headers=headers, method=method)
+        request = Request(
+            f"{self.api_base}{path}",
+            data=data,
+            headers=headers,
+            method=method,
+        )
         status = 0
         raw = b""
         try:
@@ -87,22 +149,6 @@ class _Client:
         return payload
 
 
-def _https_origin(value: str) -> str:
-    parsed = urlparse(str(value or "").strip())
-    if (
-        parsed.scheme != "https"
-        or not parsed.hostname
-        or parsed.username
-        or parsed.password
-        or parsed.query
-        or parsed.fragment
-        or parsed.path not in {"", "/"}
-    ):
-        raise WBLiveDataAcceptanceError("base URL must be a public HTTPS origin")
-    port = f":{parsed.port}" if parsed.port else ""
-    return f"https://{parsed.hostname}{port}"
-
-
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -118,7 +164,11 @@ def _account_fingerprint(external_account_id: object, fingerprint_key: str) -> s
         raise WBLiveDataAcceptanceError("WB validation did not return a usable external account id")
     if len(key) < 16:
         raise WBLiveDataAcceptanceError("WB_ACCEPTANCE_FINGERPRINT_KEY must be at least 16 bytes")
-    return hmac.new(key, f"wb-account-v1:{value}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(
+        key,
+        f"wb-account-v1:{value}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _load_object(path: Path, *, label: str) -> dict:
@@ -133,6 +183,8 @@ def _load_object(path: Path, *, label: str) -> dict:
 
 def _required_consents(client: _Client) -> list[dict]:
     payload = client.request("GET", "/legal/requirements/marketplace_credential")
+    if payload.get("status") != "success":
+        raise WBLiveDataAcceptanceError("marketplace credential legal requirements failed")
     documents = payload.get("documents")
     if not isinstance(documents, list) or not documents:
         raise WBLiveDataAcceptanceError("marketplace credential legal requirements are unavailable")
@@ -155,7 +207,11 @@ def _required_consents(client: _Client) -> list[dict]:
 
 
 def _login(client: _Client, email: str, password: str) -> None:
-    payload = client.request("POST", "/auth/login", body={"email": email, "password": password})
+    payload = client.request(
+        "POST",
+        "/auth/login",
+        body={"email": email, "password": password},
+    )
     token = payload.get("access_token")
     if payload.get("status") != "success" or not isinstance(token, str) or not token:
         raise WBLiveDataAcceptanceError("acceptance account login failed")
@@ -164,13 +220,17 @@ def _login(client: _Client, email: str, password: str) -> None:
 
 def _probe_live_account(
     *,
-    base_origin: str,
+    base_url: str,
     email: str,
     password: str,
     wb_token: str,
     fingerprint_key: str,
-) -> str:
-    client = _Client(base_origin)
+) -> tuple[str, str]:
+    """Validate the real WB token and always remove the temporary credential.
+
+    Returns (public_origin, privacy-safe account fingerprint).
+    """
+    client = _Client(base_url)
     _login(client, email, password)
     consents = _required_consents(client)
     created_id: str | None = None
@@ -193,6 +253,9 @@ def _probe_live_account(
         created_id = str(data.get("id") or "").strip() or None
         if created_id is None:
             raise WBLiveDataAcceptanceError("temporary WB credential id is missing")
+        marketplace = str(data.get("marketplace") or "").strip().lower()
+        if marketplace not in {"wildberries", "wb"}:
+            raise WBLiveDataAcceptanceError("temporary credential did not resolve to Wildberries")
         account_fingerprint = _account_fingerprint(
             data.get("external_account_id"),
             fingerprint_key,
@@ -210,7 +273,7 @@ def _probe_live_account(
 
     if account_fingerprint is None or not cleanup_complete:
         raise WBLiveDataAcceptanceError("live WB validation did not complete safely")
-    return account_fingerprint
+    return client.public_origin, account_fingerprint
 
 
 def _validate_accuracy_pair(
@@ -266,7 +329,7 @@ def validate_wb_live_data_evidence(
         raise WBLiveDataAcceptanceError("WB live data proof commit mismatch")
     if report.get("environment") != environment:
         raise WBLiveDataAcceptanceError("WB live data proof environment mismatch")
-    _https_origin(str(report.get("public_origin") or ""))
+    _public_https_origin(str(report.get("public_origin") or ""))
     if SHA256_RE.fullmatch(str(report.get("wb_account_fingerprint") or "")) is None:
         raise WBLiveDataAcceptanceError("WB live data proof has an invalid account fingerprint")
     for field in ("accuracy_input_sha256", "data_accuracy_sha256"):
@@ -291,7 +354,10 @@ def validate_wb_live_data_evidence(
 
 
 def _self_test() -> None:
-    fingerprint = _account_fingerprint("seller-123", "0123456789abcdef0123456789abcdef")
+    fingerprint = _account_fingerprint(
+        "seller-123",
+        "0123456789abcdef0123456789abcdef",
+    )
     assert SHA256_RE.fullmatch(fingerprint)
     assert fingerprint == _account_fingerprint(
         "seller-123",
@@ -301,18 +367,30 @@ def _self_test() -> None:
         "seller-124",
         "0123456789abcdef0123456789abcdef",
     )
-    try:
-        _https_origin("http://example.com")
-    except WBLiveDataAcceptanceError:
-        pass
-    else:
-        raise AssertionError("non-HTTPS origin unexpectedly accepted")
+
+    origin, api_base = _api_base("https://example.com")
+    assert origin == "https://example.com"
+    assert api_base == "https://example.com/api"
+    assert _api_base("https://example.com/api/") == (origin, api_base)
+    assert _public_https_origin(origin) == origin
+
+    for invalid in ("http://example.com", "https://example.com/app", "https://u:p@example.com"):
+        try:
+            _api_base(invalid)
+        except WBLiveDataAcceptanceError:
+            pass
+        else:
+            raise AssertionError(f"invalid API base unexpectedly accepted: {invalid}")
     print("[ok] WB live data acceptance self-test")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default=os.getenv("WB_ACCEPTANCE_BASE_URL"))
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("WB_ACCEPTANCE_BASE_URL"),
+        help="Public HTTPS origin or the same origin with /api",
+    )
     parser.add_argument("--email", default=os.getenv("WB_ACCEPTANCE_EMAIL"))
     parser.add_argument("--accuracy-input", type=Path)
     parser.add_argument("--data-accuracy", type=Path)
@@ -333,7 +411,6 @@ def main() -> int:
         return 0
 
     try:
-        base_origin = _https_origin(str(args.base_url or ""))
         email = str(args.email or "").strip()
         password = str(os.getenv("WB_ACCEPTANCE_PASSWORD") or "")
         wb_token = str(os.getenv("WB_ACCEPTANCE_TOKEN") or "").strip()
@@ -347,8 +424,8 @@ def main() -> int:
         if len(fingerprint_key.encode("utf-8")) < 16:
             raise WBLiveDataAcceptanceError("WB_ACCEPTANCE_FINGERPRINT_KEY must be at least 16 bytes")
 
-        account_fingerprint = _probe_live_account(
-            base_origin=base_origin,
+        public_origin, account_fingerprint = _probe_live_account(
+            base_url=str(args.base_url or ""),
             email=email,
             password=password,
             wb_token=wb_token,
@@ -381,7 +458,7 @@ def main() -> int:
             "version": version,
             "commit": commit.lower(),
             "environment": environment,
-            "public_origin": base_origin,
+            "public_origin": public_origin,
             "wb_account_fingerprint": account_fingerprint,
             "accuracy_input_sha256": _sha256(args.accuracy_input),
             "data_accuracy_sha256": _sha256(args.data_accuracy),
