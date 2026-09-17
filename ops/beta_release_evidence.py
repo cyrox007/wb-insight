@@ -53,6 +53,7 @@ def _artifact_path(artifacts: list[str], kind: str) -> Path:
 def _validate_wb_live_binding(
     proof_path: Path,
     *,
+    accuracy_input_path: Path,
     data_accuracy_path: Path,
     deployment_path: Path,
     version: str,
@@ -65,8 +66,20 @@ def _validate_wb_live_binding(
         commit=commit,
         environment=environment,
     )
+    accuracy_report = _load_json(data_accuracy_path, label="data_accuracy artifact")
+    accuracy_input = _load_json(accuracy_input_path, label="data-accuracy input")
+    accuracy_input_hash = _sha256(accuracy_input_path)
     if str(proof.get("data_accuracy_sha256") or "").lower() != _sha256(data_accuracy_path).lower():
         raise ValueError("WB live data proof is not bound to the supplied data_accuracy artifact")
+    if str(proof.get("accuracy_input_sha256") or "").lower() != accuracy_input_hash.lower():
+        raise ValueError("WB live data proof is not bound to the supplied accuracy input")
+    if str(accuracy_report.get("input_sha256") or "").lower() != accuracy_input_hash.lower():
+        raise ValueError("data_accuracy artifact is not bound to the supplied accuracy input")
+    if str(accuracy_input.get("wb_account_fingerprint") or "").lower() != str(
+        proof.get("wb_account_fingerprint") or ""
+    ).lower():
+        raise ValueError("accuracy input and WB live data proof identify different seller accounts")
+
     deployment = _load_json(deployment_path, label="deployment artifact")
     deployment_origin = str(deployment.get("public_origin") or "").rstrip("/")
     proof_origin = str(proof.get("public_origin") or "").rstrip("/")
@@ -79,6 +92,7 @@ def _bind_beta_proofs(
     *,
     backup_restore_path: Path,
     wb_live_data_path: Path,
+    accuracy_input_path: Path,
 ) -> None:
     manifest = _load_json(manifest_path, label="generated candidate manifest")
     if manifest.get("status") != "complete":
@@ -115,6 +129,7 @@ def _bind_beta_proofs(
     for name, proof_path in (
         ("backup_restore", backup_restore_path),
         ("wb_live_data", wb_live_data_path),
+        ("data_accuracy_input", accuracy_input_path),
     ):
         subproofs[name] = {
             "file": proof_path.name,
@@ -123,6 +138,7 @@ def _bind_beta_proofs(
         }
     manifest["beta_backup_restore_required"] = True
     manifest["beta_wb_live_data_required"] = True
+    manifest["beta_accuracy_input_bound"] = True
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -138,6 +154,7 @@ def main() -> int:
     parser.add_argument("--payment-proof", type=Path, required=True)
     parser.add_argument("--backup-restore-proof", type=Path, required=True)
     parser.add_argument("--wb-live-data-proof", type=Path, required=True)
+    parser.add_argument("--accuracy-input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -162,6 +179,7 @@ def main() -> int:
         )
         _validate_wb_live_binding(
             args.wb_live_data_proof,
+            accuracy_input_path=args.accuracy_input,
             data_accuracy_path=data_accuracy_path,
             deployment_path=deployment_path,
             version=version,
@@ -207,6 +225,7 @@ def main() -> int:
             args.output,
             backup_restore_path=args.backup_restore_proof,
             wb_live_data_path=args.wb_live_data_proof,
+            accuracy_input_path=args.accuracy_input,
         )
     except (OSError, ValueError) as exc:
         print(f"beta_release_error={exc}", file=sys.stderr)
