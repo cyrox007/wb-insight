@@ -85,14 +85,14 @@ python3 ops/wb_live_data_acceptance.py \
 
 ## Beta manifest
 
-`ops/beta_release_evidence.py` теперь требует `--wb-live-data-proof` и проверяет:
+`ops/beta_release_evidence.py` теперь требует `--wb-live-data-proof` и сам защищённый `--accuracy-input`. Он проверяет:
 
 - exact VERSION/commit/environment;
 - HTTPS origin;
 - совпадение origin с deployment evidence;
-- SHA-256 привязку к переданному `data_accuracy` artifact;
+- SHA-256 привязку proof → `data_accuracy` report → исходный accuracy input;
+- совпадение account fingerprint в input и live proof;
 - успешную live WB credential validation + cleanup;
-- account fingerprint match;
 - passing data accuracy и минимум три периода.
 
 Пример фрагмента финальной команды:
@@ -104,9 +104,10 @@ python3 ops/beta_release_evidence.py \
   --payment-proof /secure/evidence/payment-isolation.json \
   --backup-restore-proof /secure/evidence/backup-restore.json \
   --wb-live-data-proof /secure/evidence/wb-live-data.json \
+  --accuracy-input /secure/evidence/accuracy-input.json \
   --artifact data_accuracy=/secure/evidence/data-accuracy.json \
   ... \
   --output /secure/evidence/release-manifest.json
 ```
 
-В итоговом manifest хранится только SHA-256/размер/имя `wb-live-data.json` как `candidate_subproofs.wb_live_data`; чувствительные seller данные остаются в защищённом evidence storage.
+В итоговом manifest хранятся только SHA-256/размер/имя `wb-live-data.json` и защищённого accuracy input в `candidate_subproofs`; чувствительные seller данные остаются в защищённом evidence storage.
