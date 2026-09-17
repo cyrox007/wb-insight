@@ -2,16 +2,21 @@
 """Prove that beta data-accuracy evidence belongs to a live WB account.
 
 The runner performs a temporary production-like WB credential validation through the
-public API, fingerprints only the returned external account id, removes the temporary
-credential, and binds that fingerprint to a passing data-accuracy input/report pair.
-Passwords, JWTs, WB tokens, external account ids and seller values are never written
-to the evidence artifact.
+public API, derives a keyed HMAC fingerprint from the returned external account id,
+removes the temporary credential, and binds that fingerprint to a passing
+ data-accuracy input/report pair.
+
+Passwords, JWTs, WB tokens, fingerprint keys, external account ids and seller values
+are never written to the evidence artifact. Secret inputs are accepted from
+environment variables only so they do not need to appear in shell history/process
+arguments.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import json
 import os
 import sys
@@ -106,11 +111,14 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _account_fingerprint(external_account_id: object) -> str:
+def _account_fingerprint(external_account_id: object, fingerprint_key: str) -> str:
     value = str(external_account_id or "").strip()
+    key = fingerprint_key.encode("utf-8")
     if not value or len(value) > 512:
         raise WBLiveDataAcceptanceError("WB validation did not return a usable external account id")
-    return hashlib.sha256(f"wb-account-v1:{value}".encode("utf-8")).hexdigest()
+    if len(key) < 16:
+        raise WBLiveDataAcceptanceError("WB_ACCEPTANCE_FINGERPRINT_KEY must be at least 16 bytes")
+    return hmac.new(key, f"wb-account-v1:{value}".encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _load_object(path: Path, *, label: str) -> dict:
@@ -152,6 +160,57 @@ def _login(client: _Client, email: str, password: str) -> None:
     if payload.get("status") != "success" or not isinstance(token, str) or not token:
         raise WBLiveDataAcceptanceError("acceptance account login failed")
     client.access_token = token
+
+
+def _probe_live_account(
+    *,
+    base_origin: str,
+    email: str,
+    password: str,
+    wb_token: str,
+    fingerprint_key: str,
+) -> str:
+    client = _Client(base_origin)
+    _login(client, email, password)
+    consents = _required_consents(client)
+    created_id: str | None = None
+    account_fingerprint: str | None = None
+    cleanup_complete = False
+    try:
+        created = client.request(
+            "POST",
+            "/dashboard/tokens",
+            auth=True,
+            body={
+                "token": wb_token,
+                "label": f"beta-acceptance-{uuid4().hex[:8]}",
+                "legal_consents": consents,
+            },
+        )
+        data = created.get("data")
+        if created.get("status") != "success" or not isinstance(data, dict):
+            raise WBLiveDataAcceptanceError("temporary WB credential validation failed")
+        created_id = str(data.get("id") or "").strip() or None
+        if created_id is None:
+            raise WBLiveDataAcceptanceError("temporary WB credential id is missing")
+        account_fingerprint = _account_fingerprint(
+            data.get("external_account_id"),
+            fingerprint_key,
+        )
+    finally:
+        if created_id:
+            deleted = client.request(
+                "DELETE",
+                f"/dashboard/profile/token/{created_id}",
+                auth=True,
+            )
+            cleanup_complete = deleted.get("status") == "success"
+            if not cleanup_complete:
+                raise WBLiveDataAcceptanceError("temporary WB credential cleanup failed")
+
+    if account_fingerprint is None or not cleanup_complete:
+        raise WBLiveDataAcceptanceError("live WB validation did not complete safely")
+    return account_fingerprint
 
 
 def _validate_accuracy_pair(
@@ -232,9 +291,16 @@ def validate_wb_live_data_evidence(
 
 
 def _self_test() -> None:
-    fingerprint = _account_fingerprint("seller-123")
+    fingerprint = _account_fingerprint("seller-123", "0123456789abcdef0123456789abcdef")
     assert SHA256_RE.fullmatch(fingerprint)
-    assert fingerprint == _account_fingerprint("seller-123")
+    assert fingerprint == _account_fingerprint(
+        "seller-123",
+        "0123456789abcdef0123456789abcdef",
+    )
+    assert fingerprint != _account_fingerprint(
+        "seller-124",
+        "0123456789abcdef0123456789abcdef",
+    )
     try:
         _https_origin("http://example.com")
     except WBLiveDataAcceptanceError:
@@ -248,14 +314,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default=os.getenv("WB_ACCEPTANCE_BASE_URL"))
     parser.add_argument("--email", default=os.getenv("WB_ACCEPTANCE_EMAIL"))
-    parser.add_argument("--password", default=os.getenv("WB_ACCEPTANCE_PASSWORD"))
-    parser.add_argument("--wb-token", default=os.getenv("WB_ACCEPTANCE_TOKEN"))
     parser.add_argument("--accuracy-input", type=Path)
     parser.add_argument("--data-accuracy", type=Path)
     parser.add_argument("--commit", default=os.getenv("RELEASE_SHA"))
     parser.add_argument("--environment", default=os.getenv("ACCEPTANCE_ENVIRONMENT"))
     parser.add_argument("--version-file", type=Path, default=Path("VERSION"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--fingerprint-only",
+        action="store_true",
+        help="Validate and remove a temporary WB credential, then print only its keyed account fingerprint",
+    )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
 
@@ -266,14 +335,29 @@ def main() -> int:
     try:
         base_origin = _https_origin(str(args.base_url or ""))
         email = str(args.email or "").strip()
-        password = str(args.password or "")
-        wb_token = str(args.wb_token or "").strip()
+        password = str(os.getenv("WB_ACCEPTANCE_PASSWORD") or "")
+        wb_token = str(os.getenv("WB_ACCEPTANCE_TOKEN") or "").strip()
+        fingerprint_key = str(os.getenv("WB_ACCEPTANCE_FINGERPRINT_KEY") or "")
         commit = str(args.commit or "").strip()
         environment = str(args.environment or "").strip()
         if not email or not password:
             raise WBLiveDataAcceptanceError("acceptance account credentials are required")
         if not wb_token:
-            raise WBLiveDataAcceptanceError("WB_ACCEPTANCE_TOKEN or --wb-token is required")
+            raise WBLiveDataAcceptanceError("WB_ACCEPTANCE_TOKEN is required")
+        if len(fingerprint_key.encode("utf-8")) < 16:
+            raise WBLiveDataAcceptanceError("WB_ACCEPTANCE_FINGERPRINT_KEY must be at least 16 bytes")
+
+        account_fingerprint = _probe_live_account(
+            base_origin=base_origin,
+            email=email,
+            password=password,
+            wb_token=wb_token,
+            fingerprint_key=fingerprint_key,
+        )
+        if args.fingerprint_only:
+            print(f"wb_account_fingerprint={account_fingerprint}")
+            return 0
+
         if SHA40_RE.fullmatch(commit) is None:
             raise WBLiveDataAcceptanceError("release commit must be a full 40-character Git SHA")
         if not environment:
@@ -284,43 +368,6 @@ def main() -> int:
         if not version:
             raise WBLiveDataAcceptanceError("VERSION is empty")
 
-        client = _Client(base_origin)
-        _login(client, email, password)
-        consents = _required_consents(client)
-        created_id: str | None = None
-        account_fingerprint: str | None = None
-        cleanup_complete = False
-        try:
-            created = client.request(
-                "POST",
-                "/dashboard/tokens",
-                auth=True,
-                body={
-                    "token": wb_token,
-                    "label": f"beta-acceptance-{uuid4().hex[:8]}",
-                    "legal_consents": consents,
-                },
-            )
-            data = created.get("data")
-            if created.get("status") != "success" or not isinstance(data, dict):
-                raise WBLiveDataAcceptanceError("temporary WB credential validation failed")
-            created_id = str(data.get("id") or "").strip() or None
-            if created_id is None:
-                raise WBLiveDataAcceptanceError("temporary WB credential id is missing")
-            account_fingerprint = _account_fingerprint(data.get("external_account_id"))
-        finally:
-            if created_id:
-                deleted = client.request(
-                    "DELETE",
-                    f"/dashboard/profile/token/{created_id}",
-                    auth=True,
-                )
-                cleanup_complete = deleted.get("status") == "success"
-                if not cleanup_complete:
-                    raise WBLiveDataAcceptanceError("temporary WB credential cleanup failed")
-
-        if account_fingerprint is None or not cleanup_complete:
-            raise WBLiveDataAcceptanceError("live WB validation did not complete safely")
         accuracy = _validate_accuracy_pair(
             args.accuracy_input,
             args.data_accuracy,
