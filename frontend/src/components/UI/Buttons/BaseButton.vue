@@ -1,5 +1,12 @@
 <template>
-	<button :type="type" :class="buttonClasses" :disabled="disabled || loading" @click="handleClick" :title="title">
+	<button
+		:type="type"
+		:class="buttonClasses"
+		:disabled="disabled || loading"
+		:aria-busy="loading ? 'true' : undefined"
+		@click="handleClick"
+		:title="title"
+	>
 		<div v-if="loading" class="button-loader">
 			<slot name="loader">
 				<SpinnerButtonSmall />
@@ -14,7 +21,7 @@
 
 		<span class="button-text">
 			<slot>
-				{{ loading ? loadingText : text }}
+				{{ loading ? (loadingText || text) : text }}
 			</slot>
 		</span>
 
