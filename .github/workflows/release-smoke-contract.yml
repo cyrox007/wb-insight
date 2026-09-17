@@ -18,6 +18,7 @@ on:
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
       - ops/acceptance/release_candidate_selftest.py
+      - ops/acceptance/wb_live_data_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - docs/DATA_ACCURACY_ACCEPTANCE.md
@@ -41,6 +42,7 @@ on:
       - ops/release_evidence.py
       - ops/acceptance/structured_evidence_selftest.py
       - ops/acceptance/release_candidate_selftest.py
+      - ops/acceptance/wb_live_data_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - docs/DATA_ACCURACY_ACCEPTANCE.md
@@ -70,7 +72,8 @@ jobs:
             ops/release_candidate_evidence.py \
             ops/release_evidence.py \
             ops/acceptance/structured_evidence_selftest.py \
-            ops/acceptance/release_candidate_selftest.py
+            ops/acceptance/release_candidate_selftest.py \
+            ops/acceptance/wb_live_data_selftest.py
           python3 ops/release_smoke.py --help >/dev/null
           python3 ops/release_smoke.py --self-test
           python3 ops/systemd_acceptance.py --help >/dev/null
@@ -94,3 +97,4 @@ jobs:
           python3 ops/release_evidence.py --help >/dev/null
           PYTHONPATH=ops python3 ops/acceptance/structured_evidence_selftest.py
           PYTHONPATH=ops python3 ops/acceptance/release_candidate_selftest.py
+          PYTHONPATH=ops python3 ops/acceptance/wb_live_data_selftest.py
