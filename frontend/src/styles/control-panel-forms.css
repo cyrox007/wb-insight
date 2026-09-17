@@ -30,9 +30,9 @@
 }
 
 .cp-form-select:focus {
-  border-color: #a78bfa;
+  border-color: var(--secondary-color);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.14);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--secondary-color) 18%, transparent);
 }
 
 .cp-form-select:disabled {
@@ -149,8 +149,8 @@
 .cp-shell .modal-overlay .modal {
   width: min(100%, 520px);
   max-width: none;
-  max-height: calc(100vh - 32px);
-  overflow-y: auto;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
   padding: 22px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
@@ -171,10 +171,13 @@
 }
 
 .cp-shell .modal-overlay .modal-body {
+  min-height: 0;
   margin-top: 16px;
+  overflow-y: auto;
 }
 
 .cp-shell .modal-overlay .modal-footer {
+  flex: 0 0 auto;
   margin-top: 20px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
@@ -201,7 +204,7 @@
 
   .cp-shell .modal-overlay .modal {
     width: 100%;
-    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
     padding: 18px;
     border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-sm);
   }

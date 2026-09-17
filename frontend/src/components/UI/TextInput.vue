@@ -1,13 +1,22 @@
 <template>
 	<div class="form-group">
-		<label class="form-label">{{ label }}</label>
-		<input class="form-input" :type="type" :value="modelValue"
-			@input="$emit('update:modelValue', $event.target.value)" :placeholder="placeholder" :disabled="disabled">
+		<label v-if="label" class="form-label" :for="inputId">{{ label }}</label>
+		<input
+			:id="inputId"
+			class="form-input"
+			:type="type"
+			:value="modelValue"
+			@input="$emit('update:modelValue', $event.target.value)"
+			:placeholder="placeholder"
+			:disabled="disabled"
+		>
 	</div>
 </template>
 
 <script setup>
+import { computed, useId } from 'vue'
 
+const generatedId = useId()
 const props = defineProps({
 	modelValue: {
 		type: String,
@@ -21,6 +30,10 @@ const props = defineProps({
 		type: String,
 		default: ''
 	},
+	id: {
+		type: String,
+		default: ''
+	},
 	type: {
 		type: String,
 		default: 'text'
@@ -29,7 +42,9 @@ const props = defineProps({
 		type: Boolean,
 		default: false
 	}
-});
+})
+
+const inputId = computed(() => props.id || `text-input-${generatedId}`)
 </script>
 
 <style scoped>

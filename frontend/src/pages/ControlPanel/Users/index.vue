@@ -84,25 +84,31 @@ onMounted(loadUsers)
 				<strong>Все пользователи</strong>
 				<span class="cp-table__count">{{ users.length }} записей</span>
 			</div>
-			<div class="cp-table-scroll">
+			<div
+				class="cp-table-scroll"
+				role="region"
+				aria-label="Таблица пользователей"
+				tabindex="0"
+			>
 				<table class="cp-table">
+					<caption class="cp-sr-only">Зарегистрированные пользователи, их тип аккаунта, роли, статус и дата регистрации.</caption>
 					<thead>
 						<tr>
-							<th>Пользователь</th>
-							<th>Email</th>
-							<th>Телефон</th>
-							<th>Тип</th>
-							<th>Роли</th>
-							<th>Статус</th>
-							<th>Регистрация</th>
-							<th>Действия</th>
+							<th scope="col">Пользователь</th>
+							<th scope="col">Email</th>
+							<th scope="col">Телефон</th>
+							<th scope="col">Тип</th>
+							<th scope="col">Роли</th>
+							<th scope="col">Статус</th>
+							<th scope="col">Регистрация</th>
+							<th scope="col">Действия</th>
 						</tr>
 					</thead>
 					<tbody>
 						<tr v-for="user in users" :key="user.id">
 							<td>
 								<div class="cp-person">
-									<div class="cp-avatar">{{ user.full_name?.charAt(0).toUpperCase() || 'U' }}</div>
+									<div class="cp-avatar" aria-hidden="true">{{ user.full_name?.charAt(0).toUpperCase() || 'U' }}</div>
 									<div>
 										<div class="cp-person__name">{{ user.full_name || 'Не указано' }}</div>
 										<code class="cp-code" :title="user.id">{{ user.id.substring(0, 8) }}…</code>
@@ -134,8 +140,8 @@ onMounted(loadUsers)
 								<button
 									class="cp-icon-button"
 									@click="$router.push({ name: 'control-panel.edit-user', params: { id: user.id } })"
-									title="Редактировать"
-									aria-label="Редактировать пользователя"
+									title="Открыть карточку"
+									:aria-label="`Открыть карточку пользователя ${user.full_name || user.email}`"
 								>
 									<svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
 										<path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />

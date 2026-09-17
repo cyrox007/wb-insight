@@ -1,6 +1,19 @@
 <template>
-	<div v-if="isOpen" class="modal-overlay" @click.self="handleOverlayClick">
-		<div class="modal" :class="sizeClass">
+	<div
+		v-if="isOpen"
+		class="modal-overlay"
+		@click.self="handleOverlayClick"
+		@keydown="handleKeydown"
+	>
+		<div
+			ref="dialogRef"
+			class="modal"
+			:class="sizeClass"
+			role="dialog"
+			aria-modal="true"
+			:aria-label="ariaLabel"
+			tabindex="-1"
+		>
 			<slot name="header"></slot>
 			<div class="modal-body">
 				<slot name="body"></slot>
@@ -13,7 +26,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps({
 	isOpen: Boolean,
@@ -25,18 +38,102 @@ const props = defineProps({
 	closeOnOverlayClick: {
 		type: Boolean,
 		default: true
+	},
+	closeOnEscape: {
+		type: Boolean,
+		default: true
+	},
+	ariaLabel: {
+		type: String,
+		default: 'Диалоговое окно'
 	}
 })
 
 const emit = defineEmits(['close'])
+const dialogRef = ref(null)
+const previousActiveElement = ref(null)
 
 const sizeClass = computed(() => `modal-${props.size}`)
 
-const handleOverlayClick = () => {
-	if (props.closeOnOverlayClick) {
-		emit('close')
+const FOCUSABLE_SELECTOR = [
+	'a[href]',
+	'button:not([disabled])',
+	'input:not([disabled])',
+	'select:not([disabled])',
+	'textarea:not([disabled])',
+	'[tabindex]:not([tabindex="-1"])'
+].join(',')
+
+function getFocusableElements() {
+	if (!dialogRef.value) return []
+	return Array.from(dialogRef.value.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+		(element) => element.getAttribute('aria-hidden') !== 'true'
+	)
+}
+
+function restorePreviousFocus() {
+	const element = previousActiveElement.value
+	previousActiveElement.value = null
+	if (element && typeof element.focus === 'function' && element.isConnected) {
+		nextTick(() => element.focus({ preventScroll: true }))
 	}
 }
+
+function requestClose() {
+	emit('close')
+}
+
+function handleOverlayClick() {
+	if (props.closeOnOverlayClick) requestClose()
+}
+
+function handleKeydown(event) {
+	if (event.key === 'Escape') {
+		if (!props.closeOnEscape) return
+		event.preventDefault()
+		requestClose()
+		return
+	}
+
+	if (event.key !== 'Tab') return
+
+	const focusable = getFocusableElements()
+	if (!focusable.length) {
+		event.preventDefault()
+		dialogRef.value?.focus({ preventScroll: true })
+		return
+	}
+
+	const first = focusable[0]
+	const last = focusable[focusable.length - 1]
+	const active = document.activeElement
+
+	if (event.shiftKey && (active === first || active === dialogRef.value)) {
+		event.preventDefault()
+		last.focus()
+	} else if (!event.shiftKey && active === last) {
+		event.preventDefault()
+		first.focus()
+	}
+}
+
+watch(
+	() => props.isOpen,
+	async (isOpen) => {
+		if (!isOpen) {
+			restorePreviousFocus()
+			return
+		}
+
+		previousActiveElement.value = document.activeElement
+		await nextTick()
+		const focusable = getFocusableElements()
+		;(focusable[0] || dialogRef.value)?.focus({ preventScroll: true })
+	},
+	{ immediate: true }
+)
+
+onBeforeUnmount(restorePreviousFocus)
 </script>
 
 <style scoped>
@@ -46,10 +143,12 @@ const handleOverlayClick = () => {
 	left: 0;
 	right: 0;
 	bottom: 0;
+	padding: 16px;
 	background-color: rgba(0, 0, 0, 0.7);
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	overflow-y: auto;
 	z-index: 1000;
 }
 
@@ -59,7 +158,23 @@ const handleOverlayClick = () => {
 	padding: 20px;
 	width: 500px;
 	max-width: 90%;
+	max-height: calc(100dvh - 32px);
+	display: flex;
+	flex-direction: column;
 	box-shadow: var(--shadow);
+}
+
+.modal:focus {
+	outline: none;
+}
+
+.modal-body {
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.modal-footer {
+	flex: 0 0 auto;
 }
 
 .modal-header {
@@ -67,5 +182,20 @@ const handleOverlayClick = () => {
 	justify-content: space-between;
 	align-items: center;
 	margin-bottom: 20px;
+}
+
+@media (max-width: 640px) {
+	.modal-overlay {
+		align-items: flex-start;
+		padding: 12px;
+	}
+
+	.modal {
+		width: 100%;
+		max-width: 100%;
+		max-height: calc(100dvh - 24px);
+		margin-block: auto;
+		padding: 16px;
+	}
 }
 </style>
