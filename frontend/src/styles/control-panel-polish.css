@@ -1,0 +1,338 @@
+/* Final code-side polish for the administrative shell.
+   Keep overrides scoped to .cp-shell so customer-facing flows stay untouched. */
+
+.cp-shell {
+  color-scheme: dark;
+}
+
+.cp-shell .cp-nav {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-inline: contain;
+}
+
+.cp-shell .cp-nav::-webkit-scrollbar,
+.cp-shell .cp-table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.cp-shell .cp-nav::-webkit-scrollbar-thumb,
+.cp-shell .cp-table-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.cp-shell .cp-nav__link {
+  scroll-snap-align: start;
+}
+
+.cp-shell .cp-nav__link:focus-visible,
+.cp-shell .cp-shortcut-card:focus-visible,
+.cp-shell .cp-icon-button:focus-visible,
+.cp-shell .cp-toggle:focus-visible,
+.cp-shell .cp-table-scroll:focus-visible {
+  outline: 2px solid var(--secondary-color);
+  outline-offset: 2px;
+}
+
+.cp-shell .cp-shortcut-card:focus-visible {
+  border-color: var(--border-strong);
+  background: var(--card-bg-elevated);
+}
+
+/* Reuse the application button component, but keep Control Panel variants on
+   the same design tokens instead of the component's legacy hard-coded hovers. */
+.cp-shell .base-button {
+  border-radius: var(--radius-sm);
+  font-weight: 650;
+}
+
+.cp-shell .base-button.btn-primary:hover:not(:disabled):not(.btn-loading) {
+  border-color: var(--secondary-hover);
+  background: var(--secondary-hover);
+}
+
+.cp-shell .base-button.btn-danger {
+  border-color: var(--danger-color);
+  background: var(--danger-color);
+  color: var(--dark-bg);
+}
+
+.cp-shell .base-button.btn-danger:hover:not(:disabled):not(.btn-loading) {
+  border-color: color-mix(in srgb, var(--danger-color) 84%, black);
+  background: color-mix(in srgb, var(--danger-color) 84%, black);
+}
+
+.cp-shell .base-button.btn-success {
+  color: var(--dark-bg);
+}
+
+.cp-shell .base-button:disabled,
+.cp-shell .cp-icon-button:disabled,
+.cp-shell .cp-toggle:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.cp-shell .cp-icon-button:disabled,
+.cp-shell .cp-toggle:disabled {
+  pointer-events: none;
+}
+
+/* Shared form controls inside admin modals/cards. The UI components retain
+   their public API; the admin shell only normalizes their visual states. */
+.cp-shell .form-group {
+  margin-bottom: 0;
+}
+
+.cp-shell .form-label,
+.cp-shell .cp-form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cp-shell .form-input,
+.cp-shell .form-textarea,
+.cp-shell .cp-form-select {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-color);
+  background: var(--medium-bg);
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.cp-shell .form-textarea {
+  min-height: 96px;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.cp-shell .form-input::placeholder,
+.cp-shell .form-textarea::placeholder {
+  color: var(--text-subtle);
+  opacity: 1;
+}
+
+.cp-shell .form-input:hover:not(:disabled),
+.cp-shell .form-textarea:hover:not(:disabled),
+.cp-shell .cp-form-select:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.cp-shell .form-input:focus,
+.cp-shell .form-textarea:focus,
+.cp-shell .cp-form-select:focus {
+  border-color: var(--secondary-color);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--secondary-color) 18%, transparent);
+}
+
+.cp-shell .form-input:disabled,
+.cp-shell .form-textarea:disabled,
+.cp-shell .cp-form-select:disabled {
+  color: var(--text-subtle);
+  background: var(--dark-bg);
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.cp-shell .form-input:disabled::placeholder,
+.cp-shell .form-textarea:disabled::placeholder {
+  color: var(--text-subtle);
+}
+
+.cp-shell .form-error,
+.cp-shell .form-message.error {
+  color: var(--danger-color);
+}
+
+.cp-shell .cp-toggle {
+  min-width: 44px;
+  touch-action: manipulation;
+}
+
+/* Dense data stays inside its own scroll region instead of widening the page.
+   Keep the action column visible while horizontally inspecting wide tables. */
+.cp-shell .cp-table-wrap,
+.cp-shell .cp-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cp-shell .cp-table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cp-shell .cp-table tbody tr:focus-within {
+  background: var(--hover-bg);
+}
+
+.cp-shell .cp-table th:last-child,
+.cp-shell .cp-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  box-shadow: -10px 0 18px -18px rgba(0, 0, 0, 0.85);
+}
+
+.cp-shell .cp-table th:last-child {
+  z-index: 2;
+  background: var(--medium-bg);
+}
+
+.cp-shell .cp-table td:last-child {
+  background: var(--card-bg);
+}
+
+.cp-shell .cp-table tbody tr:hover td:last-child,
+.cp-shell .cp-table tbody tr:focus-within td:last-child {
+  background: var(--hover-bg);
+}
+
+.cp-shell .cp-table__toolbar {
+  min-width: 0;
+}
+
+.cp-shell .cp-table__toolbar > * {
+  min-width: 0;
+}
+
+.cp-shell .cp-state {
+  line-height: 1.5;
+}
+
+.cp-shell .cp-list-row,
+.cp-shell .cp-info-item,
+.cp-shell .cp-card {
+  min-width: 0;
+}
+
+.cp-shell .cp-detail-meta,
+.cp-shell .cp-list-row__meta,
+.cp-shell .cp-card-note,
+.cp-shell .cp-muted {
+  overflow-wrap: anywhere;
+}
+
+.cp-shell .cp-actions .base-button {
+  min-width: 0;
+}
+
+/* Utility for captions/help text that should remain available to assistive
+   technology without changing the visual hierarchy. */
+.cp-shell .cp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  .cp-shell .cp-page-header > .base-button,
+  .cp-shell .cp-section-header > .base-button {
+    align-self: flex-start;
+  }
+
+  .cp-shell .cp-table {
+    min-width: 820px;
+  }
+}
+
+@media (max-width: 640px) {
+  .cp-shell .cp-nav {
+    gap: 4px;
+    margin-inline: -2px;
+    padding: 5px;
+  }
+
+  .cp-shell .cp-nav__link {
+    min-height: 42px;
+    padding-inline: 12px;
+  }
+
+  .cp-shell .cp-table__toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cp-shell .cp-detail-card,
+  .cp-shell .cp-card--padded,
+  .cp-shell .cp-section-card {
+    padding: 16px;
+  }
+
+  .cp-shell .cp-tariff-grid,
+  .cp-shell .cp-overview-grid,
+  .cp-shell .cp-info-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cp-shell .cp-list-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .cp-shell .cp-list-row > .cp-actions {
+    width: 100%;
+  }
+
+  .cp-shell .cp-page-header > .base-button,
+  .cp-shell .cp-section-header > .base-button,
+  .cp-shell .cp-actions > .base-button {
+    min-height: 42px;
+  }
+
+  .cp-shell .cp-actions:not(.cp-actions--compact) > .base-button {
+    flex: 1 1 150px;
+  }
+
+  .cp-shell .cp-modal-footer .base-button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 420px) {
+  .cp-shell .cp-page-header > .base-button,
+  .cp-shell .cp-section-header > .base-button,
+  .cp-shell .cp-actions:not(.cp-actions--compact) > .base-button {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .cp-shell .cp-person {
+    min-width: 150px;
+  }
+
+  .cp-shell .cp-person__name {
+    max-width: 170px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-shell *,
+  .cp-shell *::before,
+  .cp-shell *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

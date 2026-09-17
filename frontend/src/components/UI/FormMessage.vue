@@ -5,7 +5,14 @@ const props = defineProps({
 });
 </script>
 <template>
-	<p class="form-message" :class="props.messageType">{{ props.message }}</p>
+	<p
+		class="form-message"
+		:class="props.messageType"
+		:role="props.messageType === 'error' ? 'alert' : 'status'"
+		:aria-live="props.messageType === 'error' ? 'assertive' : 'polite'"
+	>
+		{{ props.message }}
+	</p>
 </template>
 <style scoped>
 .form-message {

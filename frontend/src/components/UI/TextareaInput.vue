@@ -1,18 +1,30 @@
 <template>
 	<div class="form-group">
-		<label v-if="label" class="form-label">{{ label }}</label>
+		<label v-if="label" class="form-label" :for="textareaId">{{ label }}</label>
 
-		<textarea class="form-textarea" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)"
-			:placeholder="placeholder" :disabled="disabled" :rows="rows" />
+		<textarea
+			:id="textareaId"
+			class="form-textarea"
+			:value="modelValue"
+			@input="$emit('update:modelValue', $event.target.value)"
+			:placeholder="placeholder"
+			:disabled="disabled"
+			:rows="rows"
+			:aria-invalid="error ? 'true' : undefined"
+			:aria-describedby="error ? errorId : undefined"
+		/>
 
-		<div v-if="error" class="form-error">
+		<div v-if="error" :id="errorId" class="form-error" role="alert">
 			{{ error }}
 		</div>
 	</div>
 </template>
 
 <script setup>
-defineProps({
+import { computed, useId } from 'vue'
+
+const generatedId = useId()
+const props = defineProps({
 	modelValue: {
 		type: String,
 		default: ''
@@ -22,6 +34,10 @@ defineProps({
 		default: ''
 	},
 	label: {
+		type: String,
+		default: ''
+	},
+	id: {
 		type: String,
 		default: ''
 	},
@@ -38,6 +54,9 @@ defineProps({
 		default: ''
 	}
 })
+
+const textareaId = computed(() => props.id || `textarea-${generatedId}`)
+const errorId = computed(() => `${textareaId.value}-error`)
 
 defineEmits(['update:modelValue'])
 </script>

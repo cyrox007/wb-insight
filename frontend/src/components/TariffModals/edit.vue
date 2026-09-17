@@ -42,6 +42,7 @@ watch(
 )
 
 async function editTariff() {
+	if (isSaving.value) return
 	formMessage.value = ''
 	messageType.value = ''
 
@@ -86,22 +87,37 @@ async function editTariff() {
 </script>
 
 <template>
-	<Modal :is-open="isOpen" size="large" @close="$emit('close')">
+	<Modal
+		:is-open="isOpen"
+		size="large"
+		aria-label="Редактирование тарифного плана"
+		:close-on-overlay-click="!isSaving"
+		:close-on-escape="!isSaving"
+		@close="$emit('close')"
+	>
 		<template #header>
 			<h3 class="cp-modal-title">Редактировать тариф</h3>
 		</template>
 		<template #body>
-			<div class="cp-form-grid">
-				<TextInput label="Название тарифа" v-model="tariffData.name" />
-				<TextareaInput label="Описание" v-model="tariffData.description" :rows="3" />
-				<TextInput v-model="tariffData.price_rub" label="Цена, ₽/мес" type="number" />
+			<div class="cp-form-grid" :aria-busy="isSaving">
+				<TextInput label="Название тарифа" v-model="tariffData.name" :disabled="isSaving" />
+				<TextareaInput label="Описание" v-model="tariffData.description" :rows="3" :disabled="isSaving" />
+				<TextInput v-model="tariffData.price_rub" label="Цена, ₽/мес" type="number" :disabled="isSaving" />
 
 				<div class="cp-toggle-row">
 					<div class="cp-toggle-row__copy">
 						<div class="cp-toggle-row__label">Активный тариф</div>
 						<div class="cp-toggle-row__hint">{{ tariffData.is_active ? 'Доступен для подключения' : 'Отключён для подключения' }}</div>
 					</div>
-					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': tariffData.is_active }" :aria-pressed="tariffData.is_active" @click="tariffData.is_active = !tariffData.is_active"></button>
+					<button
+						type="button"
+						class="cp-toggle"
+						:class="{ 'cp-toggle--on': tariffData.is_active }"
+						:aria-pressed="tariffData.is_active"
+						aria-label="Активный тариф"
+						:disabled="isSaving"
+						@click="tariffData.is_active = !tariffData.is_active"
+					></button>
 				</div>
 
 				<div class="cp-toggle-row">
@@ -109,7 +125,15 @@ async function editTariff() {
 						<div class="cp-toggle-row__label">Публичный тариф</div>
 						<div class="cp-toggle-row__hint">{{ tariffData.is_public ? 'Показывается пользователям' : 'Скрыт из публичного списка' }}</div>
 					</div>
-					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': tariffData.is_public }" :aria-pressed="tariffData.is_public" @click="tariffData.is_public = !tariffData.is_public"></button>
+					<button
+						type="button"
+						class="cp-toggle"
+						:class="{ 'cp-toggle--on': tariffData.is_public }"
+						:aria-pressed="tariffData.is_public"
+						aria-label="Публичный тариф"
+						:disabled="isSaving"
+						@click="tariffData.is_public = !tariffData.is_public"
+					></button>
 				</div>
 			</div>
 
@@ -117,8 +141,8 @@ async function editTariff() {
 		</template>
 		<template #footer>
 			<div class="cp-modal-footer">
-				<BaseButton variant="outline" text="Отмена" @click="$emit('close')" />
-				<BaseButton variant="primary" text="Сохранить" :loading="isSaving" @click="editTariff" />
+				<BaseButton variant="outline" text="Отмена" :disabled="isSaving" @click="$emit('close')" />
+				<BaseButton variant="primary" text="Сохранить" loading-text="Сохраняем…" :loading="isSaving" @click="editTariff" />
 			</div>
 		</template>
 	</Modal>

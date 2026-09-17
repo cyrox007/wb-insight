@@ -38,7 +38,13 @@ async function loadTariffs() {
 	}
 }
 
+function closeConfirm() {
+	if (actionLoading.value) return
+	confirmDialog.value = { isOpen: false, title: '', message: '', onConfirm: null }
+}
+
 function toggleActive(tariff) {
+	if (actionLoading.value) return
 	const newStatus = !tariff.is_active
 	const action = newStatus ? 'активировать' : 'деактивировать'
 
@@ -47,22 +53,25 @@ function toggleActive(tariff) {
 		title: newStatus ? 'Активировать тариф' : 'Деактивировать тариф',
 		message: `Вы действительно хотите ${action} тариф «${tariff.name}»?`,
 		onConfirm: async () => {
-			await CP_Tariffs.updateTariffStatus(tariff.id, newStatus)
+			const response = await CP_Tariffs.updateTariffStatus(tariff.id, newStatus)
+			if (response.data?.status !== 'success') {
+				throw new Error(response.data?.message || 'Не удалось изменить статус тарифа')
+			}
 			await loadTariffs()
 		}
 	}
 }
 
 async function handleConfirm() {
-	if (!confirmDialog.value.onConfirm) return
+	if (actionLoading.value || !confirmDialog.value.onConfirm) return
 	actionLoading.value = true
 	try {
 		await confirmDialog.value.onConfirm()
-		confirmDialog.value.isOpen = false
+		confirmDialog.value = { isOpen: false, title: '', message: '', onConfirm: null }
 	} catch (error) {
 		console.error('Ошибка изменения статуса тарифа:', error)
-		loadError.value = 'Не удалось изменить статус тарифа.'
-		confirmDialog.value.isOpen = false
+		loadError.value = error.response?.data?.error?.message || error.message || 'Не удалось изменить статус тарифа.'
+		confirmDialog.value = { isOpen: false, title: '', message: '', onConfirm: null }
 	} finally {
 		actionLoading.value = false
 	}
@@ -77,7 +86,7 @@ async function handleConfirm() {
 				<h2 class="cp-detail-title">Тарифные планы</h2>
 				<p class="cp-subtitle">Управление стоимостью, доступностью и продуктовой конфигурацией тарифов.</p>
 			</div>
-			<BaseButton variant="primary" text="Создать тариф" @click="showCreateModal = true" />
+			<BaseButton variant="primary" text="Создать тариф" :disabled="actionLoading" @click="showCreateModal = true" />
 		</header>
 
 		<div v-if="isLoading" class="cp-state" role="status">Загружаем тарифы…</div>
@@ -113,31 +122,16 @@ async function handleConfirm() {
 				</div>
 
 				<p class="cp-tariff-card__description">{{ tariff.description || 'Описание не добавлено.' }}</p>
-
-				<div class="cp-price">
-					{{ Number(tariff.price_rub) === 0 ? 'Бесплатно' : `${Number(tariff.price_rub).toLocaleString('ru-RU')} ₽/мес` }}
-				</div>
+				<div class="cp-price">{{ Number(tariff.price_rub) === 0 ? 'Бесплатно' : `${Number(tariff.price_rub).toLocaleString('ru-RU')} ₽/мес` }}</div>
 
 				<div class="cp-tariff-card__footer">
 					<div class="cp-chip-row">
-						<span class="cp-chip" :class="tariff.is_active ? 'cp-chip--active' : 'cp-chip--inactive'">
-							{{ tariff.is_active ? 'Активен' : 'Неактивен' }}
-						</span>
+						<span class="cp-chip" :class="tariff.is_active ? 'cp-chip--active' : 'cp-chip--inactive'">{{ tariff.is_active ? 'Активен' : 'Неактивен' }}</span>
 					</div>
 					<div class="cp-divider"></div>
 					<div class="cp-actions">
-						<BaseButton
-							variant="outline"
-							size="small"
-							text="Редактировать"
-							@click="$router.push({ name: 'control-panel.edit-tariff', params: { id: tariff.id } })"
-						/>
-						<BaseButton
-							:variant="tariff.is_active ? 'danger' : 'success'"
-							size="small"
-							:text="tariff.is_active ? 'Деактивировать' : 'Активировать'"
-							@click="toggleActive(tariff)"
-						/>
+						<BaseButton variant="outline" size="small" text="Редактировать" :disabled="actionLoading" @click="$router.push({ name: 'control-panel.edit-tariff', params: { id: tariff.id } })" />
+						<BaseButton :variant="tariff.is_active ? 'danger' : 'success'" size="small" :text="tariff.is_active ? 'Деактивировать' : 'Активировать'" :disabled="actionLoading" @click="toggleActive(tariff)" />
 					</div>
 				</div>
 			</article>
@@ -145,17 +139,20 @@ async function handleConfirm() {
 
 		<CreateTariffModal :is-open="showCreateModal" @close="showCreateModal = false" @created="loadTariffs" />
 
-		<Modal v-if="confirmDialog.isOpen" :is-open="true" @close="confirmDialog.isOpen = false">
-			<template #header>
-				<h3>{{ confirmDialog.title }}</h3>
-			</template>
-			<template #body>
-				<p>{{ confirmDialog.message }}</p>
-			</template>
+		<Modal
+			v-if="confirmDialog.isOpen"
+			:is-open="true"
+			aria-label="Подтверждение изменения статуса тарифа"
+			:close-on-overlay-click="!actionLoading"
+			:close-on-escape="!actionLoading"
+			@close="closeConfirm"
+		>
+			<template #header><h3 class="cp-modal-title">{{ confirmDialog.title }}</h3></template>
+			<template #body><p class="cp-modal-copy">{{ confirmDialog.message }}</p></template>
 			<template #footer>
-				<div class="cp-actions cp-actions--end">
-					<BaseButton variant="outline" text="Отмена" @click="confirmDialog.isOpen = false" />
-					<BaseButton variant="danger" text="Подтвердить" :loading="actionLoading" @click="handleConfirm" />
+				<div class="cp-modal-footer">
+					<BaseButton variant="outline" text="Отмена" :disabled="actionLoading" @click="closeConfirm" />
+					<BaseButton variant="danger" text="Подтвердить" loading-text="Сохраняем…" :loading="actionLoading" @click="handleConfirm" />
 				</div>
 			</template>
 		</Modal>

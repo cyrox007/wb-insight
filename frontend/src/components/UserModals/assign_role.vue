@@ -30,17 +30,20 @@ const ROLE_LABELS = {
 async function loadRoles() {
 	isLoadingRoles.value = true
 	msg.value = ''
+	msgType.value = ''
 	selectedRole.value = ''
 	try {
 		const response = await CP_Roles.getRolesList()
-		if (response.data?.status === 'success') {
-			rolesList.value = (response.data.roles || []).map((role) => ({
-				value: role,
-				label: ROLE_LABELS[role] || role
-			}))
+		if (response.data?.status !== 'success' || !Array.isArray(response.data?.roles)) {
+			throw new Error('Некорректный ответ API ролей')
 		}
+		rolesList.value = response.data.roles.map((role) => ({
+			value: role,
+			label: ROLE_LABELS[role] || role
+		}))
 	} catch (error) {
 		console.error('Ошибка загрузки списка ролей:', error)
+		rolesList.value = []
 		msg.value = 'Не удалось загрузить список ролей.'
 		msgType.value = 'error'
 	} finally {
@@ -49,6 +52,7 @@ async function loadRoles() {
 }
 
 async function assignRole() {
+	if (isSaving.value || isLoadingRoles.value) return
 	if (!selectedRole.value) {
 		msg.value = 'Выберите роль из списка.'
 		msgType.value = 'error'
@@ -83,15 +87,21 @@ watch(() => props.isOpen, (isOpen) => {
 </script>
 
 <template>
-	<Modal :is-open="isOpen" @close="$emit('close')">
+	<Modal
+		:is-open="isOpen"
+		aria-label="Назначение роли пользователю"
+		:close-on-overlay-click="!isSaving"
+		:close-on-escape="!isSaving"
+		@close="$emit('close')"
+	>
 		<template #header>
 			<h3 class="cp-modal-title">Назначить роль</h3>
 		</template>
 		<template #body>
-			<div class="cp-form-row">
-				<label class="cp-form-label">Роль</label>
-				<select v-model="selectedRole" class="cp-form-select" :disabled="isLoadingRoles">
-					<option value="">Выберите роль</option>
+			<div class="cp-form-row" :aria-busy="isLoadingRoles || isSaving">
+				<label class="cp-form-label" for="assign-user-role">Роль</label>
+				<select id="assign-user-role" v-model="selectedRole" class="cp-form-select" :disabled="isLoadingRoles || isSaving">
+					<option value="">{{ isLoadingRoles ? 'Загружаем роли…' : 'Выберите роль' }}</option>
 					<option v-for="role in rolesList" :key="role.value" :value="role.value">
 						{{ role.label }}
 					</option>
@@ -102,8 +112,15 @@ watch(() => props.isOpen, (isOpen) => {
 		</template>
 		<template #footer>
 			<div class="cp-modal-footer">
-				<BaseButton variant="outline" text="Отмена" @click="$emit('close')" />
-				<BaseButton variant="primary" text="Назначить" :loading="isSaving" :disabled="isLoadingRoles" @click="assignRole" />
+				<BaseButton variant="outline" text="Отмена" :disabled="isSaving" @click="$emit('close')" />
+				<BaseButton
+					variant="primary"
+					text="Назначить"
+					loading-text="Назначаем…"
+					:loading="isSaving"
+					:disabled="isLoadingRoles || !selectedRole"
+					@click="assignRole"
+				/>
 			</div>
 		</template>
 	</Modal>

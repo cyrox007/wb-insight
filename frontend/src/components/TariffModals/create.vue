@@ -37,6 +37,7 @@ watch(() => props.isOpen, (isOpen) => {
 })
 
 async function createTariff() {
+	if (isSaving.value) return
 	formMessage.value = ''
 	messageType.value = ''
 
@@ -90,24 +91,39 @@ async function createTariff() {
 </script>
 
 <template>
-	<Modal :is-open="isOpen" size="large" @close="$emit('close')">
+	<Modal
+		:is-open="isOpen"
+		size="large"
+		aria-label="Создание тарифного плана"
+		:close-on-overlay-click="!isSaving"
+		:close-on-escape="!isSaving"
+		@close="$emit('close')"
+	>
 		<template #header>
 			<h3 class="cp-modal-title">Создать тариф</h3>
 		</template>
 
 		<template #body>
-			<div class="cp-form-grid">
-				<TextInput v-model="tariffCode" label="Код тарифа" placeholder="Например: business" />
-				<TextInput v-model="tariffName" label="Название" placeholder="Введите название тарифа" />
-				<TextInput v-model="tariffPrice" label="Цена, ₽/мес" placeholder="0" type="number" />
-				<TextareaInput v-model="tariffDescription" label="Описание" placeholder="Кратко опишите тариф" :rows="3" />
+			<div class="cp-form-grid" :aria-busy="isSaving">
+				<TextInput v-model="tariffCode" label="Код тарифа" placeholder="Например: business" :disabled="isSaving" />
+				<TextInput v-model="tariffName" label="Название" placeholder="Введите название тарифа" :disabled="isSaving" />
+				<TextInput v-model="tariffPrice" label="Цена, ₽/мес" placeholder="0" type="number" :disabled="isSaving" />
+				<TextareaInput v-model="tariffDescription" label="Описание" placeholder="Кратко опишите тариф" :rows="3" :disabled="isSaving" />
 
 				<div class="cp-toggle-row">
 					<div class="cp-toggle-row__copy">
 						<div class="cp-toggle-row__label">Активный тариф</div>
 						<div class="cp-toggle-row__hint">{{ isActive ? 'Доступен для подключения' : 'Отключён для подключения' }}</div>
 					</div>
-					<button type="button" class="cp-toggle" :class="{ 'cp-toggle--on': isActive }" :aria-pressed="isActive" @click="isActive = !isActive"></button>
+					<button
+						type="button"
+						class="cp-toggle"
+						:class="{ 'cp-toggle--on': isActive }"
+						:aria-pressed="isActive"
+						aria-label="Активный тариф"
+						:disabled="isSaving"
+						@click="isActive = !isActive"
+					></button>
 				</div>
 				<p class="cp-muted">Публичность тарифа можно изменить после создания в карточке тарифа.</p>
 			</div>
@@ -117,8 +133,8 @@ async function createTariff() {
 
 		<template #footer>
 			<div class="cp-modal-footer">
-				<BaseButton variant="outline" text="Отмена" @click="$emit('close')" />
-				<BaseButton variant="primary" text="Создать тариф" :loading="isSaving" @click="createTariff" />
+				<BaseButton variant="outline" text="Отмена" :disabled="isSaving" @click="$emit('close')" />
+				<BaseButton variant="primary" text="Создать тариф" loading-text="Создаём…" :loading="isSaving" @click="createTariff" />
 			</div>
 		</template>
 	</Modal>
