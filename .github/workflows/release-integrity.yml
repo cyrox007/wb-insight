@@ -395,13 +395,20 @@ jobs:
       BACKUP_ENCRYPTION_PASSPHRASE_FILE: /tmp/wb-insight-backup-passphrase
     steps:
       - uses: actions/checkout@v4
-      - name: Verify PostgreSQL client
+      - name: Prepare PostgreSQL 16 client wrappers
+        shell: bash
         run: |
-          command -v psql
-          command -v pg_dump
-          command -v pg_restore
-          command -v createdb
-          command -v dropdb
+          set -euo pipefail
+          bindir="$RUNNER_TEMP/pg16-bin"
+          mkdir -p "$bindir"
+          for tool in psql pg_dump pg_restore createdb dropdb; do
+            cat > "$bindir/$tool" <<EOF
+          #!/usr/bin/env bash
+          exec docker run --rm --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
+          EOF
+            chmod +x "$bindir/$tool"
+          done
+          echo "$bindir" >> "$GITHUB_PATH"
       - name: Validate shell syntax
         run: bash -n ops/postgres_backup.sh ops/postgres_restore.sh ops/postgres_restore_drill.sh
       - name: Prepare source database
