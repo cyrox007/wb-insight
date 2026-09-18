@@ -44,7 +44,7 @@ Manifest не копирует содержимое artifacts и не предн
 
 `ops/database_upgrade_acceptance.py` доказывает upgrade **копии существующей БД**, а не только clean-schema migration. Он проверяет checksum encrypted backup, расшифровывает backup только во временный файл, восстанавливает его в отдельную временную PostgreSQL БД, выполняет `alembic upgrade head`, сверяет `current == heads`, выполняет `alembic check` и затем удаляет временную БД. Исходная БД не изменяется. В evidence не сохраняются пароль БД, passphrase или содержимое dump; сохраняются только release binding, SHA-256 encrypted backup, revisions, table counts и статусы проверок.
 
-`deployment` создаётся `ops/systemd_acceptance.py`. Для beta он получает structured database-upgrade proof через `--database-upgrade-proof ... --require-database-upgrade-proof`, проверяет совпадение VERSION/commit/environment и связывает proof по SHA-256. Далее deployment evidence требует:
+`deployment` создаётся `ops/systemd_acceptance.py`. В dev-first flow pre-promotion candidate проверяется на exact `dev` head с `TARGET_BRANCH=dev` / `--target-branch dev`; production/release default остаётся `main`. Для beta collector получает structured database-upgrade proof через `--database-upgrade-proof ... --require-database-upgrade-proof`, проверяет совпадение VERSION/commit/environment и связывает proof по SHA-256. Далее deployment evidence требует:
 
 - clean exact-head checkout целевой ветки;
 - immutable `venv.release.*` и Python 3.12;
@@ -108,6 +108,7 @@ Manifest не копирует содержимое artifacts и не предн
 ```bash
 RELEASE_SHA="$(git rev-parse HEAD)"
 export ACCEPTANCE_ENVIRONMENT=staging-eu-1
+export TARGET_BRANCH=dev  # pre-promotion candidate; main остаётся release default
 
 python3 ops/ci_acceptance.py \
   --commit "$RELEASE_SHA" \
@@ -130,6 +131,7 @@ python3 ops/backup_restore_acceptance.py \
   --output /secure/evidence/backup-restore.json
 
 python3 ops/systemd_acceptance.py \
+  --target-branch "$TARGET_BRANCH" \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --public-base-url https://staging.example.com \
   --database-upgrade-proof /secure/evidence/database-upgrade.json \
