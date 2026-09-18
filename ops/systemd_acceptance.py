@@ -72,13 +72,17 @@ def _supported_node(version: str) -> bool:
 
 def _safe_public_origin(value: str) -> str:
     parsed = urlparse(value.strip())
+    try:
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise AcceptanceError("public base URL contains an invalid port") from exc
     if parsed.scheme != "https" or not parsed.hostname:
         raise AcceptanceError("production-like public base URL must use HTTPS")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise AcceptanceError("public base URL must not contain credentials, query or fragment")
     if parsed.path not in {"", "/"}:
         raise AcceptanceError("public base URL must be an origin without a path")
-    port = f":{parsed.port}" if parsed.port else ""
+    port = f":{parsed_port}" if parsed_port else ""
     return f"https://{parsed.hostname}{port}"
 
 
