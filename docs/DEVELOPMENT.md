@@ -10,7 +10,8 @@
 2. рабочие PR направляются в `dev`;
 3. `dev` является интеграционной веткой и накапливает завершённые задачи текущей release-линии;
 4. `main` не используется как рабочая интеграционная ветка;
-5. promotion `dev -> main` выполняется отдельным release/release-candidate PR после consolidated exact-head CI и требуемого acceptance/evidence.
+5. тяжёлый CI не гоняется после каждого рабочего merge в `dev`: перед promotion запускается consolidated exact-head набор через `workflow_dispatch` на текущем `dev` head;
+6. promotion `dev -> main` выполняется отдельным release/release-candidate PR только после этого green набора и требуемого acceptance/evidence; сам promotion PR повторно запускает release checks.
 
 Прямой merge рабочих веток в `main` запрещён. Срочные hotfix для уже опубликованного production-релиза оформляются отдельно и после выпуска обязательно синхронизируются обратно в `dev`.
 
