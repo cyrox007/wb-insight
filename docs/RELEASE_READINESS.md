@@ -4,7 +4,7 @@
 
 ## Текущий статус
 
-- `main`: **`0.9.0-alpha.11`**.
+- release baseline `main`: **`0.9.0-alpha.11`**; integration/candidate work собирается в `dev`.
 - P31–P36 release-hardening baseline закрыт.
 - P37 durable audit trail закрыт PR #74, merge `31434c26e98960c0f591bdcb969ba12d96af8263`.
 - payment administration foundation закрыт PR #71, merge `e42c691eaa2f75d7149e78222ae605d039f2eabd`.
@@ -13,7 +13,7 @@
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - `0.9.0-beta.1` разрешён только после фактического P40 acceptance на exact candidate commit.
 
-## Code-side status: закрыто в main
+## Code-side status: baseline закрыт; новая интеграция идёт через dev
 
 - auth/session/RBAC, роли и Control Panel;
 - account-scoped durable WB sync;
@@ -48,7 +48,7 @@
 
 ## Production-like host
 
-Исторические snapshots Python 3.10/Node 18 и локального helper updater больше не являются каноническим release state: deployment tooling после P36 неоднократно harden-илось. Для beta evidence не используется старый снимок хоста — состояние должно быть **заново зафиксировано на exact beta candidate commit**.
+Исторические snapshots Python 3.10/Node 18 и локального helper updater больше не являются каноническим release state: deployment tooling после P36 неоднократно harden-илось. Для beta evidence не используется старый снимок хоста — состояние должно быть **заново зафиксировано на exact beta candidate commit**. До promotion таким commit является exact `dev` head; после green consolidated acceptance выполняется отдельный `dev -> main` release PR.
 
 P40 deployment evidence обязан подтвердить:
 
@@ -60,6 +60,10 @@ P40 deployment evidence обязан подтвердить:
 6. `/health/ready` на deployed version;
 7. rollback procedure/evidence;
 8. фактически опубликованный frontend bundle того же candidate commit.
+
+## Promotion flow до `0.9.0-beta.1`
+
+Рабочие ветки вливаются только в `dev`. После завершения code-side набора на exact `dev` head вручную запускается consolidated CI, затем на этом же candidate commit собирается production-like acceptance/evidence. Только green candidate продвигается отдельным `dev -> main` release PR; promotion не должен добавлять функциональные изменения.
 
 ## Gate до `0.9.0-beta.1`
 
