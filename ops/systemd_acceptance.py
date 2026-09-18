@@ -173,6 +173,12 @@ def _self_test() -> None:
     assert not _supported_node("20.18.9")
     assert not _supported_node("18.20.8")
     assert _safe_public_origin("https://example.com/") == "https://example.com"
+    try:
+        _safe_public_origin("https://example.com:bad-port")
+    except AcceptanceError:
+        pass
+    else:
+        raise AssertionError("invalid public origin port unexpectedly passed")
     assert _asset_set('<script src="/assets/app-abc.js"></script>') == {"/assets/app-abc.js"}
     assert SHA256_RE.fullmatch("a" * 64)
     print("[ok] systemd acceptance self-test")
