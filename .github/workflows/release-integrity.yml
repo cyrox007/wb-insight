@@ -285,7 +285,7 @@ jobs:
           fi
 
   docker-build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
@@ -369,7 +369,7 @@ jobs:
           done
 
   backup-restore:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     services:
       postgres:
         image: postgres:16
@@ -378,7 +378,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: wbops
         ports:
-          - 5432:5432
+          - 55433:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d wbops"
           --health-interval 5s
@@ -386,7 +386,7 @@ jobs:
           --health-retries 10
     env:
       DB_HOST: localhost
-      DB_PORT: 5432
+      DB_PORT: 55433
       DB_NAME: wbops
       DB_USER: postgres
       DB_PASSWORD: postgres
@@ -395,10 +395,13 @@ jobs:
       BACKUP_ENCRYPTION_PASSPHRASE_FILE: /tmp/wb-insight-backup-passphrase
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL client
+      - name: Verify PostgreSQL client
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          command -v psql
+          command -v pg_dump
+          command -v pg_restore
+          command -v createdb
+          command -v dropdb
       - name: Validate shell syntax
         run: bash -n ops/postgres_backup.sh ops/postgres_restore.sh ops/postgres_restore_drill.sh
       - name: Prepare source database
