@@ -75,6 +75,8 @@ Manifest не копирует содержимое artifacts и не предн
 
 В payment evidence не сохраняются пароль Control Panel, JWT/cookies, credential hints, provider URLs/credentials или payment PII — только release binding, количество конфигураций/проверенных строк и итоговые checks. `ops/release_candidate_evidence.py --payment-proof ...` валидирует этот proof и добавляет его SHA-256 в `candidate_subproofs.payment_isolation` итогового manifest.
 
+`ops/sber_sandbox_acceptance.py` закрывает условную P40-проверку Sber sandbox merchant **только когда test credentials реально доступны**. Runner использует тот же `SberAcquiringClient`, что backend: регистрирует один неоплаченный sandbox order, проверяет HTTPS payment-form URL и выполняет `getOrderStatusExtended.do`. Card data не вводится, подписка не активируется, а paid-state считается ошибкой acceptance. В evidence не сохраняются merchant login/password, gateway URL, Sber order id или payment-form URL. Если proof передан через `ops/beta_release_evidence.py --sber-sandbox-proof ...`, он проверяется на exact VERSION/commit/environment/public origin и SHA-256-bound в `candidate_subproofs.sber_sandbox`; отсутствие proof не делает beta manifest неполным, если sandbox credentials для окружения недоступны.
+
 `ux_smoke` создаётся `ops/ux_acceptance.py`. Инструмент не выдаёт автоматическую визуальную оценку: проверку интерфейса выполняет человек, а runner делает эту проверку полной и привязанной к exact build. Контракт требует desktop/mobile evidence для публичных auth-экранов, billing success, основных dashboard-разделов и Control Panel (users/roles/tariffs/payments/mail/audit), а также representative loading/empty/error states. Для каждого required state сохраняются только имя evidence-файла, размер и SHA-256; сами изображения/видео остаются в защищённом evidence storage.
 
 `secrets_review` создаётся `ops/secrets_review.py`. Scanner не сохраняет значения секретов и не копирует совпавшие строки. Он сравнивает реально настроенные secret values с:
@@ -99,7 +101,7 @@ Manifest не копирует содержимое artifacts и не предн
 - `secrets_review` — machine-readable проверка отсутствия настроенных secrets/JWT в frontend, Git и runtime logs;
 - `data_accuracy` — green JSON-результат `ops/data_accuracy_acceptance.py` на реальном WB seller dataset.
 
-Дополнительно strict candidate entrypoint требует `payment-isolation.json` как обязательный sub-proof beta gate и привязывает его hash к manifest.
+Дополнительно strict beta entrypoint требует `payment-isolation.json`, `backup-restore.json`, `wb-live-data.json` и защищённый `accuracy-input.json`. Live-WB proof обязан соответствовать тому же seller account и тому же `data_accuracy` input; все обязательные sub-proofs SHA-256-bound в manifest. `sber-sandbox.json` остаётся условным дополнительным proof: он валидируется и привязывается только когда test merchant credentials реально доступны.
 
 Канонический P40 пример:
 
@@ -119,6 +121,14 @@ python3 ops/database_upgrade_acceptance.py \
   --passphrase-file /secure/runtime/backup-passphrase \
   --output /secure/evidence/database-upgrade.json
 
+# Используется тот же encrypted backup; рядом должен лежать <backup>.sha256.
+# Restore drill выполняется в изолированной временной БД и удаляет её после проверки.
+python3 ops/backup_restore_acceptance.py \
+  --backup /secure/backups/wb-before-candidate.dump.enc \
+  --commit "$RELEASE_SHA" \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
+  --output /secure/evidence/backup-restore.json
+
 python3 ops/systemd_acceptance.py \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --public-base-url https://staging.example.com \
@@ -128,6 +138,8 @@ python3 ops/systemd_acceptance.py \
   --require-rollback-proof \
   --output /secure/evidence/deployment.json
 
+# SMOKE_EMAIL/SMOKE_PASSWORD и реальный SMOKE_WB_TOKEN задаются через
+# environment/secret manager. Для beta core_smoke обязан доказать wb_credential=true.
 python3 ops/release_smoke.py \
   --base-url https://staging.example.com \
   --require-email-verification \
@@ -139,6 +151,26 @@ python3 ops/payment_acceptance.py \
   --base-url https://staging.example.com \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --output /secure/evidence/payment-isolation.json
+
+# Live WB/data provenance выполняется по двухпроходной схеме из
+# docs/WB_LIVE_DATA_ACCEPTANCE.md. Здесь показан финальный binding pass:
+python3 ops/wb_live_data_acceptance.py \
+  --base-url https://staging.example.com \
+  --email seller-acceptance@example.com \
+  --accuracy-input /secure/evidence/accuracy-input.json \
+  --data-accuracy /secure/evidence/data-accuracy.json \
+  --commit "$RELEASE_SHA" \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
+  --output /secure/evidence/wb-live-data.json
+
+# Если Sber test merchant credentials доступны, они передаются только через environment:
+export SBER_TEST_API_BASE_URL=https://ecomtest.sberbank.ru/ecomm/gw/partner/api/v1
+export SBER_TEST_USERNAME='<sandbox merchant login>'
+export SBER_TEST_PASSWORD='<sandbox merchant password>'
+/home/projects/wb/backend/venv/bin/python ops/sber_sandbox_acceptance.py \
+  --public-origin https://staging.example.com \
+  --environment "$ACCEPTANCE_ENVIRONMENT" \
+  --output /secure/evidence/sber-sandbox.json
 
 python3 ops/ux_acceptance.py \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
@@ -154,11 +186,14 @@ python3 ops/secrets_review.py \
   --env-file /secure/runtime/wb-insight.env \
   --output /secure/evidence/secrets-review.json
 
-python3 ops/release_candidate_evidence.py \
-  --stage beta \
+python3 ops/beta_release_evidence.py \
   --environment "$ACCEPTANCE_ENVIRONMENT" \
   --commit "$RELEASE_SHA" \
   --payment-proof /secure/evidence/payment-isolation.json \
+  --backup-restore-proof /secure/evidence/backup-restore.json \
+  --wb-live-data-proof /secure/evidence/wb-live-data.json \
+  --accuracy-input /secure/evidence/accuracy-input.json \
+  --sber-sandbox-proof /secure/evidence/sber-sandbox.json \
   --artifact ci=/secure/evidence/ci.json \
   --artifact deployment=/secure/evidence/deployment.json \
   --artifact core_smoke=/secure/evidence/release-smoke.json \
@@ -167,6 +202,8 @@ python3 ops/release_candidate_evidence.py \
   --artifact secrets_review=/secure/evidence/secrets-review.json \
   --artifact data_accuracy=/secure/evidence/data-accuracy.json \
   --output /secure/evidence/release-manifest.json
+
+# Если Sber sandbox credentials недоступны, просто не передавайте --sber-sandbox-proof.
 ```
 
 Для private repository `ops/ci_acceptance.py` получает `GITHUB_TOKEN` через environment/secret manager. Значение токена в report не попадает. При необходимости GitHub API payload можно заранее сохранить защищённо и передать через `--runs-json`.
@@ -234,6 +271,6 @@ Release evidence должно храниться отдельно от applicati
 - `legal`
 - `rc_signoff`
 
-`database-upgrade.json` и `payment-isolation.json` остаются обязательными sub-proofs P40, а не отдельными top-level artifact kinds. Первый SHA-256-bound внутри `deployment.json`; второй валидируется strict candidate entrypoint и записывается в `candidate_subproofs.payment_isolation` итогового manifest.
+`database-upgrade.json`, `payment-isolation.json`, `backup-restore.json`, `wb-live-data.json` и защищённый `accuracy-input.json` участвуют в P40 как связанные sub-proofs, а не как новые top-level artifact kinds beta contract. Database-upgrade SHA-256-bound внутри `deployment.json`; payment isolation хранится в `candidate_subproofs.payment_isolation`; strict `ops/beta_release_evidence.py` дополнительно требует и hash-bind'ит backup/restore, live-WB proof и исходный accuracy input. `sber-sandbox.json` — условный P40 sub-proof: при наличии test merchant credentials он валидируется и записывается в `candidate_subproofs.sber_sandbox`, но beta gate не фальсифицирует его наличие, если таких credentials нет.
 
 Новый обязательный gate добавляется в runner, `RELEASE_READINESS.md`, `RELEASE_ROADMAP.md` и этот документ одним PR.
