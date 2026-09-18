@@ -118,6 +118,10 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
 
 def _safe_base_origin(value: str) -> str:
     parsed = urlparse(value.strip())
+    try:
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise SmokeFailure("SMOKE_BASE_URL contains an invalid port") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise SmokeFailure("SMOKE_BASE_URL must be an http(s) origin or public /api root")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -125,7 +129,7 @@ def _safe_base_origin(value: str) -> str:
     normalized_path = parsed.path.rstrip("/")
     if normalized_path not in {"", "/api"}:
         raise SmokeFailure("SMOKE_BASE_URL path must be empty or /api")
-    port = f":{parsed.port}" if parsed.port else ""
+    port = f":{parsed_port}" if parsed_port else ""
     return f"{parsed.scheme}://{parsed.hostname}{port}"
 
 
