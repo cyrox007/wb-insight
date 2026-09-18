@@ -261,15 +261,24 @@ def _probe_live_account(
             fingerprint_key,
         )
     finally:
-        if created_id:
-            deleted = client.request(
-                "DELETE",
-                f"/dashboard/profile/token/{created_id}",
-                auth=True,
-            )
-            cleanup_complete = deleted.get("status") == "success"
-            if not cleanup_complete:
-                raise WBLiveDataAcceptanceError("temporary WB credential cleanup failed")
+        try:
+            if created_id:
+                deleted = client.request(
+                    "DELETE",
+                    f"/dashboard/profile/token/{created_id}",
+                    auth=True,
+                )
+                cleanup_complete = deleted.get("status") == "success"
+                if not cleanup_complete:
+                    raise WBLiveDataAcceptanceError("temporary WB credential cleanup failed")
+        finally:
+            # The acceptance login sets the same HttpOnly refresh cookie as the
+            # browser. Clear it even when credential validation/cleanup fails so
+            # repeated evidence runs do not leave reusable refresh cookies behind.
+            logout = client.request("POST", "/auth/logout", body={})
+            if logout.get("status") != "success":
+                raise WBLiveDataAcceptanceError("acceptance account logout failed")
+            client.access_token = None
 
     if account_fingerprint is None or not cleanup_complete:
         raise WBLiveDataAcceptanceError("live WB validation did not complete safely")
