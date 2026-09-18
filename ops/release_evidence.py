@@ -193,6 +193,21 @@ def _require_true_checks(report: dict[str, Any], names: set[str], *, artifact_ki
         )
 
 
+def _require_listed_checks(report: dict[str, Any], names: set[str], *, artifact_kind: str) -> None:
+    """Validate collectors whose canonical evidence stores checks as a name list."""
+    checks = report.get("checks")
+    if not isinstance(checks, list) or any(
+        not isinstance(item, str) or not item.strip() for item in checks
+    ):
+        raise ValueError(f"{artifact_kind} artifact must contain a checks list")
+    seen = set(checks)
+    missing = sorted(names - seen)
+    if missing:
+        raise ValueError(
+            f"{artifact_kind} artifact is missing passing checks: {', '.join(missing)}"
+        )
+
+
 def validate_deployment_evidence(
     path: Path,
     *,
@@ -212,7 +227,7 @@ def validate_deployment_evidence(
     if report.get("environment") != environment:
         raise ValueError("deployment artifact environment does not match manifest environment")
     _validate_https_origin(report.get("public_origin"), artifact_kind="deployment")
-    _require_true_checks(report, DEPLOYMENT_REQUIRED_CHECKS, artifact_kind="deployment")
+    _require_listed_checks(report, DEPLOYMENT_REQUIRED_CHECKS, artifact_kind="deployment")
     rollback_hash = str(report.get("rollback_proof_sha256") or "")
     if SHA256_RE.fullmatch(rollback_hash) is None:
         raise ValueError("deployment artifact must bind a valid rollback proof SHA-256")
