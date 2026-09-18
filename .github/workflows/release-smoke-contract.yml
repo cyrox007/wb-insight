@@ -1,7 +1,9 @@
 name: Release smoke contract
 
 on:
+  workflow_dispatch:
   pull_request:
+    branches: [main]
     paths:
       - VERSION
       - ops/release_smoke.py

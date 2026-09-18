@@ -1,7 +1,9 @@
 name: Frontend build
 
 on:
+  workflow_dispatch:
   pull_request:
+    branches: [main]
     paths:
       - 'VERSION'
       - 'frontend/**'

@@ -1,7 +1,9 @@
 name: Release integrity
 
 on:
+  workflow_dispatch:
   pull_request:
+    branches: [main]
     paths:
       - VERSION
       - CHANGELOG.md

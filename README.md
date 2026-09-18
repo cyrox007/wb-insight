@@ -1,6 +1,6 @@
 # WB Insight
 
-**Main:** `0.9.0-alpha.6` после P29. **Текущий кандидат:** `0.9.0-alpha.7` / P30. Каноническая версия ветки всегда находится в корневом `VERSION`.
+**Release baseline:** `0.9.0-alpha.11`. `dev` — интеграционная ветка текущей release-линии; `main` принимает только consolidated release/release-candidate promotion из `dev`. Каноническая версия всегда находится в корневом `VERSION`.
 
 WB Insight — web-сервис управленческой аналитики для продавцов Wildberries. Он собирает данные из официальных WB API, добавляет данные продавца (себестоимость, собственные расходы, налоговые параметры, план) и рассчитывает единый набор показателей для управления прибылью, рекламой, запасами, ценами и выплатами.
 
@@ -81,6 +81,8 @@ npm run dev
 
 ## CI / release discipline
 
+Рабочие ветки направляются в `dev`. Тяжёлый CI не запускается на каждом task PR: после завершения набора задач workflows запускаются вручную (`workflow_dispatch`) на exact `dev` head. Только после green consolidated validation создаётся promotion PR `dev -> main`, который повторно проходит release checks.
+
 Release candidate должен иметь green на одном exact head:
 
 - backend tests + `pip-audit`;
@@ -94,4 +96,4 @@ Release candidate должен иметь green на одном exact head:
 
 ## Текущий фокус
 
-P29 уже закрыл dependency/security hardening. P30 создаёт воспроизводимую сверку аналитики и evidence manifest. После P30 `0.9.0-beta.1` разрешена только при фактическом production-like smoke и реальной data-accuracy acceptance на seller account; сам merge tooling beta не назначает.
+Code-side P40 hardening собран в текущей release-линии. Следующий promotion до `0.9.0-beta.1` разрешён только после consolidated exact-head CI на `dev`, production-like deployment/rollback, реального mail lifecycle, WB seller/data-accuracy acceptance, desktop/mobile UX smoke, secrets review, backup/restore evidence и полного beta manifest. Сам факт merge в `dev` или `main` release stage не повышает.
