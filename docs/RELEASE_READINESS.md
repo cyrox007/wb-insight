@@ -1,17 +1,17 @@
 # WB Insight — Release Readiness
 
-Дата ревизии: 16 сентября 2026 года.
+Дата ревизии: 18 сентября 2026 года.
 
 ## Текущий статус
 
-- release baseline `main`: **`0.9.0-alpha.11`**; integration/candidate work собирается в `dev`.
+- release baseline `main`: **`0.9.0-alpha.11`**; exact beta candidate в `dev`: **`0.9.0-beta.1`**.
 - P31–P36 release-hardening baseline закрыт.
 - P37 durable audit trail закрыт PR #74, merge `31434c26e98960c0f591bdcb969ba12d96af8263`.
 - payment administration foundation закрыт PR #71, merge `e42c691eaa2f75d7149e78222ae605d039f2eabd`.
 - P38/P39 verified email identity + durable/provider-neutral mail delivery закрыты PR #77, merge `5733ebd2b74a2947ce583dfa78734bdeb1335357`.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
-- `0.9.0-beta.1` разрешён только после фактического P40 acceptance на exact candidate commit.
+- candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact `dev` commit.
 
 ## Code-side status: baseline закрыт; новая интеграция идёт через dev
 
@@ -61,7 +61,7 @@ P40 deployment evidence обязан подтвердить:
 7. rollback procedure/evidence;
 8. фактически опубликованный frontend bundle того же candidate commit.
 
-## Promotion flow до `0.9.0-beta.1`
+## Promotion flow для `0.9.0-beta.1`
 
 Рабочие ветки вливаются только в `dev`. После завершения code-side набора на exact `dev` head вручную запускается consolidated CI, затем на этом же candidate commit собирается production-like acceptance/evidence. Только green candidate продвигается отдельным `dev -> main` release PR; promotion не должен добавлять функциональные изменения.
 

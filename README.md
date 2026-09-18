@@ -1,6 +1,6 @@
 # WB Insight
 
-**Release baseline:** `0.9.0-alpha.11`. `dev` — интеграционная ветка текущей release-линии; `main` принимает только consolidated release/release-candidate promotion из `dev`. Каноническая версия всегда находится в корневом `VERSION`.
+**Release baseline `main`:** `0.9.0-alpha.11`. **Exact candidate `dev`:** `0.9.0-beta.1`. `main` принимает только consolidated release/release-candidate promotion из `dev`. Каноническая версия всегда находится в корневом `VERSION`.
 
 WB Insight — web-сервис управленческой аналитики для продавцов Wildberries. Он собирает данные из официальных WB API, добавляет данные продавца (себестоимость, собственные расходы, налоговые параметры, план) и рассчитывает единый набор показателей для управления прибылью, рекламой, запасами, ценами и выплатами.
 
@@ -96,4 +96,4 @@ Release candidate должен иметь green на одном exact head:
 
 ## Текущий фокус
 
-Code-side P40 hardening собран в текущей release-линии. Следующий promotion до `0.9.0-beta.1` разрешён только после consolidated exact-head CI на `dev`, production-like deployment/rollback, реального mail lifecycle, WB seller/data-accuracy acceptance, desktop/mobile UX smoke, secrets review, backup/restore evidence и полного beta manifest. Сам факт merge в `dev` или `main` release stage не повышает.
+`dev` подготовлен как exact `0.9.0-beta.1` candidate. Promotion/tag разрешены только после consolidated exact-head CI на `dev`, production-like deployment/rollback, реального mail lifecycle, WB seller/data-accuracy acceptance, desktop/mobile UX smoke, secrets review, backup/restore evidence и полного beta manifest. Сам VERSION bump не считается опубликованным релизом.

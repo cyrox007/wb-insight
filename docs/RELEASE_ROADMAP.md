@@ -1,6 +1,6 @@
 # WB Insight — дорожная карта до стабильного релиза
 
-Дата фиксации: 16 сентября 2026 года.
+Дата фиксации: 18 сентября 2026 года.
 
 Цель: первый публичный стабильный релиз **WB Insight Web v1 / `1.0.0` для продавцов Wildberries**.
 
@@ -10,7 +10,7 @@
 
 ## Текущее состояние
 
-- `main`: **`0.9.0-alpha.11`**;
+- release baseline `main`: **`0.9.0-alpha.11`**; exact candidate `dev`: **`0.9.0-beta.1`**;
 - P34 закрыт PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`;
 - P35 data-accuracy completeness hardening закрыт PR #56, merge `d2e782208228fbe60cb92b9e61fbf8d325f0e839`;
 - P36 systemd deployment hardening закрыт PR #55 и последующими updater hotfixes;
@@ -20,7 +20,7 @@
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest v2 остаются постоянными release gates;
 - **WB Web v1 feature scope заморожен**: новые продуктовые функции не добавляются до beta, кроме исправления обнаруженных blocker-дефектов;
 - текущий этап — **P40 / issue #78: production-like beta acceptance и закрытие evidence**;
-- следующий version stage — `0.9.0-beta.1` только после фактического P40 acceptance, а не по факту завершения code-side задач.
+- `0.9.0-beta.1` назначен exact candidate VERSION в `dev`; публикация/tag остаются заблокированы до фактического P40 acceptance и complete evidence.
 
 Переход стадии определяется доказанными gates и exact-commit evidence, а не номером P-задачи.
 
@@ -116,7 +116,7 @@ Code-side P37 закрыт. Production-like representative audit correlation о�
 
 Exact final head #77 прошёл Frontend build, Backend security, Database migrations и Release integrity перед merge.
 
-## Этап D — P40 / production-like validation → `0.9.0-beta.1` — открыт
+## Этап D — P40 / `0.9.0-beta.1` candidate production-like validation — открыт
 
 **Issue:** #78.
 
@@ -192,6 +192,6 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Каноническая последовательность
 
-`0.9.0-alpha.11` (текущий feature-frozen baseline) -> P40 production-like acceptance/evidence -> `0.9.0-beta.1` -> `1.0.0-rc.1` -> `1.0.0`.
+`0.9.0-alpha.11` (`main` baseline) -> `0.9.0-beta.1` exact candidate в `dev` -> P40 production-like acceptance/evidence -> promotion/tag `v0.9.0-beta.1` -> `1.0.0-rc.1` -> `1.0.0`.
 
 Связанные документы: `RELEASE_SMOKE.md`, `DATA_ACCURACY_ACCEPTANCE.md`, `RELEASE_EVIDENCE.md`, `ACCOUNT_LIFECYCLE.md`, `SYSTEMD_DEPLOYMENT.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.

@@ -4,6 +4,19 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
+## [0.9.0-beta.1] — candidate, 2026-09-18
+
+Подготовлен exact beta candidate для P40 production-like acceptance. Эта запись фиксирует candidate metadata; публикация `v0.9.0-beta.1` остаётся заблокированной до полного green P40 evidence.
+
+- завершён code-side P40 hardening: production nginx `/api` routing, strict release-smoke provenance и cleanup authenticated sessions;
+- live-WB/data provenance связывает credential validation/cleanup с тем же seller account и защищённым data-accuracy input;
+- добавлен условный Sber sandbox merchant proof без сохранения merchant secrets/order/form URL в evidence;
+- dev-first release flow закреплён: рабочие ветки идут в `dev`, а `main` принимает только release/release-candidate promotion;
+- self-hosted CI переведён на consolidated validation и защищён от повторного накопления PostgreSQL anonymous volumes/CI images;
+- frontend package metadata и lockfile синхронизированы с каноническим `VERSION`.
+
+До фактического release обязательны consolidated exact-head CI, production-like deploy/rollback, real-mail lifecycle, WB seller/data-accuracy, UX, secrets и backup/restore evidence, затем complete beta manifest.
+
 ## [0.9.0-alpha.11] — 2026-09-16
 
 P34 — закрытие разрыва между beta readiness и release-evidence contract. PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be`.

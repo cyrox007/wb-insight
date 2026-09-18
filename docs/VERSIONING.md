@@ -66,7 +66,7 @@ Feature scope WB Web v1 заморожен. `0.9.0-beta.1` допускаетс�
 
 ## Текущая release-линия
 
-`main` находится на **`0.9.0-alpha.11`**. В эту baseline входят:
+`main` остаётся release baseline **`0.9.0-alpha.11`**, а exact candidate в `dev` подготовлен как **`0.9.0-beta.1`**. В baseline/candidate входят:
 
 - P34 / PR #53, merge `2b0ce4522adda642f6af8fa78b30e5440a7469be` — beta evidence-contract closure;
 - P36 / PR #55, merge `d4c8a20d6ecc75ab9cd8449bd55f6b2ce4242d9c` — systemd updater/runtime hardening без product version bump;
@@ -76,7 +76,7 @@ P35 и P36 оставлены внутри `0.9.0-alpha.11`, потому что
 
 `0.9.0-alpha.11` теперь закрывает два дополнительных pre-beta обхода: production-like systemd update нельзя считать успешным на старом Python/Node environment, а data-accuracy нельзя пройти через пропуск policy-required метрик или необъяснённое расширение tolerance.
 
-Следующее повышение стадии — `0.9.0-beta.1` только после фактического production-like HTTPS deployment, полного smoke, SMTP recovery, UX/secrets review и real-seller data-accuracy acceptance с evidence manifest v2. Новая alpha-итерация создаётся только если до beta обнаружится новый реальный code-side/runtime release blocker.
+`0.9.0-beta.1` уже назначен как candidate VERSION в `dev`, чтобы все P40 artifacts были связаны с корректной beta-stage версией. Это не означает публикацию релиза: promotion/tag допускаются только после фактического production-like HTTPS deployment, полного smoke, SMTP recovery, UX/secrets review, real-seller data-accuracy acceptance и complete evidence manifest v2. Если acceptance выявит release-blocking defect, исправление идёт через отдельную ветку в `dev`, после чего candidate evidence собирается заново.
 
 Каноническая последовательность:
 
@@ -84,8 +84,8 @@ P35 и P36 оставлены внутри `0.9.0-alpha.11`, потому что
 2. `0.9.0-alpha.8` — account-lifecycle code baseline;
 3. `0.9.0-alpha.9` — registration transaction/demo/beta-smoke hardening;
 4. `0.9.0-alpha.10` — production configuration fail-closed hardening;
-5. `0.9.0-alpha.11` — beta evidence-contract closure + P35/P36 pre-beta hardening, текущий `main`;
-6. `0.9.0-beta.1` — feature freeze + реальный production-like + SMTP recovery + UX/secrets review + data-accuracy acceptance;
+5. `0.9.0-alpha.11` — beta evidence-contract closure + P35/P36 pre-beta hardening, release baseline `main`;
+6. `0.9.0-beta.1` — exact candidate в `dev`; публикация только после real production-like + SMTP recovery + UX/secrets review + data-accuracy acceptance;
 7. `1.0.0-rc.1` — production candidate после закрытия WB/Sber/prod/legal/ops blockers;
 8. `1.0.0` — публичный WB Insight Web v1 Stable.
 
