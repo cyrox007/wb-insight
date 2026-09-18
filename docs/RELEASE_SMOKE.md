@@ -86,9 +86,11 @@ Runner отправляет security-sensitive Control Panel read с уника�
 
 ## 5. Wildberries integration smoke
 
-В dedicated seller account runner может использовать отдельно переданный `SMOKE_WB_TOKEN`. Проверяется актуальный marketplace legal requirement, live credential validation, storage/cleanup credential, затем полный Celery sync заявленных доменов и отсутствие необъяснённых auth/permission/rate-limit ошибок.
+В dedicated seller account runner использует отдельно переданный через environment `SMOKE_WB_TOKEN`; токен не следует передавать CLI-аргументом или сохранять в evidence. Проверяется актуальный marketplace legal requirement, live credential validation и обязательный storage/cleanup временного credential.
 
-Для RC sanitized результат полного sync сохраняется как evidence kind `wb_full_sync`.
+Для **P40 beta** strict candidate gate требует, чтобы sanitized `core_smoke` содержал `wb_credential=true`, поэтому production-like core smoke запускается с реальным `SMOKE_WB_TOKEN`. Отдельный live-WB/data provenance gate дополнительно связывает data-accuracy с конкретным seller account.
+
+Для RC выполняется уже полный Celery sync заявленных доменов и отсутствие необъяснённых auth/permission/rate-limit ошибок; sanitized результат сохраняется как evidence kind `wb_full_sync`.
 
 ## 6. Data-accuracy acceptance
 
