@@ -10,7 +10,7 @@
 2. получает актуальные legal requirements для `marketplace_credential`;
 3. временно добавляет реальный WB token через штатный API, поэтому используется тот же live validation path, что и у пользователя;
 4. берёт возвращённый `external_account_id`, но **не сохраняет его** — вместо этого строит HMAC-SHA256 fingerprint с отдельным `WB_ACCEPTANCE_FINGERPRINT_KEY`;
-5. в `finally` удаляет временный credential;
+5. в `finally` удаляет временный credential и завершает acceptance login, очищая refresh cookie;
 6. проверяет, что `accuracy-input.json` содержит тот же `wb_account_fingerprint`;
 7. проверяет SHA-256 связи input → passing `data-accuracy.json`, отсутствие `fail/missing` и минимум три acceptance-периода;
 8. создаёт `wb-live-data.json`, связанный с exact VERSION/commit/environment/public origin.
