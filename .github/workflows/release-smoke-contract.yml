@@ -41,6 +41,10 @@ on:
       - docs/RELEASE_EVIDENCE.md
       - .github/workflows/release-smoke-contract.yml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smoke-contract:
     runs-on: [self-hosted, Linux, X64, wb-ci]
