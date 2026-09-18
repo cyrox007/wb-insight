@@ -1,8 +1,27 @@
 # WB Insight — подробная история версий
 
-Дата полной ревизии: 16 сентября 2026 года.
+Дата полной ревизии: 18 сентября 2026 года.
 
 Документ фиксирует продуктовые milestones, а не каждый commit. Версии до введения formal release policy являются ретроспективно реконструированными и не означают наличие соответствующего Git tag.
+
+## 0.9.0-beta.1 — P40 exact candidate
+
+**Candidate branch:** `dev`.  
+**Статус:** подготовлен к consolidated CI и production-like acceptance; immutable tag ещё не создаётся.
+
+В candidate вошёл весь code-side P40 hardening поверх `0.9.0-alpha.11`:
+
+- public production API contract через nginx `/api`;
+- strict VERSION/commit/environment binding release evidence;
+- production-like database upgrade, backup/restore и deployment evidence tooling;
+- real-mail account lifecycle/audit smoke contract;
+- live-WB credential validation/cleanup + seller-bound data-accuracy provenance;
+- payment test/live isolation и условный Sber sandbox merchant proof;
+- human-reviewed desktop/mobile UX evidence contract;
+- dev-first integration/release promotion flow;
+- self-hosted CI hardening против PostgreSQL anonymous-volume и CI image accumulation.
+
+Это milestone candidate, а не объявление опубликованного релиза. `v0.9.0-beta.1` допускается только после полного P40 evidence manifest со статусом `complete` и promotion `dev -> main` без новых функциональных изменений.
 
 ## 0.1.0-alpha.1 — реконструкция проекта
 
