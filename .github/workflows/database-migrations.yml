@@ -69,6 +69,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Prepare PostgreSQL 16 client wrappers
+        shell: bash
+        run: |
+          set -euo pipefail
+          bindir="$RUNNER_TEMP/pg16-bin"
+          mkdir -p "$bindir"
+          for tool in psql pg_dump pg_restore createdb dropdb; do
+            cat > "$bindir/$tool" <<EOF
+          #!/usr/bin/env bash
+          exec docker run --rm --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
+          EOF
+            chmod +x "$bindir/$tool"
+          done
+          echo "$bindir" >> "$GITHUB_PATH"
+
       - name: Upgrade clean database to Alembic head
         run: alembic upgrade head
 
