@@ -625,12 +625,13 @@ def _self_test() -> None:
     assert _safe_base_origin("https://example.com/api") == "https://example.com"
     assert _public_api_base("https://example.com") == "https://example.com/api"
     assert _public_api_base("https://example.com/api/") == "https://example.com/api"
-    try:
-        _safe_base_origin("https://example.com/backend")
-    except SmokeFailure:
-        pass
-    else:
-        raise AssertionError("unexpected public API path accepted")
+    for invalid_base in ("https://example.com/backend", "https://example.com:bad-port"):
+        try:
+            _safe_base_origin(invalid_base)
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError(f"unexpected public API base accepted: {invalid_base}")
     try:
         _extract_mail_token("https://app.example.com/verify-email?token=abcdefghijklmnop")
     except SmokeFailure:
