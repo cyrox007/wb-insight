@@ -7,7 +7,10 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from release_candidate_evidence import _validate_database_upgrade_binding
+from release_candidate_evidence import (
+    _validate_database_upgrade_binding,
+    _validate_wb_credential_binding,
+)
 
 
 VERSION = "0.9.0-beta.1"
@@ -54,6 +57,56 @@ def main() -> int:
             assert "database" in str(exc).lower()
         else:
             raise AssertionError("missing database upgrade proof unexpectedly passed")
+
+        core_smoke = Path(raw_tmp) / "core-smoke.json"
+        payment = Path(raw_tmp) / "payment.json"
+        _write(
+            core_smoke,
+            {
+                "schema_version": 1,
+                "kind": "release_smoke",
+                "status": "pass",
+                "version": VERSION,
+                "commit": COMMIT,
+                "environment": ENVIRONMENT,
+                "base_origin": "https://staging.example.com",
+                "checks": {"wb_credential": True},
+            },
+        )
+        deployment_payload = dict(good)
+        deployment_payload["public_origin"] = "https://staging.example.com"
+        _write(path, deployment_payload)
+        _write(
+            payment,
+            {
+                "base_origin": "https://staging.example.com",
+            },
+        )
+        _validate_wb_credential_binding(
+            core_smoke,
+            path,
+            payment,
+            version=VERSION,
+            commit=COMMIT,
+            environment=ENVIRONMENT,
+        )
+
+        mismatched_core = json.loads(core_smoke.read_text(encoding="utf-8"))
+        mismatched_core["environment"] = "other-environment"
+        _write(core_smoke, mismatched_core)
+        try:
+            _validate_wb_credential_binding(
+                core_smoke,
+                path,
+                payment,
+                version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
+            )
+        except ValueError as exc:
+            assert "environment" in str(exc)
+        else:
+            raise AssertionError("mismatched core smoke environment unexpectedly passed")
 
         broken = dict(good)
         broken["database_upgrade_proof_sha256"] = "invalid"
