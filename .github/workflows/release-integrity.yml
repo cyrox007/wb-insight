@@ -55,9 +55,13 @@ on:
       - docs/RELEASE_READINESS.md
       - .github/workflows/release-integrity.yml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   version:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -77,7 +81,7 @@ jobs:
           python3 ops/release_smoke.py --help >/dev/null
 
   acceptance-tools:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     steps:
       - uses: actions/checkout@v4
       - name: Validate acceptance tools syntax
