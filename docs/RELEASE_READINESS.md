@@ -41,6 +41,7 @@
 - Control Panel «Рассылки» с фильтрами/pagination/scheduling;
 - versioned data-accuracy comparator и evidence manifest tooling;
 - beta manifest v2 требует `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
+- P40 live-WB/data provenance gate связывает passing `data_accuracy` с тем же live-validated seller account через secret-safe HMAC fingerprint, обязательный credential cleanup и SHA-256 binding защищённого input;
 - production startup fail-closed для слабых/template secrets, unsafe endpoints и некорректных provider configs.
 
 Все существующие пользователи при P38 schema upgrade сохраняют доступ: migration backfill-ит их verified-state. Новые registrations требуют подтверждения только после явного production включения verification вместе с рабочим mail transport.
@@ -76,7 +77,7 @@ Beta разрешена только после:
 - representative durable P37 audit correlation по request id;
 - desktop/mobile UX для client screens и Control Panel users/roles/tariffs/payments/audit/mail;
 - secrets review frontend bundle/git/logs/audit/mail/payment metadata;
-- real-seller data-accuracy на фиксированных периодах: все required metrics, `missing=0`, нет необъяснённых существенных денежных расхождений;
+- real-seller data-accuracy минимум на трёх фиксированных периодах: все required metrics, `missing=0`, нет необъяснённых существенных денежных расхождений; protected input и passing report должны быть связаны с тем же live-validated WB account через `wb-live-data` proof;
 - каждый tolerance override имеет `override_reason` + review evidence;
 - backup + isolated restore evidence;
 - полного beta manifest v2 для exact `0.9.0-beta.N` candidate.
