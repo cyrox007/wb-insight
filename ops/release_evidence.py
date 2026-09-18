@@ -233,6 +233,8 @@ def validate_release_smoke_evidence(
     path: Path,
     *,
     version: str,
+    commit: str,
+    environment: str,
     artifact_kind: str,
 ) -> None:
     report = load_json_object(path, artifact_kind=artifact_kind)
@@ -244,6 +246,12 @@ def validate_release_smoke_evidence(
         raise ValueError(f"{artifact_kind} artifact must report status=pass")
     if report.get("version") != version:
         raise ValueError(f"{artifact_kind} artifact version does not match release VERSION")
+    if str(report.get("commit") or "").lower() != commit.lower():
+        raise ValueError(f"{artifact_kind} artifact commit does not match release commit")
+    if report.get("environment") != environment:
+        raise ValueError(
+            f"{artifact_kind} artifact environment does not match manifest environment"
+        )
     _validate_https_origin(report.get("base_origin"), artifact_kind=artifact_kind)
     required = (
         CORE_SMOKE_REQUIRED_CHECKS
@@ -398,6 +406,8 @@ def validate_artifact(
         validate_release_smoke_evidence(
             path,
             version=version,
+            commit=commit,
+            environment=environment,
             artifact_kind=kind,
         )
     elif structured_runtime_evidence and kind == "secrets_review":
