@@ -47,7 +47,7 @@ def main() -> int:
                 "version": VERSION,
                 "commit": COMMIT,
                 "public_origin": "https://staging.example.com",
-                "checks": {name: True for name in DEPLOYMENT_REQUIRED_CHECKS},
+                "checks": sorted(DEPLOYMENT_REQUIRED_CHECKS),
                 "runtime": {
                     "python": "3.12.13",
                     "node": "22.23.2",
@@ -64,6 +64,8 @@ def main() -> int:
                 "kind": "release_smoke",
                 "status": "pass",
                 "version": VERSION,
+                "commit": COMMIT,
+                "environment": ENVIRONMENT,
                 "base_origin": "https://staging.example.com",
                 "checks": {
                     name: True
@@ -135,8 +137,20 @@ def main() -> int:
             commit=COMMIT,
             environment=ENVIRONMENT,
         )
-        validate_release_smoke_evidence(smoke, version=VERSION, artifact_kind="core_smoke")
-        validate_release_smoke_evidence(smoke, version=VERSION, artifact_kind="account_lifecycle")
+        validate_release_smoke_evidence(
+            smoke,
+            version=VERSION,
+            commit=COMMIT,
+            environment=ENVIRONMENT,
+            artifact_kind="core_smoke",
+        )
+        validate_release_smoke_evidence(
+            smoke,
+            version=VERSION,
+            commit=COMMIT,
+            environment=ENVIRONMENT,
+            artifact_kind="account_lifecycle",
+        )
         validate_secrets_review_evidence(
             secrets_review,
             version=VERSION,
@@ -172,12 +186,42 @@ def main() -> int:
             validate_release_smoke_evidence(
                 smoke,
                 version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
                 artifact_kind="account_lifecycle",
             )
         except ValueError as exc:
             assert "password_reset" in str(exc)
         else:
             raise AssertionError("missing lifecycle check unexpectedly passed")
+
+        # Restore the passing smoke and prove exact release provenance is enforced.
+        passing_smoke = {
+            "schema_version": 1,
+            "kind": "release_smoke",
+            "status": "pass",
+            "version": VERSION,
+            "commit": "f" * 40,
+            "environment": ENVIRONMENT,
+            "base_origin": "https://staging.example.com",
+            "checks": {
+                name: True
+                for name in CORE_SMOKE_REQUIRED_CHECKS | ACCOUNT_LIFECYCLE_REQUIRED_CHECKS
+            },
+        }
+        _write(smoke, passing_smoke)
+        try:
+            validate_release_smoke_evidence(
+                smoke,
+                version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
+                artifact_kind="core_smoke",
+            )
+        except ValueError as exc:
+            assert "commit" in str(exc)
+        else:
+            raise AssertionError("mismatched smoke commit unexpectedly passed")
 
         broken_secrets = json.loads(secrets_review.read_text(encoding="utf-8"))
         broken_secrets["status"] = "fail"

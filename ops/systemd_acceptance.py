@@ -72,13 +72,17 @@ def _supported_node(version: str) -> bool:
 
 def _safe_public_origin(value: str) -> str:
     parsed = urlparse(value.strip())
+    try:
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise AcceptanceError("public base URL contains an invalid port") from exc
     if parsed.scheme != "https" or not parsed.hostname:
         raise AcceptanceError("production-like public base URL must use HTTPS")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise AcceptanceError("public base URL must not contain credentials, query or fragment")
     if parsed.path not in {"", "/"}:
         raise AcceptanceError("public base URL must be an origin without a path")
-    port = f":{parsed.port}" if parsed.port else ""
+    port = f":{parsed_port}" if parsed_port else ""
     return f"https://{parsed.hostname}{port}"
 
 
@@ -169,6 +173,12 @@ def _self_test() -> None:
     assert not _supported_node("20.18.9")
     assert not _supported_node("18.20.8")
     assert _safe_public_origin("https://example.com/") == "https://example.com"
+    try:
+        _safe_public_origin("https://example.com:bad-port")
+    except AcceptanceError:
+        pass
+    else:
+        raise AssertionError("invalid public origin port unexpectedly passed")
     assert _asset_set('<script src="/assets/app-abc.js"></script>') == {"/assets/app-abc.js"}
     assert SHA256_RE.fullmatch("a" * 64)
     print("[ok] systemd acceptance self-test")
@@ -296,7 +306,7 @@ def main() -> int:
         checks.append("local_readiness")
 
         public_origin = _safe_public_origin(args.public_base_url)
-        public_ready = _json_get(f"{public_origin}/health/ready")
+        public_ready = _json_get(f"{public_origin}/api/health/ready")
         if public_ready.get("status") != "ok" or public_ready.get("version") != version:
             raise AcceptanceError("public HTTPS readiness/version check failed")
         checks.append("public_https_readiness")

@@ -18,9 +18,13 @@ on:
       - 'ops/database_upgrade_acceptance.py'
       - '.github/workflows/database-migrations.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   alembic-upgrade:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
 
     services:
       postgres:
@@ -30,7 +34,7 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         ports:
-          - 5432:5432
+          - 55432:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d wb_migration_test"
           --health-interval 5s
@@ -46,7 +50,7 @@ jobs:
       JWT_SECRET_KEY: migration-ci-only-key
       API_TOKEN_ENCRYPTION_KEY: migration-ci-only-encryption-key
       DB_HOST: 127.0.0.1
-      DB_PORT: '5432'
+      DB_PORT: '55432'
       DB_NAME: wb_migration_test
       DB_USER: postgres
       DB_PASSWORD: postgres
@@ -65,6 +69,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Prepare PostgreSQL 16 client wrappers
+        shell: bash
+        run: |
+          set -euo pipefail
+          bindir="$RUNNER_TEMP/pg16-bin"
+          mkdir -p "$bindir"
+          for tool in psql pg_dump pg_restore createdb dropdb; do
+            cat > "$bindir/$tool" <<EOF
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
+          EOF
+            chmod +x "$bindir/$tool"
+          done
+          echo "$bindir" >> "$GITHUB_PATH"
+
       - name: Upgrade clean database to Alembic head
         run: alembic upgrade head
 
@@ -78,8 +97,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client >/dev/null
+          command -v psql
+          command -v pg_dump
+          command -v pg_restore
+          command -v createdb
+          command -v dropdb
 
           work=/tmp/wb-db-upgrade-ci
           rm -rf "$work"

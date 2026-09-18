@@ -55,9 +55,13 @@ on:
       - docs/RELEASE_READINESS.md
       - .github/workflows/release-integrity.yml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   version:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -77,7 +81,7 @@ jobs:
           python3 ops/release_smoke.py --help >/dev/null
 
   acceptance-tools:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     steps:
       - uses: actions/checkout@v4
       - name: Validate acceptance tools syntax
@@ -281,7 +285,7 @@ jobs:
           fi
 
   docker-build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
@@ -357,8 +361,15 @@ jobs:
             test "$body" = "backend:/${route}"
           done
 
+          # The production Vue build defaults to /api. Verify Docker nginx strips
+          # that public prefix before forwarding to the FastAPI root.
+          for route in health/live auth/refresh account/deactivate billing/sber/callback legal/documents/terms dashboard/ control-panel/operations/health; do
+            body="$(curl -fsS "http://127.0.0.1:18080/api/${route}")"
+            test "$body" = "backend:/${route}"
+          done
+
   backup-restore:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, wb-ci]
     services:
       postgres:
         image: postgres:16
@@ -367,7 +378,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: wbops
         ports:
-          - 5432:5432
+          - 55433:5432
         options: >-
           --health-cmd "pg_isready -U postgres -d wbops"
           --health-interval 5s
@@ -375,7 +386,7 @@ jobs:
           --health-retries 10
     env:
       DB_HOST: localhost
-      DB_PORT: 5432
+      DB_PORT: 55433
       DB_NAME: wbops
       DB_USER: postgres
       DB_PASSWORD: postgres
@@ -384,10 +395,20 @@ jobs:
       BACKUP_ENCRYPTION_PASSPHRASE_FILE: /tmp/wb-insight-backup-passphrase
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL client
+      - name: Prepare PostgreSQL 16 client wrappers
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          set -euo pipefail
+          bindir="$RUNNER_TEMP/pg16-bin"
+          mkdir -p "$bindir"
+          for tool in psql pg_dump pg_restore createdb dropdb; do
+            cat > "$bindir/$tool" <<EOF
+          #!/usr/bin/env bash
+          exec docker run --rm -i --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
+          EOF
+            chmod +x "$bindir/$tool"
+          done
+          echo "$bindir" >> "$GITHUB_PATH"
       - name: Validate shell syntax
         run: bash -n ops/postgres_backup.sh ops/postgres_restore.sh ops/postgres_restore_drill.sh
       - name: Prepare source database

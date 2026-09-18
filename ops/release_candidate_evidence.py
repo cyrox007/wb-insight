@@ -62,6 +62,8 @@ def _validate_wb_credential_binding(
     payment_path: Path,
     *,
     version: str,
+    commit: str,
+    environment: str,
 ) -> None:
     core = _load_json(core_smoke_path, label="core_smoke artifact")
     deployment = _load_json(deployment_path, label="deployment artifact")
@@ -70,6 +72,10 @@ def _validate_wb_credential_binding(
         raise ValueError("core_smoke artifact has an invalid schema")
     if core.get("status") != "pass" or core.get("version") != version:
         raise ValueError("core_smoke artifact does not match passing release VERSION")
+    if str(core.get("commit") or "").lower() != commit.lower():
+        raise ValueError("core_smoke artifact commit does not match release commit")
+    if core.get("environment") != environment:
+        raise ValueError("core_smoke artifact environment does not match release environment")
     checks = core.get("checks")
     if not isinstance(checks, dict) or checks.get("wb_credential") is not True:
         raise ValueError("core_smoke must prove live WB credential validation and cleanup")
@@ -186,6 +192,8 @@ def main() -> int:
             deployment_path,
             args.payment_proof,
             version=version,
+            commit=commit,
+            environment=environment,
         )
     except (CIAcceptanceError, PaymentAcceptanceError, ValueError, OSError) as exc:
         print(f"release_candidate_error={exc}", file=sys.stderr)

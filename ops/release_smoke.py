@@ -31,7 +31,11 @@ class SmokeFailure(RuntimeError):
 
 class SmokeClient:
     def __init__(self, base_url: str):
-        self.base_url = base_url.rstrip("/")
+        # Production-like smoke exercises the same public nginx contract as the
+        # browser. Nginx exposes backend routes under /api while proxying them to
+        # the FastAPI root, so callers may pass either the public origin or its
+        # explicit /api root and requests are normalized to /api exactly once.
+        self.base_url = _public_api_base(base_url)
         self.cookies = CookieJar()
         self.opener = build_opener(HTTPCookieProcessor(self.cookies))
         self.access_token: str | None = None
@@ -105,6 +109,27 @@ def _project_version() -> str | None:
     return version_path.read_text(encoding="utf-8").strip() or None
 
 
+def _project_commit() -> str | None:
+    project = Path(__file__).resolve().parents[1]
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    commit = completed.stdout.strip().lower()
+    if completed.returncode != 0 or len(commit) != 40 or any(
+        char not in "0123456789abcdef" for char in commit
+    ):
+        return None
+    return commit
+
+
 def _env_flag(name: str, *, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -114,14 +139,24 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
 
 def _safe_base_origin(value: str) -> str:
     parsed = urlparse(value.strip())
+    try:
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise SmokeFailure("SMOKE_BASE_URL contains an invalid port") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise SmokeFailure("SMOKE_BASE_URL must be an http(s) origin")
+        raise SmokeFailure("SMOKE_BASE_URL must be an http(s) origin or public /api root")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise SmokeFailure("SMOKE_BASE_URL must not contain credentials, query or fragment")
-    if parsed.path not in {"", "/"}:
-        raise SmokeFailure("SMOKE_BASE_URL must not contain a path")
-    port = f":{parsed.port}" if parsed.port else ""
+    normalized_path = parsed.path.rstrip("/")
+    if normalized_path not in {"", "/api"}:
+        raise SmokeFailure("SMOKE_BASE_URL path must be empty or /api")
+    port = f":{parsed_port}" if parsed_port else ""
     return f"{parsed.scheme}://{parsed.hostname}{port}"
+
+
+def _public_api_base(value: str) -> str:
+    """Return the public API root while keeping evidence bound to the bare origin."""
+    return f"{_safe_base_origin(value)}/api"
 
 
 def _write_evidence(path: Path, *, args: argparse.Namespace, checks: dict[str, bool]) -> None:
@@ -131,6 +166,8 @@ def _write_evidence(path: Path, *, args: argparse.Namespace, checks: dict[str, b
         "status": "pass",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "version": args.expected_version,
+        "commit": args.commit.lower(),
+        "environment": args.environment,
         "base_origin": _safe_base_origin(args.base_url),
         "checks": checks,
     }
@@ -553,9 +590,13 @@ def run_wb_credential_smoke(client: SmokeClient, wb_token: str) -> None:
         )
         if created.get("status") != "success":
             raise SmokeFailure("WB credential creation did not succeed")
-        created_id = created.get("data", {}).get("id")
+        data = created.get("data") if isinstance(created.get("data"), dict) else {}
+        # Cleanup endpoint accepts the internal credential UUID (`token.id`).
+        # `external_account_id` identifies the seller and must never be used as
+        # the delete path parameter.
+        created_id = data.get("id") or created.get("id")
         if not created_id:
-            raise SmokeFailure("WB credential smoke did not return credential id")
+            raise SmokeFailure("WB credential smoke did not return internal credential id")
         print("[ok] WB credential live validation and storage")
     finally:
         if created_id:
@@ -586,7 +627,10 @@ def run_billing_init_smoke(client: SmokeClient, tariff_code: str) -> None:
 
 
 def run_logout_smoke(client: SmokeClient) -> None:
-    client.request("POST", "/auth/logout", auth=True, body={})
+    # Logout is cookie-driven and intentionally does not require an access JWT.
+    # This matters when an earlier refresh assertion failed after the runner had
+    # deliberately discarded its in-memory access token.
+    client.request("POST", "/auth/logout", body={})
     client.access_token = None
     payload = client.request("POST", "/auth/refresh", body={}, expected=(401,))
     if payload.get("error", {}).get("code") not in {"INVALID_TOKEN", "SESSION_REVOKED"}:
@@ -604,6 +648,16 @@ def _self_test() -> None:
         "https://app.example.com/verify-email#token=abcdefghijklmnop"
     ) == "abcdefghijklmnop"
     assert _safe_base_origin("https://example.com/") == "https://example.com"
+    assert _safe_base_origin("https://example.com/api") == "https://example.com"
+    assert _public_api_base("https://example.com") == "https://example.com/api"
+    assert _public_api_base("https://example.com/api/") == "https://example.com/api"
+    for invalid_base in ("https://example.com/backend", "https://example.com:bad-port"):
+        try:
+            _safe_base_origin(invalid_base)
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError(f"unexpected public API base accepted: {invalid_base}")
     try:
         _extract_mail_token("https://app.example.com/verify-email?token=abcdefghijklmnop")
     except SmokeFailure:
@@ -615,12 +669,26 @@ def _self_test() -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run WB Insight production-like release smoke")
-    parser.add_argument("--base-url", default=os.getenv("SMOKE_BASE_URL"))
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("SMOKE_BASE_URL"),
+        help="Public HTTPS origin or its /api root; backend requests are sent through /api",
+    )
     parser.add_argument("--email", default=os.getenv("SMOKE_EMAIL"))
     parser.add_argument("--password", default=os.getenv("SMOKE_PASSWORD"))
     parser.add_argument(
         "--expected-version",
         default=os.getenv("SMOKE_EXPECTED_VERSION") or _project_version(),
+    )
+    parser.add_argument(
+        "--commit",
+        default=os.getenv("RELEASE_SHA") or _project_commit(),
+        help="Exact deployed Git commit; required when writing structured evidence",
+    )
+    parser.add_argument(
+        "--environment",
+        default=os.getenv("ACCEPTANCE_ENVIRONMENT"),
+        help="Production-like environment id; required when writing structured evidence",
     )
     parser.add_argument("--public-only", action="store_true")
     parser.add_argument("--self-test", action="store_true")
@@ -690,6 +758,19 @@ def main() -> int:
         raise SmokeFailure(
             "required email verification/password reset cannot be combined with skipped disposable registration"
         )
+    if args.evidence_output:
+        commit = str(args.commit or "").strip().lower()
+        if len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
+            raise SmokeFailure(
+                "structured smoke evidence requires --commit/RELEASE_SHA as a full Git SHA"
+            )
+        args.commit = commit
+        environment = str(args.environment or "").strip()
+        if not environment:
+            raise SmokeFailure(
+                "structured smoke evidence requires --environment/ACCEPTANCE_ENVIRONMENT"
+            )
+        args.environment = environment
 
     checks: dict[str, bool] = {
         "public_health_legal": False,
@@ -735,21 +816,40 @@ def main() -> int:
     if not args.email or not args.password:
         raise SmokeFailure("SMOKE_EMAIL and SMOKE_PASSWORD are required for authenticated smoke")
 
-    run_authenticated_smoke(client, args.email, args.password)
-    checks["authenticated_profile"] = True
-    checks["authenticated_refresh_restore"] = True
-    checks["dashboard_contract"] = True
-    if args.audit_smoke:
-        run_audit_correlation_smoke(client)
-        checks["audit_correlation"] = True
-    if args.wb_token:
-        run_wb_credential_smoke(client, args.wb_token)
-        checks["wb_credential"] = True
-    if args.billing_tariff:
-        run_billing_init_smoke(client, args.billing_tariff)
-        checks["billing_init"] = True
-    run_logout_smoke(client)
-    checks["logout_session_revoke"] = True
+    authenticated_error: SmokeFailure | None = None
+    try:
+        run_authenticated_smoke(client, args.email, args.password)
+        checks["authenticated_profile"] = True
+        checks["authenticated_refresh_restore"] = True
+        checks["dashboard_contract"] = True
+        if args.audit_smoke:
+            run_audit_correlation_smoke(client)
+            checks["audit_correlation"] = True
+        if args.wb_token:
+            run_wb_credential_smoke(client, args.wb_token)
+            checks["wb_credential"] = True
+        if args.billing_tariff:
+            run_billing_init_smoke(client, args.billing_tariff)
+            checks["billing_init"] = True
+    except SmokeFailure as exc:
+        authenticated_error = exc
+    finally:
+        # Once login succeeds, always revoke the refresh session even when a
+        # later audit/WB/billing assertion fails. This keeps repeated release
+        # acceptance runs from leaving reusable authenticated sessions behind.
+        if client.access_token or any(True for _ in client.cookies):
+            try:
+                run_logout_smoke(client)
+                checks["logout_session_revoke"] = True
+            except SmokeFailure as cleanup_exc:
+                if authenticated_error is not None:
+                    raise SmokeFailure(
+                        f"{authenticated_error}; authenticated smoke logout cleanup also failed"
+                    ) from cleanup_exc
+                raise
+
+    if authenticated_error is not None:
+        raise authenticated_error
 
     if args.evidence_output:
         _write_evidence(args.evidence_output, args=args, checks=checks)
