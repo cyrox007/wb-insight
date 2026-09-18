@@ -232,11 +232,15 @@ def _probe_live_account(
     """
     client = _Client(base_url)
     _login(client, email, password)
-    consents = _required_consents(client)
     created_id: str | None = None
     account_fingerprint: str | None = None
     cleanup_complete = False
     try:
+        # Everything after login stays inside the cleanup boundary. In
+        # particular, a failure while loading legal requirements must still
+        # revoke the acceptance refresh session instead of leaving a reusable
+        # cookie behind.
+        consents = _required_consents(client)
         created = client.request(
             "POST",
             "/dashboard/tokens",
@@ -383,7 +387,12 @@ def _self_test() -> None:
     assert _api_base("https://example.com/api/") == (origin, api_base)
     assert _public_https_origin(origin) == origin
 
-    for invalid in ("http://example.com", "https://example.com/app", "https://u:p@example.com"):
+    for invalid in (
+        "http://example.com",
+        "https://example.com/app",
+        "https://u:p@example.com",
+        "https://example.com:bad-port",
+    ):
         try:
             _api_base(invalid)
         except WBLiveDataAcceptanceError:
