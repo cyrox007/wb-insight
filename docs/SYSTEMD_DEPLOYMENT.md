@@ -46,7 +46,7 @@ Working tree перед deployment должен быть чистым.
 ops/update_systemd.sh
 ```
 
-Executable bit хранится в Git и проверяется CI. Не выполняйте локальный `chmod +x`: изменение mode tracked-файла делает working tree dirty и блокирует clean-tree guard updater-а. Если mode уже был изменён локально, восстановите его через `git restore -- ops/update_systemd.sh`, обновите `main` и только затем запускайте updater.
+Executable bit хранится в Git и проверяется CI. Не выполняйте локальный `chmod +x`: изменение mode tracked-файла делает working tree dirty и блокирует clean-tree guard updater-а. Если mode уже был изменён локально, восстановите его через `git restore -- ops/update_systemd.sh`, обновите целевую ветку и только затем запускайте updater.
 
 По умолчанию он ожидает проект в `/home/projects/wb` и сервисы:
 
@@ -73,7 +73,7 @@ HEALTH_URL=http://127.0.0.1:9000/health/ready \
 Updater:
 
 1. проверяет Python 3.12 и Node до изменения runtime;
-2. требует чистый `main`;
+2. требует clean checkout целевой ветки (`main` по умолчанию; для pre-promotion production-like acceptance допускается exact `dev` head через `TARGET_BRANCH=dev`);
 3. выполняет `git fetch` + `ff-only` вместо неявного merge;
 4. создаёт свежий Python 3.12 release-venv рядом со старым и не перемещает его после установки;
 5. полностью устанавливает backend requirements до переключения venv;
@@ -84,6 +84,18 @@ Updater:
 10. перезапускает API/worker/beat и reload nginx;
 11. проверяет systemd state и `/health/ready`;
 12. сохраняет предыдущий venv как `venv.previous.<timestamp>` для диагностики.
+
+## Pre-promotion acceptance из `dev`
+
+По dev-first flow production-like candidate допускается проверять **до** promotion в `main`. Acceptance host должен находиться на exact `origin/dev` head, а updater запускается с тем же target branch:
+
+```bash
+cd /home/projects/wb
+export TARGET_BRANCH=dev
+./update.sh
+```
+
+После deployment collector вызывается с `--target-branch dev`; он fail-closed проверяет clean tree и совпадение local HEAD с `origin/dev`. Для production/release deployment default остаётся `main`.
 
 ## Восстановление после ошибки `numpy==2.4.6` на Python 3.10
 
