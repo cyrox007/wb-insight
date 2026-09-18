@@ -357,6 +357,13 @@ jobs:
             test "$body" = "backend:/${route}"
           done
 
+          # The production Vue build defaults to /api. Verify Docker nginx strips
+          # that public prefix before forwarding to the FastAPI root.
+          for route in health/live auth/refresh account/deactivate billing/sber/callback legal/documents/terms dashboard/ control-panel/operations/health; do
+            body="$(curl -fsS "http://127.0.0.1:18080/api/${route}")"
+            test "$body" = "backend:/${route}"
+          done
+
   backup-restore:
     runs-on: ubuntu-latest
     services:
