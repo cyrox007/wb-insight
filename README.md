@@ -81,7 +81,7 @@ npm run dev
 
 ## CI / release discipline
 
-Рабочие ветки направляются в `dev`. После завершения набора задач выполняется consolidated validation на exact `dev` head; только затем создаётся promotion PR `dev -> main`.
+Рабочие ветки направляются в `dev`. Тяжёлый CI не запускается на каждом task PR: после завершения набора задач workflows запускаются вручную (`workflow_dispatch`) на exact `dev` head. Только после green consolidated validation создаётся promotion PR `dev -> main`, который повторно проходит release checks.
 
 Release candidate должен иметь green на одном exact head:
 
