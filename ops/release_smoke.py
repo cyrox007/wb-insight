@@ -604,7 +604,10 @@ def run_billing_init_smoke(client: SmokeClient, tariff_code: str) -> None:
 
 
 def run_logout_smoke(client: SmokeClient) -> None:
-    client.request("POST", "/auth/logout", auth=True, body={})
+    # Logout is cookie-driven and intentionally does not require an access JWT.
+    # This matters when an earlier refresh assertion failed after the runner had
+    # deliberately discarded its in-memory access token.
+    client.request("POST", "/auth/logout", body={})
     client.access_token = None
     payload = client.request("POST", "/auth/refresh", body={}, expected=(401,))
     if payload.get("error", {}).get("code") not in {"INVALID_TOKEN", "SESSION_REVOKED"}:
@@ -788,7 +791,7 @@ def main() -> int:
         # Once login succeeds, always revoke the refresh session even when a
         # later audit/WB/billing assertion fails. This keeps repeated release
         # acceptance runs from leaving reusable authenticated sessions behind.
-        if client.access_token:
+        if client.access_token or any(True for _ in client.cookies):
             try:
                 run_logout_smoke(client)
                 checks["logout_session_revoke"] = True
