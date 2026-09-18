@@ -47,7 +47,7 @@ def main() -> int:
                 "version": VERSION,
                 "commit": COMMIT,
                 "public_origin": "https://staging.example.com",
-                "checks": {name: True for name in DEPLOYMENT_REQUIRED_CHECKS},
+                "checks": sorted(DEPLOYMENT_REQUIRED_CHECKS),
                 "runtime": {
                     "python": "3.12.13",
                     "node": "22.23.2",
