@@ -2,6 +2,7 @@ name: Database migrations
 
 on:
   pull_request:
+    branches: [dev, main]
     paths:
       - 'VERSION'
       - 'backend/**'
@@ -9,6 +10,7 @@ on:
       - '.github/workflows/database-migrations.yml'
   push:
     branches:
+      - dev
       - main
       - p0-production-safety
       - p1-account-scoped-sync
