@@ -231,15 +231,14 @@ def _probe_live_account(
     Returns (public_origin, privacy-safe account fingerprint).
     """
     client = _Client(base_url)
-    _login(client, email, password)
     created_id: str | None = None
     account_fingerprint: str | None = None
     cleanup_complete = False
     try:
-        # Everything after login stays inside the cleanup boundary. In
-        # particular, a failure while loading legal requirements must still
-        # revoke the acceptance refresh session instead of leaving a reusable
-        # cookie behind.
+        # Login itself is inside the cleanup boundary. A malformed successful
+        # response may already have set the refresh cookie even if no usable
+        # access JWT was returned, so failure paths must still clear cookies.
+        _login(client, email, password)
         consents = _required_consents(client)
         created = client.request(
             "POST",
@@ -277,12 +276,13 @@ def _probe_live_account(
                     raise WBLiveDataAcceptanceError("temporary WB credential cleanup failed")
         finally:
             # The acceptance login sets the same HttpOnly refresh cookie as the
-            # browser. Clear it even when credential validation/cleanup fails so
-            # repeated evidence runs do not leave reusable refresh cookies behind.
-            logout = client.request("POST", "/auth/logout", auth=True, body={})
-            if logout.get("status") != "success":
-                raise WBLiveDataAcceptanceError("acceptance account logout failed")
-            client.access_token = None
+            # browser. Logout is cookie-driven, so it can still revoke a session
+            # when the access-token assertion failed after the cookie was set.
+            if client.access_token or any(True for _ in client.cookies):
+                logout = client.request("POST", "/auth/logout", body={})
+                if logout.get("status") != "success":
+                    raise WBLiveDataAcceptanceError("acceptance account logout failed")
+                client.access_token = None
 
     if account_fingerprint is None or not cleanup_complete:
         raise WBLiveDataAcceptanceError("live WB validation did not complete safely")
