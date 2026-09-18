@@ -31,6 +31,10 @@ on:
       - docs/README.md
       - .github/workflows/systemd-updater.yml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: [self-hosted, Linux, X64, wb-ci]
