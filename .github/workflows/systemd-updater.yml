@@ -2,6 +2,7 @@ name: Systemd updater
 
 on:
   pull_request:
+    branches: [dev, main]
     paths:
       - VERSION
       - update.sh
@@ -16,7 +17,7 @@ on:
       - docs/README.md
       - .github/workflows/systemd-updater.yml
   push:
-    branches: [main]
+    branches: [dev, main]
     paths:
       - VERSION
       - update.sh
