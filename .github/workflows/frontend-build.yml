@@ -14,6 +14,10 @@ on:
       - 'frontend/**'
       - '.github/workflows/frontend-build.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: [self-hosted, Linux, X64, wb-ci]
