@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical beta manifest entrypoint with mandatory production-like subproofs."""
+"""Canonical beta manifest entrypoint with mandatory and conditional P40 subproofs."""
 
 from __future__ import annotations
 
@@ -15,6 +15,10 @@ from backup_restore_acceptance import (
     validate_backup_restore_evidence,
 )
 from release_evidence import SHA40_RE, parse_artifact, validate_version_for_stage
+from sber_sandbox_acceptance import (
+    SberSandboxAcceptanceError,
+    validate_sber_sandbox_evidence,
+)
 from wb_live_data_acceptance import (
     WBLiveDataAcceptanceError,
     validate_wb_live_data_evidence,
@@ -93,6 +97,7 @@ def _bind_beta_proofs(
     backup_restore_path: Path,
     wb_live_data_path: Path,
     accuracy_input_path: Path,
+    sber_sandbox_path: Path | None,
 ) -> None:
     manifest = _load_json(manifest_path, label="generated candidate manifest")
     if manifest.get("status") != "complete":
@@ -105,6 +110,7 @@ def _bind_beta_proofs(
     if "backup_restore" not in required:
         required.append("backup_restore")
         required.sort()
+
     artifacts = [
         item
         for item in artifacts
@@ -136,9 +142,19 @@ def _bind_beta_proofs(
             "size_bytes": proof_path.stat().st_size,
             "sha256": _sha256(proof_path),
         }
+
     manifest["beta_backup_restore_required"] = True
     manifest["beta_wb_live_data_required"] = True
     manifest["beta_accuracy_input_bound"] = True
+
+    if sber_sandbox_path is not None:
+        subproofs["sber_sandbox"] = {
+            "file": sber_sandbox_path.name,
+            "size_bytes": sber_sandbox_path.stat().st_size,
+            "sha256": _sha256(sber_sandbox_path),
+        }
+        manifest["beta_sber_sandbox_evidence_present"] = True
+
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -155,6 +171,11 @@ def main() -> int:
     parser.add_argument("--backup-restore-proof", type=Path, required=True)
     parser.add_argument("--wb-live-data-proof", type=Path, required=True)
     parser.add_argument("--accuracy-input", type=Path, required=True)
+    parser.add_argument(
+        "--sber-sandbox-proof",
+        type=Path,
+        help="Optional P40 Sber sandbox merchant proof; validated and hash-bound when provided",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -166,11 +187,13 @@ def main() -> int:
     if SHA40_RE.fullmatch(commit) is None:
         print("beta_release_error=commit must be a full 40-character Git SHA", file=sys.stderr)
         return 2
+
     try:
         version = args.version_file.read_text(encoding="utf-8").strip()
         validate_version_for_stage(version, "beta")
         data_accuracy_path = _artifact_path(args.artifact, "data_accuracy")
         deployment_path = _artifact_path(args.artifact, "deployment")
+
         validate_backup_restore_evidence(
             args.backup_restore_proof,
             version=version,
@@ -186,12 +209,26 @@ def main() -> int:
             commit=commit,
             environment=environment,
         )
+
+        if args.sber_sandbox_proof is not None:
+            deployment = _load_json(deployment_path, label="deployment artifact")
+            public_origin = str(deployment.get("public_origin") or "").strip()
+            if not public_origin:
+                raise ValueError("deployment artifact is missing public_origin")
+            validate_sber_sandbox_evidence(
+                args.sber_sandbox_proof,
+                version=version,
+                commit=commit,
+                environment=environment,
+                public_origin=public_origin,
+            )
     except (
         OSError,
         UnicodeDecodeError,
         ValueError,
         BackupRestoreAcceptanceError,
         WBLiveDataAcceptanceError,
+        SberSandboxAcceptanceError,
     ) as exc:
         print(f"beta_release_error={exc}", file=sys.stderr)
         return 2
@@ -217,20 +254,25 @@ def main() -> int:
         if artifact.split("=", 1)[0].strip() == "backup_restore":
             continue
         command.extend(["--artifact", artifact])
+
     completed = subprocess.run(command, check=False)
     if completed.returncode != 0:
         return completed.returncode
+
     try:
         _bind_beta_proofs(
             args.output,
             backup_restore_path=args.backup_restore_proof,
             wb_live_data_path=args.wb_live_data_proof,
             accuracy_input_path=args.accuracy_input,
+            sber_sandbox_path=args.sber_sandbox_proof,
         )
     except (OSError, ValueError) as exc:
         print(f"beta_release_error={exc}", file=sys.stderr)
         return 2
-    print(f"[ok] strict beta evidence manifest: {args.output}")
+
+    suffix = " + Sber sandbox proof" if args.sber_sandbox_proof is not None else ""
+    print(f"[ok] strict beta evidence manifest with WB/data + backup/restore proof{suffix}: {args.output}")
     return 0
 
 

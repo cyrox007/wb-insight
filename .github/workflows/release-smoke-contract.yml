@@ -8,6 +8,7 @@ on:
       - ops/systemd_acceptance.py
       - ops/database_upgrade_acceptance.py
       - ops/payment_acceptance.py
+      - ops/sber_sandbox_acceptance.py
       - ops/backup_restore_acceptance.py
       - ops/wb_live_data_acceptance.py
       - ops/beta_release_evidence.py
@@ -19,10 +20,12 @@ on:
       - ops/acceptance/structured_evidence_selftest.py
       - ops/acceptance/release_candidate_selftest.py
       - ops/acceptance/wb_live_data_selftest.py
+      - ops/acceptance/beta_subproof_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - docs/DATA_ACCURACY_ACCEPTANCE.md
       - docs/WB_LIVE_DATA_ACCEPTANCE.md
+      - docs/SBER_ACQUIRING.md
       - .github/workflows/release-smoke-contract.yml
   push:
     branches: [main]
@@ -32,6 +35,7 @@ on:
       - ops/systemd_acceptance.py
       - ops/database_upgrade_acceptance.py
       - ops/payment_acceptance.py
+      - ops/sber_sandbox_acceptance.py
       - ops/backup_restore_acceptance.py
       - ops/wb_live_data_acceptance.py
       - ops/beta_release_evidence.py
@@ -43,10 +47,12 @@ on:
       - ops/acceptance/structured_evidence_selftest.py
       - ops/acceptance/release_candidate_selftest.py
       - ops/acceptance/wb_live_data_selftest.py
+      - ops/acceptance/beta_subproof_selftest.py
       - docs/RELEASE_SMOKE.md
       - docs/RELEASE_EVIDENCE.md
       - docs/DATA_ACCURACY_ACCEPTANCE.md
       - docs/WB_LIVE_DATA_ACCEPTANCE.md
+      - docs/SBER_ACQUIRING.md
       - .github/workflows/release-smoke-contract.yml
 
 concurrency:
@@ -67,6 +73,7 @@ jobs:
             ops/systemd_acceptance.py \
             ops/database_upgrade_acceptance.py \
             ops/payment_acceptance.py \
+            ops/sber_sandbox_acceptance.py \
             ops/backup_restore_acceptance.py \
             ops/wb_live_data_acceptance.py \
             ops/beta_release_evidence.py \
@@ -77,7 +84,8 @@ jobs:
             ops/release_evidence.py \
             ops/acceptance/structured_evidence_selftest.py \
             ops/acceptance/release_candidate_selftest.py \
-            ops/acceptance/wb_live_data_selftest.py
+            ops/acceptance/wb_live_data_selftest.py \
+            ops/acceptance/beta_subproof_selftest.py
           python3 ops/release_smoke.py --help >/dev/null
           python3 ops/release_smoke.py --self-test
           python3 ops/systemd_acceptance.py --help >/dev/null
@@ -86,6 +94,8 @@ jobs:
           python3 ops/database_upgrade_acceptance.py --self-test
           PYTHONPATH=ops python3 ops/payment_acceptance.py --help >/dev/null
           PYTHONPATH=ops python3 ops/payment_acceptance.py --self-test
+          PYTHONPATH=ops python3 ops/sber_sandbox_acceptance.py --help >/dev/null
+          PYTHONPATH=ops python3 ops/sber_sandbox_acceptance.py --self-test
           PYTHONPATH=ops python3 ops/backup_restore_acceptance.py --help >/dev/null
           PYTHONPATH=ops python3 ops/backup_restore_acceptance.py --self-test
           PYTHONPATH=ops python3 ops/wb_live_data_acceptance.py --help >/dev/null
@@ -102,3 +112,4 @@ jobs:
           PYTHONPATH=ops python3 ops/acceptance/structured_evidence_selftest.py
           PYTHONPATH=ops python3 ops/acceptance/release_candidate_selftest.py
           PYTHONPATH=ops python3 ops/acceptance/wb_live_data_selftest.py
+          PYTHONPATH=ops python3 ops/acceptance/beta_subproof_selftest.py

@@ -69,6 +69,29 @@ Backend endpoint:
 
 В личном кабинете интернет-эквайринга callback URL должен указывать на публичный HTTPS backend endpoint.
 
+## P40 sandbox merchant acceptance
+
+Для production-like beta acceptance используется отдельный secret-safe probe `ops/sber_sandbox_acceptance.py`. Он не создаёт локальную подписку и не принимает card data: через тот же backend adapter создаётся один **неоплаченный** sandbox order, затем выполняется `getOrderStatusExtended.do`.
+
+Acceptance credentials передаются только через environment:
+
+```bash
+export ACCEPTANCE_ENVIRONMENT=staging-eu-1
+export SMOKE_BASE_URL=https://staging.example.com
+export SBER_TEST_API_BASE_URL=https://ecomtest.sberbank.ru/ecomm/gw/partner/api/v1
+export SBER_TEST_USERNAME='<sandbox merchant login>'
+export SBER_TEST_PASSWORD='<sandbox merchant password>'
+
+/home/projects/wb/backend/venv/bin/python ops/sber_sandbox_acceptance.py \
+  --output /secure/evidence/sber-sandbox.json
+```
+
+Runner привязывает evidence к exact `VERSION`, Git commit, environment и публичному HTTPS origin. Passing proof требует, что merchant credentials приняты sandbox gateway, order зарегистрирован, payment-form URL использует HTTPS, status query проходит, а acceptance order остаётся неоплаченным.
+
+В `sber-sandbox.json` не сохраняются merchant login/password, gateway URL, Sber order id или payment-form URL. При ошибке сохраняется только стабильный error code. Сам sandbox order намеренно остаётся неоплаченным и может быть удалён/архивирован по правилам merchant sandbox кабинета.
+
+Этот probe — дополнительное P40 evidence, когда test merchant credentials реально доступны. Он не заменяет production acquiring smoke перед RC/stable и не разрешает включать live acquiring без HTTPS/domain и production merchant onboarding.
+
 ## Перед production release
 
 Кодовая интеграция не заменяет merchant onboarding. До включения `SBER_ACQUIRING_ENABLED=true` в production необходимо:
