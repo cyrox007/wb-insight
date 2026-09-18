@@ -767,21 +767,40 @@ def main() -> int:
     if not args.email or not args.password:
         raise SmokeFailure("SMOKE_EMAIL and SMOKE_PASSWORD are required for authenticated smoke")
 
-    run_authenticated_smoke(client, args.email, args.password)
-    checks["authenticated_profile"] = True
-    checks["authenticated_refresh_restore"] = True
-    checks["dashboard_contract"] = True
-    if args.audit_smoke:
-        run_audit_correlation_smoke(client)
-        checks["audit_correlation"] = True
-    if args.wb_token:
-        run_wb_credential_smoke(client, args.wb_token)
-        checks["wb_credential"] = True
-    if args.billing_tariff:
-        run_billing_init_smoke(client, args.billing_tariff)
-        checks["billing_init"] = True
-    run_logout_smoke(client)
-    checks["logout_session_revoke"] = True
+    authenticated_error: SmokeFailure | None = None
+    try:
+        run_authenticated_smoke(client, args.email, args.password)
+        checks["authenticated_profile"] = True
+        checks["authenticated_refresh_restore"] = True
+        checks["dashboard_contract"] = True
+        if args.audit_smoke:
+            run_audit_correlation_smoke(client)
+            checks["audit_correlation"] = True
+        if args.wb_token:
+            run_wb_credential_smoke(client, args.wb_token)
+            checks["wb_credential"] = True
+        if args.billing_tariff:
+            run_billing_init_smoke(client, args.billing_tariff)
+            checks["billing_init"] = True
+    except SmokeFailure as exc:
+        authenticated_error = exc
+    finally:
+        # Once login succeeds, always revoke the refresh session even when a
+        # later audit/WB/billing assertion fails. This keeps repeated release
+        # acceptance runs from leaving reusable authenticated sessions behind.
+        if client.access_token:
+            try:
+                run_logout_smoke(client)
+                checks["logout_session_revoke"] = True
+            except SmokeFailure as cleanup_exc:
+                if authenticated_error is not None:
+                    raise SmokeFailure(
+                        f"{authenticated_error}; authenticated smoke logout cleanup also failed"
+                    ) from cleanup_exc
+                raise
+
+    if authenticated_error is not None:
+        raise authenticated_error
 
     if args.evidence_output:
         _write_evidence(args.evidence_output, args=args, checks=checks)
