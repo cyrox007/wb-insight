@@ -78,7 +78,7 @@ jobs:
           for tool in psql pg_dump pg_restore createdb dropdb; do
             cat > "$bindir/$tool" <<EOF
           #!/usr/bin/env bash
-          exec docker run --rm --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
+          exec docker run --rm -i --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
           EOF
             chmod +x "$bindir/$tool"
           done
