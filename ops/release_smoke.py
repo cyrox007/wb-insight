@@ -109,6 +109,27 @@ def _project_version() -> str | None:
     return version_path.read_text(encoding="utf-8").strip() or None
 
 
+def _project_commit() -> str | None:
+    project = Path(__file__).resolve().parents[1]
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=project,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    commit = completed.stdout.strip().lower()
+    if completed.returncode != 0 or len(commit) != 40 or any(
+        char not in "0123456789abcdef" for char in commit
+    ):
+        return None
+    return commit
+
+
 def _env_flag(name: str, *, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -145,6 +166,8 @@ def _write_evidence(path: Path, *, args: argparse.Namespace, checks: dict[str, b
         "status": "pass",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "version": args.expected_version,
+        "commit": args.commit.lower(),
+        "environment": args.environment,
         "base_origin": _safe_base_origin(args.base_url),
         "checks": checks,
     }
@@ -657,6 +680,16 @@ def parse_args() -> argparse.Namespace:
         "--expected-version",
         default=os.getenv("SMOKE_EXPECTED_VERSION") or _project_version(),
     )
+    parser.add_argument(
+        "--commit",
+        default=os.getenv("RELEASE_SHA") or _project_commit(),
+        help="Exact deployed Git commit; required when writing structured evidence",
+    )
+    parser.add_argument(
+        "--environment",
+        default=os.getenv("ACCEPTANCE_ENVIRONMENT"),
+        help="Production-like environment id; required when writing structured evidence",
+    )
     parser.add_argument("--public-only", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument(
@@ -725,6 +758,19 @@ def main() -> int:
         raise SmokeFailure(
             "required email verification/password reset cannot be combined with skipped disposable registration"
         )
+    if args.evidence_output:
+        commit = str(args.commit or "").strip().lower()
+        if len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
+            raise SmokeFailure(
+                "structured smoke evidence requires --commit/RELEASE_SHA as a full Git SHA"
+            )
+        args.commit = commit
+        environment = str(args.environment or "").strip()
+        if not environment:
+            raise SmokeFailure(
+                "structured smoke evidence requires --environment/ACCEPTANCE_ENVIRONMENT"
+            )
+        args.environment = environment
 
     checks: dict[str, bool] = {
         "public_health_legal": False,
