@@ -370,6 +370,12 @@ jobs:
             test "$body" = "backend:/${route}"
           done
 
+      - name: Remove CI build images
+        if: always()
+        shell: bash
+        run: |
+          docker image rm -f wb-insight-backend:ci wb-insight-frontend:ci >/dev/null 2>&1 || true
+
   backup-restore:
     runs-on: [self-hosted, Linux, X64, wb-ci]
     services:
@@ -382,6 +388,7 @@ jobs:
         ports:
           - 55433:5432
         options: >-
+          --tmpfs /var/lib/postgresql/data:rw
           --health-cmd "pg_isready -U postgres -d wbops"
           --health-interval 5s
           --health-timeout 5s
@@ -406,7 +413,7 @@ jobs:
           for tool in psql pg_dump pg_restore createdb dropdb; do
             cat > "$bindir/$tool" <<EOF
           #!/usr/bin/env bash
-          exec docker run --rm -i --network host -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
+          exec docker run --rm -i --network host --tmpfs /var/lib/postgresql/data:rw -e PGPASSWORD -v /tmp:/tmp postgres:16 $tool "\$@"
           EOF
             chmod +x "$bindir/$tool"
           done
