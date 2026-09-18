@@ -25,6 +25,8 @@ python3 ops/release_smoke.py
 
 `SMOKE_EMAIL`/`SMOKE_PASSWORD` — заранее подготовленный smoke user. Для `SMOKE_AUDIT=true` этот пользователь должен иметь `AUDIT_READ` (`admin`/`super_admin`).
 
+При записи `--evidence-output` runner работает fail-closed: evidence обязано содержать exact Git commit и environment. `--commit` по умолчанию берётся из `RELEASE_SHA` либо из текущего `git rev-parse HEAD`; environment передаётся через `--environment` или `ACCEPTANCE_ENVIRONMENT`. Поэтому sanitized `core_smoke`/`account_lifecycle` нельзя переиспользовать для другого candidate commit с той же версией.
+
 Полный core smoke состоит из двух изолированных частей: disposable registration lifecycle и основной authenticated smoke. Проверяются health/readiness/version, legal registry, registration/legal evidence/demo, login/refresh/logout, dashboard contract, deactivation и невозможность использовать отозванную сессию.
 
 Только public checks:
