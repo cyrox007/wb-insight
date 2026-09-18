@@ -2,12 +2,14 @@ name: Frontend build
 
 on:
   pull_request:
+    branches: [dev, main]
     paths:
       - 'VERSION'
       - 'frontend/**'
       - '.github/workflows/frontend-build.yml'
   push:
     branches:
+      - dev
       - main
     paths:
       - 'VERSION'
