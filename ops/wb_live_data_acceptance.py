@@ -279,7 +279,7 @@ def _probe_live_account(
             # The acceptance login sets the same HttpOnly refresh cookie as the
             # browser. Clear it even when credential validation/cleanup fails so
             # repeated evidence runs do not leave reusable refresh cookies behind.
-            logout = client.request("POST", "/auth/logout", body={})
+            logout = client.request("POST", "/auth/logout", auth=True, body={})
             if logout.get("status") != "success":
                 raise WBLiveDataAcceptanceError("acceptance account logout failed")
             client.access_token = None
