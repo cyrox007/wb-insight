@@ -3,7 +3,7 @@ name: Systemd updater
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - VERSION
       - update.sh
@@ -18,7 +18,7 @@ on:
       - docs/README.md
       - .github/workflows/systemd-updater.yml
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - VERSION
       - update.sh
@@ -39,7 +39,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
