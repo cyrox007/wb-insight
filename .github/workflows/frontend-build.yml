@@ -3,7 +3,7 @@ name: Frontend build
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'VERSION'
       - 'frontend/**'
@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - 'VERSION'
       - 'frontend/**'
@@ -22,7 +23,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend

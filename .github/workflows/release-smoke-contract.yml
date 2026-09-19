@@ -3,7 +3,7 @@ name: Release smoke contract
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - VERSION
       - ops/release_smoke.py
@@ -30,7 +30,7 @@ on:
       - docs/SBER_ACQUIRING.md
       - .github/workflows/release-smoke-contract.yml
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - VERSION
       - ops/release_smoke.py
@@ -63,7 +63,7 @@ concurrency:
 
 jobs:
   smoke-contract:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Validate release acceptance CLIs and secret-safe helpers

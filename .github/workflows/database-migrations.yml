@@ -3,7 +3,7 @@ name: Database migrations
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - 'VERSION'
       - 'backend/**'
@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - main
+      - dev
       - p0-production-safety
       - p1-account-scoped-sync
     paths:
@@ -26,7 +27,7 @@ concurrency:
 
 jobs:
   alembic-upgrade:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
 
     services:
       postgres:
