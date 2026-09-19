@@ -3,7 +3,7 @@ name: Release integrity
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - VERSION
       - CHANGELOG.md
@@ -30,7 +30,7 @@ on:
       - docs/RELEASE_READINESS.md
       - .github/workflows/release-integrity.yml
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - VERSION
       - CHANGELOG.md
@@ -63,7 +63,7 @@ concurrency:
 
 jobs:
   version:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -83,7 +83,7 @@ jobs:
           python3 ops/release_smoke.py --help >/dev/null
 
   acceptance-tools:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Validate acceptance tools syntax
@@ -287,7 +287,7 @@ jobs:
           fi
 
   docker-build:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build backend image
@@ -377,7 +377,7 @@ jobs:
           docker image rm -f wb-insight-backend:ci wb-insight-frontend:ci >/dev/null 2>&1 || true
 
   backup-restore:
-    runs-on: [self-hosted, Linux, X64, wb-ci]
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16
