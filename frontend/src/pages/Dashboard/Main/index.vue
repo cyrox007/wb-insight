@@ -181,6 +181,7 @@ import WarehouseChart from '@/components/Diagrams/WarehouseChart.vue'
 import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue'
 import DonutChart from '@/components/Diagrams/DonutChart.vue'
 import DashboardState from '@/components/DashboardState.vue'
+import { formatFiniteNumber } from '@/utils/safeNumber'
 
 const stats = ref({})
 const chartData = ref([])
@@ -262,10 +263,7 @@ const primaryKpis = computed(() => [
 ])
 
 function formatNumber(value, maximumFractionDigits = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
-  return new Intl.NumberFormat('ru-RU', {
-    maximumFractionDigits,
-  }).format(Number(value))
+  return formatFiniteNumber(value, { maximumFractionDigits })
 }
 
 function formatMetric(value, format = 'number') {
