@@ -679,17 +679,17 @@ onMounted(async () => {
 					</div>
 					<dl>
 						<div><dt>Источник</dt><dd>{{ meta.gateway?.source || '—' }}</dd></div>
-						<div><dt>Отправка</dt><dd>{{ meta.gateway?.enabled ? 'Включена' : 'Выключена' }}</dd></div>
+						<div><dt>Кампании</dt><dd>{{ meta.gateway?.enabled ? 'Разрешены' : 'Выключены' }}</dd></div>
 						<div><dt>Credentials</dt><dd>{{ meta.gateway?.credentials_configured ? 'Настроены' : 'Не настроены' }}</dd></div>
 						<div><dt>Пользователь</dt><dd>{{ meta.gateway?.username_hint || '—' }}</dd></div>
 					</dl>
-					<p class="cp-card-note">Один шлюз используется для пользовательских кампаний и системной почты. Пароль после сохранения обратно в браузер не возвращается.</p>
+					<p class="cp-card-note">Один шлюз используется для пользовательских кампаний и системной почты. Переключатель кампаний не отключает подтверждение email и recovery, если эти функции включены отдельно. Пароль после сохранения обратно в браузер не возвращается.</p>
 				</article>
 
-				<form v-if="canManage" class="cp-card gateway-form" @submit.prevent="saveGateway">
+				<form v-if="canManage && meta.gateway?.editable" class="cp-card gateway-form" @submit.prevent="saveGateway">
 					<div class="gateway-form-head">
 						<div><p class="cp-eyebrow">Настройка</p><h3>Почтовый шлюз</h3></div>
-						<label class="switch-line"><input v-model="gatewayForm.enabled" type="checkbox"> Включён</label>
+						<label class="switch-line"><input v-model="gatewayForm.enabled" type="checkbox"> Разрешить пользовательские кампании</label>
 					</div>
 					<div class="gateway-fields">
 						<label class="wide"><span>SMTP host</span><input v-model.trim="gatewayForm.host" placeholder="smtp.provider.ru"></label>
@@ -709,6 +709,13 @@ onMounted(async () => {
 						<BaseButton type="submit" variant="primary" text="Сохранить шлюз" loading-text="Сохраняем…" :loading="gatewayBusy" />
 					</div>
 				</form>
+
+				<div v-else-if="canManage" class="cp-card gateway-form">
+					<div class="cp-info-callout">
+						<strong>SMTP сейчас управляется переменными окружения.</strong>
+						<span>Чтобы редактировать шлюз из панели, установите <code>MAIL_CONFIG_SOURCE=auto</code> или <code>MAIL_CONFIG_SOURCE=database</code> и перезапустите backend.</span>
+					</div>
+				</div>
 			</section>
 
 			<section class="cp-card gateway-test-card">
