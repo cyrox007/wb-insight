@@ -463,3 +463,39 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+
+.cp-info-callout {
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--secondary-color) 22%, var(--border-color));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--secondary-color) 7%, var(--card-bg));
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.cp-info-callout strong {
+  color: var(--text-color);
+}
+
+.cp-chip--info {
+  border-color: color-mix(in srgb, var(--secondary-color) 24%, var(--border-color));
+  background: color-mix(in srgb, var(--secondary-color) 10%, var(--card-bg));
+  color: var(--secondary-color);
+}
+
+.cp-icon-button--disabled,
+.cp-icon-button:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.cp-icon-button--disabled:hover,
+.cp-icon-button:disabled:hover {
+  border-color: var(--border-color);
+  background: transparent;
+  color: inherit;
+}
