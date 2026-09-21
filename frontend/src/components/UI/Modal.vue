@@ -151,8 +151,8 @@ onBeforeUnmount(restorePreviousFocus)
 	display: flex;
 	opacity: 1;
 	transition:
-		opacity 180ms ease,
-		backdrop-filter 220ms ease;
+		opacity 260ms ease,
+		backdrop-filter 300ms ease;
 	align-items: center;
 	justify-content: center;
 	overflow-y: auto;
@@ -174,8 +174,8 @@ onBeforeUnmount(restorePreviousFocus)
 	transform: translateY(0) scale(1);
 	transform-origin: center;
 	transition:
-		transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
-		opacity 180ms ease;
+		transform 330ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 260ms ease;
 }
 
 .modal:focus {
@@ -203,7 +203,7 @@ onBeforeUnmount(restorePreviousFocus)
 }
 
 .modal-motion-leave-active .modal {
-	transition-duration: 160ms;
+	transition-duration: 230ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
