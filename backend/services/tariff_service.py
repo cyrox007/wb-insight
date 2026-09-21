@@ -28,10 +28,18 @@ def is_system_tariff(tariff: TariffPlan) -> bool:
 
 
 def validate_limit_value(limit_type: str, limit_value: int) -> None:
-    minimum = REQUIRED_ACTIVE_LIMITS.get(limit_type)
-    if minimum is not None and int(limit_value) < minimum:
+    normalized_type = str(limit_type or "").strip()
+    if not normalized_type:
+        raise ValueError("Тип лимита обязателен")
+
+    numeric_value = int(limit_value)
+    if numeric_value < 0:
+        raise ValueError("Значение лимита не может быть отрицательным")
+
+    minimum = REQUIRED_ACTIVE_LIMITS.get(normalized_type)
+    if minimum is not None and numeric_value < minimum:
         raise ValueError(
-            f"Лимит {limit_type} для активного тарифа должен быть не меньше {minimum}"
+            f"Лимит {normalized_type} для активного тарифа должен быть не меньше {minimum}"
         )
 
 
