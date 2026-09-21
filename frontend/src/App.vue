@@ -39,7 +39,21 @@ const user = computed(() => authStore.getUser)
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'))
 const showAccountFilter = computed(() => navItems.some(item => item.name === route.name))
 const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}:${dashboardVersion.value}`)
+const ROLE_LABELS = {
+  super_admin: 'Суперадмин',
+  admin: 'Администратор',
+  manager: 'Менеджер',
+  support: 'Поддержка',
+  analyst: 'Аналитик',
+  user: 'Пользователь',
+}
 const isAdmin = computed(() => user.value?.roles?.some(role => role === 'super_admin' || role === 'admin'))
+const userRoleLabels = computed(() =>
+  (user.value?.roles || []).map(role => ROLE_LABELS[role] || role)
+)
+const userFirstName = computed(() =>
+  String(user.value?.full_name || '').trim().split(/\s+/)[0] || 'Пользователь'
+)
 const currentYear = new Date().getFullYear()
 const dashboardNeedsAccount = computed(
   () =>
@@ -178,18 +192,45 @@ const logout = async () => {
 
           <Transition name="user-menu-motion">
             <div v-if="userMenuOpen" class="user-menu__content">
-              <button v-if="isAdmin" class="menu-action" type="button" @click="navigateFromUserMenu('control-panel.index')">
-                Панель управления
+              <div class="user-menu__profile">
+                <span class="avatar avatar--menu" aria-hidden="true">{{ user.full_name?.charAt(0) || user.email?.charAt(0) || 'U' }}</span>
+                <div class="user-menu__profile-copy">
+                  <strong>Аккаунт {{ userFirstName }}</strong>
+                  <span>{{ user.email }}</span>
+                  <div v-if="userRoleLabels.length" class="user-menu__roles">
+                    <span v-for="role in userRoleLabels" :key="role" class="user-role-chip">{{ role }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="menu-section-label">Рабочая область</div>
+              <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.home')">
+                <span class="menu-action__icon" aria-hidden="true">⌂</span>
+                <span><strong>Моя аналитика</strong><small>Обзор кабинетов Wildberries</small></span>
               </button>
+
+              <div class="menu-section-label">Мой аккаунт</div>
               <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.profile')">
-                Профиль и подключения
+                <span class="menu-action__icon" aria-hidden="true">◎</span>
+                <span><strong>Профиль и подключения</strong><small>Данные профиля и WB-кабинеты</small></span>
               </button>
               <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.account-security')">
-                Безопасность аккаунта
+                <span class="menu-action__icon" aria-hidden="true">◈</span>
+                <span><strong>Безопасность</strong><small>Пароль, email и активные сессии</small></span>
               </button>
+
+              <template v-if="isAdmin">
+                <div class="menu-section-label">Администрирование</div>
+                <button class="menu-action" type="button" @click="navigateFromUserMenu('control-panel.index')">
+                  <span class="menu-action__icon" aria-hidden="true">⚙</span>
+                  <span><strong>Панель управления</strong><small>Пользователи, тарифы и система</small></span>
+                </button>
+              </template>
+
               <div class="menu-divider" />
               <button class="menu-action menu-action--danger" type="button" @click="closeUserMenu(); logout()">
-                Выйти
+                <span class="menu-action__icon" aria-hidden="true">↪</span>
+                <span><strong>Выйти из аккаунта</strong><small>Завершить текущую сессию</small></span>
               </button>
             </div>
           </Transition>
@@ -484,8 +525,8 @@ const logout = async () => {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 220px;
-  padding: 6px;
+  min-width: 310px;
+  padding: 8px;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   background: var(--card-bg-elevated);
@@ -504,15 +545,91 @@ const logout = async () => {
 }
 
 
+.user-menu__profile {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 12px;
+  margin-bottom: 4px;
+  border-radius: 9px;
+  background: var(--light-bg);
+}
+.avatar--menu {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+}
+.user-menu__profile-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.user-menu__profile-copy > strong {
+  font-size: 13px;
+}
+.user-menu__profile-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.user-menu__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.user-role-chip {
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--secondary-color) 25%, var(--border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--secondary-color) 8%, var(--card-bg));
+  color: var(--secondary-color);
+  font-size: 10px;
+  font-weight: 700;
+}
+.menu-section-label {
+  padding: 9px 10px 4px;
+  color: var(--text-subtle);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 .menu-action {
   width: 100%;
-  padding: 10px 11px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 9px 10px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--text-color);
   text-align: left;
   cursor: pointer;
+}
+.menu-action__icon {
+  min-height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.menu-action > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.menu-action strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+.menu-action small {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .menu-action:hover {
