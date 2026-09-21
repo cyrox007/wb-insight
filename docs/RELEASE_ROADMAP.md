@@ -1,6 +1,6 @@
 # WB Insight — дорожная карта до стабильного релиза
 
-Дата фиксации: 18 сентября 2026 года.
+Дата актуализации: 21 сентября 2026 года.
 
 Цель: первый публичный стабильный релиз **WB Insight Web v1 / `1.0.0` для продавцов Wildberries**.
 
@@ -17,6 +17,10 @@
 - P37 durable audit trail закрыт PR #74, merge `31434c26e98960c0f591bdcb969ba12d96af8263`;
 - payment administration foundation закрыт PR #71, merge `e42c691eaa2f75d7149e78222ae605d039f2eabd`;
 - P38/P39 verified email identity + durable/provider-neutral mail delivery + campaigns закрыты PR #77, merge `5733ebd2b74a2947ce583dfa78734bdeb1335357`;
+- P41 role-aware staff workspace + расширенное администрирование пользователей закрыт PR #119;
+- P42 RuSender HTTPS transactional provider закрыт PR #120, merge `cf11b3c60cb24b74ce7dd9f1dc615bca6848343f`;
+- P43 password-recovery hardening закрыт PR #121, merge `560322d264bde219338498cdb076e920de2ab9c9`;
+- P44 Control Panel UI/RBAC UX unification закрыт PR #122, merge `f9d775e25a49df765d7839b42bcd15f8b60976e1`; issue #62 закрыт;
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest v2 остаются постоянными release gates;
 - **WB Web v1 feature scope заморожен**: новые продуктовые функции не добавляются до beta, кроме исправления обнаруженных blocker-дефектов;
 - текущий этап — **P40 / issue #78: production-like beta acceptance и закрытие evidence**;
@@ -116,6 +120,17 @@ Code-side P37 закрыт. Production-like representative audit correlation о�
 
 Exact final head #77 прошёл Frontend build, Backend security, Database migrations и Release integrity перед merge.
 
+## Этап C9 — P41–P44: staff UX, user administration и production mail — закрыт
+
+После заморозки основного seller feature scope были закрыты эксплуатационные blocker-дефекты, найденные при подготовке acceptance:
+
+- **P41 / PR #119** — role-aware workspace `/staff` для `super_admin/admin/manager/support/analyst`, least-privilege permissions для staff-ролей, отдельные приоритеты вместо seller dashboard по умолчанию, расширенная карточка пользователя, ручная email-верификация, reactivation/deactivation и revoke sessions с lifecycle audit;
+- **P42 / PR #120** — нативный RuSender transactional provider через HTTPS 443, encrypted bearer token, provider idempotency, safe retry classification и Control Panel transport selector. Это снимает зависимость transactional mail от блокируемых SMTP-портов хостинга;
+- **P43 / PR #121** — production-ready recovery UX, resend throttling, deterministic idempotency, audit correlation и немедленное удаление reset token из browser URL/history после capture;
+- **P44 / PR #122** — единый Control Panel UI pattern, semantic theme tokens, shared segmented/filter controls, role-safe account health summary и актуализированный RBAC UX.
+
+Эти изменения не расширяют seller analytics scope `1.0.0`: они закрывают доступность, безопасность и эксплуатационную готовность auth/admin/mail контуров перед P40.
+
 ## Этап D — P40 / `0.9.0-beta.1` candidate production-like validation — открыт
 
 **Issue:** #78.
@@ -130,11 +145,11 @@ P40 не расширяет feature scope. Его задача — доказа�
 - clean working tree, миграции clean DB + upgrade копии существующей БД;
 - deploy/rollback evidence без destructive downgrade;
 - полный `ops/release_smoke.py` без skip disposable registration;
-- **реальная email verification** через доставляемый disposable/catch-all address, затем demo activation;
-- real-mail password reset через тот же provider-neutral acceptance hook;
+- **реальная email verification** через доставляемый disposable/catch-all address, затем demo activation; текущий production-like transactional transport — RuSender HTTPS API;
+- real-mail password reset через тот же provider-neutral acceptance hook, включая проверку resend throttling и повторный login после session-version rotation;
 - login/refresh-cookie restore/logout/deactivation;
 - representative P37 durable audit smoke с контролируемым request id;
-- desktop/mobile UX для client screens и Control Panel users/roles/tariffs/payments/audit/mail;
+- desktop/mobile UX для client screens, role-aware staff workspace и Control Panel users/user-detail/roles/tariffs/payments/audit/mail; отдельно фиксируются inactive/unverified user states и RuSender gateway screen;
 - отсутствие secrets/JWT/WB/mail/payment credentials в frontend bundle, git, audit и logs;
 - real-seller data-accuracy acceptance со всеми required метриками, `missing=0` и документированными overrides;
 - backup/isolated restore drill;
@@ -184,7 +199,7 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрыты P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract, P35 data-accuracy completeness, P36 systemd deployment, P37 audit и P38/P39 verified identity/mail. Текущая code-side работа — только P40 acceptance tooling и исправление дефектов, найденных фактическим acceptance.
+Внутри репозитория закрыты P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract, P35 data-accuracy completeness, P36 systemd deployment, P37 audit, P38/P39 verified identity/mail и последующие P41–P44 acceptance blockers (staff UX, user lifecycle administration, RuSender HTTPS transport, recovery/UI hardening). Текущая code-side работа — P40 acceptance tooling и только исправление дефектов, найденных фактическим acceptance.
 
 Внешние действия владельца/инфраструктуры: domain/TLS, реальный mail provider + disposable/catch-all test mailbox, WB partner/seller credentials/limits, merchant credentials/refund procedure, legal approval/requisites/retention, alert/logging/object-storage providers и фактическое выполнение production-like deployment/smoke.
 
