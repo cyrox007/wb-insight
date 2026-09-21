@@ -8,6 +8,7 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const errorMessage = ref('')
 const permissions = ref([])
+const attention = ref({})
 const health = ref({
 	total: 0,
 	active: 0,
@@ -55,6 +56,89 @@ const workspaceCopy = computed(() => {
 })
 
 const can = (permission) => permissions.value.includes(permission)
+
+const attentionCards = computed(() => {
+	const items = []
+	const users = attention.value?.users
+	const mail = attention.value?.mail
+	const payments = attention.value?.payments
+	const system = attention.value?.system
+
+	if (users?.unverified > 0) {
+		items.push({
+			key: 'unverified',
+			count: users.unverified,
+			label: 'Email не подтверждён',
+			text: 'Аккаунты ожидают подтверждения email.',
+			to: { name: 'control-panel.users' },
+			tone: 'warning',
+		})
+	}
+	if (users?.inactive > 0) {
+		items.push({
+			key: 'inactive',
+			count: users.inactive,
+			label: 'Неактивные аккаунты',
+			text: 'Клиентские аккаунты с остановленным доступом.',
+			to: { name: 'control-panel.users' },
+			tone: 'neutral',
+		})
+	}
+	if (mail?.failed_recent > 0) {
+		items.push({
+			key: 'mail-failed',
+			count: mail.failed_recent,
+			label: 'Ошибки почты',
+			text: `Ошибки за последние ${mail.failure_lookback_minutes || '—'} мин.`,
+			to: { name: 'control-panel.mail' },
+			tone: 'danger',
+		})
+	}
+	if (mail?.stale_queued > 0) {
+		items.push({
+			key: 'mail-stale',
+			count: mail.stale_queued,
+			label: 'Зависшие письма',
+			text: `Очередь старше ${mail.queue_stale_minutes || '—'} мин.`,
+			to: { name: 'control-panel.mail' },
+			tone: 'warning',
+		})
+	}
+	if (payments?.failed_24h > 0) {
+		items.push({
+			key: 'payments-failed',
+			count: payments.failed_24h,
+			label: 'Ошибки платежей',
+			text: 'Неуспешные платёжные попытки за 24 часа.',
+			to: { name: 'control-panel.payments' },
+			tone: 'danger',
+		})
+	}
+	if (payments?.pending_over_24h > 0) {
+		items.push({
+			key: 'payments-pending',
+			count: payments.pending_over_24h,
+			label: 'Долго ожидают оплаты',
+			text: 'Платёжные попытки остаются pending более 24 часов.',
+			to: { name: 'control-panel.payments' },
+			tone: 'warning',
+		})
+	}
+	if (system?.issue_count > 0) {
+		items.push({
+			key: 'system',
+			count: system.issue_count,
+			label: 'Системные сигналы',
+			text: `Operations status: ${system.status || 'unknown'}.`,
+			to: { name: 'control-panel.index' },
+			tone: system.status === 'degraded' ? 'danger' : 'warning',
+		})
+	}
+
+	return items
+})
+
+const hasAttentionScope = computed(() => Object.keys(attention.value || {}).length > 0)
 
 const actionCards = computed(() => {
 	const items = [
@@ -110,6 +194,7 @@ async function loadWorkspace() {
 		if (response.data?.status !== 'success') throw new Error('Некорректный ответ API')
 		permissions.value = Array.isArray(response.data?.permissions) ? response.data.permissions : []
 		health.value = { ...health.value, ...(response.data?.account_health || {}) }
+		attention.value = response.data?.attention || {}
 	} catch (error) {
 		console.error('Ошибка загрузки рабочего стола сотрудника:', error)
 		errorMessage.value = error.response?.data?.error?.message || 'Не удалось загрузить операционную сводку.'
@@ -163,6 +248,36 @@ onMounted(loadWorkspace)
 					<strong>{{ health.inactive }}</strong>
 					<small>Доступ к аккаунту остановлен</small>
 				</article>
+			</section>
+
+			<section v-if="hasAttentionScope" class="staff-section">
+				<div class="section-heading">
+					<div>
+						<p class="staff-eyebrow">Операционная сводка</p>
+						<h2>Требует внимания</h2>
+					</div>
+				</div>
+
+				<div v-if="attentionCards.length" class="attention-grid">
+					<RouterLink
+						v-for="item in attentionCards"
+						:key="item.key"
+						:to="item.to"
+						class="attention-card"
+						:class="`attention-card--${item.tone}`"
+					>
+						<strong>{{ item.count }}</strong>
+						<div>
+							<span>{{ item.label }}</span>
+							<small>{{ item.text }}</small>
+						</div>
+						<b aria-hidden="true">→</b>
+					</RouterLink>
+				</div>
+				<div v-else class="staff-empty staff-empty--healthy">
+					<strong>По доступным вашей роли сигналам проблем не найдено.</strong>
+					<span>Сводка строится только из агрегатов, на которые у текущей роли есть backend permission.</span>
+				</div>
 			</section>
 
 			<section class="staff-section">
@@ -332,6 +447,86 @@ onMounted(loadWorkspace)
 	font-size: 11px;
 }
 
+.attention-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.attention-card {
+	min-height: 110px;
+	padding: 15px;
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 12px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius);
+	background: var(--card-bg);
+	box-shadow: var(--shadow-sm);
+	transition: transform var(--transition), border-color var(--transition);
+}
+
+.attention-card:hover {
+	transform: translateY(-1px);
+	border-color: color-mix(in srgb, var(--secondary-color) 30%, var(--border-color));
+}
+
+.attention-card > strong {
+	min-width: 42px;
+	font-size: 28px;
+	letter-spacing: -.04em;
+}
+
+.attention-card > div {
+	min-width: 0;
+	display: grid;
+	gap: 4px;
+}
+
+.attention-card span {
+	font-size: 12px;
+	font-weight: 760;
+}
+
+.attention-card small {
+	color: var(--text-muted);
+	font-size: 10px;
+	line-height: 1.4;
+}
+
+.attention-card b {
+	color: var(--text-subtle);
+	font-size: 16px;
+}
+
+.attention-card--danger {
+	border-color: color-mix(in srgb, var(--danger-color) 26%, var(--border-color));
+	background: color-mix(in srgb, var(--danger-color) 5%, var(--card-bg));
+}
+
+.attention-card--warning {
+	border-color: color-mix(in srgb, var(--warning-color) 26%, var(--border-color));
+	background: color-mix(in srgb, var(--warning-color) 5%, var(--card-bg));
+}
+
+.staff-empty--healthy {
+	display: grid;
+	gap: 5px;
+	border-style: dashed;
+}
+
+.staff-empty--healthy strong {
+	color: var(--text-color);
+	font-size: 13px;
+}
+
+.staff-empty--healthy span {
+	color: var(--text-muted);
+	font-size: 11px;
+	line-height: 1.45;
+}
+
 .staff-section {
 	margin-top: 24px;
 }
@@ -455,7 +650,8 @@ onMounted(loadWorkspace)
 	.health-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
-	.action-grid {
+	.action-grid,
+	.attention-grid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
@@ -474,7 +670,8 @@ onMounted(loadWorkspace)
 	.staff-identity {
 		min-width: 0;
 	}
-	.action-grid {
+	.action-grid,
+	.attention-grid {
 		grid-template-columns: 1fr;
 	}
 }
