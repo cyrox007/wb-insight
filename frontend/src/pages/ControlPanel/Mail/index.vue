@@ -451,7 +451,10 @@ async function testGateway() {
 		if (data?.status !== 'success') throw new Error(data?.error?.message || 'Mail transport test failed')
 		setMessage('Тестовое письмо отправлено через текущий почтовый транспорт.')
 	} catch (e) {
-		setMessage(e.response?.data?.error?.message || e.message || 'Не удалось отправить тестовое письмо.', true)
+		const apiError = e.response?.data?.error
+		const message = apiError?.message || e.message || 'Не удалось отправить тестовое письмо.'
+		const diagnosticCode = apiError?.details?.provider_error_code || apiError?.details?.transport_code
+		setMessage(diagnosticCode ? `${message} Код: ${diagnosticCode}` : message, true)
 	} finally {
 		gatewayBusy.value = false
 	}
