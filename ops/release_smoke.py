@@ -546,6 +546,60 @@ def run_authenticated_smoke(client: SmokeClient, email: str, password: str) -> N
     print("[ok] login, protected API, cookie-only refresh restore")
 
 
+def _validate_mail_gateway_payload(
+    payload: dict,
+    *,
+    expected_provider: str | None,
+    require_email_verification: bool,
+    require_password_reset: bool,
+) -> None:
+    if payload.get("status") != "success":
+        raise SmokeFailure("mail gateway preflight returned an invalid API envelope")
+
+    gateway = payload.get("gateway") or {}
+    provider = str(gateway.get("provider") or "").strip().lower()
+    if expected_provider and provider != expected_provider:
+        raise SmokeFailure(
+            f"mail gateway provider mismatch: expected {expected_provider}, got {provider or 'unconfigured'}"
+        )
+    if gateway.get("ready") is not True:
+        diagnostic = str(gateway.get("diagnostic_code") or "not_ready")
+        raise SmokeFailure(f"mail gateway is not ready ({diagnostic})")
+
+    system_mail = gateway.get("system_mail") or {}
+    if require_email_verification:
+        verification = system_mail.get("email_verification") or {}
+        if verification.get("ready") is not True:
+            raise SmokeFailure("email verification mail capability is not ready")
+    if require_password_reset:
+        recovery = system_mail.get("password_reset") or {}
+        if recovery.get("ready") is not True:
+            raise SmokeFailure("password reset mail capability is not ready")
+
+
+def run_mail_gateway_readiness_smoke(
+    client: SmokeClient,
+    *,
+    expected_provider: str | None,
+    require_email_verification: bool,
+    require_password_reset: bool,
+) -> None:
+    """Fail early on admin-visible mail misconfiguration before real-mail smoke."""
+    payload = client.request(
+        "GET",
+        "/control-panel/mail/gateway",
+        auth=True,
+    )
+    _validate_mail_gateway_payload(
+        payload,
+        expected_provider=expected_provider,
+        require_email_verification=require_email_verification,
+        require_password_reset=require_password_reset,
+    )
+    provider = str((payload.get("gateway") or {}).get("provider") or "unknown")
+    print(f"[ok] mail gateway readiness: provider={provider}")
+
+
 def run_audit_correlation_smoke(client: SmokeClient) -> None:
     """Prove a sensitive admin read becomes queryable through durable P37 audit."""
     request_id = f"release-smoke-{uuid4().hex}"
@@ -664,6 +718,42 @@ def _self_test() -> None:
         pass
     else:
         raise AssertionError("query-string secret unexpectedly accepted")
+
+    _validate_mail_gateway_payload(
+        {
+            "status": "success",
+            "gateway": {
+                "provider": "rusender",
+                "ready": True,
+                "diagnostic_code": None,
+                "system_mail": {
+                    "email_verification": {"ready": True},
+                    "password_reset": {"ready": True},
+                },
+            },
+        },
+        expected_provider="rusender",
+        require_email_verification=True,
+        require_password_reset=True,
+    )
+    try:
+        _validate_mail_gateway_payload(
+            {
+                "status": "success",
+                "gateway": {
+                    "provider": "rusender",
+                    "ready": False,
+                    "diagnostic_code": "environment_fallback_invalid",
+                },
+            },
+            expected_provider="rusender",
+            require_email_verification=False,
+            require_password_reset=False,
+        )
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("not-ready mail gateway unexpectedly passed preflight")
     print("[ok] release smoke self-test")
 
 
@@ -726,6 +816,17 @@ def parse_args() -> argparse.Namespace:
         help="Exercise password reset through the same real mail token hook",
     )
     parser.add_argument(
+        "--mail-gateway-smoke",
+        action="store_true",
+        default=_env_flag("SMOKE_MAIL_GATEWAY"),
+        help="Require authenticated Control Panel mail gateway readiness preflight",
+    )
+    parser.add_argument(
+        "--expected-mail-provider",
+        default=os.getenv("SMOKE_EXPECTED_MAIL_PROVIDER"),
+        help="Optional expected effective provider, for example rusender",
+    )
+    parser.add_argument(
         "--audit-smoke",
         action="store_true",
         default=_env_flag("SMOKE_AUDIT"),
@@ -758,6 +859,10 @@ def main() -> int:
         raise SmokeFailure(
             "required email verification/password reset cannot be combined with skipped disposable registration"
         )
+    if args.expected_mail_provider:
+        args.expected_mail_provider = str(args.expected_mail_provider).strip().lower()
+        if args.expected_mail_provider not in {"smtp", "rusender"}:
+            raise SmokeFailure("expected mail provider must be smtp or rusender")
     if args.evidence_output:
         commit = str(args.commit or "").strip().lower()
         if len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
@@ -785,6 +890,7 @@ def main() -> int:
         "authenticated_profile": False,
         "authenticated_refresh_restore": False,
         "dashboard_contract": False,
+        "mail_gateway_ready": False,
         "audit_correlation": False,
         "wb_credential": False,
         "billing_init": False,
@@ -822,6 +928,14 @@ def main() -> int:
         checks["authenticated_profile"] = True
         checks["authenticated_refresh_restore"] = True
         checks["dashboard_contract"] = True
+        if args.mail_gateway_smoke:
+            run_mail_gateway_readiness_smoke(
+                client,
+                expected_provider=args.expected_mail_provider,
+                require_email_verification=args.require_email_verification,
+                require_password_reset=args.require_password_reset,
+            )
+            checks["mail_gateway_ready"] = True
         if args.audit_smoke:
             run_audit_correlation_smoke(client)
             checks["audit_correlation"] = True

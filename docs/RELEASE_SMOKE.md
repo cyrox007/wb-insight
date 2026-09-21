@@ -69,6 +69,22 @@ export SMOKE_MAIL_TOKEN_COMMAND='python3 ops/imap_mail_token_hook.py'
 
 Helper открывает mailbox в read-only режиме, проверяет точного получателя и ожидаемый subject, берёт только bounded recent tail и выводит stdout только verification/reset URL с `#token=`. Message body, IMAP credentials и server authentication responses не попадают в release evidence. Для `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` всё равно нужен уникальный доставляемый адрес с `{uuid}` — например provider alias/plus-addressing или catch-all.
 
+Перед real-mail flow рекомендуется включить admin preflight почтового шлюза:
+
+```bash
+export SMOKE_MAIL_GATEWAY=true
+export SMOKE_EXPECTED_MAIL_PROVIDER=rusender
+```
+
+Runner после authenticated login вызывает `GET /control-panel/mail/gateway` и fail-fast проверяет:
+
+- effective transport имеет `ready=true`;
+- provider совпадает с ожидаемым, если задан `SMOKE_EXPECTED_MAIL_PROVIDER`;
+- при `SMOKE_REQUIRE_EMAIL_VERIFICATION=true` готов именно verification-контур, а не только transport;
+- при `SMOKE_REQUIRE_PASSWORD_RESET=true` готов именно recovery-контур.
+
+Для этой фазы `SMOKE_EMAIL` должен принадлежать staff/admin аккаунту с `mail:read`. Проверка не отправляет письмо и не раскрывает credentials; она нужна, чтобы получить понятный blocker до создания disposable account.
+
 Beta disposable flow доказывает:
 
 1. registration возвращает `email_verification_required=true`;
