@@ -84,10 +84,10 @@ const block2Rows = computed(() => {
 })
 
 const chartMetrics = [
-  { key: 'to_pay_accumulated', name: 'К выплате', color: '#a78bfa', visible: true, type: 'rub' },
-  { key: 'logistics', name: 'Логистика', color: '#60a5fa', visible: true, type: 'rub' },
-  { key: 'fines', name: 'Штрафы', color: '#fb7185', visible: true, type: 'rub' },
-  { key: 'to_pay_seller', name: 'К перечислению', color: '#34d399', visible: true, type: 'rub' },
+  { key: 'to_pay_accumulated', name: 'К выплате', color: '#6259d9', visible: true, type: 'rub' },
+  { key: 'logistics', name: 'Логистика', color: '#4f86da', visible: true, type: 'rub' },
+  { key: 'fines', name: 'Штрафы', color: '#e26478', visible: true, type: 'rub' },
+  { key: 'to_pay_seller', name: 'К перечислению', color: '#26a77b', visible: true, type: 'rub' },
 ]
 
 const chartData = computed(() => dailyData.value.map(day => ({
@@ -221,7 +221,7 @@ onMounted(loadData)
 }
 
 .eyebrow {
-  color: #a78bfa;
+  color: #6259d9;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -293,7 +293,7 @@ onMounted(loadData)
   border: 1px solid rgba(251, 113, 133, 0.28);
   border-radius: var(--radius);
   background: rgba(251, 113, 133, 0.08);
-  color: #fda4af;
+  color: #c83b55;
   font-size: 13px;
 }
 
@@ -321,7 +321,7 @@ onMounted(loadData)
 .chart-card,
 .table-card {
   border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(29, 40, 55, 0.96), rgba(24, 33, 46, 0.96));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.98));
   box-shadow: var(--shadow-sm);
 }
 
