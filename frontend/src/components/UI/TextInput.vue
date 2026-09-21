@@ -75,13 +75,13 @@ const inputId = computed(() => props.id || `text-input-${generatedId}`)
 .form-input:disabled {
 	background-color: var(--dark-bg);
 	/* Более тёмный фон */
-	color: #666;
+	color: var(--text-subtle);
 	/* Приглушённый текст */
 	cursor: not-allowed;
 	opacity: 0.7;
 }
 
 .form-input:disabled::placeholder {
-	color: #555;
+	color: var(--text-subtle);
 }
 </style>
