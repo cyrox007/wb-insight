@@ -352,11 +352,10 @@ async def upsert_mail_transport(
         if bool(existing.get("username")) != bool(existing.get("password")):
             raise ValueError("SMTP username и password должны быть настроены вместе")
     else:
-        row.host = str(
-            values.get("api_base_url")
-            or row.host
-            or _DEFAULT_RUSENDER_API_BASE_URL
-        ).strip().rstrip("/")
+        # The DB-managed RuSender adapter is pinned to the official API origin
+        # so an administrative setting cannot redirect the bearer token to an
+        # arbitrary host.
+        row.host = _DEFAULT_RUSENDER_API_BASE_URL
         row.port = 443
         row.starttls = True
 
