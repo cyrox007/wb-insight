@@ -19,6 +19,7 @@ class MailProvider(Protocol):
         recipient: str,
         subject: str,
         body: str,
+        html_body: str | None = None,
     ) -> MailDeliveryReceipt:
         ...
 
