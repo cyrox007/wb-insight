@@ -56,6 +56,19 @@ export SMOKE_REQUIRE_PASSWORD_RESET=true
 
 Runner захватывает stdout/stderr helper-а и никогда не печатает их при ошибке. URL с `?token=` отвергается. Таймаут регулируется `SMOKE_MAIL_TOKEN_TIMEOUT_SECONDS` (по умолчанию 180 секунд, максимум 1800).
 
+В репозитории есть готовый provider-neutral helper `ops/imap_mail_token_hook.py`. Он подходит для отдельного acceptance mailbox, catch-all или alias, если почтовый провайдер даёт IMAP. Credentials передаются только через environment:
+
+```bash
+export SMOKE_IMAP_HOST=imap.provider.example
+export SMOKE_IMAP_PORT=993
+export SMOKE_IMAP_USERNAME='release-mailbox@example.com'
+export SMOKE_IMAP_PASSWORD='...'
+export SMOKE_IMAP_MAILBOX=INBOX
+export SMOKE_MAIL_TOKEN_COMMAND='python3 ops/imap_mail_token_hook.py'
+```
+
+Helper открывает mailbox в read-only режиме, проверяет точного получателя и ожидаемый subject, берёт только bounded recent tail и выводит stdout только verification/reset URL с `#token=`. Message body, IMAP credentials и server authentication responses не попадают в release evidence. Для `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` всё равно нужен уникальный доставляемый адрес с `{uuid}` — например provider alias/plus-addressing или catch-all.
+
 Beta disposable flow доказывает:
 
 1. registration возвращает `email_verification_required=true`;
