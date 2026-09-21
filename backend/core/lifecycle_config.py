@@ -42,12 +42,16 @@ class LifecycleConfig:
     MAIL_BATCH_SIZE = int(os.getenv("MAIL_BATCH_SIZE", "25"))
     MAIL_MAX_ATTEMPTS = int(os.getenv("MAIL_MAX_ATTEMPTS", "5"))
     MAIL_RETRY_BASE_SECONDS = int(os.getenv("MAIL_RETRY_BASE_SECONDS", "30"))
+    MAIL_UNSUBSCRIBE_BASE_URL = os.getenv("MAIL_UNSUBSCRIBE_BASE_URL", "").strip()
+    MAIL_UNSUBSCRIBE_HMAC_KEY = os.getenv("MAIL_UNSUBSCRIBE_HMAC_KEY", "").strip()
 
     SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
     SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip() or None
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") or None
     SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "").strip()
+    SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "WB Insight").strip() or "WB Insight"
+    SMTP_REPLY_TO_EMAIL = os.getenv("SMTP_REPLY_TO_EMAIL", "").strip() or None
     SMTP_STARTTLS = os.getenv("SMTP_STARTTLS", "true").lower() == "true"
     SMTP_TIMEOUT_SECONDS = float(os.getenv("SMTP_TIMEOUT_SECONDS", "10"))
 
@@ -104,6 +108,12 @@ class LifecycleConfig:
             raise RuntimeError("EMAIL_VERIFICATION_TOKEN_TTL_MINUTES must be positive")
         if self.EMAIL_VERIFICATION_RESEND_SECONDS <= 0:
             raise RuntimeError("EMAIL_VERIFICATION_RESEND_SECONDS must be positive")
+        if len(self.SMTP_FROM_NAME) > 160:
+            raise RuntimeError("SMTP_FROM_NAME must be at most 160 characters")
+        if self.SMTP_REPLY_TO_EMAIL and (
+            "@" not in self.SMTP_REPLY_TO_EMAIL or len(self.SMTP_REPLY_TO_EMAIL) > 320
+        ):
+            raise RuntimeError("SMTP_REPLY_TO_EMAIL must be a valid email address")
         if self.MAIL_BATCH_SIZE <= 0 or self.MAIL_MAX_ATTEMPTS <= 0 or self.MAIL_RETRY_BASE_SECONDS <= 0:
             raise RuntimeError("Mail queue limits must be positive")
         if self.SMTP_PORT <= 0 or self.SMTP_TIMEOUT_SECONDS <= 0:
@@ -136,6 +146,19 @@ class LifecycleConfig:
                 self.PASSWORD_RESET_BASE_URL,
                 production=production,
             )
+
+        if self.MAIL_DELIVERY_ENABLED and production:
+            if not self.MAIL_UNSUBSCRIBE_BASE_URL:
+                raise RuntimeError("Production marketing mail requires MAIL_UNSUBSCRIBE_BASE_URL")
+            self._validate_https_url(
+                "MAIL_UNSUBSCRIBE_BASE_URL",
+                self.MAIL_UNSUBSCRIBE_BASE_URL,
+                production=True,
+            )
+            if len(self.MAIL_UNSUBSCRIBE_HMAC_KEY) < 32 or _is_placeholder(self.MAIL_UNSUBSCRIBE_HMAC_KEY):
+                raise RuntimeError(
+                    "Production marketing mail requires a strong MAIL_UNSUBSCRIBE_HMAC_KEY"
+                )
 
         if self.EMAIL_VERIFICATION_ENABLED:
             if self.MAIL_CONFIG_SOURCE == "environment" and not self.MAIL_DELIVERY_ENABLED:
