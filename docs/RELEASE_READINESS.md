@@ -13,6 +13,10 @@
 - P42 RuSender HTTPS transactional mail закрыт PR #120, merge `cf11b3c60cb24b74ce7dd9f1dc615bca6848343f`.
 - P43 password recovery hardening закрыт PR #121, merge `560322d264bde219338498cdb076e920de2ab9c9`.
 - P44 Control Panel UI/RBAC UX unification закрыт PR #122, merge `f9d775e25a49df765d7839b42bcd15f8b60976e1`.
+- P47 DB-first mail bootstrap + auth-mail readiness diagnostics закрыт PR #125, merge `cf40d2738a3ac9028936a7c6a65e35e9fd6811fe`.
+- P48 backend release warning cleanup закрыт PR #126, merge `aafac5564c4d4b1dcbb708f5787df56f8e499061`.
+- P49 release-smoke mail gateway preflight закрыт PR #127, merge `46e08f966b0862dc523de718e4a20bc49eea3bdb`.
+- P50 role-aware staff profile закрыт PR #128, merge `0118ce67e4bf79e7cbdffd285381ed48e668a991`.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact `dev` commit.
@@ -39,6 +43,8 @@
 - P38 email verification: new account login/demo gated by ownership proof when enabled;
 - безопасная смена email через `pending_email`, session/reset invalidation после подтверждения;
 - provider-neutral mail registry: SMTP + RuSender HTTPS transactional adapter;
+- `MAIL_CONFIG_SOURCE=auto` использует DB-first runtime selection: placeholder ENV fallback не блокирует bootstrap реального encrypted provider, но fail-closed отклоняется, если реально становится effective;
+- Control Panel mail gateway отдельно показывает readiness транспорта, email verification и password recovery;
 - durable Celery mail outbox с retry/backoff/idempotency;
 - campaign draft/preview/test/immediate/scheduled launch/cancel, segmentation, suppression и delivery history;
 - campaign scheduling с row lock/due-time recheck и retry-safe materialization;
@@ -46,6 +52,7 @@
 - Control Panel «Рассылки» с фильтрами/pagination/scheduling и выбором SMTP/RuSender transport;
 - расширенная карточка пользователя: профиль, staff-атрибуты, ручная email-верификация, activation/deactivation и revoke sessions с audit/lifecycle evidence;
 - единый responsive Control Panel UI pattern для overview/users/user-detail/roles/tariffs/payments/mail/audit;
+- staff account profile скрывает seller-only тариф/WB/COGS/expenses controls; seller analytics остаётся отдельным secondary workspace;
 - versioned data-accuracy comparator и evidence manifest tooling;
 - beta manifest v2 требует `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
 - P40 live-WB/data provenance gate связывает passing `data_accuracy` с тем же live-validated seller account через secret-safe HMAC fingerprint, обязательный credential cleanup и SHA-256 binding защищённого input;
@@ -80,7 +87,7 @@ Beta разрешена только после:
 - production-like HTTPS deployment с реальными non-placeholder secrets/hosts;
 - миграций clean DB + upgrade копии существующей БД;
 - deploy/rollback smoke;
-- полного `ops/release_smoke.py` без `--skip-disposable-registration`;
+- полного `ops/release_smoke.py` без `--skip-disposable-registration`; authenticated mail gateway preflight должен подтвердить effective `rusender` и readiness verification/recovery до disposable flow;
 - **реального email verification smoke** на deliverable disposable/catch-all адресе через текущий RuSender HTTPS transactional provider;
 - demo activation только после verification ownership proof;
 - **реального password reset** через тот же provider, включая повторный login после session-version rotation;
