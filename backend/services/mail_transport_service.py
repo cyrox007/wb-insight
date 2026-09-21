@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config
+from integrations.mail.smtp import SMTPMailProvider
 from models.mail_delivery import MailProviderConfig
 from utils.secret_crypto import decrypt_secret_payload, encrypt_secret_payload
 
@@ -210,3 +211,38 @@ async def upsert_mail_transport(
 
     await session.flush()
     return row
+
+
+
+async def send_mail_transport_test(
+    session: AsyncSession,
+    *,
+    recipient_email: str,
+) -> str:
+    recipient = str(recipient_email or "").strip().lower()
+    if not recipient or "@" not in recipient or len(recipient) > 320:
+        raise ValueError("Укажите корректный email для теста")
+
+    runtime = await get_mail_transport_runtime(session)
+    if not runtime.ready:
+        raise RuntimeError("Почтовый шлюз ещё не готов: заполните обязательные SMTP-поля")
+
+    provider = SMTPMailProvider(runtime)
+    receipt = await provider.send(
+        sender=runtime.SMTP_FROM_EMAIL,
+        recipient=recipient,
+        subject="[TEST] WB Insight · проверка почтового шлюза",
+        body=(
+            "Почтовый шлюз WB Insight настроен корректно.\n\n"
+            "Это тестовое письмо из Панели управления."
+        ),
+        html_body=(
+            '<!doctype html><html><body style="font-family:Arial,sans-serif;'
+            'background:#f5f6fb;padding:24px;color:#182033;">'
+            '<div style="max-width:620px;margin:auto;background:#fff;padding:28px;'
+            'border-radius:14px;"><h2 style="margin-top:0;">Почтовый шлюз работает</h2>'
+            '<p>WB Insight успешно отправил тестовое письмо через текущую SMTP-конфигурацию.</p>'
+            '</div></body></html>'
+        ),
+    )
+    return receipt.provider_message_id or ""
