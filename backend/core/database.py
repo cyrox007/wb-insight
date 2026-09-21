@@ -1,4 +1,4 @@
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.exc import InterfaceError, OperationalError, SQLAlchemyError
 from sqlalchemy import text
@@ -40,7 +40,7 @@ class Database:
                 connect_args={
                     "command_timeout": 60,
                     "server_settings": {
-                        "application_name": "your_app_name"
+                        "application_name": "wb-insight"
                     }
                 } if "postgresql" in config.database_url(async_mode=True) else {}
             )
