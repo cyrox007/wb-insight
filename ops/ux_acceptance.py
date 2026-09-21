@@ -29,6 +29,7 @@ DEFAULT_SCENARIOS = {
     "auth.verify_email",
     "auth.reset_password",
     "billing.success",
+    "staff.workspace",
     "dashboard.overview",
     "dashboard.profile",
     "dashboard.account_security",
@@ -39,6 +40,7 @@ DEFAULT_SCENARIOS = {
     "dashboard.ads",
     "control_panel.overview",
     "control_panel.users",
+    "control_panel.user_detail",
     "control_panel.roles",
     "control_panel.tariffs",
     "control_panel.payments",
@@ -53,18 +55,29 @@ EXTRA_REQUIRED = {
     ("public.home", "mobile", "validation_error"),
     ("auth.verify_email", "desktop", "invalid_or_expired"),
     ("auth.reset_password", "desktop", "invalid_or_expired"),
+    ("auth.reset_password", "desktop", "request_sent"),
+    ("auth.reset_password", "desktop", "reset_success"),
+    ("staff.workspace", "desktop", "super_admin"),
+    ("staff.workspace", "desktop", "admin"),
+    ("staff.workspace", "desktop", "manager"),
+    ("staff.workspace", "desktop", "support"),
+    ("staff.workspace", "desktop", "analyst"),
     ("dashboard.overview", "desktop", "loading"),
     ("dashboard.overview", "desktop", "empty"),
     ("dashboard.overview", "desktop", "error"),
     ("control_panel.users", "desktop", "loading"),
     ("control_panel.users", "desktop", "empty"),
     ("control_panel.users", "desktop", "error"),
+    ("control_panel.user_detail", "desktop", "inactive_account"),
+    ("control_panel.user_detail", "desktop", "unverified_email"),
+    ("control_panel.user_detail", "desktop", "staff_profile"),
     ("control_panel.payments", "desktop", "loading"),
     ("control_panel.payments", "desktop", "empty"),
     ("control_panel.payments", "desktop", "error"),
     ("control_panel.mail", "desktop", "loading"),
     ("control_panel.mail", "desktop", "empty"),
     ("control_panel.mail", "desktop", "error"),
+    ("control_panel.mail", "desktop", "rusender_gateway"),
 }
 
 REQUIRED_CHECKS = {
@@ -226,7 +239,10 @@ def _self_test() -> None:
     assert ("dashboard.overview", "desktop", "error") in REQUIRED_CHECKS
     assert ("control_panel.audit", "mobile", "default") in REQUIRED_CHECKS
     assert ("control_panel.mail", "desktop", "empty") in REQUIRED_CHECKS
-    assert len(REQUIRED_CHECKS) >= 50
+    assert ("control_panel.mail", "desktop", "rusender_gateway") in REQUIRED_CHECKS
+    assert ("staff.workspace", "desktop", "manager") in REQUIRED_CHECKS
+    assert ("control_panel.user_detail", "desktop", "unverified_email") in REQUIRED_CHECKS
+    assert len(REQUIRED_CHECKS) >= 65
     example = _template("staging-ci", "0.9.0-beta.1", "0" * 40)
     assert len(example["checks"]) == len(REQUIRED_CHECKS)
     assert all(item["status"] == "pending" for item in example["checks"])

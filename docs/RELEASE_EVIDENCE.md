@@ -77,7 +77,7 @@ Manifest не копирует содержимое artifacts и не предн
 
 `ops/sber_sandbox_acceptance.py` закрывает условную P40-проверку Sber sandbox merchant **только когда test credentials реально доступны**. Runner использует тот же `SberAcquiringClient`, что backend: регистрирует один неоплаченный sandbox order, проверяет HTTPS payment-form URL и выполняет `getOrderStatusExtended.do`. Card data не вводится, подписка не активируется, а paid-state считается ошибкой acceptance. В evidence не сохраняются merchant login/password, gateway URL, Sber order id или payment-form URL. Если proof передан через `ops/beta_release_evidence.py --sber-sandbox-proof ...`, он проверяется на exact VERSION/commit/environment/public origin и SHA-256-bound в `candidate_subproofs.sber_sandbox`; отсутствие proof не делает beta manifest неполным, если sandbox credentials для окружения недоступны.
 
-`ux_smoke` создаётся `ops/ux_acceptance.py`. Инструмент не выдаёт автоматическую визуальную оценку: проверку интерфейса выполняет человек, а runner делает эту проверку полной и привязанной к exact build. Контракт требует desktop/mobile evidence для публичных auth-экранов, billing success, основных dashboard-разделов и Control Panel (users/roles/tariffs/payments/mail/audit), а также representative loading/empty/error states. Для каждого required state сохраняются только имя evidence-файла, размер и SHA-256; сами изображения/видео остаются в защищённом evidence storage.
+`ux_smoke` создаётся `ops/ux_acceptance.py`. Инструмент не выдаёт автоматическую визуальную оценку: проверку интерфейса выполняет человек, а runner делает эту проверку полной и привязанной к exact build. Контракт требует desktop/mobile evidence для публичных auth-экранов, billing success, основных dashboard-разделов, role-aware staff workspace и Control Panel (overview/users/user-detail/roles/tariffs/payments/mail/audit). Для staff workspace отдельно фиксируются super_admin/admin/manager/support/analyst priorities; для user-detail — inactive/unverified/staff states; для mail — RuSender gateway; для recovery — request-sent/reset-success/invalid-or-expired states. Для каждого required state сохраняются только имя evidence-файла, размер и SHA-256; сами изображения/видео остаются в защищённом evidence storage.
 
 `secrets_review` создаётся `ops/secrets_review.py`. Scanner не сохраняет значения секретов и не копирует совпавшие строки. Он сравнивает реально настроенные secret values с:
 
@@ -96,7 +96,7 @@ Manifest не копирует содержимое artifacts и не предн
 - `ci` — structured exact-head GitHub Actions evidence;
 - `deployment` — evidence production-like HTTPS deployment, isolated existing-DB upgrade и deploy/rollback smoke;
 - `core_smoke` — результат production-like `ops/release_smoke.py` без отключения disposable registration;
-- `account_lifecycle` — login/refresh/logout/deactivation и реальный password-recovery smoke через настроенный SMTP/provider;
+- `account_lifecycle` — login/refresh/logout/deactivation и реальный password-recovery smoke через настроенный provider (текущий production-like путь — RuSender HTTPS API);
 - `ux_smoke` — structured human-reviewed desktop/mobile evidence основных экранов и критичных empty/loading/error states;
 - `secrets_review` — machine-readable проверка отсутствия настроенных secrets/JWT в frontend, Git и runtime logs;
 - `data_accuracy` — green JSON-результат `ops/data_accuracy_acceptance.py` на реальном WB seller dataset.

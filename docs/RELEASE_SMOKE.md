@@ -37,9 +37,9 @@ python3 ops/release_smoke.py --base-url https://staging.example.com --public-onl
 
 `--skip-disposable-registration` / `SMOKE_SKIP_DISPOSABLE_REGISTRATION=true` разрешён только для диагностики. Такой прогон не закрывает beta gate.
 
-## 3. P40: реальная email verification и password recovery
+## 3. P40: реальная email verification и password recovery через RuSender
 
-После P38/P39 beta smoke обязан доказать реальную доставку писем. Нельзя закрывать beta с `EMAIL_VERIFICATION_ENABLED=false` или адресом `@smoke.invalid`.
+После P38/P39/P42/P43 beta smoke обязан доказать реальную доставку писем. Нельзя закрывать beta с `EMAIL_VERIFICATION_ENABLED=false` или адресом `@smoke.invalid`. Текущий production-like transactional transport — RuSender HTTPS API, поэтому SMTP-порты хостинга не участвуют в этом acceptance.
 
 Runner поддерживает provider-neutral inbox hook. Нужны:
 
@@ -56,6 +56,19 @@ export SMOKE_REQUIRE_PASSWORD_RESET=true
 
 Runner захватывает stdout/stderr helper-а и никогда не печатает их при ошибке. URL с `?token=` отвергается. Таймаут регулируется `SMOKE_MAIL_TOKEN_TIMEOUT_SECONDS` (по умолчанию 180 секунд, максимум 1800).
 
+В репозитории есть готовый provider-neutral helper `ops/imap_mail_token_hook.py`. Он подходит для отдельного acceptance mailbox, catch-all или alias, если почтовый провайдер даёт IMAP. Credentials передаются только через environment:
+
+```bash
+export SMOKE_IMAP_HOST=imap.provider.example
+export SMOKE_IMAP_PORT=993
+export SMOKE_IMAP_USERNAME='release-mailbox@example.com'
+export SMOKE_IMAP_PASSWORD='...'
+export SMOKE_IMAP_MAILBOX=INBOX
+export SMOKE_MAIL_TOKEN_COMMAND='python3 ops/imap_mail_token_hook.py'
+```
+
+Helper открывает mailbox в read-only режиме, проверяет точного получателя и ожидаемый subject, берёт только bounded recent tail и выводит stdout только verification/reset URL с `#token=`. Message body, IMAP credentials и server authentication responses не попадают в release evidence. Для `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` всё равно нужен уникальный доставляемый адрес с `{uuid}` — например provider alias/plus-addressing или catch-all.
+
 Beta disposable flow доказывает:
 
 1. registration возвращает `email_verification_required=true`;
@@ -65,9 +78,10 @@ Beta disposable flow доказывает:
 5. session identity содержит `email_verified=true`;
 6. demo активируется после ownership proof;
 7. exact legal consent evidence сохранён;
-8. password reset проходит через тот же реальный mail transport;
-9. новый пароль работает, старые sessions отозваны;
-10. refresh lifecycle и soft-deactivation остаются корректными.
+8. password reset проходит через тот же реальный RuSender transport;
+9. повторные recovery-запросы не создают неконтролируемый поток писем, а idempotency/throttle сохраняют anti-enumeration contract;
+10. новый пароль работает, старые sessions отозваны;
+11. refresh lifecycle и soft-deactivation остаются корректными.
 
 Для локального smoke контракта без сети:
 
@@ -117,7 +131,7 @@ python3 ops/release_smoke.py
 
 ## 8. Operations smoke
 
-Перед beta/RC по соответствующему gate подтверждаются deployment/rollback, active backend/Celery/Beat, `/health/ready`, secrets review, desktop/mobile UX, mail delivery, durable audit, backup/restore. Перед RC дополнительно подключаются внешний uptime monitor, alert destination, centralized logs, off-host encrypted backup и измеренный restore drill/RPO/RTO.
+Перед beta/RC по соответствующему gate подтверждаются deployment/rollback, active backend/Celery/Beat, `/health/ready`, secrets review, desktop/mobile UX, role-aware staff workspace, RuSender mail delivery, durable audit, backup/restore. Перед RC дополнительно подключаются внешний uptime monitor, alert destination, centralized logs, off-host encrypted backup и измеренный restore drill/RPO/RTO.
 
 ## WB Web v1 checklist
 
@@ -127,7 +141,10 @@ python3 ops/release_smoke.py
 - [ ] legal consent evidence;
 - [ ] login/refresh/logout/deactivation;
 - [ ] durable audit correlation;
-- [ ] Control Panel users/roles/tariffs/payments/audit/mail desktop/mobile;
+- [ ] role-aware staff workspace для super_admin/admin/manager/support/analyst;
+- [ ] Control Panel overview/users/user-detail/roles/tariffs/payments/audit/mail desktop/mobile;
+- [ ] user-detail inactive/unverified/staff states;
+- [ ] RuSender gateway state и тестовая transactional доставка;
 - [ ] real WB seller connection + full sync;
 - [ ] data-accuracy acceptance;
 - [ ] Overview / Unit Economy / Finance / Inventory / Prices / Ads;

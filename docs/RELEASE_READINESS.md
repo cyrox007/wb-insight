@@ -1,6 +1,6 @@
 # WB Insight — Release Readiness
 
-Дата ревизии: 18 сентября 2026 года.
+Дата ревизии: 21 сентября 2026 года.
 
 ## Текущий статус
 
@@ -9,6 +9,10 @@
 - P37 durable audit trail закрыт PR #74, merge `31434c26e98960c0f591bdcb969ba12d96af8263`.
 - payment administration foundation закрыт PR #71, merge `e42c691eaa2f75d7149e78222ae605d039f2eabd`.
 - P38/P39 verified email identity + durable/provider-neutral mail delivery закрыты PR #77, merge `5733ebd2b74a2947ce583dfa78734bdeb1335357`.
+- P41 role-aware staff workspace и расширенное управление пользователями закрыты PR #119.
+- P42 RuSender HTTPS transactional mail закрыт PR #120, merge `cf11b3c60cb24b74ce7dd9f1dc615bca6848343f`.
+- P43 password recovery hardening закрыт PR #121, merge `560322d264bde219338498cdb076e920de2ab9c9`.
+- P44 Control Panel UI/RBAC UX unification закрыт PR #122, merge `f9d775e25a49df765d7839b42bcd15f8b60976e1`.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact `dev` commit.
@@ -16,6 +20,7 @@
 ## Code-side status: baseline закрыт; новая интеграция идёт через dev
 
 - auth/session/RBAC, роли и Control Panel;
+- role-aware staff workspace `/staff` для super_admin/admin/manager/support/analyst с least-privilege backend permissions;
 - account-scoped durable WB sync;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
@@ -27,18 +32,20 @@
 - encrypted backup/restore + CI drill;
 - versioned legal-consent technical baseline;
 - access JWT in-memory + HttpOnly refresh restore;
-- password reset/recovery через durable transactional mail;
-- digest-only reset/verification tokens, raw secrets только в URL fragment;
+- password reset/recovery через durable transactional mail, resend throttling и idempotency;
+- digest-only reset/verification tokens, raw secrets только в URL fragment; reset token удаляется из browser URL/history сразу после capture;
 - durable `session_version`, paid cancel-at-period-end/undo, self-service soft deactivation;
 - durable append-only P37 audit trail + Control Panel «Аудит»;
 - P38 email verification: new account login/demo gated by ownership proof when enabled;
 - безопасная смена email через `pending_email`, session/reset invalidation после подтверждения;
-- provider-neutral mail registry, SMTP initial adapter;
+- provider-neutral mail registry: SMTP + RuSender HTTPS transactional adapter;
 - durable Celery mail outbox с retry/backoff/idempotency;
 - campaign draft/preview/test/immediate/scheduled launch/cancel, segmentation, suppression и delivery history;
 - campaign scheduling с row lock/due-time recheck и retry-safe materialization;
 - mail failure-rate/stale-queue operational checks;
-- Control Panel «Рассылки» с фильтрами/pagination/scheduling;
+- Control Panel «Рассылки» с фильтрами/pagination/scheduling и выбором SMTP/RuSender transport;
+- расширенная карточка пользователя: профиль, staff-атрибуты, ручная email-верификация, activation/deactivation и revoke sessions с audit/lifecycle evidence;
+- единый responsive Control Panel UI pattern для overview/users/user-detail/roles/tariffs/payments/mail/audit;
 - versioned data-accuracy comparator и evidence manifest tooling;
 - beta manifest v2 требует `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
 - P40 live-WB/data provenance gate связывает passing `data_accuracy` с тем же live-validated seller account через secret-safe HMAC fingerprint, обязательный credential cleanup и SHA-256 binding защищённого input;
@@ -74,12 +81,12 @@ Beta разрешена только после:
 - миграций clean DB + upgrade копии существующей БД;
 - deploy/rollback smoke;
 - полного `ops/release_smoke.py` без `--skip-disposable-registration`;
-- **реального email verification smoke** на deliverable disposable/catch-all адресе;
+- **реального email verification smoke** на deliverable disposable/catch-all адресе через текущий RuSender HTTPS transactional provider;
 - demo activation только после verification ownership proof;
-- **реального password reset** через настроенный mail provider;
+- **реального password reset** через тот же provider, включая повторный login после session-version rotation;
 - login/refresh-cookie restore/logout/deactivation;
 - representative durable P37 audit correlation по request id;
-- desktop/mobile UX для client screens и Control Panel users/roles/tariffs/payments/audit/mail;
+- desktop/mobile UX для client screens, role-aware staff workspace и Control Panel overview/users/user-detail/roles/tariffs/payments/audit/mail; обязательны состояния inactive/unverified user и RuSender gateway;
 - secrets review frontend bundle/git/logs/audit/mail/payment metadata;
 - real-seller data-accuracy минимум на трёх фиксированных периодах: все required metrics, `missing=0`, нет необъяснённых существенных денежных расхождений; protected input и passing report должны быть связаны с тем же live-validated WB account через `wb-live-data` proof;
 - каждый tolerance override имеет `override_reason` + review evidence;
