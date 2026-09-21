@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from starlette.responses import Response
 
-from handlers.dashboard.biling_handler import create_payment_handler, pay_now
+from handlers.dashboard.biling_handler import create_payment_handler, pay_now, router as billing_router
 from handlers.dashboard.profile_handler import _public_token
 from models.subscription_model import Subscription, SubscriptionStatus
 from models.tokens_model import Marketplace
@@ -62,3 +62,16 @@ def test_profile_never_serializes_token_ciphertext():
 
     assert "VERY_SECRET_CIPHERTEXT" not in payload.values()
     assert "encrypted_token" not in payload
+
+
+
+def test_sber_callback_openapi_operations_are_unique():
+    callback_routes = [
+        route
+        for route in billing_router.routes
+        if getattr(route, "path", "") == "/billing/sber/callback"
+    ]
+
+    assert len(callback_routes) == 2
+    operation_ids = {route.operation_id for route in callback_routes}
+    assert operation_ids == {"sber_callback_get", "sber_callback_post"}

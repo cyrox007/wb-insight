@@ -397,11 +397,10 @@ async def _callback_params(request: Request) -> dict[str, str]:
     return {}
 
 
-@router.api_route("/sber/callback", methods=["GET", "POST"])
-async def sber_callback_handler(
+async def _handle_sber_callback(
     request: Request,
     response: Response,
-    db_session: AsyncSession = Depends(get_db_session),
+    db_session: AsyncSession,
 ):
     """Treat the callback only as a trigger; bank status is re-queried server-side."""
     params = await _callback_params(request)
@@ -445,6 +444,24 @@ async def sber_callback_handler(
         return response_error(code="PAYMENT_CONFIRMATION_ERROR", message="Не удалось подтвердить платёж")
 
     return response_success(accepted=True)
+
+
+@router.get("/sber/callback", operation_id="sber_callback_get")
+async def sber_callback_get(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    return await _handle_sber_callback(request, response, db_session)
+
+
+@router.post("/sber/callback", operation_id="sber_callback_post")
+async def sber_callback_post(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    return await _handle_sber_callback(request, response, db_session)
 
 
 @router.post("/pay-now", dependencies=[Depends(auth_middle)])
