@@ -93,9 +93,9 @@
           :is-loading="isLoading"
           :chart-data="dynamicsChart"
           :metrics="[
-            { key: 'views', name: 'Просмотры', color: '#60a5fa', visible: true, type: 'number' },
-            { key: 'clicks', name: 'Клики', color: '#fbbf24', visible: true, type: 'number' },
-            { key: 'amount', name: 'Расходы, ₽', color: '#fb7185', visible: true, type: 'rub' },
+            { key: 'views', name: 'Просмотры', color: '#4f86da', visible: true, type: 'number' },
+            { key: 'clicks', name: 'Клики', color: '#d49a2b', visible: true, type: 'number' },
+            { key: 'amount', name: 'Расходы, ₽', color: '#e26478', visible: true, type: 'rub' },
           ]"
         />
       </section>
@@ -302,7 +302,7 @@ onMounted(loadData)
 }
 
 .eyebrow {
-  color: #a78bfa;
+  color: #6259d9;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -379,7 +379,7 @@ onMounted(loadData)
 .status-banner {
   border: 1px solid rgba(251, 113, 133, 0.28);
   background: rgba(251, 113, 133, 0.08);
-  color: #fda4af;
+  color: #c83b55;
 }
 
 .status-banner span,
@@ -413,7 +413,7 @@ onMounted(loadData)
 .section-card,
 .table-card {
   border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(29, 40, 55, 0.96), rgba(24, 33, 46, 0.96));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.98));
   box-shadow: var(--shadow-sm);
 }
 
@@ -511,7 +511,7 @@ onMounted(loadData)
 }
 
 .metric-row--accent strong {
-  color: #c4b5fd;
+  color: #5b52d6;
 }
 
 .table-wrapper {

@@ -1,29 +1,34 @@
 :root {
-  --primary-color: #111827;
-  --secondary-color: #7c3aed;
-  --secondary-hover: #6d28d9;
-  --accent-color: #ec4899;
+  --primary-color: #18213a;
+  --secondary-color: #635bff;
+  --secondary-hover: #5148df;
+  --accent-color: #d94683;
 
-  --dark-bg: #0f141c;
-  --medium-bg: #151c27;
-  --light-bg: #1c2634;
-  --card-bg: #18212e;
-  --card-bg-elevated: #1d2837;
-  --hover-bg: #222f40;
+  /*
+   * Unified light product palette. Legacy token names are kept because the
+   * existing dashboard/control-panel already consume them extensively.
+   */
+  --dark-bg: #f5f7fb;
+  --medium-bg: #ffffff;
+  --light-bg: #f1f4f9;
+  --card-bg: #ffffff;
+  --card-bg-elevated: #ffffff;
+  --hover-bg: #f2f1ff;
 
-  --text-color: #e8edf5;
-  --text-muted: #94a3b8;
-  --text-subtle: #6f7f93;
-  --border-color: #2b394b;
-  --border-strong: #3b4d63;
+  --text-color: #18213a;
+  --text-muted: #667085;
+  --text-subtle: #8a93a5;
+  --text-secondary: var(--text-muted);
+  --border-color: #e1e6ef;
+  --border-strong: #cbd3e1;
 
-  --success-color: #34d399;
-  --warning-color: #fbbf24;
-  --danger-color: #fb7185;
-  --info-color: #60a5fa;
+  --success-color: #16805f;
+  --warning-color: #a66b08;
+  --danger-color: #c83b55;
+  --info-color: #4f7fd3;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.16);
-  --shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+  --shadow-sm: 0 1px 2px rgba(31, 42, 68, 0.06), 0 4px 14px rgba(31, 42, 68, 0.04);
+  --shadow: 0 18px 48px rgba(42, 49, 82, 0.12);
   --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 16px;

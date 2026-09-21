@@ -99,9 +99,9 @@
           :is-loading="isLoading || isChartsLoading"
           :chart-data="chartData"
           :metrics="[
-            { key: 'orders', name: 'Заказы, ₽', color: '#a78bfa', visible: true, type: 'rub' },
-            { key: 'buyouts', name: 'Выкупы, ₽', color: '#34d399', visible: true, type: 'rub' },
-            { key: 'profit', name: 'Прибыль, ₽', color: '#fb7185', visible: true, type: 'rub' },
+            { key: 'orders', name: 'Заказы, ₽', color: '#6259d9', visible: true, type: 'rub' },
+            { key: 'buyouts', name: 'Выкупы, ₽', color: '#26a77b', visible: true, type: 'rub' },
+            { key: 'profit', name: 'Прибыль, ₽', color: '#e26478', visible: true, type: 'rub' },
           ]"
         />
       </article>
@@ -117,9 +117,9 @@
           :is-loading="isLoading || isChartsLoading"
           :chart-data="chartData"
           :metrics="[
-            { key: 'views', name: 'Просмотры', color: '#60a5fa', visible: true, type: 'number' },
-            { key: 'clicks', name: 'Клики', color: '#fbbf24', visible: true, type: 'number' },
-            { key: 'cart', name: 'В корзину', color: '#c084fc', visible: true, type: 'number' },
+            { key: 'views', name: 'Просмотры', color: '#4f86da', visible: true, type: 'number' },
+            { key: 'clicks', name: 'Клики', color: '#d49a2b', visible: true, type: 'number' },
+            { key: 'cart', name: 'В корзину', color: '#9a6bd9', visible: true, type: 'number' },
           ]"
         />
       </article>
@@ -377,7 +377,7 @@ onMounted(loadDashboard)
 }
 
 .eyebrow {
-  color: #a78bfa;
+  color: #6259d9;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -452,7 +452,7 @@ onMounted(loadDashboard)
   border: 1px solid rgba(96, 165, 250, 0.28);
   border-radius: var(--radius);
   background: rgba(96, 165, 250, 0.08);
-  color: #bfdbfe;
+  color: #3568a8;
   font-size: 13px;
 }
 
@@ -473,7 +473,7 @@ onMounted(loadDashboard)
 .status-banner--error {
   border-color: rgba(251, 113, 133, 0.3);
   background: rgba(251, 113, 133, 0.08);
-  color: #fda4af;
+  color: #c83b55;
 }
 
 .kpi-grid {
@@ -485,7 +485,7 @@ onMounted(loadDashboard)
 .kpi-card,
 .section-card {
   border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(29, 40, 55, 0.96), rgba(24, 33, 46, 0.96));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.98));
   box-shadow: var(--shadow-sm);
 }
 
@@ -529,12 +529,12 @@ onMounted(loadDashboard)
 
 .change-badge--positive {
   background: rgba(52, 211, 153, 0.1);
-  color: #6ee7b7;
+  color: #16805f;
 }
 
 .change-badge--negative {
   background: rgba(251, 113, 133, 0.1);
-  color: #fda4af;
+  color: #c83b55;
 }
 
 .change-badge--neutral {
@@ -599,7 +599,7 @@ onMounted(loadDashboard)
   flex-direction: column;
   justify-content: space-between;
   border-radius: 10px;
-  background: rgba(15, 20, 28, 0.48);
+  background: rgba(239, 242, 249, 0.9);
 }
 
 .plan-metric span {

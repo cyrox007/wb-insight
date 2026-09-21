@@ -199,9 +199,9 @@ onMounted(loadAccounts)
 }
 
 .control-button--primary {
-    border-color: rgba(124, 58, 237, 0.5);
-    background: rgba(124, 58, 237, 0.18);
-    color: #ddd6fe;
+    border-color: rgba(99, 91, 255, 0.32);
+    background: rgba(99, 91, 255, 0.09);
+    color: #5b52d6;
 }
 
 .control-button:disabled {

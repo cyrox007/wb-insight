@@ -144,7 +144,8 @@ onBeforeUnmount(restorePreviousFocus)
 	right: 0;
 	bottom: 0;
 	padding: 16px;
-	background-color: rgba(0, 0, 0, 0.7);
+	background-color: rgba(24, 33, 58, 0.36);
+	backdrop-filter: blur(4px);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -154,7 +155,8 @@ onBeforeUnmount(restorePreviousFocus)
 
 .modal {
 	background-color: var(--card-bg);
-	border-radius: 8px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-lg);
 	padding: 20px;
 	width: 500px;
 	max-width: 90%;

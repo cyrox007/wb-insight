@@ -333,7 +333,7 @@ onMounted(loadData)
 
 .eyebrow {
   margin: 0 0 5px;
-  color: #a78bfa;
+  color: #6259d9;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: .09em;
@@ -388,9 +388,9 @@ h2 { margin-bottom: 0; font-size: 19px; }
 .kpi-card strong { margin-top: 8px; font-size: 23px; letter-spacing: -.03em; }
 .kpi-card small { margin-top: auto; padding-top: 8px; color: var(--text-subtle); font-size: 11px; line-height: 1.35; }
 .kpi-card--accent { border-color: rgba(124, 58, 237, .3); }
-.kpi-card--accent strong { color: #c4b5fd; }
+.kpi-card--accent strong { color: #5b52d6; }
 .kpi-card--warning { border-color: rgba(245, 158, 11, .35); }
-.kpi-card--warning strong { color: #fcd34d; }
+.kpi-card--warning strong { color: #a66b08; }
 
 .balance-card,
 .reports-card { overflow: hidden; border-radius: var(--radius); }
@@ -413,13 +413,13 @@ th, td { padding: 12px 13px; border-bottom: 1px solid var(--border-color); text-
 th { color: var(--text-subtle); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 tbody tr:last-child td { border-bottom: 0; }
 .number-cell { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.total-cell { color: #c4b5fd; font-weight: 700; }
+.total-cell { color: #5b52d6; font-weight: 700; }
 .period-cell { display: flex; flex-direction: column; gap: 3px; white-space: nowrap; }
 .period-cell span { color: var(--text-subtle); font-size: 10px; }
 
 .status-pill { display: inline-flex; padding: 4px 7px; border: 1px solid var(--border-color); border-radius: 999px; color: var(--text-muted); font-size: 10px; white-space: nowrap; }
-.status-pill--ok { border-color: rgba(34, 197, 94, .28); color: #86efac; background: rgba(34, 197, 94, .08); }
-.status-pill--warning { border-color: rgba(245, 158, 11, .3); color: #fcd34d; background: rgba(245, 158, 11, .08); }
+.status-pill--ok { border-color: rgba(34, 197, 94, .28); color: #16805f; background: rgba(22, 128, 95, .08); }
+.status-pill--warning { border-color: rgba(245, 158, 11, .3); color: #a66b08; background: rgba(166, 107, 8, .08); }
 .status-pill--muted { color: var(--text-subtle); }
 .discrepancy,
 .detail-count { display: block; margin-top: 5px; color: var(--text-subtle); font-size: 10px; white-space: nowrap; }

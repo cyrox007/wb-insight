@@ -90,7 +90,7 @@ defineEmits(['update:modelValue'])
 
 .form-textarea:disabled {
 	background-color: var(--dark-bg);
-	color: #666;
+	color: var(--text-subtle);
 	cursor: not-allowed;
 	opacity: 0.7;
 }
