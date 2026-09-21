@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.access_control import Permission
+from core.authorization import require_permission
 from core.dependencies import get_db_session
 from core.lifecycle_config import lifecycle_config
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage, MailStatus
@@ -18,7 +20,11 @@ from services.mail_service import queue_test_email
 from utils.responce_helps import response_error, response_success
 
 
-router = APIRouter(prefix="/control-panel/mail", tags=["Control Panel - Mail"])
+router = APIRouter(
+    prefix="/control-panel/mail",
+    tags=["Control Panel - Mail"],
+    dependencies=[Depends(require_permission(Permission.MAIL_READ))],
+)
 
 
 def _campaign_item(item: MailCampaign) -> dict:
@@ -105,7 +111,7 @@ async def campaign_list(
     )
 
 
-@router.post("/campaigns")
+@router.post("/campaigns", dependencies=[Depends(require_permission(Permission.MAIL_WRITE))])
 async def campaign_create(
     request: Request,
     response: Response,
@@ -154,7 +160,7 @@ async def campaign_preview(campaign_id: UUID, response: Response, db_session: As
     return response_success(**preview)
 
 
-@router.post("/campaigns/{campaign_id}/test-send")
+@router.post("/campaigns/{campaign_id}/test-send", dependencies=[Depends(require_permission(Permission.MAIL_WRITE))])
 async def campaign_test_send(
     campaign_id: UUID,
     request: Request,
@@ -183,7 +189,7 @@ async def campaign_test_send(
     return response_success(message_id=str(message.id), status=message.status)
 
 
-@router.post("/campaigns/{campaign_id}/schedule")
+@router.post("/campaigns/{campaign_id}/schedule", dependencies=[Depends(require_permission(Permission.MAIL_WRITE))])
 async def campaign_schedule(
     campaign_id: UUID,
     request: Request,
@@ -218,7 +224,7 @@ async def campaign_schedule(
     return response_success(campaign=_campaign_item(campaign))
 
 
-@router.post("/campaigns/{campaign_id}/launch")
+@router.post("/campaigns/{campaign_id}/launch", dependencies=[Depends(require_permission(Permission.MAIL_WRITE))])
 async def campaign_launch(campaign_id: UUID, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     disabled = _require_campaign_delivery(response)
     if disabled is not None:
@@ -238,7 +244,7 @@ async def campaign_launch(campaign_id: UUID, response: Response, db_session: Asy
     return response_success(campaign=_campaign_item(campaign))
 
 
-@router.post("/campaigns/{campaign_id}/cancel")
+@router.post("/campaigns/{campaign_id}/cancel", dependencies=[Depends(require_permission(Permission.MAIL_WRITE))])
 async def campaign_cancel(campaign_id: UUID, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     campaign_result = await db_session.execute(
         select(MailCampaign).where(MailCampaign.id == campaign_id).with_for_update()
