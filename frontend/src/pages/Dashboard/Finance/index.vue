@@ -1,5 +1,5 @@
 <template>
-  <section class="finance-page">
+  <section class="finance-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoaded }">
     <header class="page-header">
       <div>
         <p class="eyebrow">Финансовый контроль</p>
