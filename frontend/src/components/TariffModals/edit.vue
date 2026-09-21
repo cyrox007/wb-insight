@@ -53,13 +53,13 @@ async function editTariff() {
 		return
 	}
 
-	const price = Number(String(tariffData.value.price_rub).replace(',', '.'))
-
 	if (isSystemTariff.value) {
 		tariffData.value.price_rub = '0.00'
 		tariffData.value.is_active = true
 		tariffData.value.is_public = false
 	}
+
+	const price = Number(String(tariffData.value.price_rub).replace(',', '.'))
 	if (!Number.isFinite(price) || price < 0) {
 		formMessage.value = 'Цена должна быть неотрицательным числом.'
 		messageType.value = 'error'
