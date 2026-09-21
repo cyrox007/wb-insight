@@ -31,7 +31,7 @@ async function loadUser() {
 	isLoading.value = true
 	loadError.value = ''
 	try {
-		const { data } = await CP_Users.getUserByUuid(route.params.id)
+		const { data } = await CP_Users.getUser(route.params.id)
 		if (data?.status === 'success') {
 			targetUser.value = data.target_user
 		} else {
