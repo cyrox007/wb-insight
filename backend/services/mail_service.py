@@ -273,7 +273,6 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
                 user_id=message.user_id,
                 list_id="marketing",
             )
-            from_domain = runtime_domain = ""
             runtime = await get_mail_transport_runtime(session)
             from_domain = runtime.SMTP_FROM_EMAIL.rpartition("@")[2].strip().lower()
             list_id = f"marketing.{from_domain}" if from_domain else "marketing.wb-insight"
