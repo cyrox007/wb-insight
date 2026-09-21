@@ -783,22 +783,24 @@ onMounted(async () => {
 					<div>
 						<p class="cp-eyebrow">Доставляемость</p>
 						<h3>Защита от спама и подмены отправителя</h3>
-						<span>Часть требований контролирует приложение, SPF/DKIM/DMARC/PTR настраиваются у DNS/SMTP-провайдера.</span>
+						<span v-if="meta.gateway?.provider === 'rusender'">HTTPS-контур контролирует приложение, а SPF/DKIM/DMARC и репутацию отправки обслуживает домен и RuSender.</span>
+						<span v-else>Часть требований контролирует приложение, SPF/DKIM/DMARC/PTR настраиваются у DNS/SMTP-провайдера.</span>
 					</div>
 				</div>
 				<div class="deliverability-grid">
-					<div :class="{ ok: meta.gateway?.deliverability?.tls }"><strong>STARTTLS</strong><span>{{ meta.gateway?.deliverability?.tls ? 'Включён' : 'Требует настройки' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.tls }"><strong>{{ meta.gateway?.provider === 'rusender' ? 'HTTPS / TLS' : 'STARTTLS' }}</strong><span>{{ meta.gateway?.deliverability?.tls ? 'Защищено' : 'Требует настройки' }}</span></div>
 					<div :class="{ ok: meta.gateway?.deliverability?.sender_identity }"><strong>From identity</strong><span>{{ meta.gateway?.deliverability?.sender_identity ? 'Настроен' : 'Требует настройки' }}</span></div>
-					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : 'Нужны MAIL_UNSUBSCRIBE_BASE_URL + HMAC key' }}</span></div>
-					<div :class="{ ok: meta.gateway?.deliverability?.reply_to_configured }"><strong>Reply-To</strong><span>{{ meta.gateway?.deliverability?.reply_to_configured ? 'Настроен' : 'Рекомендуется' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : (meta.gateway?.provider === 'rusender' ? 'Не используется транзакционным API' : 'Нужны MAIL_UNSUBSCRIBE_BASE_URL + HMAC key') }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.reply_to_configured }"><strong>Reply-To</strong><span>{{ meta.gateway?.deliverability?.reply_to_configured ? 'Настроен' : (meta.gateway?.provider === 'rusender' ? 'Не заявлен в текущем API-контракте' : 'Рекомендуется') }}</span></div>
 					<div class="external"><strong>SPF</strong><span>Проверить DNS</span></div>
-					<div class="external"><strong>DKIM</strong><span>Включить у SMTP-провайдера</span></div>
+					<div class="external"><strong>DKIM</strong><span>{{ meta.gateway?.provider === 'rusender' ? 'Контролируется доменом/RuSender' : 'Включить у SMTP-провайдера' }}</span></div>
 					<div class="external"><strong>DMARC</strong><span>Проверить DNS</span></div>
-					<div class="external"><strong>PTR / rDNS</strong><span>Проверить у провайдера IP</span></div>
+					<div class="external"><strong>PTR / rDNS</strong><span>{{ meta.gateway?.provider === 'rusender' ? 'На стороне RuSender' : 'Проверить у провайдера IP' }}</span></div>
 				</div>
 				<div class="cp-info-callout">
-					<strong>Для маркетинговых писем приложение добавляет служебные заголовки автоматически.</strong>
-					<span>Date, Message-ID, Reply-To, List-ID, List-Unsubscribe, List-Unsubscribe-Post и Precedence: bulk. Транзакционные письма подтверждения и recovery не помечаются как bulk. Безопасная подпись отписки задаётся на сервере через MAIL_UNSUBSCRIBE_HMAC_KEY.</span>
+					<strong>{{ meta.gateway?.provider === 'rusender' ? 'RuSender API используется для транзакционной почты.' : 'Для маркетинговых писем приложение добавляет служебные заголовки автоматически.' }}</strong>
+					<span v-if="meta.gateway?.provider === 'rusender'">Подтверждение email, восстановление пароля и системные уведомления отправляются по HTTPS. Для каждого запроса приложение передаёт idempotencyKey и сохраняет UUID RuSender как provider_message_id.</span>
+					<span v-else>Date, Message-ID, Reply-To, List-ID, List-Unsubscribe, List-Unsubscribe-Post и Precedence: bulk. Транзакционные письма подтверждения и recovery не помечаются как bulk. Безопасная подпись отписки задаётся на сервере через MAIL_UNSUBSCRIBE_HMAC_KEY.</span>
 				</div>
 			</section>
 
@@ -806,7 +808,7 @@ onMounted(async () => {
 				<div>
 					<p class="cp-eyebrow">Проверка</p>
 					<h3>Отправить тестовое письмо</h3>
-					<p class="cp-card-note">Тест идёт напрямую через текущую эффективную SMTP-конфигурацию и помогает проверить host, STARTTLS и credentials до запуска кампаний.</p>
+					<p class="cp-card-note">{{ meta.gateway?.provider === 'rusender' ? 'Тест идёт напрямую через RuSender API по HTTPS и проверяет Key ID, API token и From-домен.' : 'Тест идёт напрямую через текущую SMTP-конфигурацию и проверяет host, STARTTLS и credentials.' }}</p>
 				</div>
 				<div class="gateway-test-action">
 					<input v-model.trim="gatewayTestEmail" type="email" placeholder="your@email.com">
@@ -923,6 +925,13 @@ onMounted(async () => {
 .gateway-status-card dt { color:var(--text-muted); }
 .gateway-status-card dd { margin:0; font-weight:700; }
 .gateway-form { display:grid; gap:16px; }
+.provider-choice { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.provider-choice label { display:flex; align-items:flex-start; gap:9px; padding:12px; border:1px solid var(--border-color); border-radius:10px; background:var(--light-bg); cursor:pointer; }
+.provider-choice label.active { border-color:color-mix(in srgb,var(--secondary-color) 45%,var(--border-color)); background:color-mix(in srgb,var(--secondary-color) 8%,var(--card-bg)); }
+.provider-choice input { margin-top:3px; }
+.provider-choice span { display:grid; gap:3px; }
+.provider-choice strong { font-size:12px; }
+.provider-choice small { color:var(--text-muted); font-size:10px; line-height:1.35; }
 .gateway-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .gateway-fields .wide { grid-column:1/-1; }
 .danger-toggle { color:var(--danger-color) !important; }
@@ -946,6 +955,7 @@ onMounted(async () => {
 }
 @media(max-width:760px) {
 	.mail-header,.editor-head,.section-caption,.gateway-test-card { align-items:stretch; flex-direction:column; }
+	.provider-choice { grid-template-columns:1fr; }
 	.campaign-fields,.audience-basics { grid-template-columns:1fr; }
 	.mail-stats { grid-template-columns:1fr 1fr; }
 	.mail-test,.mail-schedule,.gateway-test-action { flex-direction:column; align-items:stretch; }
