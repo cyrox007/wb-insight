@@ -138,6 +138,8 @@ class MailProviderConfig(Database.Base):
     host: Mapped[str | None] = mapped_column(String(255), nullable=True)
     port: Mapped[int] = mapped_column(Integer, nullable=False, default=587, server_default="587")
     from_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    from_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    reply_to_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     starttls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=10, server_default="10")
     encrypted_secrets: Mapped[str | None] = mapped_column(Text, nullable=True)

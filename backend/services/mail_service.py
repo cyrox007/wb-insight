@@ -19,6 +19,7 @@ from models.users_model import User
 from services.account_lifecycle_service import issue_password_reset_token
 from services.email_verification_service import issue_email_verification_token
 from services.mail_transport_service import get_mail_transport_runtime
+from services.mail_unsubscribe_service import unsubscribe_url
 from utils.mail_html import render_mail_document
 
 
@@ -53,6 +54,7 @@ async def _smtp_send(
     body: str,
     *,
     html_body: str | None = None,
+    headers: dict[str, str] | None = None,
 ) -> str:
     """Dispatch through the effective SMTP runtime without exposing secrets."""
     runtime = await get_mail_transport_runtime(session)
@@ -69,10 +71,13 @@ async def _smtp_send(
     provider = SMTPMailProvider(runtime)
     receipt = await provider.send(
         sender=runtime.SMTP_FROM_EMAIL,
+        sender_name=runtime.SMTP_FROM_NAME,
+        reply_to=runtime.SMTP_REPLY_TO_EMAIL,
         recipient=recipient,
         subject=subject,
         body=body,
         html_body=html_body,
+        headers=headers,
     )
     return receipt.provider_message_id or ""
 
@@ -256,12 +261,39 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
     await session.flush()
 
     html_body = None
+    delivery_headers: dict[str, str] | None = None
     if message.kind == MailKind.TRANSACTIONAL.value:
         subject, body = await _render_transactional(session, message)
     else:
         subject = (message.subject or "WB Insight")[:255]
         body = message.body or ""
-        if message.body_html:
+        if message.kind == MailKind.CAMPAIGN.value:
+            unsubscribe = unsubscribe_url(
+                email=message.recipient_email,
+                user_id=message.user_id,
+                list_id="marketing",
+            )
+            runtime = await get_mail_transport_runtime(session)
+            from_domain = runtime.SMTP_FROM_EMAIL.rpartition("@")[2].strip().lower()
+            list_id = f"marketing.{from_domain}" if from_domain else "marketing.wb-insight"
+            delivery_headers = {
+                "List-Unsubscribe": f"<{unsubscribe}>",
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                "List-ID": f"WB Insight marketing <{list_id}>",
+                "Precedence": "bulk",
+            }
+            body = (
+                body.rstrip()
+                + "\n\n---\n"
+                + "Отписаться от маркетинговых писем WB Insight:\n"
+                + unsubscribe
+            )
+            if message.body_html:
+                html_body = render_mail_document(
+                    message.body_html,
+                    unsubscribe_url=unsubscribe,
+                )
+        elif message.body_html:
             html_body = render_mail_document(message.body_html)
 
     provider_id = await _smtp_send(
@@ -270,6 +302,7 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
         subject,
         body,
         html_body=html_body,
+        headers=delivery_headers,
     )
     message.attempt_count += 1
     message.provider_message_id = provider_id

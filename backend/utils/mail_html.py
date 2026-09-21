@@ -170,8 +170,22 @@ def html_to_text(value: str | None) -> str:
     return "\n\n".join(line for line in lines if line).strip()
 
 
-def render_mail_document(fragment: str) -> str:
+def render_mail_document(
+    fragment: str,
+    *,
+    unsubscribe_url: str | None = None,
+) -> str:
     safe_fragment = sanitize_mail_html(fragment)
+    unsubscribe_footer = ""
+    if unsubscribe_url:
+        safe_unsubscribe = escape(unsubscribe_url, quote=True)
+        unsubscribe_footer = (
+            '<tr><td style="padding:0 32px 28px;color:#64748b;font-size:12px;line-height:1.5;">'
+            'Вы получили это письмо как пользователь WB Insight. '
+            f'<a href="{safe_unsubscribe}" style="color:#64748b;text-decoration:underline;">'
+            'Отписаться от маркетинговых писем</a>.'
+            '</td></tr>'
+        )
     return (
         '<!doctype html><html><body style="margin:0;padding:0;background:#f5f6fb;'
         'font-family:Arial,sans-serif;color:#182033;">'
@@ -181,5 +195,7 @@ def render_mail_document(fragment: str) -> str:
         'style="width:100%;max-width:640px;background:#ffffff;border-radius:16px;'
         'box-shadow:0 8px 32px rgba(15,23,42,.08);"><tr><td style="padding:32px;">'
         + safe_fragment
-        + '</td></tr></table></td></tr></table></body></html>'
+        + '</td></tr>'
+        + unsubscribe_footer
+        + '</table></td></tr></table></body></html>'
     )
