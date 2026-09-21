@@ -832,8 +832,8 @@ onMounted(async () => {
 		</template>
 
 		<Modal :is-open="Boolean(confirmAction)" size="small" :close-on-overlay-click="true" @close="confirmAction = null">
-			<template #header><h3>{{ confirmTitle }}</h3></template>
-			<template #body><p class="mail-confirm__text">{{ confirmText }}</p></template>
+			<template #header><h3 class="cp-modal-title">{{ confirmTitle }}</h3></template>
+			<template #body><p class="cp-modal-copy">{{ confirmText }}</p></template>
 			<template #footer><div class="cp-actions"><BaseButton variant="outline" text="Отмена" @click="confirmAction = null" /><BaseButton variant="primary" :text="confirmAction === 'cancel' ? 'Остановить' : 'Запустить'" @click="confirmPendingAction" /></div></template>
 		</Modal>
 	</section>
