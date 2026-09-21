@@ -21,6 +21,10 @@
 - P42 RuSender HTTPS transactional provider закрыт PR #120, merge `cf11b3c60cb24b74ce7dd9f1dc615bca6848343f`;
 - P43 password-recovery hardening закрыт PR #121, merge `560322d264bde219338498cdb076e920de2ab9c9`;
 - P44 Control Panel UI/RBAC UX unification закрыт PR #122, merge `f9d775e25a49df765d7839b42bcd15f8b60976e1`; issue #62 закрыт;
+- P47 DB-first mail bootstrap + auth-mail readiness diagnostics закрыт PR #125, merge `cf40d2738a3ac9028936a7c6a65e35e9fd6811fe`;
+- P48 backend release warning cleanup закрыт PR #126, merge `aafac5564c4d4b1dcbb708f5787df56f8e499061`;
+- P49 release-smoke mail gateway preflight закрыт PR #127, merge `46e08f966b0862dc523de718e4a20bc49eea3bdb`;
+- P50 role-aware staff profile закрыт PR #128, merge `0118ce67e4bf79e7cbdffd285381ed48e668a991`;
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest v2 остаются постоянными release gates;
 - **WB Web v1 feature scope заморожен**: новые продуктовые функции не добавляются до beta, кроме исправления обнаруженных blocker-дефектов;
 - текущий этап — **P40 / issue #78: production-like beta acceptance и закрытие evidence**;
@@ -131,6 +135,15 @@ Exact final head #77 прошёл Frontend build, Backend security, Database mig
 
 Эти изменения не расширяют seller analytics scope `1.0.0`: они закрывают доступность, безопасность и эксплуатационную готовность auth/admin/mail контуров перед P40.
 
+## Этап C10 — P47–P50: bootstrap, release smoke и role-aware account UX — закрыт
+
+Дополнительный acceptance hardening после первых real-provider прогонов:
+
+- **P47 / PR #125** — `MAIL_CONFIG_SOURCE=auto` стал DB-first: encrypted DB provider имеет приоритет, placeholder ENV fallback валидируется только если действительно нужен; Control Panel отдельно показывает readiness transport/email verification/password reset;
+- **P48 / PR #126** — устранены собственные release warnings без изменения billing semantics: SQLAlchemy import, PostgreSQL application name, Sber callback OpenAPI operation IDs и CI JWT key size;
+- **P49 / PR #127** — release smoke получил authenticated mail gateway preflight с проверкой expected provider и отдельных verification/recovery capabilities до запуска disposable real-mail flow;
+- **P50 / PR #128** — основной профиль staff-аккаунта отделён от seller-only тарифов, WB connections, COGS и manual expenses; seller analytics остаётся отдельным вторичным workspace.
+
 ## Этап D — P40 / `0.9.0-beta.1` candidate production-like validation — открыт
 
 **Issue:** #78.
@@ -144,7 +157,7 @@ P40 не расширяет feature scope. Его задача — доказа�
 - backend/Celery/Beat на Python 3.12, frontend build на поддерживаемой Node-линии;
 - clean working tree, миграции clean DB + upgrade копии существующей БД;
 - deploy/rollback evidence без destructive downgrade;
-- полный `ops/release_smoke.py` без skip disposable registration;
+- полный `ops/release_smoke.py` без skip disposable registration; перед real-mail flow включается authenticated mail gateway preflight с expected provider `rusender`;
 - **реальная email verification** через доставляемый disposable/catch-all address, затем demo activation; текущий production-like transactional transport — RuSender HTTPS API;
 - real-mail password reset через тот же provider-neutral acceptance hook, включая проверку resend throttling и повторный login после session-version rotation;
 - login/refresh-cookie restore/logout/deactivation;
@@ -199,7 +212,7 @@ Stable выпускается из проверенного RC, а не из н�
 
 ## Ownership
 
-Внутри репозитория закрыты P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract, P35 data-accuracy completeness, P36 systemd deployment, P37 audit, P38/P39 verified identity/mail и последующие P41–P44 acceptance blockers (staff UX, user lifecycle administration, RuSender HTTPS transport, recovery/UI hardening). Текущая code-side работа — P40 acceptance tooling и только исправление дефектов, найденных фактическим acceptance.
+Внутри репозитория закрыты P31 lifecycle, P32 registration/beta-smoke, P33 production-config, P34 evidence-contract, P35 data-accuracy completeness, P36 systemd deployment, P37 audit, P38/P39 verified identity/mail и последующие P41–P50 acceptance blockers/hardening (staff UX, user lifecycle administration, RuSender HTTPS transport, recovery/UI, DB-first mail bootstrap, release-smoke preflight и role-aware staff profile). Текущая code-side работа — P40 acceptance tooling и только исправление дефектов, найденных фактическим acceptance.
 
 Внешние действия владельца/инфраструктуры: domain/TLS, реальный mail provider + disposable/catch-all test mailbox, WB partner/seller credentials/limits, merchant credentials/refund procedure, legal approval/requisites/retention, alert/logging/object-storage providers и фактическое выполнение production-like deployment/smoke.
 
