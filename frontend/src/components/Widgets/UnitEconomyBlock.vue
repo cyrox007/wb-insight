@@ -28,6 +28,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { formatFiniteNumber, toFiniteNumber } from '@/utils/safeNumber';
 
 const props = defineProps({
 	title: {
@@ -51,26 +52,26 @@ const hasData = computed(() => {
 const formatValue = (value, type = 'currency') => {
 	if (value === null || value === undefined || value === '') return '—';
 	
-	const numValue = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]/g, '')) : value;
-	
-	if (isNaN(numValue)) return value;
+	const rawValue = typeof value === 'string' ? value.replace(/[^0-9.-]/g, '') : value;
+	const numValue = toFiniteNumber(rawValue);
+	if (numValue === null) return '—';
 
 	switch (type) {
 		case 'currency':
-			return new Intl.NumberFormat('ru-RU', {
+			return formatFiniteNumber(numValue, {
 				minimumFractionDigits: 2,
-				maximumFractionDigits: 2
-			}).format(numValue) + ' ₽';
+				maximumFractionDigits: 2,
+			}) + ' ₽';
 		case 'percent':
-			return new Intl.NumberFormat('ru-RU', {
+			return formatFiniteNumber(numValue, {
 				minimumFractionDigits: 2,
-				maximumFractionDigits: 2
-			}).format(numValue) + '%';
+				maximumFractionDigits: 2,
+			}) + '%';
 		case 'number':
-			return new Intl.NumberFormat('ru-RU', {
+			return formatFiniteNumber(numValue, {
 				minimumFractionDigits: 0,
-				maximumFractionDigits: 2
-			}).format(numValue);
+				maximumFractionDigits: 2,
+			});
 		default:
 			return value;
 	}
