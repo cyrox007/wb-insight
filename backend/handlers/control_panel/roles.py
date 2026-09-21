@@ -1,20 +1,36 @@
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.access_control import Permission, permissions_for_role
+from core.authorization import require_permission
 from core.dependencies import get_db_session
-from core.middleware import auth_middle
 from services.user_service import create_user_role_association, get_user_role_association_by_code, delete_role_association
 from utils.responce_helps import response_success, response_error
 from models.users_model import UserRole
 
-router = APIRouter(prefix='/control-panel/roles', tags=['Roles'])
+router = APIRouter(
+    prefix='/control-panel/roles',
+    tags=['Roles'],
+    dependencies=[Depends(require_permission(Permission.ROLES_READ))],
+)
 
 @router.get('/')
 async def get_roles(response: Response, db_session: AsyncSession = Depends(get_db_session)):
-    roles_list = [role.value for role in UserRole]
-    return response_success(roles=roles_list)
+    roles_list = [
+        {
+            "code": role.value,
+            "permissions": sorted(
+                permission.value for permission in permissions_for_role(role)
+            ),
+        }
+        for role in UserRole
+    ]
+    return response_success(
+        roles=roles_list,
+        permissions=[permission.value for permission in Permission],
+    )
 
-@router.post('/', dependencies=[Depends(auth_middle)])
+@router.post('/', dependencies=[Depends(require_permission(Permission.ROLES_WRITE))])
 async def create_role(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     input_data = await request.json()
 
@@ -48,7 +64,7 @@ async def create_role(request: Request, response: Response, db_session: AsyncSes
     
     return response_success(message='Роль успешно добавлена', code="role_created")
 
-@router.delete('/{user_id}/{role_code}', dependencies=[Depends(auth_middle)])
+@router.delete('/{user_id}/{role_code}', dependencies=[Depends(require_permission(Permission.ROLES_WRITE))])
 async def remove_role(user_id: str, role_code: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not user_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
