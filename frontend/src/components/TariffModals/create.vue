@@ -18,7 +18,6 @@ const tariffCode = ref('')
 const tariffName = ref('')
 const tariffPrice = ref('')
 const tariffDescription = ref('')
-const isActive = ref(true)
 const formMessage = ref('')
 const messageType = ref('')
 
@@ -27,7 +26,6 @@ function resetForm() {
 	tariffName.value = ''
 	tariffPrice.value = ''
 	tariffDescription.value = ''
-	isActive.value = true
 	formMessage.value = ''
 	messageType.value = ''
 }
@@ -71,7 +69,7 @@ async function createTariff() {
 			name: tariffName.value.trim(),
 			price: Number(priceNum.toFixed(2)),
 			description: tariffDescription.value.trim(),
-			isActive: isActive.value
+			isActive: false
 		})
 
 		if (response.data?.status !== 'success') {
@@ -110,22 +108,10 @@ async function createTariff() {
 				<TextInput v-model="tariffPrice" label="Цена, ₽/мес" placeholder="0" type="number" :disabled="isSaving" />
 				<TextareaInput v-model="tariffDescription" label="Описание" placeholder="Кратко опишите тариф" :rows="3" :disabled="isSaving" />
 
-				<div class="cp-toggle-row">
-					<div class="cp-toggle-row__copy">
-						<div class="cp-toggle-row__label">Активный тариф</div>
-						<div class="cp-toggle-row__hint">{{ isActive ? 'Доступен для подключения' : 'Отключён для подключения' }}</div>
-					</div>
-					<button
-						type="button"
-						class="cp-toggle"
-						:class="{ 'cp-toggle--on': isActive }"
-						:aria-pressed="isActive"
-						aria-label="Активный тариф"
-						:disabled="isSaving"
-						@click="isActive = !isActive"
-					></button>
+				<div class="cp-info-callout">
+					<strong>Новый тариф создаётся как черновик.</strong>
+					<span>Сначала задайте обязательные лимиты <code>wb_accounts</code> и <code>sync_frequency_hours</code>, затем активируйте и опубликуйте тариф.</span>
 				</div>
-				<p class="cp-muted">Публичность тарифа можно изменить после создания в карточке тарифа.</p>
 			</div>
 
 			<FormMessage v-if="formMessage" :message="formMessage" :message-type="messageType" />
