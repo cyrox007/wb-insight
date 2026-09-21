@@ -49,7 +49,7 @@
   padding: 12px 14px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: rgba(247, 249, 253, 0.96);
+  background: var(--light-bg);
 }
 
 .cp-toggle-row__copy {
@@ -142,7 +142,7 @@
    rendered inside the Control Panel shell so customer-facing flows stay untouched. */
 .cp-shell .modal-overlay {
   padding: 16px;
-  background: rgba(24, 33, 58, 0.36);
+  background: var(--overlay-bg);
   backdrop-filter: blur(4px);
 }
 
@@ -155,7 +155,7 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background: var(--card-bg-elevated);
-  box-shadow: 0 24px 70px rgba(31, 42, 68, 0.22);
+  box-shadow: var(--shadow);
 }
 
 .cp-shell .modal-overlay .modal-small {
