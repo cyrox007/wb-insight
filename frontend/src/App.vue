@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import AuthService from './API/AuthService.js'
@@ -23,6 +23,7 @@ const navItems = [
 ]
 
 const isAuthenticated = computed(() => authStore.isAuthSatus)
+const isLandingGuest = computed(() => !isAuthenticated.value && route.name === 'home')
 const user = computed(() => authStore.getUser)
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'))
 const showAccountFilter = computed(() => navItems.some(item => item.name === route.name))
@@ -32,6 +33,19 @@ const currentYear = new Date().getFullYear()
 
 const showLogin = ref(false)
 const showRegister = ref(false)
+
+const openLogin = () => { showLogin.value = true }
+const openRegister = () => { showRegister.value = true }
+
+onMounted(() => {
+  window.addEventListener('wb:open-login', openLogin)
+  window.addEventListener('wb:open-register', openRegister)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('wb:open-login', openLogin)
+  window.removeEventListener('wb:open-register', openRegister)
+})
 
 const logout = async () => {
   try {
@@ -50,13 +64,20 @@ const logout = async () => {
 </script>
 
 <template>
-  <header class="app-header">
+  <header class="app-header" :class="{ 'app-header--landing': isLandingGuest }">
     <div class="app-header__inner">
       <RouterLink to="/" class="brand" aria-label="WB Insight — на главную">
         <span class="brand__mark">WB</span>
         <span class="brand__name">Insight</span>
         <span class="brand__badge">AI</span>
       </RouterLink>
+
+      <nav v-if="isLandingGuest" class="landing-header-nav" aria-label="Навигация промо-страницы">
+        <a href="#features">Возможности</a>
+        <a href="#how">Как работает</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#faq">FAQ</a>
+      </nav>
 
       <div class="header-actions">
         <details v-if="isAuthenticated && user" class="user-menu">
@@ -87,8 +108,8 @@ const logout = async () => {
         </details>
 
         <div v-else class="auth-actions">
-          <button class="button button--ghost" type="button" @click="showLogin = true">Войти</button>
-          <button class="button button--primary" type="button" @click="showRegister = true">Регистрация</button>
+          <button class="button button--ghost" type="button" @click="openLogin">Войти</button>
+          <button class="button button--primary" type="button" @click="openRegister">Регистрация</button>
         </div>
       </div>
     </div>
@@ -116,7 +137,7 @@ const logout = async () => {
     <RouterView :key="dashboardViewKey" />
   </main>
 
-  <footer v-if="!isAuthenticated" class="app-footer">
+  <footer v-if="!isAuthenticated && !isLandingGuest" class="app-footer">
     © {{ currentYear }} WB Insight
   </footer>
 </template>
@@ -129,6 +150,49 @@ const logout = async () => {
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(15, 20, 28, 0.9);
   backdrop-filter: blur(16px);
+}
+
+.app-header--landing {
+  border-bottom-color: rgba(99, 91, 255, 0.1);
+  background: rgba(255, 255, 255, 0.88);
+  color: #14213d;
+}
+
+.app-header--landing .brand__name {
+  color: #14213d;
+}
+
+.app-header--landing .brand__badge {
+  color: #635bff;
+  border-color: rgba(99, 91, 255, 0.22);
+}
+
+.app-header--landing .button--ghost {
+  color: #3a425a;
+  border-color: #e1e3ef;
+}
+
+.app-header--landing .button--ghost:hover {
+  background: #f5f5ff;
+}
+
+.landing-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-left: auto;
+  margin-right: 24px;
+  color: #697086;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.landing-header-nav a {
+  transition: color var(--transition);
+}
+
+.landing-header-nav a:hover {
+  color: #635bff;
 }
 
 .app-header__inner {
@@ -367,6 +431,10 @@ const logout = async () => {
 }
 
 @media (max-width: 900px) {
+  .landing-header-nav {
+    display: none;
+  }
+
   .workspace-bar {
     align-items: stretch;
     flex-direction: column;
