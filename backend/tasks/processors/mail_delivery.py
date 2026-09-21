@@ -5,7 +5,6 @@ from sqlalchemy import select
 
 from celery_app import celery_app
 from core.database_celery import get_session
-from core.lifecycle_config import lifecycle_config
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage
 from services.mail_campaign_service import due_scheduled_campaign_ids, launch_campaign
 from services.mail_service import (
@@ -15,6 +14,7 @@ from services.mail_service import (
     mark_message_failure,
     refresh_campaign_counters,
 )
+from services.mail_transport_service import get_mail_transport_runtime
 
 
 async def _campaign_id(message_id):
@@ -40,11 +40,11 @@ async def _refresh_campaign(campaign_id) -> None:
 
 
 async def _process_due_campaigns() -> dict[str, int]:
-    if not lifecycle_config.MAIL_DELIVERY_ENABLED:
-        return {"launched": 0, "failed": 0}
-
     session = await get_session()
     try:
+        runtime = await get_mail_transport_runtime(session)
+        if not runtime.MAIL_DELIVERY_ENABLED or not runtime.ready:
+            return {"launched": 0, "failed": 0}
         campaign_ids = await due_scheduled_campaign_ids(session)
     finally:
         await session.close()
@@ -86,9 +86,12 @@ async def _process_due_mail() -> dict[str, int]:
 
     session = await get_session()
     try:
+        runtime = await get_mail_transport_runtime(session)
+        if not runtime.ready:
+            return {"processed": 0, "failed": 0}
         ids = await due_message_ids(
             session,
-            include_marketing=lifecycle_config.MAIL_DELIVERY_ENABLED,
+            include_marketing=runtime.MAIL_DELIVERY_ENABLED,
         )
     finally:
         await session.close()
