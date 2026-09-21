@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { finiteOrZero, formatFiniteNumber } from '@/utils/safeNumber';
 
 const props = defineProps({
     data: {
@@ -35,11 +36,14 @@ const hasData = computed(() => {
 
 const chartData = computed(() => {
     if (!hasData.value) return [];
-    const total = props.data.reduce((sum, item) => sum + (item.value || 0), 0);
-    return props.data.map(item => ({
+    const normalized = props.data.map(item => ({
         category: item.category,
-        value: item.value || 0,
-        percent: total > 0 ? ((item.value || 0) / total * 100).toFixed(1) : 0
+        value: finiteOrZero(item.value),
+    }));
+    const total = normalized.reduce((sum, item) => sum + item.value, 0);
+    return normalized.map(item => ({
+        ...item,
+        percent: total > 0 ? Number(((item.value / total) * 100).toFixed(1)) : 0,
     }));
 });
 
@@ -52,17 +56,14 @@ const getColor = (index) => {
 };
 
 const formatPrice = (value) => {
-    if (!value && value !== 0) return '0 ₽';
-    return value.toLocaleString('ru-RU') + ' ₽';
+    return formatFiniteNumber(value, { maximumFractionDigits: 2, fallback: '0' }) + ' ₽';
 };
 
 const formatShortPrice = (value) => {
-    if (value >= 1000000) {
-        return (value / 1000000).toFixed(1) + ' млн';
-    } else if (value >= 1000) {
-        return (value / 1000).toFixed(0) + ' тыс';
-    }
-    return value.toString();
+    const numeric = finiteOrZero(value);
+    if (numeric >= 1000000) return (numeric / 1000000).toFixed(1) + ' млн';
+    if (numeric >= 1000) return (numeric / 1000).toFixed(0) + ' тыс';
+    return formatFiniteNumber(numeric, { maximumFractionDigits: 0, fallback: '0' });
 };
 
 const segments = computed(() => {
