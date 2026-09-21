@@ -222,32 +222,27 @@ const logout = async () => {
       <DashboardAccountSelect v-if="showAccountFilter" class="workspace-account" />
     </section>
 
-    <Transition name="page-state" mode="out-in">
-      <DashboardState
-        v-if="showAccountFilter && accountsLoading && !accountsLoaded"
-        key="accounts-loading"
-        kind="loading"
-      />
-      <DashboardState
-        v-else-if="showAccountFilter && accountsError"
-        key="accounts-error"
-        kind="error"
-        title="Не удалось проверить кабинеты Wildberries"
-        :message="accountsError"
-        action-label="Повторить"
-        @retry="loadAccounts({ force: true })"
-      />
-      <DashboardState
-        v-else-if="dashboardNeedsAccount"
-        key="accounts-empty"
-        kind="account"
-        title="Нет доступного кабинета Wildberries"
-        message="Добавьте действующий кабинет Wildberries или проверьте доступность аналитики на текущем тарифе. Все разделы аналитики используют один и тот же кабинет."
-        action-label="Профиль и подключения"
-        :action-to="{ name: 'dashboard.profile' }"
-      />
-      <RouterView v-else :key="dashboardViewKey" />
-    </Transition>
+    <DashboardState
+      v-if="showAccountFilter && accountsLoading && !accountsLoaded"
+      kind="loading"
+    />
+    <DashboardState
+      v-else-if="showAccountFilter && accountsError"
+      kind="error"
+      title="Не удалось проверить кабинеты Wildberries"
+      :message="accountsError"
+      action-label="Повторить"
+      @retry="loadAccounts({ force: true })"
+    />
+    <DashboardState
+      v-else-if="dashboardNeedsAccount"
+      kind="account"
+      title="Нет доступного кабинета Wildberries"
+      message="Добавьте действующий кабинет Wildberries или проверьте доступность аналитики на текущем тарифе. Все разделы аналитики используют один и тот же кабинет."
+      action-label="Профиль и подключения"
+      :action-to="{ name: 'dashboard.profile' }"
+    />
+    <RouterView v-else :key="dashboardViewKey" />
   </main>
 
   <footer v-if="!isAuthenticated && !isLandingGuest" class="app-footer">
@@ -508,16 +503,6 @@ const logout = async () => {
   transform: translateY(-6px) scale(0.985);
 }
 
-.page-state-enter-active,
-.page-state-leave-active {
-  transition: opacity 220ms ease, transform 260ms ease;
-}
-
-.page-state-enter-from,
-.page-state-leave-to {
-  opacity: 0;
-  transform: translateY(6px);
-}
 
 .menu-action {
   width: 100%;
