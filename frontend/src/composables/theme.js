@@ -27,6 +27,8 @@ const applyTheme = (value) => {
   if (typeof document !== 'undefined') {
     document.documentElement.dataset.theme = value
     document.documentElement.style.colorScheme = value
+    const themeColor = document.getElementById('theme-color')
+    if (themeColor) themeColor.content = value === THEME_DARK ? '#111720' : '#f5f7fb'
   }
 }
 
