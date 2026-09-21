@@ -3,8 +3,35 @@ import { useAuthStore } from '@/stores/auth'
 import { pinia } from '@/stores/pinia'
 
 
+const prefersReducedMotion = () =>
+	typeof window !== 'undefined' &&
+	typeof window.matchMedia === 'function' &&
+	window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 const router = createRouter({
 	history: createWebHistory(import.meta.env.BASE_URL),
+	scrollBehavior(to, from, savedPosition) {
+		if (savedPosition) return savedPosition
+
+		const behavior = prefersReducedMotion() ? 'auto' : 'smooth'
+
+		if (to.hash) {
+			return {
+				el: to.hash,
+				top: 84,
+				behavior,
+			}
+		}
+
+		if (to.path !== from.path) {
+			return {
+				top: 0,
+				behavior,
+			}
+		}
+
+		return false
+	},
 	routes: [
 		{ path: '/', name: 'home', component: () => import('../pages/HomePage/index.vue'), meta: { title: 'Главная', requestGuest: true } },
 		{ path: '/legal/:code', name: 'legal.document', component: () => import('../pages/Legal/DocumentPage.vue'), meta: { title: 'Юридический документ · WB Insight' } },

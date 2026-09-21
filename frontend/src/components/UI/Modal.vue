@@ -1,28 +1,30 @@
 <template>
-	<div
-		v-if="isOpen"
-		class="modal-overlay"
-		@click.self="handleOverlayClick"
-		@keydown="handleKeydown"
-	>
+	<Transition name="modal-motion" appear>
 		<div
-			ref="dialogRef"
-			class="modal"
-			:class="sizeClass"
-			role="dialog"
-			aria-modal="true"
-			:aria-label="ariaLabel"
-			tabindex="-1"
+			v-if="isOpen"
+			class="modal-overlay"
+			@click.self="handleOverlayClick"
+			@keydown="handleKeydown"
 		>
-			<slot name="header"></slot>
-			<div class="modal-body">
-				<slot name="body"></slot>
-			</div>
-			<div v-if="$slots.footer" class="modal-footer">
-				<slot name="footer"></slot>
+			<div
+				ref="dialogRef"
+				class="modal"
+				:class="sizeClass"
+				role="dialog"
+				aria-modal="true"
+				:aria-label="ariaLabel"
+				tabindex="-1"
+			>
+				<slot name="header"></slot>
+				<div class="modal-body">
+					<slot name="body"></slot>
+				</div>
+				<div v-if="$slots.footer" class="modal-footer">
+					<slot name="footer"></slot>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Transition>
 </template>
 
 <script setup>
@@ -147,6 +149,10 @@ onBeforeUnmount(restorePreviousFocus)
 	background-color: var(--overlay-bg);
 	backdrop-filter: blur(4px);
 	display: flex;
+	opacity: 1;
+	transition:
+		opacity 180ms ease,
+		backdrop-filter 220ms ease;
 	align-items: center;
 	justify-content: center;
 	overflow-y: auto;
@@ -164,10 +170,52 @@ onBeforeUnmount(restorePreviousFocus)
 	display: flex;
 	flex-direction: column;
 	box-shadow: var(--shadow);
+	opacity: 1;
+	transform: translateY(0) scale(1);
+	transform-origin: center;
+	transition:
+		transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+		opacity 180ms ease;
 }
 
 .modal:focus {
 	outline: none;
+}
+
+.modal-motion-enter-from,
+.modal-motion-leave-to {
+	opacity: 0;
+	backdrop-filter: blur(0);
+}
+
+.modal-motion-enter-from .modal {
+	opacity: 0;
+	transform: translateY(14px) scale(0.975);
+}
+
+.modal-motion-leave-to .modal {
+	opacity: 0;
+	transform: translateY(8px) scale(0.985);
+}
+
+.modal-motion-enter-active .modal {
+	will-change: transform, opacity;
+}
+
+.modal-motion-leave-active .modal {
+	transition-duration: 160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.modal-overlay,
+	.modal {
+		transition: none;
+	}
+
+	.modal-motion-enter-from .modal,
+	.modal-motion-leave-to .modal {
+		transform: none;
+	}
 }
 
 .modal-body {
