@@ -24,6 +24,8 @@ class MailTransportRuntime:
     SMTP_USERNAME: str | None
     SMTP_PASSWORD: str | None
     SMTP_FROM_EMAIL: str
+    SMTP_FROM_NAME: str
+    SMTP_REPLY_TO_EMAIL: str | None
     SMTP_STARTTLS: bool
     SMTP_TIMEOUT_SECONDS: float
     source: str
@@ -83,6 +85,8 @@ async def get_mail_transport_runtime(
             SMTP_USERNAME=lifecycle_config.SMTP_USERNAME,
             SMTP_PASSWORD=lifecycle_config.SMTP_PASSWORD,
             SMTP_FROM_EMAIL=lifecycle_config.SMTP_FROM_EMAIL,
+            SMTP_FROM_NAME=lifecycle_config.SMTP_FROM_NAME,
+            SMTP_REPLY_TO_EMAIL=lifecycle_config.SMTP_REPLY_TO_EMAIL,
             SMTP_STARTTLS=bool(lifecycle_config.SMTP_STARTTLS),
             SMTP_TIMEOUT_SECONDS=float(lifecycle_config.SMTP_TIMEOUT_SECONDS),
             source="environment" if lifecycle_config.SMTP_HOST else (
@@ -99,6 +103,8 @@ async def get_mail_transport_runtime(
             SMTP_USERNAME=None,
             SMTP_PASSWORD=None,
             SMTP_FROM_EMAIL="",
+            SMTP_FROM_NAME="WB Insight",
+            SMTP_REPLY_TO_EMAIL=None,
             SMTP_STARTTLS=True,
             SMTP_TIMEOUT_SECONDS=10.0,
             source="database",
@@ -113,6 +119,8 @@ async def get_mail_transport_runtime(
         SMTP_USERNAME=str(secrets.get("username") or "") or None,
         SMTP_PASSWORD=str(secrets.get("password") or "") or None,
         SMTP_FROM_EMAIL=str(row.from_email or ""),
+        SMTP_FROM_NAME=str(row.from_name or "WB Insight"),
+        SMTP_REPLY_TO_EMAIL=str(row.reply_to_email or "") or None,
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
         source="database",
@@ -138,6 +146,8 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
         "host": runtime.SMTP_HOST,
         "port": runtime.SMTP_PORT,
         "from_email": runtime.SMTP_FROM_EMAIL,
+        "from_name": runtime.SMTP_FROM_NAME,
+        "reply_to_email": runtime.SMTP_REPLY_TO_EMAIL,
         "starttls": runtime.SMTP_STARTTLS,
         "timeout_seconds": runtime.SMTP_TIMEOUT_SECONDS,
         "credentials_configured": runtime.credentials_configured,
@@ -176,6 +186,18 @@ async def upsert_mail_transport(
         if from_email and ("@" not in from_email or len(from_email) > 320):
             raise ValueError("Укажите корректный email отправителя")
         row.from_email = from_email or None
+
+    if "from_name" in values:
+        from_name = str(values.get("from_name") or "").strip()
+        if len(from_name) > 160:
+            raise ValueError("Имя отправителя не должно превышать 160 символов")
+        row.from_name = from_name or "WB Insight"
+
+    if "reply_to_email" in values:
+        reply_to = str(values.get("reply_to_email") or "").strip()
+        if reply_to and ("@" not in reply_to or len(reply_to) > 320):
+            raise ValueError("Укажите корректный Reply-To email")
+        row.reply_to_email = reply_to or None
 
     if "port" in values:
         port = int(values["port"])
@@ -225,6 +247,8 @@ async def upsert_mail_transport(
         SMTP_USERNAME=str(existing.get("username") or "") or None,
         SMTP_PASSWORD=str(existing.get("password") or "") or None,
         SMTP_FROM_EMAIL=str(row.from_email or ""),
+        SMTP_FROM_NAME=str(row.from_name or "WB Insight"),
+        SMTP_REPLY_TO_EMAIL=str(row.reply_to_email or "") or None,
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
         source="database",
@@ -257,6 +281,8 @@ async def send_mail_transport_test(
     provider = SMTPMailProvider(runtime)
     receipt = await provider.send(
         sender=runtime.SMTP_FROM_EMAIL,
+        sender_name=runtime.SMTP_FROM_NAME,
+        reply_to=runtime.SMTP_REPLY_TO_EMAIL,
         recipient=recipient,
         subject="[TEST] WB Insight · проверка почтового шлюза",
         body=(
