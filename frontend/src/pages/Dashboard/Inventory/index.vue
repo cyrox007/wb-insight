@@ -13,15 +13,18 @@
       </button>
     </header>
 
-    <div v-if="errorMessage" class="status-banner status-banner--error" role="alert">
-      <div>
-        <strong>Не удалось загрузить остатки.</strong>
-        <span>{{ errorMessage }}</span>
-      </div>
-      <button type="button" @click="loadData">Повторить</button>
-    </div>
+    <DashboardState v-if="isLoading && !hasLoadedOnce" kind="loading" />
 
-    <div v-if="period" class="method-note">
+    <DashboardState
+      v-if="errorMessage"
+      kind="error"
+      title="Не удалось загрузить остатки"
+      :message="errorMessage"
+      action-label="Повторить"
+      @retry="loadData"
+    />
+
+    <div v-if="period && !errorMessage && (!isLoading || hasLoadedOnce)" class="method-note">
       <strong>{{ period.start_date }} — {{ period.end_date }}</strong>
       <span>
         Скорость = заказы / {{ period.lookback_days }} дней · критично &lt; {{ period.critical_days }} дней · цель {{ period.target_days }} дней.
@@ -29,7 +32,7 @@
       </span>
     </div>
 
-    <div class="kpi-grid" aria-label="Сводка по остаткам">
+    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce)" class="kpi-grid" aria-label="Сводка по остаткам">
       <article class="kpi-card">
         <span>Остаток FBO</span>
         <strong>{{ formatNumber(summary.stock_units) }}</strong>
@@ -62,7 +65,7 @@
       </article>
     </div>
 
-    <section class="table-card">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce)" class="table-card">
       <div class="table-heading">
         <div>
           <p class="eyebrow">Приоритет пополнения</p>
@@ -152,6 +155,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import InventoryService from '@/API/Dashboard/InventoryService.js'
+import DashboardState from '@/components/DashboardState.vue'
 
 const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
