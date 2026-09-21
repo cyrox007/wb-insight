@@ -269,7 +269,7 @@ onMounted(loadCampaigns)
 			</label>
 		</div>
 
-		<div v-if="loading" class="cp-state">Загружаем рассылки…</div>
+		<div v-if="loading" class="cp-state" role="status">Загружаем рассылки…</div>
 		<div v-else-if="error" class="cp-state cp-state--error">{{ error }}</div>
 		<div v-else class="mail-layout">
 			<div class="cp-card mail-list">
