@@ -13,7 +13,7 @@ def test_password_reset_secret_is_kept_in_url_fragment(monkeypatch):
 
     url = mail_service._password_reset_url("secret-token")
 
-    assert url == "https://app.example.com/reset-password#token=secret-token"
+    assert url == "https://app.jsinteractive.ru/reset-password#token=secret-token"
     assert "?token=" not in url
 
 
