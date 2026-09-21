@@ -7,7 +7,6 @@ from fastapi import HTTPException, Response
 from starlette.requests import Request
 
 from core import middleware
-from core.authorization import require_admin
 from core.lifecycle_config import lifecycle_config
 from handlers import account_lifecycle_handler
 from handlers.control_panel import users as control_panel_users
@@ -359,10 +358,20 @@ async def test_support_event_rejects_unbounded_event_type(monkeypatch):
     assert payload["error"]["code"] == "INVALID_SUPPORT_EVENT_TYPE"
 
 
-def test_control_panel_user_routes_have_explicit_admin_dependency():
+def test_control_panel_user_routes_have_explicit_permission_dependency():
     for route in control_panel_users.router.routes:
-        dependency_calls = {dependency.call for dependency in route.dependant.dependencies}
-        assert require_admin in dependency_calls, route.path
+        permissions = {
+            permission
+            for dependency in route.dependant.dependencies
+            if (
+                permission := getattr(
+                    dependency.call,
+                    "required_permission",
+                    None,
+                )
+            )
+        }
+        assert "users:read" in permissions, route.path
 
 
 def test_account_lifecycle_routes_are_registered():
