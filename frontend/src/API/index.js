@@ -132,10 +132,11 @@ $api.interceptors.response.use(
         }
 
         if (error.response?.status === 403) {
-            console.warn(
-                'Доступ запрещен:',
-                error.response.data?.message || 'Недостаточно прав для выполнения действия',
-            );
+            const forbiddenMessage =
+                error.response.data?.error?.message ||
+                error.response.data?.message ||
+                'Недостаточно прав для выполнения действия';
+            console.warn('Доступ запрещен:', forbiddenMessage);
             return Promise.reject(error);
         }
 
