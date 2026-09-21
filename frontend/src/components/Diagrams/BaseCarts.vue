@@ -160,7 +160,7 @@ const shortDate = (value) => {
   gap: 5px;
   border: 1px dashed var(--border-color);
   border-radius: 10px;
-  background: rgba(15, 20, 28, 0.35);
+  background: rgba(239, 242, 249, 0.78);
   text-align: center;
 }
 
@@ -189,7 +189,7 @@ const shortDate = (value) => {
   gap: 4px;
   border: 1px solid rgba(148, 163, 184, 0.08);
   border-radius: 10px;
-  background: rgba(15, 20, 28, 0.45);
+  background: rgba(247, 249, 253, 0.95);
 }
 
 .grid-line,
@@ -269,7 +269,7 @@ const shortDate = (value) => {
   transform: translateX(-50%);
   border: 1px solid var(--border-color);
   border-radius: 7px;
-  background: #111923;
+  background: #ffffff;
   color: var(--text-color);
   box-shadow: var(--shadow);
   font-size: 10px;
