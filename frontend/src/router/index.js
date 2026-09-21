@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { pinia } from '@/stores/pinia'
+import { canAccessControlPanel, defaultAuthenticatedRouteName, isStaffUser } from '@/security/roles'
 
 
 const prefersReducedMotion = () =>
@@ -39,6 +40,7 @@ const router = createRouter({
 		{ path: '/privacy', redirect: '/legal/privacy' },
 		{ path: '/reset-password', name: 'auth.reset-password', component: () => import('../pages/Auth/ResetPassword.vue'), meta: { title: 'Восстановление доступа · WB Insight' } },
 		{ path: '/verify-email', name: 'auth.verify-email', component: () => import('../pages/Auth/VerifyEmail.vue'), meta: { title: 'Подтверждение email · WB Insight' } },
+		{ path: '/staff', name: 'staff.home', component: () => import('../pages/Staff/Home.vue'), meta: { title: 'Рабочий стол · WB Insight', requestAuth: true, requestStaff: true } },
 		{ path: '/dashboard', name: 'dashboard.home', component: () => import('../pages/Dashboard/Main/index.vue'), meta: { title: 'Обзор · WB Insight', requestAuth: true }, children: [] },
 		{ path: '/dashboard/profile', name: 'dashboard.profile', component: () => import('../pages/Dashboard/Profile/index.vue'), meta: { title: 'Настройки продавца · WB Insight', requestAuth: true } },
 		{ path: '/dashboard/account-security', name: 'dashboard.account-security', component: () => import('../pages/Dashboard/AccountSecurity.vue'), meta: { title: 'Безопасность аккаунта · WB Insight', requestAuth: true } },
@@ -52,7 +54,7 @@ const router = createRouter({
 			path: '/control-panel',
 			name: 'control-panel.index',
 			component: () => import('../pages/ControlPanel/Main/index.vue'),
-			meta: { title: 'Панель управления', requestAuth: true, requestAdmin: true },
+			meta: { title: 'Панель управления', requestAuth: true, requestControlPanel: true },
 			children: [
 				{ path: 'users', name: 'control-panel.users', component: () => import('../pages/ControlPanel/Users/index.vue'), meta: { title: 'Пользователи', requestAuth: true } },
 				{ path: 'edit-user/:id', name: 'control-panel.edit-user', component: () => import('../pages/ControlPanel/Users/edit.vue'), meta: { title: 'Редактировать пользователя', requestAuth: true } },
@@ -68,7 +70,6 @@ const router = createRouter({
 	],
 })
 
-const isAdmin = (user) => Array.isArray(user?.roles) && user.roles.some((role) => role === 'super_admin' || role === 'admin')
 
 router.beforeEach((to, from, next) => {
 	if (to.meta.title) document.title = to.meta.title
@@ -80,11 +81,15 @@ router.beforeEach((to, from, next) => {
 		return
 	}
 	if (to.meta.requestGuest && user) {
+		next({ name: defaultAuthenticatedRouteName(user) })
+		return
+	}
+	if (to.meta.requestStaff && !isStaffUser(user)) {
 		next({ name: 'dashboard.home' })
 		return
 	}
-	if (to.meta.requestAdmin && !isAdmin(user)) {
-		next({ name: 'dashboard.home' })
+	if (to.meta.requestControlPanel && !canAccessControlPanel(user)) {
+		next({ name: defaultAuthenticatedRouteName(user) })
 		return
 	}
 	next()

@@ -177,3 +177,107 @@ async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
     )
     await session.flush()
     return user
+
+
+
+async def admin_verify_email(
+    session: AsyncSession,
+    user: User,
+    *,
+    actor_user_id,
+    reason: str | None = None,
+) -> bool:
+    """Mark the current account email as verified from the control panel.
+
+    This is intentionally an audited administrative escape hatch for support
+    cases where normal mail delivery is unavailable. It verifies only the
+    current email identity, cancels stale pending-email capabilities, and grants
+    the same demo entitlement as the normal registration verification flow.
+    """
+    if user.email_verified_at is not None:
+        return False
+
+    now = datetime.now(timezone.utc)
+    user.email_verified_at = now
+    user.pending_email = None
+
+    await session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+
+    subscription_result = await session.execute(
+        select(Subscription.id).where(Subscription.user_id == user.id).limit(1)
+    )
+    if subscription_result.scalar_one_or_none() is None:
+        await create_demo_subscription(session, user.id)
+
+    await record_lifecycle_event(
+        session,
+        user_id=user.id,
+        actor_user_id=actor_user_id,
+        event_type="email_verified_manual",
+        reason=(reason or "").strip()[:1000] or None,
+        event_data={"source": "control_panel"},
+    )
+    await session.flush()
+    return True
+
+
+
+async def admin_change_email_identity(
+    session: AsyncSession,
+    user: User,
+    *,
+    new_email: str,
+    actor_user_id,
+) -> None:
+    """Apply an admin email correction without silently preserving verification.
+
+    The new address becomes the current login identity but returns to the
+    unverified state. Existing sessions and recovery/verification capabilities
+    are revoked so the administrator may either use the normal verification
+    flow or explicitly perform the audited manual verification action.
+    """
+    normalized = _normalized_email(new_email)
+    if not normalized or "@" not in normalized or len(normalized) > 254:
+        raise ValueError("invalid_email")
+    if normalized == _normalized_email(user.email):
+        return
+
+    now = datetime.now(timezone.utc)
+    user.email = normalized
+    user.email_verified_at = None
+    user.pending_email = None
+    user.session_version += 1
+
+    await session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    await session.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    await record_lifecycle_event(
+        session,
+        user_id=user.id,
+        actor_user_id=actor_user_id,
+        event_type="email_changed_by_admin",
+        event_data={"source": "control_panel", "verified": False},
+    )
+    await session.flush()

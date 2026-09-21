@@ -50,13 +50,32 @@ def test_role_permission_matrix_is_explicit():
     assert Permission.MAIL_WRITE not in admin_permissions
     assert Permission.SYSTEM_MANAGE not in admin_permissions
 
-    for role in (
-        UserRole.MANAGER,
-        UserRole.SUPPORT,
-        UserRole.ANALYST,
-        UserRole.USER,
-    ):
-        assert permissions_for_role(role) == frozenset()
+    manager_permissions = permissions_for_role(UserRole.MANAGER)
+    assert {
+        Permission.CONTROL_PANEL_ACCESS,
+        Permission.USERS_READ,
+        Permission.TARIFFS_READ,
+        Permission.PAYMENTS_READ,
+        Permission.MAIL_READ,
+        Permission.AUDIT_READ,
+    } <= set(manager_permissions)
+    assert Permission.USERS_WRITE not in manager_permissions
+    assert Permission.TARIFFS_WRITE not in manager_permissions
+    assert Permission.PAYMENTS_WRITE not in manager_permissions
+    assert Permission.MAIL_WRITE not in manager_permissions
+    assert Permission.ROLES_WRITE not in manager_permissions
+
+    support_permissions = permissions_for_role(UserRole.SUPPORT)
+    assert set(support_permissions) == {
+        Permission.CONTROL_PANEL_ACCESS,
+        Permission.USERS_READ,
+        Permission.AUDIT_READ,
+    }
+
+    analyst_permissions = permissions_for_role(UserRole.ANALYST)
+    assert set(analyst_permissions) == {Permission.CONTROL_PANEL_ACCESS}
+
+    assert permissions_for_role(UserRole.USER) == frozenset()
 
 
 @pytest.mark.asyncio
@@ -129,6 +148,15 @@ def test_control_panel_routes_enforce_granular_permissions():
         "users:read"
     }
     assert _route_permissions(users_router, "/control-panel/users/{user_uuid}", "PUT") == {
+        "users:read",
+        "users:write",
+    }
+
+    assert _route_permissions(
+        users_router,
+        "/control-panel/users/{user_uuid}/verify-email",
+        "POST",
+    ) == {
         "users:read",
         "users:write",
     }

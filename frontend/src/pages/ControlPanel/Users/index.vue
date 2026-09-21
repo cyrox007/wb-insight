@@ -91,7 +91,7 @@ onMounted(loadUsers)
 				tabindex="0"
 			>
 				<table class="cp-table">
-					<caption class="cp-sr-only">Зарегистрированные пользователи, их тип аккаунта, роли, статус и дата регистрации.</caption>
+					<caption class="cp-sr-only">Зарегистрированные пользователи, их тип аккаунта, роли, активность, верификация и дата регистрации.</caption>
 					<thead>
 						<tr>
 							<th scope="col">Пользователь</th>
@@ -131,9 +131,14 @@ onMounted(loadUsers)
 								</div>
 							</td>
 							<td>
-								<span class="cp-chip" :class="user.is_active ? 'cp-chip--active' : 'cp-chip--inactive'">
-									{{ user.is_active ? 'Активен' : 'Неактивен' }}
-								</span>
+								<div class="cp-chip-row">
+									<span class="cp-chip" :class="user.is_active ? 'cp-chip--active' : 'cp-chip--inactive'">
+										{{ user.is_active ? 'Активен' : 'Неактивен' }}
+									</span>
+									<span class="cp-chip" :class="user.email_verified_at ? 'cp-chip--active' : 'cp-chip--warning'">
+										{{ user.email_verified_at ? 'Email ✓' : 'Email не подтверждён' }}
+									</span>
+								</div>
 							</td>
 							<td>{{ DateTransform.formatDate(user.created_at) }}</td>
 							<td>

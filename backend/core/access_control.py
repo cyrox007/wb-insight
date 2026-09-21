@@ -39,9 +39,31 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.MAIL_READ,
         }
     ),
-    UserRole.MANAGER: frozenset(),
-    UserRole.SUPPORT: frozenset(),
-    UserRole.ANALYST: frozenset(),
+    # Staff roles deliberately receive only the minimum operational surface they
+    # need. Seller analytics remain available as a secondary workspace, but the
+    # default staff experience is the role-aware operations workspace.
+    UserRole.MANAGER: frozenset(
+        {
+            Permission.CONTROL_PANEL_ACCESS,
+            Permission.USERS_READ,
+            Permission.TARIFFS_READ,
+            Permission.PAYMENTS_READ,
+            Permission.MAIL_READ,
+            Permission.AUDIT_READ,
+        }
+    ),
+    UserRole.SUPPORT: frozenset(
+        {
+            Permission.CONTROL_PANEL_ACCESS,
+            Permission.USERS_READ,
+            Permission.AUDIT_READ,
+        }
+    ),
+    UserRole.ANALYST: frozenset(
+        {
+            Permission.CONTROL_PANEL_ACCESS,
+        }
+    ),
     UserRole.USER: frozenset(),
 }
 

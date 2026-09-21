@@ -84,6 +84,54 @@ async def test_regular_user_cannot_open_control_panel():
 
 
 @pytest.mark.asyncio
+async def test_manager_can_read_users_but_cannot_mutate_them():
+    token = create_access_token({"sub": USER_ID})
+
+    read_request = _request("/control-panel/users", token)
+    await _authorize_control_panel(read_request, _FakeSession("manager"))
+    assert "manager" in read_request.state.roles
+
+    write_request = _request(
+        f"/control-panel/users/{USER_ID}",
+        token,
+        method="PUT",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await _authorize_control_panel(write_request, _FakeSession("manager"))
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_support_can_read_users_but_cannot_mutate_them():
+    token = create_access_token({"sub": USER_ID})
+
+    read_request = _request("/control-panel/users", token)
+    await _authorize_control_panel(read_request, _FakeSession("support"))
+
+    write_request = _request(
+        f"/control-panel/users/{USER_ID}",
+        token,
+        method="PUT",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        await _authorize_control_panel(write_request, _FakeSession("support"))
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_analyst_can_open_staff_control_panel_overview_but_not_user_list():
+    token = create_access_token({"sub": USER_ID})
+
+    overview_request = _request("/control-panel/", token)
+    await _authorize_control_panel(overview_request, _FakeSession("analyst"))
+
+    users_request = _request("/control-panel/users", token)
+    with pytest.raises(HTTPException) as exc_info:
+        await _authorize_control_panel(users_request, _FakeSession("analyst"))
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_can_open_control_panel():
     token = create_access_token({"sub": USER_ID})
     request = _request("/control-panel/users", token)
