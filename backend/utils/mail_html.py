@@ -144,7 +144,12 @@ class _TextExtractor(HTMLParser):
     def handle_data(self, data: str) -> None:
         text = data.strip()
         if text:
-            if self.parts and not self.parts[-1].endswith(("\n", " ")):
+            punctuation = ".,!?;:)]}…"
+            if (
+                self.parts
+                and not self.parts[-1].endswith(("\n", " ", "(", "[", "{"))
+                and not text.startswith(tuple(punctuation))
+            ):
                 self.parts.append(" ")
             self.parts.append(text)
 
