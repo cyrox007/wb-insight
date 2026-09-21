@@ -1,15 +1,55 @@
+import re
+
 import httpx
 
 from integrations.mail.provider import MailDeliveryReceipt
 
 
+_PROVIDER_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+
+
+def _safe_provider_error_code(response: httpx.Response) -> str | None:
+    """Extract only RuSender's machine-readable code, never its description/body."""
+    try:
+        payload = response.json()
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    candidate = payload.get("code")
+    if candidate is None and isinstance(payload.get("error"), dict):
+        candidate = payload["error"].get("code")
+    value = str(candidate or "").strip()
+    if not value or not _PROVIDER_ERROR_CODE_RE.fullmatch(value):
+        return None
+    return value
+
+
 class RuSenderAPIError(RuntimeError):
     """Safe provider error with retry semantics for the mail worker."""
 
-    def __init__(self, code: str, *, retryable: bool) -> None:
+    def __init__(
+        self,
+        code: str,
+        *,
+        retryable: bool,
+        provider_error_code: str | None = None,
+    ) -> None:
         super().__init__(code)
         self.code = code[:96]
         self.retryable = retryable
+        self.provider_error_code = (
+            provider_error_code
+            if provider_error_code and _PROVIDER_ERROR_CODE_RE.fullmatch(provider_error_code)
+            else None
+        )
+
+    @property
+    def safe_code(self) -> str:
+        if not self.provider_error_code:
+            return self.code
+        return f"{self.code}:{self.provider_error_code}"[:96]
 
 
 class RuSenderMailProvider:
@@ -90,7 +130,15 @@ class RuSenderMailProvider:
             return MailDeliveryReceipt(provider_message_id=provider_id)
 
         error_code = f"rusender_http_{response.status_code}"
+        # RuSender publishes a machine-readable error code in the response body.
+        # Keep only that bounded code for diagnostics; never persist/return the
+        # provider description or raw body because it may contain request context.
+        provider_error_code = _safe_provider_error_code(response)
         # 429 and 5xx are transient. Authentication, sender/domain and recipient
         # policy failures require configuration/user intervention and must not spin.
         retryable = response.status_code == 429 or response.status_code >= 500
-        raise RuSenderAPIError(error_code, retryable=retryable)
+        raise RuSenderAPIError(
+            error_code,
+            retryable=retryable,
+            provider_error_code=provider_error_code,
+        )
