@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 
 from services import mail_transport_service as transport
+from services import mail_unsubscribe_service as unsubscribe
 from utils.mail_html import html_to_text, render_mail_document, sanitize_mail_html
 
 
@@ -179,3 +180,34 @@ def test_marketing_document_contains_visible_unsubscribe_link():
 
     assert url in document
     assert "Отписаться от маркетинговых писем" in document
+
+
+
+def test_signed_unsubscribe_token_round_trip_and_tamper_rejection(monkeypatch):
+    monkeypatch.setattr(
+        unsubscribe.lifecycle_config,
+        "MAIL_UNSUBSCRIBE_HMAC_KEY",
+        "independent-mail-unsubscribe-secret-1234567890",
+    )
+    monkeypatch.setattr(
+        unsubscribe.lifecycle_config,
+        "MAIL_UNSUBSCRIBE_BASE_URL",
+        "https://app.example.net/api/account/mail/unsubscribe",
+    )
+
+    token = unsubscribe.create_unsubscribe_token(
+        email="SELLER@example.net",
+        user_id="5cad7ec0-2b52-4d41-bccb-c47035fc73d1",
+    )
+    identity = unsubscribe.parse_unsubscribe_token(token)
+
+    assert identity.email == "seller@example.net"
+    assert identity.user_id == "5cad7ec0-2b52-4d41-bccb-c47035fc73d1"
+    assert identity.list_id == "marketing"
+    assert token in unsubscribe.unsubscribe_url(
+        email="seller@example.net",
+        user_id=identity.user_id,
+    )
+
+    with pytest.raises(ValueError, match="unsubscribe_token_invalid"):
+        unsubscribe.parse_unsubscribe_token(token[:-1] + ("A" if token[-1] != "A" else "B"))
