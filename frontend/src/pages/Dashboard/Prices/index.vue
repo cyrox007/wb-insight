@@ -187,6 +187,7 @@
 import { computed, onMounted, ref } from 'vue'
 import PriceService from '@/API/Dashboard/PriceService.js'
 import DashboardState from '@/components/DashboardState.vue'
+import { formatFiniteNumber, toFiniteNumber } from '@/utils/safeNumber'
 
 const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
@@ -222,31 +223,37 @@ const filteredProducts = computed(() => {
   })
 })
 
-const formatNumber = (value) => new Intl.NumberFormat('ru-RU', {
+const formatNumber = (value) => formatFiniteNumber(value, {
   maximumFractionDigits: 0,
-}).format(Number(value || 0))
+  fallback: '0',
+})
 
-const formatPercent = (value) => `${new Intl.NumberFormat('ru-RU', {
+const formatPercent = (value) => `${formatFiniteNumber(value, {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
-}).format(Number(value || 0))}%`
+  fallback: '0',
+})}%`
 
 const currencySymbol = (currency) => currency === 'RUB' || !currency ? '₽' : currency
 
 const formatMoney = (value, currency) => {
-  if (value == null) return '—'
-  return `${new Intl.NumberFormat('ru-RU', {
+  const numeric = toFiniteNumber(value)
+  if (numeric === null) return '—'
+  return `${formatFiniteNumber(numeric, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(Number(value))} ${currencySymbol(currency)}`
+  })} ${currencySymbol(currency)}`
 }
 
 const formatPriceRange = (range, currency) => {
   if (!range || range.min == null) return '—'
-  if (range.max == null || Number(range.min) === Number(range.max)) {
-    return formatMoney(range.min, currency)
+  const minValue = toFiniteNumber(range.min)
+  const maxValue = toFiniteNumber(range.max)
+  if (minValue === null) return '—'
+  if (maxValue === null || minValue === maxValue) {
+    return formatMoney(minValue, currency)
   }
-  return `${formatMoney(range.min, currency)} – ${formatMoney(range.max, currency)}`
+  return `${formatMoney(minValue, currency)} – ${formatMoney(maxValue, currency)}`
 }
 
 const formatDateTime = (value) => {
