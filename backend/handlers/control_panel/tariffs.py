@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.access_control import Permission
+from core.authorization import require_permission
 from core.dependencies import get_db_session
 from core.logger import setup_logger
 from models.tariffs_model import TariffLimit
@@ -27,7 +29,11 @@ from services.tariff_service import (
 )
 from utils.responce_helps import response_error, response_success
 
-router = APIRouter(prefix='/control-panel/tariffs', tags=['Tariffs'])
+router = APIRouter(
+    prefix='/control-panel/tariffs',
+    tags=['Tariffs'],
+    dependencies=[Depends(require_permission(Permission.TARIFFS_READ))],
+)
 
 logger = setup_logger(__name__)
 
@@ -63,7 +69,7 @@ async def get_tariff(tariff_id: UUID, response: Response, db_session: AsyncSessi
     )
 
 
-@router.post('/create', status_code=status.HTTP_201_CREATED)
+@router.post('/create', status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission(Permission.TARIFFS_WRITE))])
 async def create_tariffs(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     formdata = await request.json()
     
@@ -130,7 +136,7 @@ async def create_tariffs(request: Request, response: Response, db_session: Async
 
     return response_success(tariff=tariff)
 
-@router.put('/{tariff_id}/update-status')
+@router.put('/{tariff_id}/update-status', dependencies=[Depends(require_permission(Permission.TARIFFS_WRITE))])
 async def update_tariff_status(tariff_id: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     data = await request.json()
     new_status = data.get('status', False)
@@ -191,7 +197,7 @@ async def update_tariff_status(tariff_id: str, request: Request, response: Respo
         tariff=tariff
     )
 
-@router.put('/{tariff_id}/edit', status_code=status.HTTP_200_OK)
+@router.put('/{tariff_id}/edit', status_code=status.HTTP_200_OK, dependencies=[Depends(require_permission(Permission.TARIFFS_WRITE))])
 async def edit_tariff(tariff_id: UUID, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     input_data = await request.json()
     if not tariff_id:
@@ -262,7 +268,7 @@ async def edit_tariff(tariff_id: UUID, request: Request, response: Response, db_
     
     return response_success(tariff=tariff)
 
-@router.delete('/{tariff_id}')
+@router.delete('/{tariff_id}', dependencies=[Depends(require_permission(Permission.TARIFFS_WRITE))])
 async def delete_tariff(tariff_id: UUID, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -301,7 +307,7 @@ async def delete_tariff(tariff_id: UUID, response: Response, db_session: AsyncSe
         )
     return response_success(deleting=result)
 
-@router.post('/{tariff_id}/limits/create', status_code=status.HTTP_201_CREATED)
+@router.post('/{tariff_id}/limits/create', status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_permission(Permission.TARIFFS_WRITE))])
 async def create_tariff_limit(tariff_id: UUID, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -360,7 +366,7 @@ async def create_tariff_limit(tariff_id: UUID, request: Request, response: Respo
         limit=new_limit
     )
 
-@router.put('/{tariff_id}/limits/{limit_type}/edit')
+@router.put('/{tariff_id}/limits/{limit_type}/edit', dependencies=[Depends(require_permission(Permission.TARIFFS_WRITE))])
 async def edit_tariff_limit(tariff_id: UUID, limit_type: str, request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     logger.info(f"tariff_id={tariff_id}, limit_type='{limit_type}'")
     logger.info(f"type(tariff_id)={type(tariff_id)}")
@@ -441,7 +447,7 @@ async def edit_tariff_limit(tariff_id: UUID, limit_type: str, request: Request, 
         limit=limit
     )
 
-@router.delete('/{tariff_id}/limits/{limit_type}/delete')
+@router.delete('/{tariff_id}/limits/{limit_type}/delete', dependencies=[Depends(require_permission(Permission.TARIFFS_WRITE))])
 async def delete_tariff_limit(tariff_id: UUID, limit_type: str, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     if not tariff_id:
         response.status_code = status.HTTP_400_BAD_REQUEST
