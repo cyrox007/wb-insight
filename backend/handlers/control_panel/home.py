@@ -21,8 +21,13 @@ logger = setup_logger(__name__)
 
 @router.get('/')
 async def get_control_panel(request: Request, db_session: AsyncSession = Depends(get_db_session)):
-    user_count = await get_user_count(db_session)
+    permissions = set(getattr(request.state, "permissions", set()))
+    user_count = (
+        await get_user_count(db_session)
+        if Permission.USERS_READ.value in permissions
+        else None
+    )
     return response_success(
         user_count=user_count,
-        permissions=sorted(getattr(request.state, "permissions", set())),
+        permissions=sorted(permissions),
     )
