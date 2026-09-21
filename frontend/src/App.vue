@@ -232,7 +232,7 @@ const logout = async () => {
 
 .brand__badge {
   padding: 2px 6px;
-  border: 1px solid rgba(167, 139, 250, 0.3);
+  border: 1px solid rgba(99, 91, 255, 0.22);
   border-radius: 6px;
   color: #5b52d6;
   font-size: 10px;
@@ -306,7 +306,7 @@ const logout = async () => {
   place-items: center;
   border-radius: 9px;
   background: #eceaff;
-  color: #c4b5fd;
+  color: #5b52d6;
   font-weight: 700;
 }
 
