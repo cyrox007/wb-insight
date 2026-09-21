@@ -46,13 +46,13 @@ onMounted(loadOverview)
 		</header>
 
 		<nav class="cp-nav" aria-label="Разделы панели управления">
-			<router-link :to="{ name: 'control-panel.index' }" class="cp-nav__link" :aria-current="isOverview ? 'page' : undefined">Обзор</router-link>
-			<router-link :to="{ name: 'control-panel.users' }" class="cp-nav__link" :class="{ 'router-link-active': usersActive }" :aria-current="usersActive ? 'page' : undefined">Пользователи</router-link>
-			<router-link :to="{ name: 'control-panel.roles' }" class="cp-nav__link" :class="{ 'router-link-active': rolesActive }" :aria-current="rolesActive ? 'page' : undefined">Роли</router-link>
-			<router-link :to="{ name: 'control-panel.tariffs' }" class="cp-nav__link" :class="{ 'router-link-active': tariffsActive }" :aria-current="tariffsActive ? 'page' : undefined">Тарифы</router-link>
-			<router-link :to="{ name: 'control-panel.payments' }" class="cp-nav__link" :class="{ 'router-link-active': paymentsActive }" :aria-current="paymentsActive ? 'page' : undefined">Платежи</router-link>
-			<router-link :to="{ name: 'control-panel.mail' }" class="cp-nav__link" :class="{ 'router-link-active': mailActive }" :aria-current="mailActive ? 'page' : undefined">Рассылки</router-link>
-			<router-link :to="{ name: 'control-panel.audit' }" class="cp-nav__link" :class="{ 'router-link-active': auditActive }" :aria-current="auditActive ? 'page' : undefined">Аудит</router-link>
+			<router-link :to="{ name: 'control-panel.index' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': isOverview }" :aria-current="isOverview ? 'page' : undefined">Обзор</router-link>
+			<router-link :to="{ name: 'control-panel.users' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': usersActive }" :aria-current="usersActive ? 'page' : undefined">Пользователи</router-link>
+			<router-link :to="{ name: 'control-panel.roles' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': rolesActive }" :aria-current="rolesActive ? 'page' : undefined">Роли</router-link>
+			<router-link :to="{ name: 'control-panel.tariffs' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': tariffsActive }" :aria-current="tariffsActive ? 'page' : undefined">Тарифы</router-link>
+			<router-link :to="{ name: 'control-panel.payments' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': paymentsActive }" :aria-current="paymentsActive ? 'page' : undefined">Платежи</router-link>
+			<router-link :to="{ name: 'control-panel.mail' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': mailActive }" :aria-current="mailActive ? 'page' : undefined">Рассылки</router-link>
+			<router-link :to="{ name: 'control-panel.audit' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': auditActive }" :aria-current="auditActive ? 'page' : undefined">Аудит</router-link>
 		</nav>
 
 		<div v-if="isOverview" class="cp-page">
