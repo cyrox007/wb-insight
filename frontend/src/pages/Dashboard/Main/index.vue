@@ -1,5 +1,5 @@
 <template>
-  <section class="overview-page">
+  <section class="overview-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoadedOnce }">
     <header class="page-header">
       <div>
         <p class="eyebrow">Wildberries · аналитика кабинета</p>
