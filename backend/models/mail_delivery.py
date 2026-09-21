@@ -55,6 +55,7 @@ class MailCampaign(Database.Base):
     name: Mapped[str] = mapped_column(String(180), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     segment: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default=text("'{}'::json"))
     status: Mapped[str] = mapped_column(String(24), nullable=False, default=CampaignStatus.DRAFT.value, server_default=CampaignStatus.DRAFT.value)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
@@ -93,6 +94,7 @@ class MailMessage(Database.Base):
     template_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default=MailStatus.QUEUED.value, server_default=MailStatus.QUEUED.value)
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=5, server_default="5")
@@ -119,5 +121,26 @@ class MailSuppression(Database.Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     reason: Mapped[str] = mapped_column(String(32), nullable=False, default="unsubscribe", server_default="unsubscribe")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+
+class MailProviderConfig(Database.Base):
+    __tablename__ = "mail_provider_configs"
+    __table_args__ = (
+        UniqueConstraint("provider", name="uq_mail_provider_configs_provider"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="smtp")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    port: Mapped[int] = mapped_column(Integer, nullable=False, default=587, server_default="587")
+    from_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    starttls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=10, server_default="10")
+    encrypted_secrets: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[object] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
