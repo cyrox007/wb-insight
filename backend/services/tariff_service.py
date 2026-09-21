@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -113,7 +113,9 @@ async def get_tariff_by_code(
     session: AsyncSession,
     code: str,
 ) -> Optional[TariffPlan]:
-    query = select(TariffPlan).where(TariffPlan.code == normalized_tariff_code(code))
+    query = select(TariffPlan).where(
+        func.lower(TariffPlan.code) == normalized_tariff_code(code)
+    )
     result = await session.execute(query)
     return result.scalar_one_or_none()
 
