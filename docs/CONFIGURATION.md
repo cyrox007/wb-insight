@@ -115,6 +115,8 @@ WB Insight поддерживает два транспорта:
 Общие параметры:
 
 - `MAIL_CONFIG_SOURCE` — `auto`, `environment` или `database`;
+- при `auto` encrypted DB config имеет приоритет. ENV становится fallback только если в БД нет provider row; incomplete/example fallback в production считается недоступным на runtime, но не мешает приложению стартовать и настроить реальный provider из Control Panel;
+- `environment` остаётся fail-closed на startup: включённая auth-mail capability требует полностью валидный ENV transport;
 - `MAIL_PROVIDER` — `smtp` или `rusender` для ENV-конфигурации;
 - `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` — sender identity, используются обоими адаптерами;
 - `MAIL_DELIVERY_ENABLED` — разрешает маркетинговые кампании. Для текущего RuSender transactional adapter должен оставаться `false`.
@@ -126,7 +128,7 @@ RuSender ENV:
 - `RUSENDER_API_TOKEN` — bearer token с permission `external_mail.send`;
 - `RUSENDER_TIMEOUT_SECONDS`.
 
-При `MAIL_CONFIG_SOURCE=auto` или `database` RuSender можно настроить из Control Panel. API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
+При `MAIL_CONFIG_SOURCE=auto` или `database` RuSender можно настроить из Control Panel. API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. Экран шлюза отдельно показывает готовность transport, email verification и password recovery, поэтому наличие рабочего provider не маскирует выключенный feature flag или отсутствующий HTTPS base URL. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
 
 RuSender transport передаёт `idempotencyKey` и сохраняет возвращаемый `uuid` как `provider_message_id`. Маркетинговые кампании пока не используют transactional endpoint RuSender: текущий контракт custom headers допускает только `X-*`, поэтому приложение не заявляет через него RFC 8058 one-click unsubscribe.
 

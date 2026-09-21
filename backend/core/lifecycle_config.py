@@ -167,7 +167,11 @@ class LifecycleConfig:
         if self.MAIL_CONFIG_SOURCE not in {"auto", "environment", "database"}:
             raise RuntimeError("MAIL_CONFIG_SOURCE must be auto, environment or database")
 
-        if self.MAIL_PROVIDER == "rusender" and self.MAIL_DELIVERY_ENABLED:
+        if (
+            self.MAIL_CONFIG_SOURCE == "environment"
+            and self.MAIL_PROVIDER == "rusender"
+            and self.MAIL_DELIVERY_ENABLED
+        ):
             raise RuntimeError(
                 "RuSender transactional adapter does not support marketing campaigns; set MAIL_DELIVERY_ENABLED=false"
             )
@@ -180,16 +184,12 @@ class LifecycleConfig:
         if needs_mail and self.MAIL_CONFIG_SOURCE == "environment":
             self._validate_mail_transport(production=production)
         elif needs_mail and self.MAIL_CONFIG_SOURCE == "auto":
-            # In auto mode the database runtime configuration may be the
-            # effective transport. Validate ENV only when an ENV transport is
-            # actually present as a fallback.
-            env_transport_present = (
-                bool(self.SMTP_HOST or self.SMTP_FROM_EMAIL)
-                if self.MAIL_PROVIDER == "smtp"
-                else bool(self.RUSENDER_KEY_ID or self.RUSENDER_API_TOKEN or self.SMTP_FROM_EMAIL)
-            )
-            if env_transport_present:
-                self._validate_mail_transport(production=production)
+            # Auto mode is intentionally bootstrap-safe: an encrypted database
+            # transport may be the effective provider, but import-time config
+            # validation cannot query PostgreSQL. Runtime selection validates
+            # the ENV fallback only when no DB provider exists and fails that
+            # capability closed if the fallback is incomplete/placeholder.
+            pass
 
         if self.PASSWORD_RESET_ENABLED:
             if not self.PASSWORD_RESET_BASE_URL:

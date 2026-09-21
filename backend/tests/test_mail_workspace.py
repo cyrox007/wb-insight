@@ -88,6 +88,70 @@ async def test_mail_transport_payload_never_returns_password(monkeypatch):
     assert payload["reply_to_email"] == "support@example.net"
     assert payload["marketing_ready"] is True
     assert payload["deliverability"]["one_click_unsubscribe"] is True
+    assert "diagnostic_code" in payload
+    assert "system_mail" in payload
+
+
+@pytest.mark.asyncio
+async def test_auto_mail_source_rejects_invalid_environment_fallback_at_runtime(monkeypatch):
+    async def no_database_transport(_session):
+        return None
+
+    monkeypatch.setattr(transport, "get_mail_provider_config", no_database_transport)
+    monkeypatch.setattr(transport.lifecycle_config, "MAIL_CONFIG_SOURCE", "auto")
+    monkeypatch.setattr(transport.lifecycle_config, "MAIL_PROVIDER", "smtp")
+    monkeypatch.setattr(transport.lifecycle_config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(transport.lifecycle_config, "SMTP_FROM_EMAIL", "no-reply@example.com")
+    monkeypatch.setattr(transport.lifecycle_config, "SMTP_USERNAME", None)
+    monkeypatch.setattr(transport.lifecycle_config, "SMTP_PASSWORD", None)
+    monkeypatch.setattr(transport.lifecycle_config, "SMTP_STARTTLS", True)
+    monkeypatch.setattr(transport.config, "IS_PRODUCTION", True)
+
+    runtime = await transport.get_mail_transport_runtime(object())
+
+    assert runtime.ready is False
+    assert runtime.source == "unconfigured"
+    assert runtime.diagnostic_code == "environment_fallback_invalid"
+
+
+@pytest.mark.asyncio
+async def test_auto_mail_source_prefers_database_rusender_over_invalid_env(monkeypatch):
+    row = SimpleNamespace(
+        provider="rusender",
+        enabled=False,
+        host="https://api.rusender.ru",
+        port=443,
+        from_email="no-reply@mail.jsinteractive.ru",
+        from_name="WB Insight",
+        reply_to_email=None,
+        starttls=True,
+        timeout_seconds=10,
+        encrypted_secrets="encrypted",
+        updated_at=None,
+    )
+
+    async def database_transport(_session):
+        return row
+
+    monkeypatch.setattr(transport, "get_mail_provider_config", database_transport)
+    monkeypatch.setattr(
+        transport,
+        "_read_secrets",
+        lambda _row: {"key_id": "15074", "api_token": "secret-token"},
+    )
+    monkeypatch.setattr(transport.lifecycle_config, "MAIL_CONFIG_SOURCE", "auto")
+    monkeypatch.setattr(transport.lifecycle_config, "MAIL_PROVIDER", "smtp")
+    monkeypatch.setattr(transport.lifecycle_config, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(transport.lifecycle_config, "SMTP_FROM_EMAIL", "no-reply@example.com")
+    monkeypatch.setattr(transport.config, "IS_PRODUCTION", True)
+
+    runtime = await transport.get_mail_transport_runtime(object())
+
+    assert runtime.ready is True
+    assert runtime.source == "database"
+    assert runtime.MAIL_PROVIDER == "rusender"
+    assert runtime.RUSENDER_KEY_ID == "15074"
+    assert runtime.diagnostic_code is None
 
 
 class _FakeSession:

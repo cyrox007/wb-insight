@@ -714,12 +714,27 @@ onMounted(async () => {
 					</div>
 					<dl>
 						<div><dt>Источник</dt><dd>{{ meta.gateway?.source || '—' }}</dd></div>
-						<div><dt>Системная почта</dt><dd>{{ meta.gateway?.ready ? 'Готова' : 'Не готова' }}</dd></div>
+						<div><dt>Транспорт</dt><dd>{{ meta.gateway?.ready ? 'Готов' : 'Не готов' }}</dd></div>
+						<div>
+							<dt>Подтверждение email</dt>
+							<dd>{{ meta.gateway?.system_mail?.email_verification?.ready ? 'Готово' : (meta.gateway?.system_mail?.email_verification?.enabled ? 'Не готово' : 'Выключено') }}</dd>
+						</div>
+						<div>
+							<dt>Восстановление пароля</dt>
+							<dd>{{ meta.gateway?.system_mail?.password_reset?.ready ? 'Готово' : (meta.gateway?.system_mail?.password_reset?.enabled ? 'Не готово' : 'Выключено') }}</dd>
+						</div>
 						<div><dt>Кампании</dt><dd>{{ meta.gateway?.marketing_ready ? 'Готовы' : 'Выключены' }}</dd></div>
 						<div><dt>Credentials</dt><dd>{{ meta.gateway?.credentials_configured ? 'Настроены' : 'Не настроены' }}</dd></div>
 						<div v-if="meta.gateway?.provider === 'rusender'"><dt>Key ID</dt><dd>{{ meta.gateway?.key_id || '—' }}</dd></div>
 						<div v-else><dt>Пользователь</dt><dd>{{ meta.gateway?.username_hint || '—' }}</dd></div>
 					</dl>
+					<div v-if="meta.gateway?.diagnostic_code" class="cp-info-callout gateway-diagnostic">
+						<strong>Шлюз не выбран как рабочий.</strong>
+						<span v-if="meta.gateway.diagnostic_code === 'environment_fallback_invalid'">ENV fallback содержит неполную или шаблонную production-конфигурацию. При <code>MAIL_CONFIG_SOURCE=auto</code> сохраните реальный транспорт в панели — после этого DB-конфигурация станет приоритетной.</span>
+						<span v-else-if="meta.gateway.diagnostic_code === 'environment_fallback_incomplete'">В ENV нет полного fallback-транспорта. Сохраните SMTP или RuSender API в панели.</span>
+						<span v-else-if="meta.gateway.diagnostic_code === 'database_transport_missing'">Режим <code>database</code> включён, но почтовый транспорт ещё не сохранён.</span>
+						<span v-else>Текущая конфигурация транспорта неполна. Проверьте обязательные поля и credentials.</span>
+					</div>
 					<p v-if="meta.gateway?.provider === 'rusender'" class="cp-card-note">
 						RuSender работает по HTTPS и не зависит от исходящих SMTP-портов хостера. Этот адаптер сейчас используется для подтверждения email, recovery и системных писем. Маркетинговые кампании через него намеренно не включаются.
 					</p>
@@ -772,6 +787,11 @@ onMounted(async () => {
 						<strong>Секреты хранятся зашифрованно.</strong>
 						<span v-if="gatewayForm.provider === 'rusender'">API token шифруется сервером и после сохранения никогда не возвращается в браузер. Для текущего ключа отправки укажите Key ID 15074 и адрес на домене mail.jsinteractive.ru.</span>
 						<span v-else>Пароль SMTP шифруется сервером ключом приложения и никогда не возвращается через API после сохранения.</span>
+					</div>
+
+					<div class="cp-info-callout">
+						<strong>Системные функции включаются отдельно в ENV.</strong>
+						<span>После настройки транспорта для production должны быть включены <code>EMAIL_VERIFICATION_ENABLED=true</code> и <code>PASSWORD_RESET_ENABLED=true</code> с реальными HTTPS base URL. Статусы слева показывают готовность каждого контура отдельно.</span>
 					</div>
 
 					<div v-if="gatewayForm.provider === 'rusender'" class="cp-info-callout">
@@ -926,6 +946,7 @@ onMounted(async () => {
 .gateway-grid { display:grid; grid-template-columns:minmax(280px,.65fr) minmax(0,1.35fr); gap:16px; align-items:start; }
 .gateway-status-card,.gateway-form,.gateway-test-card { padding:20px; }
 .gateway-status-card dl { display:grid; gap:0; margin:18px 0; }
+.gateway-diagnostic { margin-top:12px; }
 .gateway-status-card dl div { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-color); }
 .gateway-status-card dt { color:var(--text-muted); }
 .gateway-status-card dd { margin:0; font-weight:700; }

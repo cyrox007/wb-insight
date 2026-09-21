@@ -39,6 +39,8 @@ def _lifecycle_config(**overrides):
         "PASSWORD_RESET_ENABLED": True,
         "PASSWORD_RESET_BASE_URL": "https://app.wbinsight.ru/reset-password",
         "PASSWORD_RESET_TOKEN_TTL_MINUTES": 30,
+        "MAIL_CONFIG_SOURCE": "environment",
+        "MAIL_PROVIDER": "smtp",
         "SMTP_HOST": "smtp.mail-provider.ru",
         "SMTP_PORT": 587,
         "SMTP_USERNAME": "wbinsight-mailer",
