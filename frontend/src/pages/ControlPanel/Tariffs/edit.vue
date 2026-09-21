@@ -5,7 +5,7 @@ import CreateLimit from '@/components/TariffModals/createLimit.vue'
 import EditLimit from '@/components/TariffModals/editLimit.vue'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
 import Modal from '@/components/UI/Modal.vue'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -20,6 +20,11 @@ const currentTariff = ref(null)
 const currentLimit = ref(null)
 const limits = ref([])
 const deleteConfirm = ref({ isOpen: false, limitType: '', label: '' })
+const requiredLimitTypes = new Set(['wb_accounts', 'sync_frequency_hours'])
+const isSystemTariff = computed(() => String(currentTariff.value?.code || '').toLowerCase() === 'demo')
+
+const isProtectedLimit = (limit) =>
+	Boolean(currentTariff.value?.is_active) && requiredLimitTypes.has(limit?.limit_type)
 
 onMounted(loadTariff)
 
@@ -40,6 +45,7 @@ function openEditLimitModal(limit) {
 }
 
 function askDeleteLimit(limit) {
+	if (isProtectedLimit(limit)) return
 	deleteConfirm.value = {
 		isOpen: true,
 		limitType: limit.limit_type,
@@ -102,10 +108,18 @@ async function deleteLimitConfirmed() {
 		</div>
 
 		<template v-else-if="currentTariff">
+			<div v-if="isSystemTariff" class="cp-info-callout">
+				<strong>Системный тариф demo.</strong>
+				<span>Он используется регистрацией, trial-доступом, квотами и планировщиком синхронизации. Его нельзя удалить или деактивировать; цена всегда 0 ₽, а публичность выключена.</span>
+			</div>
+
 			<article class="cp-card cp-detail-card">
 				<div class="cp-detail-header">
 					<div>
-						<h3 class="cp-detail-title">{{ currentTariff.name }}</h3>
+						<div class="cp-chip-row">
+							<h3 class="cp-detail-title">{{ currentTariff.name }}</h3>
+							<span v-if="isSystemTariff" class="cp-chip cp-chip--info">Системный</span>
+						</div>
 						<p class="cp-detail-meta">Код: <code class="cp-code">{{ currentTariff.code }}</code></p>
 					</div>
 					<span class="cp-chip" :class="currentTariff.is_active ? 'cp-chip--active' : 'cp-chip--inactive'">
@@ -159,6 +173,7 @@ async function deleteLimitConfirmed() {
 							<div class="cp-chip-row">
 								<strong class="cp-list-row__title">{{ getLimitTypeLabel(limit.limit_type) }}</strong>
 								<code class="cp-code">{{ limit.limit_type }}</code>
+								<span v-if="requiredLimitTypes.has(limit.limit_type)" class="cp-chip cp-chip--info">Обязательный</span>
 							</div>
 							<p class="cp-list-row__meta">Значение: <strong>{{ limit.limit_value }}</strong></p>
 						</div>
@@ -168,7 +183,14 @@ async function deleteLimitConfirmed() {
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
 								</svg>
 							</button>
-							<button class="cp-icon-button cp-icon-button--danger" title="Удалить" aria-label="Удалить лимит" @click="askDeleteLimit(limit)">
+							<button
+								class="cp-icon-button cp-icon-button--danger"
+								:class="{ 'cp-icon-button--disabled': isProtectedLimit(limit) }"
+								:title="isProtectedLimit(limit) ? 'Обязательный runtime-лимит активного тарифа нельзя удалить' : 'Удалить'"
+								:aria-label="isProtectedLimit(limit) ? 'Удаление лимита недоступно' : 'Удалить лимит'"
+								:disabled="isProtectedLimit(limit)"
+								@click="askDeleteLimit(limit)"
+							>
 								<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M9 7h6" />
 								</svg>
