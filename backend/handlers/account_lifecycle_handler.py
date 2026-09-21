@@ -22,6 +22,7 @@ from services.account_lifecycle_service import (
     withdraw_subscription_cancellation,
 )
 from services.mail_service import queue_transactional_email
+from services.mail_transport_service import get_mail_transport_runtime
 from services.user_service import get_user_by_email, get_user_by_uuid
 from settings import config
 from utils.responce_helps import response_error, response_success
@@ -53,6 +54,14 @@ async def request_password_reset(
     if not lifecycle_config.PASSWORD_RESET_ENABLED:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return response_error(code="PASSWORD_RECOVERY_NOT_CONFIGURED", message="Восстановление доступа временно недоступно")
+
+    runtime = await get_mail_transport_runtime(db_session)
+    if not runtime.ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return response_error(
+            code="PASSWORD_RECOVERY_DELIVERY_UNAVAILABLE",
+            message="Восстановление доступа временно недоступно",
+        )
 
     body = await request.json()
     email = _normalize_email(body.get("email"))
@@ -118,6 +127,14 @@ async def request_email_change(
         return response_error(
             code="EMAIL_VERIFICATION_NOT_CONFIGURED",
             message="Смена email временно недоступна",
+        )
+
+    runtime = await get_mail_transport_runtime(db_session)
+    if not runtime.ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return response_error(
+            code="EMAIL_VERIFICATION_DELIVERY_UNAVAILABLE",
+            message="Смена email временно недоступна: почтовый шлюз не готов",
         )
 
     user_id = UUID(str(request.state.user["sub"]))
