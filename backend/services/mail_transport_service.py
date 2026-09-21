@@ -138,10 +138,18 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
             if len(value) <= 4
             else f"{value[:2]}{'•' * max(4, len(value) - 4)}{value[-2:]}"
         )
+    unsubscribe_configured = bool(
+        lifecycle_config.MAIL_UNSUBSCRIBE_BASE_URL
+        and len(lifecycle_config.MAIL_UNSUBSCRIBE_HMAC_KEY) >= 32
+    )
     return {
         "provider": runtime.MAIL_PROVIDER,
         "enabled": runtime.MAIL_DELIVERY_ENABLED,
         "ready": runtime.ready,
+        "marketing_ready": bool(
+            runtime.ready and runtime.MAIL_DELIVERY_ENABLED and unsubscribe_configured
+        ),
+        "unsubscribe_configured": unsubscribe_configured,
         "source": runtime.source,
         "host": runtime.SMTP_HOST,
         "port": runtime.SMTP_PORT,
@@ -155,6 +163,16 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
         "updated_at": runtime.updated_at,
         "config_source": lifecycle_config.MAIL_CONFIG_SOURCE,
         "editable": lifecycle_config.MAIL_CONFIG_SOURCE in {"auto", "database"},
+        "deliverability": {
+            "tls": bool(runtime.SMTP_STARTTLS),
+            "sender_identity": bool(runtime.SMTP_FROM_EMAIL and runtime.SMTP_FROM_NAME),
+            "reply_to_configured": bool(runtime.SMTP_REPLY_TO_EMAIL),
+            "one_click_unsubscribe": unsubscribe_configured,
+            "spf": "external",
+            "dkim": "external",
+            "dmarc": "external",
+            "ptr": "external",
+        },
     }
 
 
