@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.authorization import require_super_admin
+from core.access_control import Permission
+from core.authorization import require_permission
 from core.dependencies import get_db_session
 from services.operational_monitoring_service import build_operational_snapshot
 
@@ -9,7 +10,7 @@ from services.operational_monitoring_service import build_operational_snapshot
 router = APIRouter(
     prefix="/control-panel/operations",
     tags=["Control Panel Operations"],
-    dependencies=[Depends(require_super_admin)],
+    dependencies=[Depends(require_permission(Permission.SYSTEM_MANAGE))],
 )
 
 
