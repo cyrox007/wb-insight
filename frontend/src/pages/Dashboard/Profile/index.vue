@@ -231,7 +231,17 @@ async function openAddTokenModal() {
     }
     showAddTokenModal.value = true
   } catch (error) {
-    notify.error(error.response?.data?.error?.message || 'Не удалось проверить лимит кабинетов')
+    const status = error.response?.status
+    const code = error.response?.data?.error?.code
+    const message = error.response?.data?.error?.message || 'Не удалось проверить лимит кабинетов'
+
+    if (status === 403 && (code === 'TOKEN_LIMIT_EXCEEDED' || code === 'TARIFF_LIMIT_EXCEEDED')) {
+      notify.info(message)
+      showTariffModal.value = true
+      return
+    }
+
+    notify.error(message)
   } finally {
     addBtnLoading.value = false
   }
