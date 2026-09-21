@@ -70,9 +70,10 @@ async def get_mail_provider_config(
 async def get_mail_transport_runtime(
     session: AsyncSession | None,
 ) -> MailTransportRuntime:
-    row = await get_mail_provider_config(session)
+    source_mode = lifecycle_config.MAIL_CONFIG_SOURCE
+    row = await get_mail_provider_config(session) if source_mode != "environment" else None
 
-    if row is None:
+    if source_mode == "environment" or (source_mode == "auto" and row is None):
         return MailTransportRuntime(
             MAIL_PROVIDER=lifecycle_config.MAIL_PROVIDER,
             MAIL_DELIVERY_ENABLED=lifecycle_config.MAIL_DELIVERY_ENABLED,
@@ -83,7 +84,23 @@ async def get_mail_transport_runtime(
             SMTP_FROM_EMAIL=lifecycle_config.SMTP_FROM_EMAIL,
             SMTP_STARTTLS=bool(lifecycle_config.SMTP_STARTTLS),
             SMTP_TIMEOUT_SECONDS=float(lifecycle_config.SMTP_TIMEOUT_SECONDS),
-            source="environment" if lifecycle_config.SMTP_HOST else "unconfigured",
+            source="environment" if lifecycle_config.SMTP_HOST else (
+                "database" if source_mode == "database" else "unconfigured"
+            ),
+        )
+
+    if row is None:
+        return MailTransportRuntime(
+            MAIL_PROVIDER="smtp",
+            MAIL_DELIVERY_ENABLED=False,
+            SMTP_HOST="",
+            SMTP_PORT=587,
+            SMTP_USERNAME=None,
+            SMTP_PASSWORD=None,
+            SMTP_FROM_EMAIL="",
+            SMTP_STARTTLS=True,
+            SMTP_TIMEOUT_SECONDS=10.0,
+            source="database",
         )
 
     secrets = _read_secrets(row)
@@ -125,6 +142,8 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
         "credentials_configured": runtime.credentials_configured,
         "username_hint": username_hint,
         "updated_at": runtime.updated_at,
+        "config_source": lifecycle_config.MAIL_CONFIG_SOURCE,
+        "editable": lifecycle_config.MAIL_CONFIG_SOURCE in {"auto", "database"},
     }
 
 
@@ -134,6 +153,11 @@ async def upsert_mail_transport(
     actor_id: UUID,
     values: dict[str, Any],
 ) -> MailProviderConfig:
+    if lifecycle_config.MAIL_CONFIG_SOURCE == "environment":
+        raise ValueError(
+            "SMTP управляется ENV. Установите MAIL_CONFIG_SOURCE=auto или database для настройки из панели"
+        )
+
     row = await get_mail_provider_config(session)
     if row is None:
         row = MailProviderConfig(provider=_PROVIDER)
