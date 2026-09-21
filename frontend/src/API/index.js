@@ -10,7 +10,27 @@ import {
 // development on the direct backend port, while still allowing an explicit
 // VITE_API_BASE_URL override for Docker/custom deployments.
 const defaultApiBaseURL = import.meta.env.PROD ? '/api' : 'http://localhost:9000';
-const apiBaseURL = (import.meta.env.VITE_API_BASE_URL || defaultApiBaseURL).replace(/\/$/, '');
+
+const resolveApiBaseURL = () => {
+    const configuredBaseURL = (import.meta.env.VITE_API_BASE_URL || '').trim();
+    if (!configuredBaseURL) return defaultApiBaseURL;
+
+    if (
+        import.meta.env.PROD &&
+        typeof window !== 'undefined' &&
+        window.location.protocol === 'https:' &&
+        /^http:\/\//i.test(configuredBaseURL)
+    ) {
+        console.warn(
+            'Ignoring insecure VITE_API_BASE_URL on HTTPS origin; falling back to same-origin /api.',
+        );
+        return '/api';
+    }
+
+    return configuredBaseURL;
+};
+
+const apiBaseURL = resolveApiBaseURL().replace(/\/$/, '');
 
 const $api = axios.create({
     withCredentials: true,

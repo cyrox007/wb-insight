@@ -8,21 +8,26 @@
 		</template>
 
 		<template #body>
-			<div class="modal-body">
+			<form id="login-form" class="login-form" @submit.prevent="performLogin">
 				<TextInput v-model="loginEmail" label="Email" placeholder="Введите email" type="email" />
 				<TextInput v-model="loginPassword" label="Пароль" placeholder="Введите пароль" type="password" />
 				<div class="auth-links">
 					<button class="recovery-link" type="button" @click="openRecovery">Забыли пароль?</button>
 					<button v-if="needsVerification" class="recovery-link" type="button" @click="openVerification">Подтвердить email</button>
 				</div>
-			</div>
-			<div class="modal-error" v-if="loginError !== ''">{{ loginError }}</div>
+				<div class="modal-error" v-if="loginError !== ''" role="alert">{{ loginError }}</div>
+			</form>
 		</template>
 
 		<template #footer>
 			<div class="modal-footer">
 				<ButtonCancel @click="$emit('close')" />
-				<ButtonLogin @click="performLogin" :loading="modalLoadedBtn" :disabled="modalLoadedBtn" />
+				<ButtonLogin
+					type="submit"
+					form="login-form"
+					:loading="modalLoadedBtn"
+					:disabled="modalLoadedBtn"
+				/>
 			</div>
 		</template>
 	</Modal>
@@ -60,8 +65,12 @@ const openVerification = async () => {
 }
 
 const performLogin = async () => {
+	if (modalLoadedBtn.value) return
+
 	modalLoadedBtn.value = true
+	loginError.value = ''
 	needsVerification.value = false
+
 	if (loginEmail.value === '' && loginPassword.value === '') {
 		modalLoadedBtn.value = false
 		loginError.value = 'Введите email и пароль'
@@ -83,6 +92,10 @@ const performLogin = async () => {
 			const code = error.response.data?.error?.code
 			needsVerification.value = code === 'EMAIL_NOT_VERIFIED'
 			loginError.value = error.response.data?.error?.message || error.response.data?.message || 'Ошибка авторизации'
+		} else if (error.request) {
+			loginError.value = 'Не удалось связаться с сервером. Проверьте соединение и попробуйте ещё раз.'
+		} else {
+			loginError.value = 'Не удалось выполнить вход. Попробуйте ещё раз.'
 		}
 	} finally {
 		modalLoadedBtn.value = false
@@ -93,8 +106,9 @@ const performLogin = async () => {
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .modal-title { font-size: 20px; font-weight: 600; }
 .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #aaa; }
-.modal-body { margin-bottom: 20px; }
+.login-form { margin-bottom: 4px; }
 .auth-links { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
 .recovery-link { padding: 0; border: 0; background: transparent; color: inherit; text-decoration: underline; cursor: pointer; opacity: .78; }
+.modal-error { margin-top: 12px; color: var(--danger-color); font-size: 13px; line-height: 1.45; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 10px; }
 </style>
