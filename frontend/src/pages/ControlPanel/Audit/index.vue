@@ -181,7 +181,8 @@ onMounted(loadEvents)
 			</div>
 		</div>
 
-		<article v-if="selected" class="cp-card audit-detail">
+		<Transition name="cp-expand">
+			<article v-if="selected" class="cp-card audit-detail">
 			<div class="audit-detail__head">
 				<div>
 					<p class="cp-eyebrow">Событие</p>
@@ -208,7 +209,8 @@ onMounted(loadEvents)
 				<span class="cp-muted">Безопасные metadata</span>
 				<pre class="audit-json">{{ JSON.stringify(selected.metadata || {}, null, 2) }}</pre>
 			</div>
-		</article>
+			</article>
+		</Transition>
 	</section>
 </template>
 
@@ -216,8 +218,8 @@ onMounted(loadEvents)
 .audit-filters {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	gap: 0.75rem;
-	margin-bottom: 1rem;
+	gap: 12px;
+	padding: 16px;
 }
 .filter-input {
 	min-height: 2.5rem;
@@ -235,7 +237,11 @@ onMounted(loadEvents)
 	align-items: center;
 	gap: 0.75rem;
 }
-.audit-filter-actions { flex-wrap: wrap; }
+.audit-filter-actions {
+	grid-column: 1 / -1;
+	flex-wrap: wrap;
+	padding-top: 2px;
+}
 .audit-pagination {
 	justify-content: space-between;
 	margin-top: 1rem;
@@ -251,7 +257,9 @@ onMounted(loadEvents)
 	overflow-wrap: anywhere;
 }
 .audit-detail {
-	margin-top: 1rem;
+	max-height: 1100px;
+	overflow: hidden;
+	padding: 20px;
 }
 .audit-detail__head {
 	justify-content: space-between;
@@ -272,14 +280,15 @@ onMounted(loadEvents)
 	gap: 0.2rem;
 }
 .audit-detail__grid span,
-.audit-evidence span { color: var(--muted-text-color, #94a3b8); font-size: 0.8rem; }
+.audit-evidence span { color: var(--text-muted); font-size: 0.8rem; }
 .audit-evidence { margin-bottom: 1rem; }
 .audit-json {
 	margin-top: 0.5rem;
 	padding: 0.85rem;
 	border: 1px solid var(--border-color);
 	border-radius: 0.5rem;
-	background: var(--dark-bg);
+	background: var(--light-bg);
+	color: var(--text-color);
 	white-space: pre-wrap;
 	word-break: break-word;
 	max-height: 320px;

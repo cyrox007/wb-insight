@@ -1,5 +1,5 @@
 <template>
-  <section class="ads-page">
+  <section class="ads-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoadedOnce }">
     <header class="page-header">
       <div>
         <p class="eyebrow">Продвижение</p>
@@ -22,16 +22,26 @@
       </form>
     </header>
 
-    <div v-if="errorMessage" class="status-banner status-banner--error" role="alert">
-      <strong>Не удалось загрузить рекламу.</strong>
-      <span>{{ errorMessage }}</span>
-      <button type="button" @click="loadData">Повторить</button>
-    </div>
+    <DashboardState
+      v-if="isLoading && !hasLoadedOnce"
+      kind="loading"
+    />
 
-    <div v-else-if="!hasData && hasLoadedOnce" class="empty-state">
-      <strong>Пока нет рекламной статистики.</strong>
-      <span>Данные появятся после первой успешной синхронизации Promotion API Wildberries.</span>
-    </div>
+    <DashboardState
+      v-else-if="errorMessage"
+      kind="error"
+      title="Не удалось загрузить рекламу"
+      :message="errorMessage"
+      action-label="Повторить"
+      @retry="loadData"
+    />
+
+    <DashboardState
+      v-else-if="!hasData && hasLoadedOnce"
+      kind="empty"
+      title="Пока нет рекламной статистики"
+      message="Данные появятся после первой успешной синхронизации Promotion API Wildberries."
+    />
 
     <template v-else>
       <div class="kpi-grid">
@@ -152,6 +162,7 @@ import { computed, onMounted, ref } from 'vue'
 import AdsService from '@/API/Dashboard/AdsService.js'
 import { notify } from '@/composables/notification'
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
+import DashboardState from '@/components/DashboardState.vue'
 
 const isLoading = ref(false)
 const hasLoadedOnce = ref(false)

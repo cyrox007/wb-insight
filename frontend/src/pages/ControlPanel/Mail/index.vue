@@ -245,7 +245,8 @@ onMounted(loadCampaigns)
 
 		<div v-if="actionError" class="cp-state" :class="{ 'cp-state--error': !actionError.includes('поставлено в очередь') }">{{ actionError }}</div>
 
-		<form v-if="creating && canManage" class="cp-card mail-form" @submit.prevent="createCampaign">
+		<Transition name="cp-expand">
+			<form v-if="creating && canManage" class="cp-card mail-form" @submit.prevent="createCampaign">
 			<h3>Новая рассылка</h3>
 			<label>Название<input v-model.trim="form.name" required maxlength="180"></label>
 			<label>Тема письма<input v-model.trim="form.subject" required maxlength="255"></label>
@@ -256,8 +257,9 @@ onMounted(loadCampaigns)
 			</div>
 			<label>Роли через запятую<input v-model.trim="form.roles" placeholder="user, manager"></label>
 			<label>Коды тарифов через запятую<input v-model.trim="form.tariff_codes" placeholder="demo, pro"></label>
-			<div class="cp-actions"><BaseButton type="submit" variant="primary" text="Сохранить черновик" /><BaseButton variant="outline" text="Отмена" @click="creating = false" /></div>
-		</form>
+				<div class="cp-actions"><BaseButton type="submit" variant="primary" text="Сохранить черновик" /><BaseButton variant="outline" text="Отмена" @click="creating = false" /></div>
+			</form>
+		</Transition>
 
 		<div class="mail-toolbar">
 			<label>Статус кампании
@@ -267,7 +269,7 @@ onMounted(loadCampaigns)
 			</label>
 		</div>
 
-		<div v-if="loading" class="cp-state">Загружаем рассылки…</div>
+		<div v-if="loading" class="cp-state" role="status">Загружаем рассылки…</div>
 		<div v-else-if="error" class="cp-state cp-state--error">{{ error }}</div>
 		<div v-else class="mail-layout">
 			<div class="cp-card mail-list">
@@ -313,33 +315,237 @@ onMounted(loadCampaigns)
 </template>
 
 <style scoped>
-.mail-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
-.mail-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
-.mail-toolbar label, .mail-schedule label { display: grid; gap: 6px; color: #9fb0c8; font-size: 12px; }
-.mail-toolbar select, .mail-delivery-head select, .mail-schedule input { border: 1px solid #334158; border-radius: 8px; background: #0e1520; color: #fff; padding: 9px 11px; }
-.mail-layout { display: grid; grid-template-columns: minmax(280px, .7fr) minmax(0, 1.3fr); gap: 18px; }
-.mail-list, .mail-detail, .mail-form { padding: 18px; }
-.mail-list__head, .mail-detail__head, .mail-delivery-head { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
-.campaign-row { width: 100%; display: flex; justify-content: space-between; gap: 12px; text-align: left; color: inherit; background: transparent; border: 0; border-top: 1px solid #263348; padding: 14px 4px; cursor: pointer; }
-.campaign-row.active { background: rgba(129, 73, 255, .08); }
-.campaign-row div:first-child { display: grid; gap: 4px; }
-.campaign-row span, .campaign-row small { color: #9fb0c8; }
-.campaign-row__meta { display: grid; justify-items: end; gap: 6px; }
-.mail-form { display: grid; gap: 14px; margin-bottom: 18px; }
-.mail-form label { display: grid; gap: 7px; color: #b9c6d8; }
-.mail-form input, .mail-form textarea, .mail-test input { border: 1px solid #334158; border-radius: 8px; background: #0e1520; color: #fff; padding: 10px 12px; }
-.mail-segment { display: flex; flex-wrap: wrap; gap: 20px; }
-.mail-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
-.mail-stats div { padding: 12px; border-radius: 10px; background: #101824; display: grid; gap: 4px; }
-.mail-stats span { color: #8fa2bc; font-size: 12px; }
-.mail-stats strong { font-size: 22px; }
-.mail-body { white-space: pre-wrap; font: inherit; line-height: 1.55; background: #0d141f; border: 1px solid #263348; border-radius: 10px; padding: 14px; max-height: 260px; overflow: auto; }
-.mail-test, .mail-schedule { display: flex; gap: 10px; margin: 14px 0 20px; align-items: end; }
-.mail-test input, .mail-schedule label { flex: 1; }
-.mail-preview { margin: 12px 0 20px; padding: 12px; border-radius: 9px; background: rgba(129,73,255,.09); }
-.mail-pagination { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; color: #9fb0c8; }
-.mail-delivery-head { align-items: center; margin-top: 18px; }
-.mail-confirm__header h3 { margin: 0 0 10px; }
-.mail-confirm__text { margin: 0; color: #b9c6d8; line-height: 1.5; }
-@media (max-width: 900px) { .mail-layout { grid-template-columns: 1fr; } .mail-stats { grid-template-columns: repeat(2, 1fr); } .mail-header { align-items: flex-start; flex-direction: column; } .mail-schedule { align-items: stretch; flex-direction: column; } }
+.mail-header {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+.mail-toolbar {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.mail-toolbar label,
+.mail-schedule label,
+.mail-form label {
+	display: grid;
+	gap: 7px;
+	color: var(--text-muted);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.mail-layout {
+	display: grid;
+	grid-template-columns: minmax(280px, .72fr) minmax(0, 1.28fr);
+	gap: 18px;
+	align-items: start;
+}
+
+.mail-list,
+.mail-detail,
+.mail-form {
+	padding: 20px;
+}
+
+.mail-form {
+	max-height: 1100px;
+	display: grid;
+	gap: 16px;
+	margin: 0;
+	overflow: hidden;
+}
+
+.mail-form h3 {
+	margin: 0;
+	font-size: 18px;
+}
+
+.mail-list__head,
+.mail-detail__head,
+.mail-delivery-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 14px;
+	align-items: flex-start;
+}
+
+.campaign-row {
+	width: 100%;
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 8px;
+	border: 0;
+	border-top: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text-color);
+	text-align: left;
+	cursor: pointer;
+	transition: background 200ms ease, transform 200ms ease;
+}
+
+.campaign-row:hover {
+	background: var(--hover-bg);
+}
+
+.campaign-row.active {
+	background: color-mix(in srgb, var(--secondary-color) 10%, var(--card-bg));
+}
+
+.campaign-row div:first-child {
+	display: grid;
+	gap: 4px;
+}
+
+.campaign-row span,
+.campaign-row small {
+	color: var(--text-muted);
+}
+
+.campaign-row__meta {
+	display: grid;
+	justify-items: end;
+	gap: 6px;
+}
+
+.mail-segment {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 18px;
+}
+
+.mail-segment label {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.mail-stats {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 10px;
+	margin: 18px 0;
+}
+
+.mail-stats div {
+	padding: 12px;
+	display: grid;
+	gap: 4px;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: var(--light-bg);
+}
+
+.mail-stats span {
+	color: var(--text-muted);
+	font-size: 12px;
+}
+
+.mail-stats strong {
+	font-size: 22px;
+}
+
+.mail-body {
+	max-height: 260px;
+	padding: 14px;
+	overflow: auto;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: var(--light-bg);
+	color: var(--text-color);
+	font: inherit;
+	line-height: 1.55;
+	white-space: pre-wrap;
+}
+
+.mail-test,
+.mail-schedule {
+	display: flex;
+	gap: 10px;
+	margin: 16px 0 20px;
+	align-items: end;
+}
+
+.mail-test input,
+.mail-schedule label {
+	flex: 1;
+}
+
+.mail-preview {
+	margin: 12px 0 20px;
+	padding: 12px;
+	border: 1px solid color-mix(in srgb, var(--secondary-color) 18%, var(--border-color));
+	border-radius: 9px;
+	background: color-mix(in srgb, var(--secondary-color) 8%, var(--card-bg));
+	color: var(--text-muted);
+}
+
+.mail-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	margin-top: 14px;
+	color: var(--text-muted);
+}
+
+.mail-delivery-head {
+	align-items: center;
+	margin-top: 18px;
+}
+
+.mail-confirm__header h3 {
+	margin: 0 0 10px;
+}
+
+.mail-confirm__text {
+	margin: 0;
+	color: var(--text-muted);
+	line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+	.mail-layout {
+		grid-template-columns: 1fr;
+	}
+
+	.mail-stats {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.mail-header {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.mail-schedule,
+	.mail-test {
+		align-items: stretch;
+		flex-direction: column;
+	}
+}
+
+@media (max-width: 560px) {
+	.mail-list,
+	.mail-detail,
+	.mail-form {
+		padding: 16px;
+	}
+
+	.mail-stats {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.campaign-row {
+		flex-direction: column;
+	}
+
+	.campaign-row__meta {
+		justify-items: start;
+	}
+}
 </style>

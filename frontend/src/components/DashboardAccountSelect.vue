@@ -2,8 +2,10 @@
     <div class="account-tools">
         <label class="field account-filter">
             <span class="field__label">Кабинет</span>
-            <select class="field__control" :value="selectedTokenId" @change="onChange">
-                <option value="">Все кабинеты WB</option>
+            <select class="field__control" :value="selectedTokenId" :disabled="accountsLoading || !accounts.length" @change="onChange">
+                <option v-if="accountsLoading" value="">Загружаем кабинеты…</option>
+                <option v-else-if="!accounts.length" value="">Нет доступных кабинетов</option>
+                <option v-else value="">Все кабинеты WB</option>
                 <option v-for="account in accounts" :key="account.id" :value="account.id">
                     {{ account.label || 'Wildberries' }} · {{ account.id.slice(0, 8) }}
                 </option>
@@ -38,7 +40,7 @@
             </button>
         </form>
 
-        <p v-else-if="route.name === 'dashboard.home'" class="plan-hint">
+        <p v-else-if="route.name === 'dashboard.home' && accounts.length" class="plan-hint">
             Выберите один кабинет, чтобы задать месячный план.
         </p>
     </div>
@@ -57,6 +59,7 @@ const planTarget = ref('')
 const isSaving = ref(false)
 const {
     accounts,
+    accountsLoading,
     selectedTokenId,
     loadAccounts,
     setSelectedTokenId,
@@ -116,11 +119,11 @@ onMounted(loadAccounts)
 
 <style scoped>
 .account-tools {
-    display: flex;
-    align-items: flex-end;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(205px, 230px) auto;
+    align-items: end;
+    justify-content: end;
+    gap: 8px 12px;
 }
 
 .field {
@@ -210,17 +213,26 @@ onMounted(loadAccounts)
 }
 
 .plan-hint {
-    max-width: 230px;
+    max-width: 210px;
+    margin: 0 0 3px;
     color: var(--text-subtle);
     font-size: 11px;
     line-height: 1.35;
 }
 
-@media (max-width: 900px) {
-    .account-tools,
+@media (max-width: 1100px) {
+    .account-tools {
+        grid-template-columns: minmax(205px, 1fr);
+        justify-content: stretch;
+    }
+
     .plan-editor {
         width: 100%;
         justify-content: flex-start;
+    }
+
+    .plan-hint {
+        max-width: none;
     }
 }
 

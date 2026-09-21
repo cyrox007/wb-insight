@@ -1,18 +1,27 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import AuthService from './API/AuthService.js'
 import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue'
 import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue'
 import DashboardAccountSelect from './components/DashboardAccountSelect.vue'
+import DashboardState from './components/DashboardState.vue'
 import { useDashboardAccount } from './composables/dashboardAccount.js'
 import { useTheme } from './composables/theme.js'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
-const { selectedTokenId, dashboardVersion } = useDashboardAccount()
+const {
+  accounts,
+  accountsLoaded,
+  accountsLoading,
+  accountsError,
+  selectedTokenId,
+  dashboardVersion,
+  loadAccounts,
+} = useDashboardAccount()
 const { isDark, toggleTheme } = useTheme()
 
 const navItems = [
@@ -32,21 +41,74 @@ const showAccountFilter = computed(() => navItems.some(item => item.name === rou
 const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}:${dashboardVersion.value}`)
 const isAdmin = computed(() => user.value?.roles?.some(role => role === 'super_admin' || role === 'admin'))
 const currentYear = new Date().getFullYear()
+const dashboardNeedsAccount = computed(
+  () =>
+    showAccountFilter.value &&
+    accountsLoaded.value &&
+    !accountsLoading.value &&
+    !accountsError.value &&
+    accounts.value.length === 0
+)
+
+const dashboardAccountStateVisible = computed(
+  () =>
+    showAccountFilter.value &&
+    (
+      (accountsLoading.value && !accountsLoaded.value) ||
+      Boolean(accountsError.value) ||
+      dashboardNeedsAccount.value
+    )
+)
+
+watch(
+  () => [isAuthenticated.value, showAccountFilter.value],
+  ([authenticated, shouldLoad]) => {
+    if (authenticated && shouldLoad) loadAccounts()
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.fullPath,
+  () => closeUserMenu()
+)
 
 const showLogin = ref(false)
 const showRegister = ref(false)
+const userMenuOpen = ref(false)
+const userMenuRef = ref(null)
 
 const openLogin = () => { showLogin.value = true }
 const openRegister = () => { showRegister.value = true }
+const closeUserMenu = () => { userMenuOpen.value = false }
+const toggleUserMenu = () => { userMenuOpen.value = !userMenuOpen.value }
+
+const navigateFromUserMenu = async (name) => {
+  closeUserMenu()
+  await router.push({ name })
+}
+
+const handleDocumentPointerDown = (event) => {
+  if (!userMenuOpen.value || !userMenuRef.value) return
+  if (!userMenuRef.value.contains(event.target)) closeUserMenu()
+}
+
+const handleDocumentKeydown = (event) => {
+  if (event.key === 'Escape') closeUserMenu()
+}
 
 onMounted(() => {
   window.addEventListener('wb:open-login', openLogin)
   window.addEventListener('wb:open-register', openRegister)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('keydown', handleDocumentKeydown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('wb:open-login', openLogin)
   window.removeEventListener('wb:open-register', openRegister)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  document.removeEventListener('keydown', handleDocumentKeydown)
 })
 
 const logout = async () => {
@@ -98,32 +160,40 @@ const logout = async () => {
           </svg>
         </button>
 
-        <details v-if="isAuthenticated && user" class="user-menu">
-          <summary class="user-menu__trigger" aria-label="Меню пользователя">
+        <div v-if="isAuthenticated && user" ref="userMenuRef" class="user-menu">
+          <button
+            class="user-menu__trigger"
+            type="button"
+            aria-label="Меню пользователя"
+            :aria-expanded="userMenuOpen ? 'true' : 'false'"
+            @click="toggleUserMenu"
+          >
             <span class="avatar" aria-hidden="true">{{ user.full_name?.charAt(0) || user.email?.charAt(0) || 'U' }}</span>
             <span class="user-identity">
               <strong>{{ user.full_name || 'Пользователь' }}</strong>
               <small>{{ user.email }}</small>
             </span>
-            <span class="chevron" aria-hidden="true">⌄</span>
-          </summary>
+            <span class="chevron" :class="{ 'chevron--open': userMenuOpen }" aria-hidden="true">⌄</span>
+          </button>
 
-          <div class="user-menu__content">
-            <button v-if="isAdmin" class="menu-action" type="button" @click="router.push({ name: 'control-panel.index' })">
-              Панель управления
-            </button>
-            <button class="menu-action" type="button" @click="router.push({ name: 'dashboard.profile' })">
-              Профиль и подключения
-            </button>
-            <button class="menu-action" type="button" @click="router.push({ name: 'dashboard.account-security' })">
-              Безопасность аккаунта
-            </button>
-            <div class="menu-divider" />
-            <button class="menu-action menu-action--danger" type="button" @click="logout">
-              Выйти
-            </button>
-          </div>
-        </details>
+          <Transition name="user-menu-motion">
+            <div v-if="userMenuOpen" class="user-menu__content">
+              <button v-if="isAdmin" class="menu-action" type="button" @click="navigateFromUserMenu('control-panel.index')">
+                Панель управления
+              </button>
+              <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.profile')">
+                Профиль и подключения
+              </button>
+              <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.account-security')">
+                Безопасность аккаунта
+              </button>
+              <div class="menu-divider" />
+              <button class="menu-action menu-action--danger" type="button" @click="closeUserMenu(); logout()">
+                Выйти
+              </button>
+            </div>
+          </Transition>
+        </div>
 
         <div v-else class="auth-actions">
           <button class="button button--ghost" type="button" @click="openLogin">Войти</button>
@@ -152,7 +222,32 @@ const logout = async () => {
       <DashboardAccountSelect v-if="showAccountFilter" class="workspace-account" />
     </section>
 
-    <RouterView :key="dashboardViewKey" />
+    <Transition name="page-state" mode="out-in">
+      <DashboardState
+        v-if="showAccountFilter && accountsLoading && !accountsLoaded"
+        key="accounts-loading"
+        kind="loading"
+      />
+      <DashboardState
+        v-else-if="showAccountFilter && accountsError"
+        key="accounts-error"
+        kind="error"
+        title="Не удалось проверить кабинеты Wildberries"
+        :message="accountsError"
+        action-label="Повторить"
+        @retry="loadAccounts({ force: true })"
+      />
+      <DashboardState
+        v-else-if="dashboardNeedsAccount"
+        key="accounts-empty"
+        kind="account"
+        title="Нет доступного кабинета Wildberries"
+        message="Добавьте действующий кабинет Wildberries или проверьте доступность аналитики на текущем тарифе. Все разделы аналитики используют один и тот же кабинет."
+        action-label="Профиль и подключения"
+        :action-to="{ name: 'dashboard.profile' }"
+      />
+      <RouterView v-else :key="dashboardViewKey" />
+    </Transition>
   </main>
 
   <footer v-if="!isAuthenticated && !isLandingGuest" class="app-footer">
@@ -324,27 +419,23 @@ const logout = async () => {
   position: relative;
 }
 
-.user-menu summary {
-  list-style: none;
-}
-
-.user-menu summary::-webkit-details-marker {
-  display: none;
-}
-
 .user-menu__trigger {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 220px;
   padding: 6px 9px;
+  border: 0;
   border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: background var(--transition);
+  transition: background 220ms ease;
 }
 
 .user-menu__trigger:hover,
-.user-menu[open] .user-menu__trigger {
+.user-menu__trigger[aria-expanded="true"] {
   background: var(--hover-bg);
 }
 
@@ -387,6 +478,11 @@ const logout = async () => {
 
 .chevron {
   color: var(--text-muted);
+  transition: transform 220ms ease;
+}
+
+.chevron--open {
+  transform: rotate(180deg);
 }
 
 .user-menu__content {
@@ -399,6 +495,28 @@ const logout = async () => {
   border-radius: 12px;
   background: var(--card-bg-elevated);
   box-shadow: var(--shadow);
+}
+
+.user-menu-motion-enter-active,
+.user-menu-motion-leave-active {
+  transition: opacity 220ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.user-menu-motion-enter-from,
+.user-menu-motion-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(0.985);
+}
+
+.page-state-enter-active,
+.page-state-leave-active {
+  transition: opacity 220ms ease, transform 260ms ease;
+}
+
+.page-state-enter-from,
+.page-state-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 .menu-action {
@@ -433,11 +551,11 @@ const logout = async () => {
 .workspace-bar {
   width: min(100% - 32px, var(--content-width));
   margin: 18px auto 0;
-  padding: 10px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, auto);
+  align-items: center;
+  gap: 18px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   background: var(--header-bg-soft);
@@ -445,9 +563,11 @@ const logout = async () => {
 }
 
 .workspace-nav {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .workspace-nav__item {
@@ -470,7 +590,8 @@ const logout = async () => {
 }
 
 .workspace-account {
-  margin-left: auto;
+  min-width: 0;
+  justify-self: end;
 }
 
 .app-footer {
@@ -486,13 +607,13 @@ const logout = async () => {
   }
 
   .workspace-bar {
+    grid-template-columns: 1fr;
     align-items: stretch;
-    flex-direction: column;
   }
 
   .workspace-account {
     width: 100%;
-    margin-left: 0;
+    justify-self: stretch;
   }
 }
 

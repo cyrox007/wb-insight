@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
+import Modal from '@/components/UI/Modal.vue'
 import CP_Payments from '@/API/ControlPanel/CP_Payments'
 
 const activeSection = ref('providers')
@@ -30,12 +31,14 @@ const form = reactive({
 })
 
 const providerKey = (provider) => `${provider.provider}:${provider.mode}`
-const isEditing = (provider) => editingKey.value === providerKey(provider)
 const modeLabel = (mode) => mode === 'live' ? 'Боевой' : 'Тестовый'
 const statusLabel = (value) => ({ pending: 'Ожидает', succeeded: 'Оплачен', failed: 'Ошибка', cancelled: 'Отменён' }[value] || value)
 const providerLabel = (value) => ({ sber: 'Сбер', fake: 'Тестовая оплата', yookassa: 'ЮKassa' }[value] || value)
 
 const configuredCount = computed(() => providers.value.filter((item) => item.enabled).length)
+const editingProvider = computed(
+	() => providers.value.find((provider) => providerKey(provider) === editingKey.value) || null
+)
 
 async function loadProviders() {
 	isLoading.value = true
@@ -179,8 +182,6 @@ onMounted(loadProviders)
 				<span class="cp-muted">Изменение конфигурации доступно только суперадминистратору. Секреты после сохранения не возвращаются в браузер.</span>
 			</div>
 
-			<div v-if="saveError" class="cp-state cp-state--error" role="alert">{{ saveError }}</div>
-
 			<div class="provider-grid">
 				<article v-for="provider in providers" :key="providerKey(provider)" class="cp-card provider-card">
 					<div class="provider-card__head">
@@ -203,33 +204,74 @@ onMounted(loadProviders)
 
 					<div v-if="!provider.adapter_available" class="provider-note">Адаптер ещё не подключён. Настройки зарезервированы для следующего этапа интеграции.</div>
 
-					<form v-if="isEditing(provider)" class="provider-form" @submit.prevent="saveProvider(provider)">
-						<div class="provider-form__checks">
-							<label><input v-model="form.enabled" type="checkbox"> Включён</label>
-							<label><input v-model="form.is_default" type="checkbox"> Провайдер по умолчанию</label>
-						</div>
-						<label class="provider-field">API URL<input v-model.trim="form.api_base_url" type="url" placeholder="https://…"></label>
-						<label class="provider-field">Return URL<input v-model.trim="form.return_url" type="url" placeholder="https://…"></label>
-						<label class="provider-field">Fail URL<input v-model.trim="form.fail_url" type="url" placeholder="https://…"></label>
-						<div class="provider-form__row">
-							<label class="provider-field">Код валюты<input v-model.trim="form.currency_code" type="text"></label>
-							<label class="provider-field">Timeout, сек.<input v-model="form.timeout_seconds" type="number" min="1" max="120"></label>
-						</div>
-						<div class="provider-form__row">
-							<label class="provider-field">Логин<input v-model.trim="form.username" type="text" autocomplete="off" placeholder="Пусто = оставить текущий"></label>
-							<label class="provider-field">Пароль<input v-model="form.password" type="password" autocomplete="new-password" placeholder="Пусто = оставить текущий"></label>
-						</div>
-						<label class="provider-clear"><input v-model="form.clear_secrets" type="checkbox"> Очистить сохранённые credentials</label>
-						<div class="cp-actions">
-							<BaseButton type="submit" variant="primary" size="small" text="Сохранить" :loading="savingKey === providerKey(provider)" />
-							<BaseButton variant="outline" size="small" text="Отмена" @click="cancelEdit" />
-						</div>
-					</form>
-					<div v-else class="cp-actions">
+					<div class="cp-actions">
 						<BaseButton variant="outline" size="small" text="Настроить" :disabled="!canManage" @click="startEdit(provider)" />
 					</div>
 				</article>
 			</div>
+
+			<Modal
+				:is-open="Boolean(editingProvider)"
+				size="large"
+				:aria-label="editingProvider ? `Настройка ${editingProvider.name}` : 'Настройка платёжной системы'"
+				@close="cancelEdit"
+			>
+				<template #header>
+					<div class="provider-modal__header">
+						<div>
+							<p class="cp-eyebrow">Платёжная система</p>
+							<h3 class="cp-modal-title">{{ editingProvider?.name || 'Настройка' }}</h3>
+							<p v-if="editingProvider" class="cp-modal-copy">{{ modeLabel(editingProvider.mode) }} режим · секреты после сохранения не возвращаются в браузер.</p>
+						</div>
+					</div>
+				</template>
+
+				<template #body>
+					<form
+						v-if="editingProvider"
+						id="provider-config-form"
+						class="provider-form provider-form--modal"
+						@submit.prevent="saveProvider(editingProvider)"
+					>
+						<div v-if="saveError" class="cp-state cp-state--error" role="alert">{{ saveError }}</div>
+
+						<div class="provider-form__checks">
+							<label><input v-model="form.enabled" type="checkbox"> Включён</label>
+							<label><input v-model="form.is_default" type="checkbox"> Провайдер по умолчанию</label>
+						</div>
+
+						<label class="provider-field">API URL<input v-model.trim="form.api_base_url" type="url" placeholder="https://…"></label>
+						<label class="provider-field">Return URL<input v-model.trim="form.return_url" type="url" placeholder="https://…"></label>
+						<label class="provider-field">Fail URL<input v-model.trim="form.fail_url" type="url" placeholder="https://…"></label>
+
+						<div class="provider-form__row">
+							<label class="provider-field">Код валюты<input v-model.trim="form.currency_code" type="text"></label>
+							<label class="provider-field">Timeout, сек.<input v-model="form.timeout_seconds" type="number" min="1" max="120"></label>
+						</div>
+
+						<div class="provider-form__row">
+							<label class="provider-field">Логин<input v-model.trim="form.username" type="text" autocomplete="off" placeholder="Пусто = оставить текущий"></label>
+							<label class="provider-field">Пароль<input v-model="form.password" type="password" autocomplete="new-password" placeholder="Пусто = оставить текущий"></label>
+						</div>
+
+						<label class="provider-clear"><input v-model="form.clear_secrets" type="checkbox"> Очистить сохранённые credentials</label>
+					</form>
+				</template>
+
+				<template #footer>
+					<div class="cp-modal-footer">
+						<BaseButton variant="outline" text="Отмена" @click="cancelEdit" />
+						<BaseButton
+							type="submit"
+							form="provider-config-form"
+							variant="primary"
+							text="Сохранить"
+							:loading="editingProvider && savingKey === providerKey(editingProvider)"
+							:disabled="!editingProvider"
+						/>
+					</div>
+				</template>
+			</Modal>
 		</template>
 
 		<template v-else>
@@ -276,12 +318,13 @@ onMounted(loadProviders)
 </template>
 
 <style scoped>
-.payments-switcher { display:flex; gap:8px; padding:6px; border:1px solid var(--border-color); border-radius:12px; margin-bottom:18px; background:var(--medium-bg); }
-.payments-switcher__button { border:0; background:transparent; color:var(--text-muted,#9eb1cc); border-radius:8px; padding:9px 14px; cursor:pointer; font-weight:600; }
-.payments-switcher__button.active { background:rgba(124,58,237,.22); color:var(--text-color); outline:1px solid rgba(139,92,246,.45); }
-.payments-summary { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
-.provider-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:14px; }
-.provider-card { display:flex; flex-direction:column; gap:16px; }
+.payments-switcher { display:flex; gap:8px; padding:6px; border:1px solid var(--border-color); border-radius:12px; background:var(--medium-bg); }
+.payments-switcher__button { border:0; background:transparent; color:var(--text-muted); border-radius:8px; padding:9px 14px; cursor:pointer; font-weight:650; transition:background 220ms ease,color 220ms ease,box-shadow 220ms ease; }
+.payments-switcher__button:hover { background:var(--hover-bg); color:var(--text-color); }
+.payments-switcher__button.active { background:color-mix(in srgb,var(--secondary-color) 12%,var(--medium-bg)); color:var(--secondary-color); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--secondary-color) 28%,transparent); }
+.payments-summary { display:flex; align-items:center; gap:12px; }
+.provider-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; align-items:start; }
+.provider-card { display:flex; flex-direction:column; gap:16px; align-self:start; padding:18px; transition:border-color 220ms ease,box-shadow 220ms ease; }
 .provider-card__head,.provider-title-row,.payment-detail__head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
 .provider-title-row { justify-content:flex-start; align-items:center; }
 .provider-card__title { margin:0; }
@@ -289,18 +332,21 @@ onMounted(loadProviders)
 .provider-meta > div { display:flex; flex-direction:column; gap:4px; padding:10px; border:1px solid var(--border-color); border-radius:8px; }
 .provider-meta span { color:var(--text-muted,#91a4bf); font-size:12px; }
 .provider-note { padding:10px 12px; border:1px dashed var(--border-color); border-radius:8px; color:var(--text-muted,#91a4bf); }
-.provider-form { border-top:1px solid var(--border-color); padding-top:14px; }
+.provider-form { display:grid; gap:12px; }
+.provider-form--modal { padding:2px 0 0; }
+.provider-modal__header { display:flex; justify-content:space-between; gap:14px; }
+.provider-modal__header .cp-modal-copy { margin-top:5px; }
 .provider-form__checks,.provider-form__row { display:flex; gap:14px; }
 .provider-form__checks { margin-bottom:12px; flex-wrap:wrap; }
 .provider-field { display:flex; flex-direction:column; gap:6px; flex:1; margin-bottom:10px; font-size:13px; }
-.provider-field input,.filter-input { min-height:38px; border:1px solid var(--border-color); border-radius:8px; background:var(--medium-bg); color:var(--text-color); padding:8px 10px; }
+.provider-field input,.filter-input { min-height:42px; }
 .provider-clear { display:block; margin:8px 0 14px; color:var(--text-muted,#91a4bf); font-size:13px; }
-.journal-filters { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+.journal-filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:14px; }
 .filter-input { min-width:150px; }
-.payment-detail { margin-top:16px; }
+.payment-detail { padding:18px; }
 .payment-detail h3 { margin:2px 0 0; font-size:16px; word-break:break-all; }
 .payment-event { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--border-color); }
 .payment-event > div { display:flex; flex-direction:column; gap:2px; }
 .payment-event span { font-size:12px; color:var(--text-muted,#91a4bf); }
-@media (max-width:760px) { .provider-grid { grid-template-columns:1fr; }.provider-form__row,.payments-summary { flex-direction:column; align-items:stretch; }.provider-meta { grid-template-columns:1fr; } }
+@media (max-width:760px) { .provider-grid { grid-template-columns:1fr; }.provider-form__row,.payments-summary { flex-direction:column; align-items:stretch; }.provider-meta { grid-template-columns:1fr; }.provider-card { padding:16px; } }
 </style>

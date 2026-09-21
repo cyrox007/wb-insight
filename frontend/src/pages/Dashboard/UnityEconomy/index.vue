@@ -5,8 +5,10 @@ import UnitEconomyBlock from '@/components/Widgets/UnitEconomyBlock.vue'
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
 import UnitEconomyTable from '@/components/Widgets/UnitEconomyTable.vue'
 import { notify } from '@/composables/notification'
+import DashboardState from '@/components/DashboardState.vue'
 
 const isLoading = ref(false)
+const hasLoadedOnce = ref(false)
 const errorMessage = ref('')
 const unityData = ref(null)
 const tableData = ref([])
@@ -130,6 +132,7 @@ const loadData = async () => {
     notify.error(errorMessage.value, 3000)
   } finally {
     isLoading.value = false
+    hasLoadedOnce.value = true
   }
 }
 
@@ -137,7 +140,7 @@ onMounted(loadData)
 </script>
 
 <template>
-  <section class="unit-page">
+  <section class="unit-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoadedOnce }">
     <header class="page-header">
       <div>
         <p class="eyebrow">P&L по товарам</p>
@@ -160,11 +163,26 @@ onMounted(loadData)
       </form>
     </header>
 
-    <div v-if="errorMessage" class="status-banner" role="alert">
-      <strong>Нет данных для расчёта.</strong>
-      <span>{{ errorMessage }}</span>
-      <button type="button" @click="loadData">Повторить</button>
-    </div>
+    <DashboardState
+      v-if="isLoading && !hasLoadedOnce"
+      kind="loading"
+    />
+
+    <DashboardState
+      v-else-if="errorMessage"
+      kind="error"
+      title="Не удалось рассчитать юнит-экономику"
+      :message="errorMessage"
+      action-label="Повторить"
+      @retry="loadData"
+    />
+
+    <DashboardState
+      v-else-if="hasLoadedOnce && !unityData"
+      kind="empty"
+      title="Нет данных для расчёта"
+      message="После синхронизации продаж, финансовых удержаний и себестоимости здесь появится юнит-экономика."
+    />
 
     <template v-else>
       <div class="summary-grid">

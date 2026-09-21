@@ -1,5 +1,5 @@
 <template>
-  <section class="finance-page">
+  <section class="finance-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoaded }">
     <header class="page-header">
       <div>
         <p class="eyebrow">Финансовый контроль</p>
@@ -23,22 +23,25 @@
       </div>
     </header>
 
-    <div class="method-note">
+    <DashboardState v-if="isLoading && !hasLoaded" kind="loading" />
+
+    <DashboardState
+      v-if="errorMessage"
+      kind="error"
+      title="Не удалось загрузить финансы"
+      :message="errorMessage"
+      action-label="Повторить"
+      @retry="loadData"
+    />
+
+    <div v-if="!errorMessage && (!isLoading || hasLoaded)" class="method-note">
       <strong>Источник истины по выплате — итог отчёта WB.</strong>
       <span>
         Мы не восстанавливаем «Итого к оплате» собственной формулой: сравниваем одноимённые поля сводного отчёта с детализацией и отдельно показываем расхождения.
       </span>
     </div>
 
-    <div v-if="errorMessage" class="status-banner status-banner--error" role="alert">
-      <div>
-        <strong>Не удалось загрузить финансы.</strong>
-        <span>{{ errorMessage }}</span>
-      </div>
-      <button type="button" @click="loadData">Повторить</button>
-    </div>
-
-    <div class="kpi-grid" aria-label="Сводка финансов">
+    <div v-if="!errorMessage && (!isLoading || hasLoaded)" class="kpi-grid" aria-label="Сводка финансов">
       <article class="kpi-card kpi-card--accent">
         <span>Итого к оплате WB</span>
         <strong>{{ money(summary.bank_payment) }}</strong>
@@ -66,7 +69,7 @@
       </article>
     </div>
 
-    <section class="balance-card">
+    <section v-if="!errorMessage && (!isLoading || hasLoaded)" class="balance-card">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Баланс WB</p>
@@ -99,7 +102,7 @@
       </div>
     </section>
 
-    <section class="reports-card">
+    <section v-if="!errorMessage && (!isLoading || hasLoaded)" class="reports-card">
       <div class="section-heading section-heading--controls">
         <div>
           <p class="eyebrow">Отчёты реализации</p>
@@ -180,6 +183,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import FinanceService from '@/API/Dashboard/FinanceService.js'
+import DashboardState from '@/components/DashboardState.vue'
 
 const iso = (date) => date.toISOString().slice(0, 10)
 const today = new Date()
