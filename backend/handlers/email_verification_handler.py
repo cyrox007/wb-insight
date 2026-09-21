@@ -11,6 +11,7 @@ from core.session_cookie import clear_refresh_cookie
 from models.mail_delivery import MailMessage
 from services.email_verification_service import EmailVerificationTargetConflict, verify_email
 from services.mail_service import queue_transactional_email
+from services.mail_transport_service import get_mail_transport_runtime
 from services.user_service import get_user_by_email
 from utils.responce_helps import response_error, response_success
 
@@ -84,6 +85,14 @@ async def resend_email(
         return response_error(
             code="EMAIL_VERIFICATION_NOT_CONFIGURED",
             message="Подтверждение email временно недоступно",
+        )
+
+    runtime = await get_mail_transport_runtime(db_session)
+    if not runtime.ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return response_error(
+            code="EMAIL_VERIFICATION_DELIVERY_UNAVAILABLE",
+            message="Отправка писем подтверждения временно недоступна",
         )
 
     data = await request.json()
