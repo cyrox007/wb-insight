@@ -1,5 +1,5 @@
 <template>
-  <section class="inventory-page">
+  <section class="inventory-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoadedOnce }">
     <header class="page-header">
       <div>
         <p class="eyebrow">Запасы</p>
