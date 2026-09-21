@@ -140,7 +140,7 @@ onMounted(loadData)
 </script>
 
 <template>
-  <section class="unit-page">
+  <section class="unit-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoadedOnce }">
     <header class="page-header">
       <div>
         <p class="eyebrow">P&L по товарам</p>
