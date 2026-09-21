@@ -6,6 +6,7 @@ import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
 import UnitEconomyTable from '@/components/Widgets/UnitEconomyTable.vue'
 import { notify } from '@/composables/notification'
 import DashboardState from '@/components/DashboardState.vue'
+import { formatFiniteNumber } from '@/utils/safeNumber'
 
 const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
@@ -28,10 +29,8 @@ const startDate = ref(formatDateInput(initialStart))
 const endDate = ref(formatDateInput(today))
 const periodIsValid = computed(() => Boolean(startDate.value && endDate.value && startDate.value <= endDate.value))
 
-const formatNumber = (value, maximumFractionDigits = 2) => {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits }).format(Number(value))
-}
+const formatNumber = (value, maximumFractionDigits = 2) =>
+  formatFiniteNumber(value, { maximumFractionDigits })
 
 const formatMetric = (value, type = 'number') => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
