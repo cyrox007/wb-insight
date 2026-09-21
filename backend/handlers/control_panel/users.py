@@ -2,14 +2,15 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy import inspect
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+from sqlalchemy import func, inspect, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from core.access_control import Permission, permissions_for_roles
 from core.authorization import require_permission
 from core.dependencies import get_db_session
-from models.users_model import EntityType, UserRole
+from models.users_model import EntityType, User, UserRole, UserRoleAssociation
 from services.account_lifecycle_service import (
     deactivate_account,
     list_lifecycle_events,
@@ -22,7 +23,6 @@ from services.user_service import (
     get_user_by_email,
     get_user_by_phone,
     get_user_by_uuid,
-    get_user_list,
 )
 from utils.responce_helps import response_error, response_success
 
@@ -81,12 +81,89 @@ def _reject_sensitive_target(response: Response) -> dict:
     )
 
 
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _user_list_conditions(
+    *,
+    search: str | None,
+    active: bool | None,
+    verified: bool | None,
+    staff: bool | None,
+    role: str | None,
+):
+    conditions = []
+    normalized_search = str(search or "").strip()
+    if normalized_search:
+        pattern = f"%{_escape_like(normalized_search)}%"
+        conditions.append(
+            or_(
+                User.full_name.ilike(pattern, escape="\\"),
+                User.email.ilike(pattern, escape="\\"),
+                User.phone.ilike(pattern, escape="\\"),
+                User.staff_id.ilike(pattern, escape="\\"),
+            )
+        )
+    if active is not None:
+        conditions.append(User.is_active.is_(active))
+    if verified is not None:
+        conditions.append(
+            User.email_verified_at.is_not(None)
+            if verified
+            else User.email_verified_at.is_(None)
+        )
+    if staff is not None:
+        conditions.append(User.is_staff.is_(staff))
+    if role:
+        conditions.append(
+            User.roles.any(UserRoleAssociation.role == role)
+        )
+    return conditions
+
+
 @router.get('/')
 async def get_users(
+    search: str | None = Query(default=None, max_length=100),
+    active: bool | None = Query(default=None),
+    verified: bool | None = Query(default=None),
+    staff: bool | None = Query(default=None),
+    role: str | None = Query(default=None, max_length=20),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    user_list = await get_user_list(db_session, limit=None)
-    return response_success(user_list=[_user_to_dict(user) for user in user_list])
+    normalized_role = str(role or "").strip().lower() or None
+    if normalized_role and normalized_role not in {item.value for item in UserRole}:
+        raise ValueError("Неизвестная роль пользователя")
+
+    conditions = _user_list_conditions(
+        search=search,
+        active=active,
+        verified=verified,
+        staff=staff,
+        role=normalized_role,
+    )
+    query = (
+        select(User)
+        .options(selectinload(User.roles))
+        .order_by(User.created_at.desc(), User.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    count_query = select(func.count(User.id))
+    for condition in conditions:
+        query = query.where(condition)
+        count_query = count_query.where(condition)
+
+    result = await db_session.execute(query)
+    total = await db_session.scalar(count_query)
+    return response_success(
+        user_list=[_user_to_dict(user) for user in result.scalars().unique().all()],
+        total=int(total or 0),
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get('/{user_uuid}')
