@@ -34,7 +34,10 @@ for (const [clientName, clientPath] of Object.entries(clients)) {
 
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8')
-    for (const match of source.matchAll(callPattern)) {
+    const executableSource = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+    for (const match of executableSource.matchAll(callPattern)) {
       const method = match[1]
       if (!referenced.has(method)) referenced.set(method, [])
       referenced.get(method).push(path.relative(process.cwd(), file))
