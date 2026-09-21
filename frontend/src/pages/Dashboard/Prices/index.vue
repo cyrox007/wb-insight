@@ -324,7 +324,7 @@ onMounted(loadData)
 
 .eyebrow {
   margin: 0 0 5px;
-  color: #a78bfa;
+  color: #6259d9;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: .09em;
@@ -472,7 +472,7 @@ h2 {
 }
 
 .kpi-card--accent strong {
-  color: #c4b5fd;
+  color: #5b52d6;
 }
 
 .kpi-card--warning {
@@ -480,7 +480,7 @@ h2 {
 }
 
 .kpi-card--warning strong {
-  color: #fcd34d;
+  color: #a66b08;
 }
 
 .table-card,
@@ -596,7 +596,7 @@ tbody tr:hover td {
 }
 
 .price-cell {
-  color: #e9d5ff;
+  color: #5148c7;
   font-weight: 650;
 }
 
@@ -606,8 +606,8 @@ tbody tr:hover td {
   justify-content: center;
   padding: 2px 6px;
   border-radius: 999px;
-  background: rgba(124, 58, 237, .15);
-  color: #c4b5fd;
+  background: rgba(99, 91, 255, .08);
+  color: #5b52d6;
   font-weight: 700;
 }
 
@@ -623,12 +623,12 @@ tbody tr:hover td {
 
 .status-pill--changed {
   border-color: rgba(124, 58, 237, .3);
-  color: #c4b5fd;
+  color: #5b52d6;
 }
 
 .status-pill--warning {
   border-color: rgba(245, 158, 11, .3);
-  color: #fcd34d;
+  color: #a66b08;
 }
 
 .change-list {
