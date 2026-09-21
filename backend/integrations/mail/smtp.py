@@ -20,6 +20,7 @@ class SMTPMailProvider:
         recipient: str,
         subject: str,
         body: str,
+        html_body: str | None = None,
     ) -> str:
         message = EmailMessage()
         message["Subject"] = subject
@@ -28,6 +29,8 @@ class SMTPMailProvider:
         message_id = make_msgid(domain=(sender.rpartition("@")[2] or None))
         message["Message-ID"] = message_id
         message.set_content(body)
+        if html_body:
+            message.add_alternative(html_body, subtype="html")
 
         with smtplib.SMTP(
             self._config.SMTP_HOST,
@@ -51,6 +54,7 @@ class SMTPMailProvider:
         recipient: str,
         subject: str,
         body: str,
+        html_body: str | None = None,
     ) -> MailDeliveryReceipt:
         provider_message_id = await asyncio.to_thread(
             self._send_sync,
@@ -58,5 +62,6 @@ class SMTPMailProvider:
             recipient=recipient,
             subject=subject,
             body=body,
+            html_body=html_body,
         )
         return MailDeliveryReceipt(provider_message_id=provider_message_id)
