@@ -161,6 +161,15 @@ async def get_mail_transport_runtime(
                 provider=runtime.MAIL_PROVIDER,
                 diagnostic_code="environment_fallback_incomplete",
             )
+        if (
+            runtime.MAIL_PROVIDER == "rusender"
+            and lifecycle_config.MAIL_DELIVERY_ENABLED
+        ):
+            return _unconfigured_runtime(
+                source="unconfigured",
+                provider=runtime.MAIL_PROVIDER,
+                diagnostic_code="environment_fallback_invalid",
+            )
         try:
             # Startup validation deliberately cannot inspect DB configuration.
             # Once runtime selection knows DB has no provider row, validate the
