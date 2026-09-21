@@ -138,8 +138,8 @@ class LifecycleConfig:
             )
 
         if self.EMAIL_VERIFICATION_ENABLED:
-            if not self.MAIL_DELIVERY_ENABLED:
-                raise RuntimeError("EMAIL_VERIFICATION_ENABLED requires MAIL_DELIVERY_ENABLED=true")
+            if self.MAIL_CONFIG_SOURCE == "environment" and not self.MAIL_DELIVERY_ENABLED:
+                raise RuntimeError("EMAIL_VERIFICATION_ENABLED requires MAIL_DELIVERY_ENABLED=true for ENV mail")
             if not self.EMAIL_VERIFICATION_BASE_URL:
                 raise RuntimeError("EMAIL_VERIFICATION_ENABLED requires EMAIL_VERIFICATION_BASE_URL")
             self._validate_https_url(
