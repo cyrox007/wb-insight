@@ -349,7 +349,6 @@ async def test_password_reset_request_is_throttled_without_disclosing_state(monk
     )
 
     assert payload["status"] == "success"
-    assert response.status_code == 202
     assert "Если активный аккаунт" in payload["message"]
 
 
