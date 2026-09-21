@@ -163,6 +163,7 @@ import AdsService from '@/API/Dashboard/AdsService.js'
 import { notify } from '@/composables/notification'
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
 import DashboardState from '@/components/DashboardState.vue'
+import { formatFiniteNumber } from '@/utils/safeNumber'
 
 const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
@@ -235,10 +236,8 @@ const summaryKpis = computed(() => [
   },
 ])
 
-const formatNumber = (value, maximumFractionDigits = 2) => {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
-  return new Intl.NumberFormat('ru-RU', { maximumFractionDigits }).format(Number(value))
-}
+const formatNumber = (value, maximumFractionDigits = 2) =>
+  formatFiniteNumber(value, { maximumFractionDigits })
 
 const formatMetric = (value, type = 'number') => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
