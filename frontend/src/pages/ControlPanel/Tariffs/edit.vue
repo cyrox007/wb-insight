@@ -222,10 +222,10 @@ async function deleteLimitConfirmed() {
 
 		<Modal v-if="deleteConfirm.isOpen" :is-open="true" @close="deleteConfirm.isOpen = false">
 			<template #header>
-				<h3>Удалить лимит</h3>
+				<h3 class="cp-modal-title">Удалить лимит</h3>
 			</template>
 			<template #body>
-				<p>Удалить лимит «{{ deleteConfirm.label }}»? Это действие нельзя отменить.</p>
+				<p class="cp-modal-copy">Удалить лимит «{{ deleteConfirm.label }}»? Это действие нельзя отменить.</p>
 			</template>
 			<template #footer>
 				<div class="cp-actions cp-actions--end">

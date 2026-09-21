@@ -485,11 +485,25 @@ onMounted(async () => {
 			<BaseButton v-if="activeTab === 'campaigns' && canManage" variant="primary" text="Создать рассылку" @click="newCampaign" />
 		</header>
 
-		<nav class="mail-tabs" aria-label="Разделы почты">
-			<button type="button" :class="{ active: activeTab === 'campaigns' }" @click="activeTab = 'campaigns'">Кампании</button>
-			<button type="button" :class="{ active: activeTab === 'gateway' }" @click="activeTab = 'gateway'">
+		<nav class="cp-segmented" aria-label="Разделы почты" role="tablist">
+			<button
+				type="button"
+				role="tab"
+				class="cp-segmented__button"
+				:class="{ 'is-active': activeTab === 'campaigns' }"
+				:aria-selected="activeTab === 'campaigns'"
+				@click="activeTab = 'campaigns'"
+			>Кампании</button>
+			<button
+				type="button"
+				role="tab"
+				class="cp-segmented__button"
+				:class="{ 'is-active': activeTab === 'gateway' }"
+				:aria-selected="activeTab === 'gateway'"
+				@click="activeTab = 'gateway'"
+			>
 				Почтовый шлюз
-				<span class="gateway-dot" :class="{ ready: meta.gateway?.ready }" />
+				<span class="gateway-dot" :class="{ ready: meta.gateway?.ready }" aria-hidden="true" />
 			</button>
 		</nav>
 
@@ -818,8 +832,8 @@ onMounted(async () => {
 		</template>
 
 		<Modal :is-open="Boolean(confirmAction)" size="small" :close-on-overlay-click="true" @close="confirmAction = null">
-			<template #header><h3>{{ confirmTitle }}</h3></template>
-			<template #body><p class="mail-confirm__text">{{ confirmText }}</p></template>
+			<template #header><h3 class="cp-modal-title">{{ confirmTitle }}</h3></template>
+			<template #body><p class="cp-modal-copy">{{ confirmText }}</p></template>
 			<template #footer><div class="cp-actions"><BaseButton variant="outline" text="Отмена" @click="confirmAction = null" /><BaseButton variant="primary" :text="confirmAction === 'cancel' ? 'Остановить' : 'Запустить'" @click="confirmPendingAction" /></div></template>
 		</Modal>
 	</section>
@@ -828,15 +842,6 @@ onMounted(async () => {
 <style scoped>
 .mail-page { gap: 16px; }
 .mail-header { display:flex; align-items:flex-end; justify-content:space-between; gap:20px; }
-.mail-tabs {
-	display:flex; gap:6px; padding:6px; width:fit-content;
-	border:1px solid var(--border-color); border-radius:11px; background:var(--card-bg);
-}
-.mail-tabs button {
-	display:flex; align-items:center; gap:8px; min-height:36px; padding:7px 12px;
-	border:0; border-radius:8px; background:transparent; color:var(--text-muted); font:inherit; font-weight:700; cursor:pointer;
-}
-.mail-tabs button.active { background:color-mix(in srgb,var(--secondary-color) 10%,var(--card-bg)); color:var(--secondary-color); }
 .gateway-dot { width:7px; height:7px; border-radius:50%; background:var(--danger-color); }
 .gateway-dot.ready { background:var(--success-color); }
 

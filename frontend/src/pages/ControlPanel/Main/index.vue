@@ -6,6 +6,14 @@ import { useRoute } from 'vue-router'
 
 const route = useRoute()
 const userCount = ref(0)
+const accountHealth = ref({
+	total: 0,
+	active: 0,
+	inactive: 0,
+	verified: 0,
+	unverified: 0,
+	staff: 0,
+})
 const permissions = ref([])
 const isLoading = ref(false)
 const loadError = ref('')
@@ -26,6 +34,10 @@ async function loadOverview() {
 		const response = await CP_Main.getControlPanel()
 		if (response.data?.status !== 'success') throw new Error('Некорректный ответ API панели управления')
 		userCount.value = Number(response.data?.user_count || 0)
+		accountHealth.value = {
+			...accountHealth.value,
+			...(response.data?.account_health || {}),
+		}
 		permissions.value = Array.isArray(response.data?.permissions) ? response.data.permissions : []
 	} catch (error) {
 		console.error('Ошибка загрузки панели управления:', error)
@@ -62,15 +74,44 @@ onMounted(loadOverview)
 			<div v-if="isLoading" class="cp-state" role="status">Загружаем административную сводку…</div>
 			<div v-else-if="loadError" class="cp-state cp-state--error" role="alert"><div class="cp-state__stack"><strong>{{ loadError }}</strong><BaseButton variant="outline" size="small" text="Повторить" @click="loadOverview" /></div></div>
 
-			<div v-else class="cp-overview-grid">
-				<article v-if="can('users:read')" class="cp-card cp-metric-card"><span class="cp-metric-card__label">Пользователи</span><strong class="cp-metric-card__value">{{ userCount }}</strong><p class="cp-metric-card__hint">Зарегистрировано в системе</p></article>
-				<router-link v-if="can('users:read')" :to="{ name: 'control-panel.users' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Аккаунты</span><h2 class="cp-shortcut-card__title">Управление пользователями</h2><p class="cp-card-note">Статус, профиль и безопасность аккаунтов.</p></div><span class="cp-shortcut-card__action">Открыть пользователей →</span></router-link>
-				<router-link v-if="can('roles:read')" :to="{ name: 'control-panel.roles' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Доступ</span><h2 class="cp-shortcut-card__title">Роли и права</h2><p class="cp-card-note">Просмотр назначений и управление системными ролями.</p></div><span class="cp-shortcut-card__action">Открыть роли →</span></router-link>
-				<router-link v-if="can('tariffs:read')" :to="{ name: 'control-panel.tariffs' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Монетизация</span><h2 class="cp-shortcut-card__title">Тарифные планы</h2><p class="cp-card-note">Стоимость, доступность и продуктовые лимиты.</p></div><span class="cp-shortcut-card__action">Открыть тарифы →</span></router-link>
-				<router-link v-if="can('payments:read')" :to="{ name: 'control-panel.payments' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Платежи</span><h2 class="cp-shortcut-card__title">Платёжные системы</h2><p class="cp-card-note">Test/live режимы, credentials и журнал оплат тарифов.</p></div><span class="cp-shortcut-card__action">Открыть платежи →</span></router-link>
-				<router-link v-if="can('mail:read')" :to="{ name: 'control-panel.mail' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Коммуникации</span><h2 class="cp-shortcut-card__title">Рассылки</h2><p class="cp-card-note">Черновики, сегменты, test-send, очередь и журнал доставки.</p></div><span class="cp-shortcut-card__action">Открыть рассылки →</span></router-link>
-				<router-link v-if="can('audit:read')" :to="{ name: 'control-panel.audit' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Инциденты</span><h2 class="cp-shortcut-card__title">Аудит действий</h2><p class="cp-card-note">Кто, когда и что изменил — с результатом и request-корреляцией.</p></div><span class="cp-shortcut-card__action">Открыть аудит →</span></router-link>
-			</div>
+			<template v-else>
+				<section class="cp-health-grid" aria-label="Состояние аккаунтов">
+					<article class="cp-card cp-metric-card">
+						<span class="cp-metric-card__label">Аккаунты</span>
+						<strong class="cp-metric-card__value">{{ accountHealth.total || userCount }}</strong>
+						<p class="cp-metric-card__hint">Всего зарегистрировано</p>
+					</article>
+					<article class="cp-card cp-metric-card">
+						<span class="cp-metric-card__label">Активны</span>
+						<strong class="cp-metric-card__value">{{ accountHealth.active }}</strong>
+						<p class="cp-metric-card__hint">Доступ к сервису разрешён</p>
+					</article>
+					<article class="cp-card cp-metric-card">
+						<span class="cp-metric-card__label">Без верификации</span>
+						<strong class="cp-metric-card__value">{{ accountHealth.unverified }}</strong>
+						<p class="cp-metric-card__hint">Email ещё не подтверждён</p>
+					</article>
+					<article class="cp-card cp-metric-card">
+						<span class="cp-metric-card__label">Деактивированы</span>
+						<strong class="cp-metric-card__value">{{ accountHealth.inactive }}</strong>
+						<p class="cp-metric-card__hint">Доступ к аккаунту остановлен</p>
+					</article>
+				</section>
+
+				<section class="cp-overview-grid cp-overview-grid--shortcuts">
+					<router-link v-if="can('users:read')" :to="{ name: 'control-panel.users' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Аккаунты</span><h2 class="cp-shortcut-card__title">Управление пользователями</h2><p class="cp-card-note">Статус, профиль, верификация и безопасность аккаунтов.</p></div><span class="cp-shortcut-card__action">Открыть пользователей →</span></router-link>
+					<router-link v-if="can('roles:read')" :to="{ name: 'control-panel.roles' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Доступ</span><h2 class="cp-shortcut-card__title">Роли и права</h2><p class="cp-card-note">Матрица доступа и назначения системных ролей.</p></div><span class="cp-shortcut-card__action">Открыть роли →</span></router-link>
+					<router-link v-if="can('tariffs:read')" :to="{ name: 'control-panel.tariffs' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Монетизация</span><h2 class="cp-shortcut-card__title">Тарифные планы</h2><p class="cp-card-note">Стоимость, доступность и продуктовые лимиты.</p></div><span class="cp-shortcut-card__action">Открыть тарифы →</span></router-link>
+					<router-link v-if="can('payments:read')" :to="{ name: 'control-panel.payments' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Платежи</span><h2 class="cp-shortcut-card__title">Платёжные системы</h2><p class="cp-card-note">Test/live режимы, credentials и журнал оплат тарифов.</p></div><span class="cp-shortcut-card__action">Открыть платежи →</span></router-link>
+					<router-link v-if="can('mail:read')" :to="{ name: 'control-panel.mail' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Коммуникации</span><h2 class="cp-shortcut-card__title">Рассылки</h2><p class="cp-card-note">Транзакционная почта, кампании и журнал доставки.</p></div><span class="cp-shortcut-card__action">Открыть рассылки →</span></router-link>
+					<router-link v-if="can('audit:read')" :to="{ name: 'control-panel.audit' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Инциденты</span><h2 class="cp-shortcut-card__title">Аудит действий</h2><p class="cp-card-note">Кто, когда и что изменил — с результатом и request-корреляцией.</p></div><span class="cp-shortcut-card__action">Открыть аудит →</span></router-link>
+				</section>
+
+				<div v-if="permissions.length === 1 && can('control_panel:access')" class="cp-info-callout">
+					<strong>Для этой роли доступна безопасная операционная сводка.</strong>
+					<span>Клиентские карточки, платежи и другие чувствительные разделы не открываются без отдельного backend permission.</span>
+				</div>
+			</template>
 		</div>
 
 		<RouterView />

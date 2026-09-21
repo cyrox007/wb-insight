@@ -159,11 +159,25 @@ onMounted(loadProviders)
 			</div>
 		</header>
 
-		<div class="payments-switcher" role="tablist" aria-label="Разделы платежей">
-			<button type="button" :class="['payments-switcher__button', { active: activeSection === 'providers' }]" @click="switchSection('providers')">
+		<div class="cp-segmented" role="tablist" aria-label="Разделы платежей">
+			<button
+				type="button"
+				role="tab"
+				class="cp-segmented__button"
+				:class="{ 'is-active': activeSection === 'providers' }"
+				:aria-selected="activeSection === 'providers'"
+				@click="switchSection('providers')"
+			>
 				Платёжные системы
 			</button>
-			<button type="button" :class="['payments-switcher__button', { active: activeSection === 'journal' }]" @click="switchSection('journal')">
+			<button
+				type="button"
+				role="tab"
+				class="cp-segmented__button"
+				:class="{ 'is-active': activeSection === 'journal' }"
+				:aria-selected="activeSection === 'journal'"
+				@click="switchSection('journal')"
+			>
 				Журнал оплат
 			</button>
 		</div>
@@ -275,12 +289,26 @@ onMounted(loadProviders)
 		</template>
 
 		<template v-else>
-			<div class="journal-filters cp-card">
-				<input v-model.trim="filters.email" class="filter-input" type="search" placeholder="Email пользователя">
-				<select v-model="filters.provider" class="filter-input"><option value="">Все провайдеры</option><option value="sber">Сбер</option><option value="fake">Тестовая оплата</option><option value="yookassa">ЮKassa</option></select>
-				<select v-model="filters.mode" class="filter-input"><option value="">Все режимы</option><option value="live">Боевой</option><option value="test">Тестовый</option></select>
-				<select v-model="filters.status" class="filter-input"><option value="">Все статусы</option><option value="pending">Ожидает</option><option value="succeeded">Оплачен</option><option value="failed">Ошибка</option><option value="cancelled">Отменён</option></select>
-				<BaseButton variant="primary" size="small" text="Применить" @click="loadJournal" />
+			<div class="cp-card cp-filter-surface">
+				<label class="cp-field-label">
+					<span>Email пользователя</span>
+					<input v-model.trim="filters.email" type="search" placeholder="seller@example.com">
+				</label>
+				<label class="cp-field-label">
+					<span>Провайдер</span>
+					<select v-model="filters.provider"><option value="">Все провайдеры</option><option value="sber">Сбер</option><option value="fake">Тестовая оплата</option><option value="yookassa">ЮKassa</option></select>
+				</label>
+				<label class="cp-field-label">
+					<span>Режим</span>
+					<select v-model="filters.mode"><option value="">Все режимы</option><option value="live">Боевой</option><option value="test">Тестовый</option></select>
+				</label>
+				<label class="cp-field-label">
+					<span>Статус</span>
+					<select v-model="filters.status"><option value="">Все статусы</option><option value="pending">Ожидает</option><option value="succeeded">Оплачен</option><option value="failed">Ошибка</option><option value="cancelled">Отменён</option></select>
+				</label>
+				<div class="cp-filter-surface__actions">
+					<BaseButton variant="primary" size="small" text="Применить" @click="loadJournal" />
+				</div>
 			</div>
 
 			<div v-if="payments.length === 0" class="cp-state">Платежей пока нет.</div>
@@ -318,10 +346,6 @@ onMounted(loadProviders)
 </template>
 
 <style scoped>
-.payments-switcher { display:flex; gap:8px; padding:6px; border:1px solid var(--border-color); border-radius:12px; background:var(--medium-bg); }
-.payments-switcher__button { border:0; background:transparent; color:var(--text-muted); border-radius:8px; padding:9px 14px; cursor:pointer; font-weight:650; transition:background 220ms ease,color 220ms ease,box-shadow 220ms ease; }
-.payments-switcher__button:hover { background:var(--hover-bg); color:var(--text-color); }
-.payments-switcher__button.active { background:color-mix(in srgb,var(--secondary-color) 12%,var(--medium-bg)); color:var(--secondary-color); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--secondary-color) 28%,transparent); }
 .payments-summary { display:flex; align-items:center; gap:12px; }
 .provider-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; align-items:start; }
 .provider-card { display:flex; flex-direction:column; gap:16px; align-self:start; padding:18px; transition:border-color 220ms ease,box-shadow 220ms ease; }
@@ -330,7 +354,7 @@ onMounted(loadProviders)
 .provider-card__title { margin:0; }
 .provider-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .provider-meta > div { display:flex; flex-direction:column; gap:4px; padding:10px; border:1px solid var(--border-color); border-radius:8px; }
-.provider-meta span { color:var(--text-muted,#91a4bf); font-size:12px; }
+.provider-meta span { color:var(--text-muted); font-size:12px; }
 .provider-note { padding:10px 12px; border:1px dashed var(--border-color); border-radius:8px; color:var(--text-muted,#91a4bf); }
 .provider-form { display:grid; gap:12px; }
 .provider-form--modal { padding:2px 0 0; }
@@ -341,8 +365,6 @@ onMounted(loadProviders)
 .provider-field { display:flex; flex-direction:column; gap:6px; flex:1; margin-bottom:10px; font-size:13px; }
 .provider-field input,.filter-input { min-height:42px; }
 .provider-clear { display:block; margin:8px 0 14px; color:var(--text-muted,#91a4bf); font-size:13px; }
-.journal-filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:14px; }
-.filter-input { min-width:150px; }
 .payment-detail { padding:18px; }
 .payment-detail h3 { margin:2px 0 0; font-size:16px; word-break:break-all; }
 .payment-event { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--border-color); }

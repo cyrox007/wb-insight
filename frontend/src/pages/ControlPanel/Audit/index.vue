@@ -126,20 +126,41 @@ onMounted(() => {
 			</div>
 		</header>
 
-		<div class="audit-filters cp-card">
-			<input v-model.trim="filters.action" class="filter-input" type="search" placeholder="Действие / префикс">
-			<select v-model="filters.result" class="filter-input">
-				<option value="">Любой результат</option>
-				<option value="success">Успешно</option>
-				<option value="denied">Отклонено</option>
-				<option value="failed">Ошибка</option>
-			</select>
-			<input v-model.trim="filters.target_type" class="filter-input" type="search" placeholder="Тип объекта">
-			<input v-model.trim="filters.actor_id" class="filter-input" type="search" placeholder="ID пользователя">
-			<input v-model.trim="filters.request_id" class="filter-input" type="search" placeholder="Request ID">
-			<input v-model="filters.date_from" class="filter-input" type="datetime-local" aria-label="Дата от">
-			<input v-model="filters.date_to" class="filter-input" type="datetime-local" aria-label="Дата до">
-			<div class="audit-filter-actions">
+		<div class="cp-card cp-filter-surface audit-filter-surface">
+			<label class="cp-field-label">
+				<span>Действие</span>
+				<input v-model.trim="filters.action" type="search" placeholder="Например, account.">
+			</label>
+			<label class="cp-field-label">
+				<span>Результат</span>
+				<select v-model="filters.result">
+					<option value="">Любой результат</option>
+					<option value="success">Успешно</option>
+					<option value="denied">Отклонено</option>
+					<option value="failed">Ошибка</option>
+				</select>
+			</label>
+			<label class="cp-field-label">
+				<span>Тип объекта</span>
+				<input v-model.trim="filters.target_type" type="search" placeholder="user, tariff…">
+			</label>
+			<label class="cp-field-label">
+				<span>ID пользователя</span>
+				<input v-model.trim="filters.actor_id" type="search" placeholder="UUID">
+			</label>
+			<label class="cp-field-label">
+				<span>Request ID</span>
+				<input v-model.trim="filters.request_id" type="search" placeholder="Correlation ID">
+			</label>
+			<label class="cp-field-label">
+				<span>Дата от</span>
+				<input v-model="filters.date_from" type="datetime-local">
+			</label>
+			<label class="cp-field-label">
+				<span>Дата до</span>
+				<input v-model="filters.date_to" type="datetime-local">
+			</label>
+			<div class="cp-filter-surface__actions audit-filter-actions">
 				<BaseButton variant="primary" size="small" text="Применить" @click="applyFilters" />
 				<BaseButton variant="outline" size="small" text="Сбросить" @click="resetFilters" />
 			</div>
@@ -220,20 +241,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.audit-filters {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	gap: 12px;
-	padding: 16px;
-}
-.filter-input {
-	min-height: 2.5rem;
-	padding: 0.55rem 0.7rem;
-	border: 1px solid var(--border-color);
-	border-radius: 0.5rem;
-	background: var(--medium-bg);
-	color: var(--text-color);
-}
 .audit-filter-actions,
 .audit-pagination,
 .audit-detail__head,
@@ -242,11 +249,8 @@ onMounted(() => {
 	align-items: center;
 	gap: 0.75rem;
 }
-.audit-filter-actions {
-	grid-column: 1 / -1;
-	flex-wrap: wrap;
-	padding-top: 2px;
-}
+.audit-filter-surface { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.audit-filter-actions { align-self: end; }
 .audit-pagination {
 	justify-content: space-between;
 	margin-top: 1rem;
