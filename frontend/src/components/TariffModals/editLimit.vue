@@ -18,6 +18,7 @@ const isSaving = ref(false)
 const formMessage = ref('')
 const msgStatus = ref('')
 const limitData = ref({ limit_type: '', limit_value: 0 })
+const requiredLimitTypes = new Set(['wb_accounts', 'sync_frequency_hours'])
 
 watch(
 	() => props.limit,
@@ -40,6 +41,12 @@ async function editLimit() {
 	const limitValue = Number(limitData.value.limit_value)
 	if (!Number.isFinite(limitValue) || limitValue < 0) {
 		formMessage.value = 'Значение лимита должно быть неотрицательным числом.'
+		msgStatus.value = 'error'
+		return
+	}
+
+	if (requiredLimitTypes.has(props.limit?.limit_type) && limitValue < 1) {
+		formMessage.value = 'Обязательный runtime-лимит должен быть не меньше 1.'
 		msgStatus.value = 'error'
 		return
 	}

@@ -8,7 +8,6 @@ from integrations.wildberries.token_metadata import (
     decode_wb_token,
 )
 from integrations.wildberries.token_validation import validate_wb_token_live
-from models.subscription_model import SubscriptionStatus
 from models.tokens_model import Marketplace
 from services.subscription_service import get_active_subscription
 from services.tariff_service import get_limit
@@ -28,15 +27,14 @@ async def get_wb_account_limit(
     if subscription is None:
         return 0
 
-    if subscription.status == SubscriptionStatus.DEMO:
-        return 1
-
     tariff_limit = await get_limit(
         session=session,
         tariff_id=subscription.tariff_id,
         limit_type="wb_accounts",
     )
-    return max(0, int(tariff_limit.limit_value) if tariff_limit else 1)
+    # Tariff configuration is the single source of truth for runtime limits.
+    # Missing limits fail closed instead of silently granting a default quota.
+    return max(0, int(tariff_limit.limit_value)) if tariff_limit else 0
 
 
 async def get_allowed_wb_tokens(

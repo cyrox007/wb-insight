@@ -91,6 +91,18 @@ jobs:
       - name: Upgrade clean database to Alembic head
         run: alembic upgrade head
 
+      - name: Verify system demo tariff contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PGPASSWORD="$DB_PASSWORD"
+
+          demo_count="$(psql             --host="$DB_HOST"             --port="$DB_PORT"             --username="$DB_USER"             --dbname="$DB_NAME"             --tuples-only             --no-align             --command="SELECT count(*) FROM tariff_plans WHERE lower(code)='demo' AND price_rub=0 AND is_active IS TRUE AND is_public IS FALSE;")"
+          test "$demo_count" = "1"
+
+          required_limits="$(psql             --host="$DB_HOST"             --port="$DB_PORT"             --username="$DB_USER"             --dbname="$DB_NAME"             --tuples-only             --no-align             --command="SELECT count(*) FROM tariff_limits tl JOIN tariff_plans tp ON tp.id=tl.tariff_id WHERE lower(tp.code)='demo' AND ((tl.limit_type='wb_accounts' AND tl.limit_value>=1) OR (tl.limit_type='sync_frequency_hours' AND tl.limit_value>=1));")"
+          test "$required_limits" = "2"
+
       - name: Show current revision
         run: alembic current
 

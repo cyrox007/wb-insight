@@ -133,3 +133,53 @@ async def test_full_quota_keeps_slot_when_live_check_is_inconclusive(monkeypatch
     assert token.is_active is True
     assert token.is_revoked is False
     assert session.flushed == 0
+
+
+@pytest.mark.asyncio
+async def test_wb_account_limit_is_driven_by_subscription_tariff_limit(monkeypatch):
+    tariff_id = "demo-tariff-id"
+
+    async def fake_subscription(_session, _user_id):
+        return SimpleNamespace(tariff_id=tariff_id)
+
+    async def fake_limit(*, session, tariff_id: str, limit_type: str):
+        assert tariff_id == "demo-tariff-id"
+        assert limit_type == "wb_accounts"
+        return SimpleNamespace(limit_value=2)
+
+    monkeypatch.setattr(
+        marketplace_access_service,
+        "get_active_subscription",
+        fake_subscription,
+    )
+    monkeypatch.setattr(marketplace_access_service, "get_limit", fake_limit)
+
+    result = await marketplace_access_service.get_wb_account_limit(
+        object(),
+        "user-id",
+    )
+
+    assert result == 2
+
+
+@pytest.mark.asyncio
+async def test_missing_wb_account_limit_fails_closed(monkeypatch):
+    async def fake_subscription(_session, _user_id):
+        return SimpleNamespace(tariff_id="tariff-id")
+
+    async def fake_limit(**_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        marketplace_access_service,
+        "get_active_subscription",
+        fake_subscription,
+    )
+    monkeypatch.setattr(marketplace_access_service, "get_limit", fake_limit)
+
+    result = await marketplace_access_service.get_wb_account_limit(
+        object(),
+        "user-id",
+    )
+
+    assert result == 0

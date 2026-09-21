@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import CP_Tariffs from '@/API/ControlPanel/CP_Tariffs'
 import Modal from '@/components/UI/Modal.vue'
 import TextInput from '@/components/UI/TextInput.vue'
@@ -23,6 +23,7 @@ const tariffData = ref({
 const isSaving = ref(false)
 const formMessage = ref('')
 const messageType = ref('')
+const isSystemTariff = computed(() => String(props.currentTariff?.code || '').toLowerCase() === 'demo')
 
 watch(
 	() => props.currentTariff,
@@ -50,6 +51,12 @@ async function editTariff() {
 		formMessage.value = 'Название тарифа обязательно.'
 		messageType.value = 'error'
 		return
+	}
+
+	if (isSystemTariff.value) {
+		tariffData.value.price_rub = '0.00'
+		tariffData.value.is_active = true
+		tariffData.value.is_public = false
 	}
 
 	const price = Number(String(tariffData.value.price_rub).replace(',', '.'))
@@ -102,7 +109,12 @@ async function editTariff() {
 			<div class="cp-form-grid" :aria-busy="isSaving">
 				<TextInput label="Название тарифа" v-model="tariffData.name" :disabled="isSaving" />
 				<TextareaInput label="Описание" v-model="tariffData.description" :rows="3" :disabled="isSaving" />
-				<TextInput v-model="tariffData.price_rub" label="Цена, ₽/мес" type="number" :disabled="isSaving" />
+				<TextInput v-model="tariffData.price_rub" label="Цена, ₽/мес" type="number" :disabled="isSaving || isSystemTariff" />
+
+				<div v-if="isSystemTariff" class="cp-info-callout">
+					<strong>Системный тариф.</strong>
+					<span>Для demo зафиксированы цена 0 ₽, активный статус и скрытие из публичного каталога. Название и описание можно менять.</span>
+				</div>
 
 				<div class="cp-toggle-row">
 					<div class="cp-toggle-row__copy">
@@ -115,8 +127,8 @@ async function editTariff() {
 						:class="{ 'cp-toggle--on': tariffData.is_active }"
 						:aria-pressed="tariffData.is_active"
 						aria-label="Активный тариф"
-						:disabled="isSaving"
-						@click="tariffData.is_active = !tariffData.is_active"
+						:disabled="isSaving || isSystemTariff"
+						@click="() => { tariffData.is_active = !tariffData.is_active; if (!tariffData.is_active) tariffData.is_public = false }"
 					></button>
 				</div>
 
@@ -131,7 +143,7 @@ async function editTariff() {
 						:class="{ 'cp-toggle--on': tariffData.is_public }"
 						:aria-pressed="tariffData.is_public"
 						aria-label="Публичный тариф"
-						:disabled="isSaving"
+						:disabled="isSaving || isSystemTariff || !tariffData.is_active"
 						@click="tariffData.is_public = !tariffData.is_public"
 					></button>
 				</div>
