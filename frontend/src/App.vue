@@ -9,6 +9,7 @@ import DashboardAccountSelect from './components/DashboardAccountSelect.vue'
 import DashboardState from './components/DashboardState.vue'
 import { useDashboardAccount } from './composables/dashboardAccount.js'
 import { useTheme } from './composables/theme.js'
+import { canAccessControlPanel, isStaffUser, ROLE_LABELS } from './security/roles.js'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -39,15 +40,12 @@ const user = computed(() => authStore.getUser)
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'))
 const showAccountFilter = computed(() => navItems.some(item => item.name === route.name))
 const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}:${dashboardVersion.value}`)
-const ROLE_LABELS = {
-  super_admin: 'Суперадмин',
-  admin: 'Администратор',
-  manager: 'Менеджер',
-  support: 'Поддержка',
-  analyst: 'Аналитик',
-  user: 'Пользователь',
-}
-const isAdmin = computed(() => user.value?.roles?.some(role => role === 'super_admin' || role === 'admin'))
+const isStaff = computed(() => isStaffUser(user.value))
+const canControlPanel = computed(() => canAccessControlPanel(user.value))
+const isSellerAnalyticsRoute = computed(() => navItems.some(item => item.name === route.name))
+const showWorkspaceBar = computed(
+  () => isAuthenticated.value && !isControlPanelRoute.value && (!isStaff.value || isSellerAnalyticsRoute.value)
+)
 const userRoleLabels = computed(() =>
   (user.value?.roles || []).map(role => ROLE_LABELS[role] || role)
 )
@@ -204,22 +202,30 @@ const logout = async () => {
               </div>
 
               <div class="menu-section-label">Рабочая область</div>
-              <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.home')">
+              <button v-if="isStaff" class="menu-action" type="button" @click="navigateFromUserMenu('staff.home')">
+                <span class="menu-action__icon" aria-hidden="true">⌂</span>
+                <span><strong>Рабочий стол</strong><small>Приоритеты и инструменты вашей роли</small></span>
+              </button>
+              <button v-else class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.home')">
                 <span class="menu-action__icon" aria-hidden="true">⌂</span>
                 <span><strong>Моя аналитика</strong><small>Обзор кабинетов Wildberries</small></span>
+              </button>
+              <button v-if="isStaff" class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.home')">
+                <span class="menu-action__icon" aria-hidden="true">◫</span>
+                <span><strong>Клиентская аналитика</strong><small>Вторичный режим для проверки интерфейса</small></span>
               </button>
 
               <div class="menu-section-label">Мой аккаунт</div>
               <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.profile')">
                 <span class="menu-action__icon" aria-hidden="true">◎</span>
-                <span><strong>Профиль и подключения</strong><small>Данные профиля и WB-кабинеты</small></span>
+                <span><strong>{{ isStaff ? 'Профиль аккаунта' : 'Профиль и подключения' }}</strong><small>{{ isStaff ? 'Личные данные и настройки аккаунта' : 'Данные профиля и WB-кабинеты' }}</small></span>
               </button>
               <button class="menu-action" type="button" @click="navigateFromUserMenu('dashboard.account-security')">
                 <span class="menu-action__icon" aria-hidden="true">◈</span>
                 <span><strong>Безопасность</strong><small>Пароль, email и активные сессии</small></span>
               </button>
 
-              <template v-if="isAdmin">
+              <template v-if="canControlPanel">
                 <div class="menu-section-label">Администрирование</div>
                 <button class="menu-action" type="button" @click="navigateFromUserMenu('control-panel.index')">
                   <span class="menu-action__icon" aria-hidden="true">⚙</span>
@@ -248,7 +254,7 @@ const logout = async () => {
   <RegistrationModal :is-open="showRegister" @close="showRegister = false" />
 
   <main class="app-main">
-    <section v-if="isAuthenticated && !isControlPanelRoute" class="workspace-bar" aria-label="Навигация аналитики">
+    <section v-if="showWorkspaceBar" class="workspace-bar" aria-label="Навигация аналитики">
       <nav class="workspace-nav">
         <RouterLink
           v-for="item in navItems"
