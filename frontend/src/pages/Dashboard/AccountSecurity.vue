@@ -138,8 +138,8 @@ async function deactivate() {
 header { margin-bottom: 4px; }
 h1 { margin: 4px 0 10px; font-size: clamp(28px, 4vw, 38px); }
 header > p:last-child, .card p { color: var(--text-muted); line-height: 1.55; }
-.eyebrow { color: #a78bfa; font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-.eyebrow.danger { color: #fda4af; }
+.eyebrow { color: #6259d9; font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.eyebrow.danger { color: #c83b55; }
 .card { padding: 22px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--card-bg); }
 .card h2 { margin: 0 0 8px; }
 .danger-zone { border-color: rgba(251,113,133,.28); }
@@ -151,6 +151,6 @@ button { margin-top: 16px; min-height: 38px; padding: 8px 14px; border-radius: 9
 .link-button { border: 0; background: transparent; color: var(--text-muted); text-decoration: underline; }
 .email-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .pending-note { margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 9px; background: var(--light-bg); }
-.danger-button { border: 1px solid rgba(251,113,133,.45); background: rgba(190,24,93,.18); color: #fecdd3; }
+.danger-button { border: 1px solid rgba(251,113,133,.45); background: rgba(190,24,93,.18); color: #b4233f; }
 button:disabled { opacity: .5; cursor: default; }
 </style>
