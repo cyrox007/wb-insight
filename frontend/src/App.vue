@@ -147,8 +147,8 @@ const logout = async () => {
   position: sticky;
   top: 0;
   z-index: 50;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(15, 20, 28, 0.9);
+  border-bottom: 1px solid rgba(99, 91, 255, 0.1);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(16px);
 }
 
@@ -220,7 +220,7 @@ const logout = async () => {
   height: 34px;
   padding: 0 7px;
   border-radius: 9px;
-  background: linear-gradient(135deg, #7c3aed, #9333ea);
+  background: linear-gradient(135deg, #635bff, #7a65e8);
   color: #fff;
   font-size: 13px;
   letter-spacing: 0.02em;
@@ -234,7 +234,7 @@ const logout = async () => {
   padding: 2px 6px;
   border: 1px solid rgba(167, 139, 250, 0.3);
   border-radius: 6px;
-  color: #c4b5fd;
+  color: #5b52d6;
   font-size: 10px;
   font-weight: 700;
 }
@@ -305,7 +305,7 @@ const logout = async () => {
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: #263449;
+  background: #eceaff;
   color: #c4b5fd;
   font-weight: 700;
 }
@@ -367,7 +367,7 @@ const logout = async () => {
 }
 
 .menu-action--danger {
-  color: #fda4af;
+  color: var(--danger-color);
 }
 
 .menu-divider {
@@ -390,7 +390,7 @@ const logout = async () => {
   gap: 16px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background: rgba(24, 33, 46, 0.82);
+  background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow-sm);
 }
 
@@ -415,8 +415,8 @@ const logout = async () => {
 }
 
 .workspace-nav__item--active {
-  color: #fff;
-  background: rgba(124, 58, 237, 0.22);
+  color: #4f46c8;
+  background: rgba(99, 91, 255, 0.1);
 }
 
 .workspace-account {
