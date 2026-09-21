@@ -251,7 +251,6 @@ async def admin_change_email_identity(
         return
 
     now = datetime.now(timezone.utc)
-    old_email = _normalized_email(user.email)
     user.email = normalized
     user.email_verified_at = None
     user.pending_email = None
@@ -279,6 +278,6 @@ async def admin_change_email_identity(
         user_id=user.id,
         actor_user_id=actor_user_id,
         event_type="email_changed_by_admin",
-        event_data={"previous_email": old_email, "verified": False},
+        event_data={"source": "control_panel", "verified": False},
     )
     await session.flush()
