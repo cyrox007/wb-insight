@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config as config
-from integrations.mail.smtp import SMTPMailProvider
+from integrations.mail.rusender import RuSenderAPIError
 from models.mail_delivery import (
     CampaignStatus,
     MailCampaign,
@@ -18,7 +18,7 @@ from models.mail_delivery import (
 from models.users_model import User
 from services.account_lifecycle_service import issue_password_reset_token
 from services.email_verification_service import issue_email_verification_token
-from services.mail_transport_service import get_mail_transport_runtime
+from services.mail_transport_service import get_mail_transport_runtime, mail_provider_for_runtime
 from services.mail_unsubscribe_service import unsubscribe_url
 from utils.mail_html import render_mail_document
 
@@ -47,7 +47,7 @@ def _password_reset_url(token: str) -> str:
     return _token_url(config.PASSWORD_RESET_BASE_URL, token)
 
 
-async def _smtp_send(
+async def _transport_send(
     session: AsyncSession | None,
     recipient: str,
     subject: str,
@@ -55,8 +55,9 @@ async def _smtp_send(
     *,
     html_body: str | None = None,
     headers: dict[str, str] | None = None,
+    idempotency_key: str | None = None,
 ) -> str:
-    """Dispatch through the effective SMTP runtime without exposing secrets."""
+    """Dispatch through the effective provider without exposing secrets."""
     runtime = await get_mail_transport_runtime(session)
     feature_enabled = (
         runtime.MAIL_DELIVERY_ENABLED
@@ -68,18 +69,35 @@ async def _smtp_send(
     if not runtime.ready:
         raise RuntimeError("mail_transport_not_ready")
 
-    provider = SMTPMailProvider(runtime)
-    receipt = await provider.send(
-        sender=runtime.SMTP_FROM_EMAIL,
-        sender_name=runtime.SMTP_FROM_NAME,
-        reply_to=runtime.SMTP_REPLY_TO_EMAIL,
-        recipient=recipient,
-        subject=subject,
-        body=body,
-        html_body=html_body,
-        headers=headers,
-    )
+    # RuSender's transactional endpoint does not accept our RFC list headers.
+    # Marketing delivery therefore remains disabled for this adapter at the
+    # scheduling/worker layer until a campaign-native provider is added.
+    if headers and runtime.MAIL_PROVIDER == "rusender":
+        raise PermanentMailDeliveryError("rusender_marketing_transport_unsupported")
+
+    provider = mail_provider_for_runtime(runtime)
+    try:
+        receipt = await provider.send(
+            sender=runtime.SMTP_FROM_EMAIL,
+            sender_name=runtime.SMTP_FROM_NAME,
+            reply_to=runtime.SMTP_REPLY_TO_EMAIL,
+            recipient=recipient,
+            subject=subject,
+            body=body,
+            html_body=html_body,
+            headers=headers,
+            idempotency_key=idempotency_key,
+        )
+    except RuSenderAPIError as exc:
+        if not exc.retryable:
+            raise PermanentMailDeliveryError(exc.code) from exc
+        raise
     return receipt.provider_message_id or ""
+
+
+# Compatibility alias for older callers/tests. The implementation is now
+# provider-neutral even though the historical helper name was SMTP-specific.
+_smtp_send = _transport_send
 
 
 async def queue_transactional_email(
@@ -296,13 +314,14 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
         elif message.body_html:
             html_body = render_mail_document(message.body_html)
 
-    provider_id = await _smtp_send(
+    provider_id = await _transport_send(
         session,
         message.recipient_email,
         subject,
         body,
         html_body=html_body,
         headers=delivery_headers,
+        idempotency_key=message.idempotency_key,
     )
     message.attempt_count += 1
     message.provider_message_id = provider_id
@@ -389,7 +408,7 @@ async def refresh_campaign_counters(session: AsyncSession, campaign_id) -> None:
 async def send_password_reset_email(email: str, token: str) -> None:
     """Compatibility helper for legacy callers/tests; request flow uses the queue."""
     reset_url = _password_reset_url(token)
-    await _smtp_send(
+    await _transport_send(
         None,
         email,
         "Восстановление доступа к WB Insight",
