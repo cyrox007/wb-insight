@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import email
 from email import policy
-from email.message import Message
+from email.message import EmailMessage, Message
 from html import unescape
 import imaplib
 import os
@@ -225,16 +225,16 @@ def _poll(kind: str, target_email: str) -> str:
 
 def _self_test() -> None:
     target = "release-smoke+abc@example.com"
-    raw = (
-        "From: WB Insight <no-reply@mail.jsinteractive.ru>\r\n"
-        f"To: {target}\r\n"
-        "Date: Sun, 21 Sep 2026 15:00:00 +0000\r\n"
-        "Subject: =?utf-8?b?0J/QvtC00YLQstC10YDQtNC40YLQtSDlbWFpbCDQsiBXQiBJbnNpZ2h0?=\r\n"
-        "MIME-Version: 1.0\r\n"
-        "Content-Type: text/plain; charset=utf-8\r\n"
-        "\r\n"
-        "https://app.example.com/verify-email#token=0123456789abcdef0123456789abcdef\r\n"
-    ).encode("utf-8")
+    verification = EmailMessage()
+    verification["From"] = "WB Insight <no-reply@mail.jsinteractive.ru>"
+    verification["To"] = target
+    verification["Date"] = "Sun, 21 Sep 2026 15:00:00 +0000"
+    verification["Subject"] = "Подтвердите email в WB Insight"
+    verification.set_content(
+        "https://app.example.com/verify-email#token=0123456789abcdef0123456789abcdef"
+    )
+    raw = verification.as_bytes()
+
     match = _extract_matching_url(
         raw,
         kind="email_verification",
@@ -251,14 +251,16 @@ def _self_test() -> None:
     )
     assert wrong_target is None
 
-    reset = (
-        "To: seller@example.com\r\n"
-        "Subject: =?utf-8?b?0JLQvtGB0YHRgtCw0L3QvtCy0LvQtdC90LjQtSDQtNC+0YHRgtGD0L/QsCDQuiBXQiBJbnNpZ2h0?=\r\n"
-        "Content-Type: text/html; charset=utf-8\r\n\r\n"
-        "<a href=\"https://app.example.com/reset-password#token=abcdefghijklmnop12345678\">reset</a>"
-    ).encode("utf-8")
+    reset = EmailMessage()
+    reset["To"] = "seller@example.com"
+    reset["Subject"] = "Восстановление доступа к WB Insight"
+    reset.set_content("Откройте ссылку восстановления.")
+    reset.add_alternative(
+        '<a href="https://app.example.com/reset-password#token=abcdefghijklmnop12345678">reset</a>',
+        subtype="html",
+    )
     assert _extract_matching_url(
-        reset,
+        reset.as_bytes(),
         kind="password_reset",
         target_email="seller@example.com",
         not_before=datetime.now(timezone.utc) - timedelta(days=1),
