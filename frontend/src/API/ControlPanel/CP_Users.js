@@ -7,6 +7,9 @@ export default class CP_Users {
     static async getUser(userId) {
         return await $api.get(`/control-panel/users/${userId}`)
     }
+    static async getUserByUuid(userId) {
+        return await this.getUser(userId)
+    }
     static async updateUser(userId, payload) {
         return await $api.put(`/control-panel/users/${userId}`, payload)
     }
