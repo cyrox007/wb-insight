@@ -58,12 +58,8 @@ async def _smtp_send(
     runtime = await get_mail_transport_runtime(session)
     feature_enabled = (
         runtime.MAIL_DELIVERY_ENABLED
-        if runtime.source == "database"
-        else (
-            runtime.MAIL_DELIVERY_ENABLED
-            or config.PASSWORD_RESET_ENABLED
-            or config.EMAIL_VERIFICATION_ENABLED
-        )
+        or config.PASSWORD_RESET_ENABLED
+        or config.EMAIL_VERIFICATION_ENABLED
     )
     if not feature_enabled:
         raise RuntimeError("mail_delivery_disabled")
