@@ -151,17 +151,21 @@ async def _require_campaign_delivery(
     response: Response,
     db_session: AsyncSession,
 ):
-    runtime = await get_mail_transport_runtime(db_session)
-    if runtime.MAIL_DELIVERY_ENABLED and runtime.ready:
+    payload = await mail_transport_payload(db_session)
+    if payload.get("marketing_ready"):
         return None
     response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    if not payload.get("ready"):
+        message = "Почтовый шлюз не настроен или не готов к отправке"
+    elif not payload.get("enabled"):
+        message = "Пользовательские кампании отключены"
+    elif not payload.get("unsubscribe_configured"):
+        message = "Не настроен безопасный one-click unsubscribe для маркетинговых писем"
+    else:
+        message = "Почтовый шлюз не готов к маркетинговой отправке"
     return response_error(
         code="MAIL_DELIVERY_DISABLED",
-        message=(
-            "Почтовый шлюз отключён"
-            if runtime.ready
-            else "Почтовый шлюз не настроен или не готов к отправке"
-        ),
+        message=message,
     )
 
 
