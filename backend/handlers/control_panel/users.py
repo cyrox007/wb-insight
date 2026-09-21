@@ -298,8 +298,17 @@ async def remove_user(
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(message='User not found', code="USER_NOT_FOUND")
+    if not _can_manage_sensitive_target(request, target_user):
+        return _reject_sensitive_target(response)
 
     actor_user_id = UUID(str(request.state.user_id))
+    if actor_user_id == target_user.id:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="SELF_DEACTIVATION_USE_ACCOUNT_FLOW",
+            message="Для деактивации собственного аккаунта используйте раздел безопасности аккаунта",
+        )
+
     changed = await deactivate_account(
         db_session,
         target_user,
