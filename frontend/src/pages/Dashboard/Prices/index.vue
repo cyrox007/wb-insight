@@ -1,5 +1,5 @@
 <template>
-  <section class="prices-page">
+  <section class="prices-page dashboard-page" :class="{ 'is-refreshing': isLoading && hasLoadedOnce }">
     <header class="page-header">
       <div>
         <div class="title-line">
