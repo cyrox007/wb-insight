@@ -16,6 +16,7 @@ const isSaving = ref(false)
 const msgStatus = ref('')
 const formMessage = ref('')
 const newLimit = ref({ limit_type: '', limit_value: '' })
+const requiredLimitTypes = new Set(['wb_accounts', 'sync_frequency_hours'])
 
 function resetForm() {
 	newLimit.value = { limit_type: '', limit_value: '' }
@@ -40,6 +41,12 @@ async function createLimit() {
 	const limitValue = Number(newLimit.value.limit_value)
 	if (!Number.isFinite(limitValue) || limitValue < 0) {
 		formMessage.value = 'Значение лимита должно быть неотрицательным числом.'
+		msgStatus.value = 'error'
+		return
+	}
+
+	if (requiredLimitTypes.has(newLimit.value.limit_type.trim()) && limitValue < 1) {
+		formMessage.value = 'Обязательный runtime-лимит должен быть не меньше 1.'
 		msgStatus.value = 'error'
 		return
 	}
