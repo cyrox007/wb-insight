@@ -5,13 +5,19 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.access_control import Permission
+from core.authorization import require_permission
 from core.dependencies import get_db_session
 from models.audit_event import AuditEvent
 from models.users_model import User
 from utils.responce_helps import response_error, response_success
 
 
-router = APIRouter(prefix="/control-panel/audit", tags=["Control Panel - Audit"])
+router = APIRouter(
+    prefix="/control-panel/audit",
+    tags=["Control Panel - Audit"],
+    dependencies=[Depends(require_permission(Permission.AUDIT_READ))],
+)
 
 
 def _payload(event: AuditEvent, actor_email: str | None = None) -> dict:

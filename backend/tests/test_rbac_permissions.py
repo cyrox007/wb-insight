@@ -1,0 +1,221 @@
+from types import SimpleNamespace
+
+import pytest
+from fastapi import HTTPException
+
+from core import authorization
+from core.access_control import Permission, permissions_for_role
+from handlers.control_panel.audit import router as audit_router
+from handlers.control_panel.home import router as home_router
+from handlers.control_panel.mail import router as mail_router
+from handlers.control_panel.operations import router as operations_router
+from handlers.control_panel.payments import router as payments_router
+from handlers.control_panel.roles import router as roles_router
+from handlers.control_panel.tariffs import router as tariffs_router
+from handlers.control_panel.users import router as users_router
+from models.users_model import UserRole
+
+
+def _route_permissions(router, path: str, method: str) -> set[str]:
+    method = method.upper()
+    for route in router.routes:
+        if getattr(route, "path", None) != path:
+            continue
+        if method not in set(getattr(route, "methods", set())):
+            continue
+        return {
+            permission
+            for dependency in route.dependant.dependencies
+            if (
+                permission := getattr(
+                    dependency.call,
+                    "required_permission",
+                    None,
+                )
+            )
+        }
+    raise AssertionError(f"Route not found: {method} {path}")
+
+
+def test_role_permission_matrix_is_explicit():
+    super_permissions = permissions_for_role(UserRole.SUPER_ADMIN)
+    admin_permissions = permissions_for_role(UserRole.ADMIN)
+
+    assert set(super_permissions) == set(Permission)
+    assert Permission.CONTROL_PANEL_ACCESS in admin_permissions
+    assert Permission.USERS_WRITE in admin_permissions
+    assert Permission.TARIFFS_WRITE in admin_permissions
+    assert Permission.ROLES_WRITE not in admin_permissions
+    assert Permission.PAYMENTS_WRITE not in admin_permissions
+    assert Permission.MAIL_WRITE not in admin_permissions
+    assert Permission.SYSTEM_MANAGE not in admin_permissions
+
+    for role in (
+        UserRole.MANAGER,
+        UserRole.SUPPORT,
+        UserRole.ANALYST,
+        UserRole.USER,
+    ):
+        assert permissions_for_role(role) == frozenset()
+
+
+@pytest.mark.asyncio
+async def test_require_permission_reads_current_database_roles(monkeypatch):
+    async def fake_auth(_request):
+        return None
+
+    async def fake_roles(_request, _session):
+        return {UserRole.ADMIN.value}
+
+    monkeypatch.setattr(authorization, "auth_middle", fake_auth)
+    monkeypatch.setattr(authorization, "_get_active_user_roles", fake_roles)
+
+    request = SimpleNamespace(state=SimpleNamespace())
+    dependency = authorization.require_permission(Permission.TARIFFS_WRITE)
+
+    await dependency(request, object())
+
+    assert Permission.TARIFFS_WRITE.value in request.state.permissions
+    assert Permission.ROLES_WRITE.value not in request.state.permissions
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_escalate_roles_through_backend(monkeypatch):
+    async def fake_auth(_request):
+        return None
+
+    async def fake_roles(_request, _session):
+        return {UserRole.ADMIN.value}
+
+    monkeypatch.setattr(authorization, "auth_middle", fake_auth)
+    monkeypatch.setattr(authorization, "_get_active_user_roles", fake_roles)
+
+    request = SimpleNamespace(state=SimpleNamespace())
+    dependency = authorization.require_permission(Permission.ROLES_WRITE)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await dependency(request, object())
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["error_type"] == "permission_denied"
+    assert exc_info.value.detail["required_permission"] == "roles:write"
+
+
+@pytest.mark.asyncio
+async def test_super_admin_can_manage_roles(monkeypatch):
+    async def fake_auth(_request):
+        return None
+
+    async def fake_roles(_request, _session):
+        return {UserRole.SUPER_ADMIN.value}
+
+    monkeypatch.setattr(authorization, "auth_middle", fake_auth)
+    monkeypatch.setattr(authorization, "_get_active_user_roles", fake_roles)
+
+    request = SimpleNamespace(state=SimpleNamespace())
+    dependency = authorization.require_permission(Permission.ROLES_WRITE)
+
+    await dependency(request, object())
+
+    assert Permission.ROLES_WRITE.value in request.state.permissions
+
+
+def test_control_panel_routes_enforce_granular_permissions():
+    assert _route_permissions(home_router, "/control-panel/", "GET") == {
+        "control_panel:access"
+    }
+
+    assert _route_permissions(users_router, "/control-panel/users/", "GET") == {
+        "users:read"
+    }
+    assert _route_permissions(users_router, "/control-panel/users/{user_uuid}", "PUT") == {
+        "users:read",
+        "users:write",
+    }
+
+    assert _route_permissions(roles_router, "/control-panel/roles/", "GET") == {
+        "roles:read"
+    }
+    assert _route_permissions(roles_router, "/control-panel/roles/", "POST") == {
+        "roles:read",
+        "roles:write",
+    }
+    assert _route_permissions(
+        roles_router,
+        "/control-panel/roles/{user_id}/{role_code}",
+        "DELETE",
+    ) == {
+        "roles:read",
+        "roles:write",
+    }
+
+    assert _route_permissions(tariffs_router, "/control-panel/tariffs/", "GET") == {
+        "tariffs:read"
+    }
+    assert _route_permissions(
+        tariffs_router,
+        "/control-panel/tariffs/create",
+        "POST",
+    ) == {
+        "tariffs:read",
+        "tariffs:write",
+    }
+
+    assert _route_permissions(
+        payments_router,
+        "/control-panel/payments/providers",
+        "GET",
+    ) == {
+        "payments:read"
+    }
+    assert _route_permissions(
+        payments_router,
+        "/control-panel/payments/providers/{provider}/{mode}",
+        "PUT",
+    ) == {
+        "payments:read",
+        "payments:write",
+    }
+
+    assert _route_permissions(audit_router, "/control-panel/audit/", "GET") == {
+        "audit:read"
+    }
+
+    assert _route_permissions(
+        mail_router,
+        "/control-panel/mail/campaigns",
+        "GET",
+    ) == {
+        "mail:read"
+    }
+    assert _route_permissions(
+        mail_router,
+        "/control-panel/mail/campaigns",
+        "POST",
+    ) == {
+        "mail:read",
+        "mail:write",
+    }
+    assert _route_permissions(
+        mail_router,
+        "/control-panel/mail/campaigns/{campaign_id}/preview",
+        "POST",
+    ) == {
+        "mail:read"
+    }
+    assert _route_permissions(
+        mail_router,
+        "/control-panel/mail/campaigns/{campaign_id}/launch",
+        "POST",
+    ) == {
+        "mail:read",
+        "mail:write",
+    }
+
+    assert _route_permissions(
+        operations_router,
+        "/control-panel/operations/health",
+        "GET",
+    ) == {
+        "system:manage"
+    }

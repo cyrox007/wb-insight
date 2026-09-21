@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.access_control import Permission
+from core.authorization import require_permission
 from core.dependencies import get_db_session
 from models.payments_model import Payment, PaymentEvent, PaymentProvider, PaymentStatus
 from models.tariffs_model import TariffPlan
@@ -18,7 +19,11 @@ from services.payment_provider_service import (
 from utils.responce_helps import response_error, response_success
 
 
-router = APIRouter(prefix="/control-panel/payments", tags=["Control Panel - Payments"])
+router = APIRouter(
+    prefix="/control-panel/payments",
+    tags=["Control Panel - Payments"],
+    dependencies=[Depends(require_permission(Permission.PAYMENTS_READ))],
+)
 _SENSITIVE_FRAGMENTS = ("password", "secret", "token", "credential", "authorization")
 
 
@@ -66,7 +71,7 @@ async def providers_list(
     )
 
 
-@router.put("/providers/{provider}/{mode}")
+@router.put("/providers/{provider}/{mode}", dependencies=[Depends(require_permission(Permission.PAYMENTS_WRITE))])
 async def provider_update(
     provider: str,
     mode: str,

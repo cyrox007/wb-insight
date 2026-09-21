@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.authorization import require_admin
+from core.access_control import Permission, permissions_for_roles
+from core.authorization import require_permission
 from core.dependencies import get_db_session
 from models.users_model import UserRole
 from services.account_lifecycle_service import (
@@ -27,7 +28,7 @@ from utils.responce_helps import response_error, response_success
 router = APIRouter(
     prefix='/control-panel/users',
     tags=['Control Panel'],
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission(Permission.USERS_READ))],
 )
 
 SUPPORT_EVENT_TYPES = frozenset({
@@ -54,6 +55,10 @@ def _user_to_dict(user) -> dict:
         }
         for role in user.roles
     ]
+    user_dict['permissions'] = sorted(
+        permission.value
+        for permission in permissions_for_roles(role.role for role in user.roles)
+    )
     return user_dict
 
 
@@ -96,7 +101,7 @@ async def get_user(
     return response_success(target_user=_user_to_dict(target_user))
 
 
-@router.put('/{user_uuid}')
+@router.put('/{user_uuid}', dependencies=[Depends(require_permission(Permission.USERS_WRITE))])
 async def edit_user(
     user_uuid: UUID,
     request: Request,
@@ -147,7 +152,7 @@ async def edit_user(
     return response_success(user=_user_to_dict(new_user))
 
 
-@router.delete('/{user_uuid}')
+@router.delete('/{user_uuid}', dependencies=[Depends(require_permission(Permission.USERS_WRITE))])
 async def remove_user(
     user_uuid: UUID,
     request: Request,
@@ -184,7 +189,7 @@ async def remove_user(
     )
 
 
-@router.post('/{user_uuid}/reactivate')
+@router.post('/{user_uuid}/reactivate', dependencies=[Depends(require_permission(Permission.USERS_WRITE))])
 async def reactivate_user(
     user_uuid: UUID,
     request: Request,
@@ -211,7 +216,7 @@ async def reactivate_user(
     return response_success(reactivated=True)
 
 
-@router.post('/{user_uuid}/revoke-sessions')
+@router.post('/{user_uuid}/revoke-sessions', dependencies=[Depends(require_permission(Permission.USERS_WRITE))])
 async def revoke_sessions(
     user_uuid: UUID,
     request: Request,
@@ -262,7 +267,7 @@ async def get_lifecycle_events(
     )
 
 
-@router.post('/{user_uuid}/lifecycle-events')
+@router.post('/{user_uuid}/lifecycle-events', dependencies=[Depends(require_permission(Permission.USERS_WRITE))])
 async def add_support_lifecycle_event(
     user_uuid: UUID,
     request: Request,
