@@ -29,28 +29,28 @@ const props = defineProps({
 /* Успешное сообщение */
 .form-message.success {
 	color: var(--success-color);
-	background-color: rgba(46, 204, 113, 0.1);
-	border-color: rgba(46, 204, 113, 0.3);
+	background-color: rgba(22, 128, 95, 0.08);
+	border-color: rgba(22, 128, 95, 0.24);
 }
 
 /* Ошибка */
 .form-message.error {
 	color: var(--accent-color);
-	background-color: rgba(231, 76, 60, 0.1);
-	border-color: rgba(231, 76, 60, 0.3);
+	background-color: rgba(200, 59, 85, 0.08);
+	border-color: rgba(200, 59, 85, 0.24);
 }
 
 /* Информационное сообщение */
 .form-message.info {
 	color: var(--info-color);
-	background-color: rgba(155, 89, 182, 0.1);
-	border-color: rgba(155, 89, 182, 0.3);
+	background-color: rgba(79, 127, 211, 0.08);
+	border-color: rgba(79, 127, 211, 0.24);
 }
 
 /* Предупреждение */
 .form-message.warning {
 	color: var(--warning-color);
-	background-color: rgba(243, 156, 18, 0.1);
-	border-color: rgba(243, 156, 18, 0.3);
+	background-color: rgba(166, 107, 8, 0.08);
+	border-color: rgba(166, 107, 8, 0.24);
 }
 </style>
