@@ -109,7 +109,8 @@ async def create_tariffs(request: Request, response: Response, db_session: Async
         'name': name,
         'description': description,
         'price_rub': price_rub,
-        'is_active': is_active
+        'is_active': is_active,
+        'is_public': False
     })
 
     if not tariff:
@@ -174,7 +175,8 @@ async def update_tariff_status(tariff_id: str, request: Request, response: Respo
         session=db_session, 
         tariff=tariff, 
         tariff_data={
-            'is_active': new_status
+            'is_active': new_status,
+            **({'is_public': False} if not new_status else {})
         }
     )
 
