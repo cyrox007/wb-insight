@@ -82,6 +82,12 @@
 
 .cp-page {
   min-width: 0;
+  display: grid;
+  gap: 18px;
+}
+
+.cp-page > .cp-page-header {
+  margin-bottom: 0;
 }
 
 .cp-card {
@@ -185,6 +191,7 @@
 }
 
 .cp-state {
+  position: relative;
   display: grid;
   min-height: 132px;
   place-items: center;
@@ -192,8 +199,23 @@
   border: 1px dashed var(--border-color);
   border-radius: var(--radius);
   color: var(--text-muted);
-  background: rgba(247, 249, 253, 0.96);
+  background: var(--light-bg);
   text-align: center;
+  overflow: hidden;
+}
+
+.cp-state[role="status"]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-color) 6%, transparent), transparent);
+  animation: cp-state-shimmer 1.45s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes cp-state-shimmer {
+  to { transform: translateX(100%); }
 }
 
 .cp-state--error {
@@ -426,7 +448,7 @@
   padding: 14px;
   border: 1px solid rgba(205, 213, 225, 0.86);
   border-radius: var(--radius-sm);
-  background: rgba(247, 249, 253, 0.96);
+  background: var(--light-bg)
 }
 
 .cp-info-value {
