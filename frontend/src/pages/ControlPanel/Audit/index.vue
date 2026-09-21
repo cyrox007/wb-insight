@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
 import CP_Audit from '@/API/ControlPanel/CP_Audit'
 
+const route = useRoute()
 const events = ref([])
 const total = ref(0)
 const limit = 50
@@ -108,7 +110,10 @@ async function openEvent(event) {
 	}
 }
 
-onMounted(loadEvents)
+onMounted(() => {
+	if (route.query.actor_id) filters.actor_id = String(route.query.actor_id)
+	loadEvents()
+})
 </script>
 
 <template>
