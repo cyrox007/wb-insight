@@ -101,7 +101,7 @@ def _environment_runtime() -> MailTransportRuntime:
     provider = lifecycle_config.MAIL_PROVIDER
     return MailTransportRuntime(
         MAIL_PROVIDER=provider,
-        MAIL_DELIVERY_ENABLED=lifecycle_config.MAIL_DELIVERY_ENABLED,
+        MAIL_DELIVERY_ENABLED=(lifecycle_config.MAIL_DELIVERY_ENABLED if provider == "smtp" else False),
         SMTP_HOST=lifecycle_config.SMTP_HOST,
         SMTP_PORT=int(lifecycle_config.SMTP_PORT),
         SMTP_USERNAME=lifecycle_config.SMTP_USERNAME,
@@ -245,7 +245,7 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
                 or runtime.SMTP_STARTTLS
             ),
             "sender_identity": bool(runtime.SMTP_FROM_EMAIL and runtime.SMTP_FROM_NAME),
-            "reply_to_configured": bool(runtime.SMTP_REPLY_TO_EMAIL),
+            "reply_to_configured": bool(runtime.SMTP_REPLY_TO_EMAIL and runtime.MAIL_PROVIDER == "smtp"),
             "one_click_unsubscribe": bool(
                 unsubscribe_configured and marketing_transport_supported
             ),
@@ -295,7 +295,7 @@ async def upsert_mail_transport(
         existing = {}
 
     if "enabled" in values:
-        row.enabled = bool(values["enabled"])
+        row.enabled = bool(values["enabled"]) if provider == "smtp" else False
 
     if "from_email" in values:
         from_email = str(values.get("from_email") or "").strip().lower()
