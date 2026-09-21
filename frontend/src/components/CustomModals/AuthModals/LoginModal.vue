@@ -41,6 +41,7 @@ import ButtonCancel from '@/components/UI/Buttons/ButtonCancel.vue'
 import AuthService from '@/API/AuthService';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
+import { defaultAuthenticatedRouteName } from '@/security/roles';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -83,7 +84,7 @@ const performLogin = async () => {
 			authStore.login(response.data)
 			const redirectPath = localStorage.getItem('redirectPath')
 			localStorage.removeItem('redirectPath')
-			await router.push(redirectPath || '/dashboard')
+			await router.push(redirectPath || { name: defaultAuthenticatedRouteName(response.data.user) })
 			emit('close')
 		}
 	} catch (error) {
