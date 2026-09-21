@@ -47,6 +47,8 @@ const gatewayForm = reactive({
 	host: '',
 	port: 587,
 	from_email: '',
+	from_name: 'WB Insight',
+	reply_to_email: '',
 	starttls: true,
 	timeout_seconds: 10,
 	username: '',
@@ -200,6 +202,8 @@ function fillGatewayForm(gateway) {
 		host: gateway.host || '',
 		port: Number(gateway.port || 587),
 		from_email: gateway.from_email || '',
+		from_name: gateway.from_name || 'WB Insight',
+		reply_to_email: gateway.reply_to_email || '',
 		starttls: gateway.starttls !== false,
 		timeout_seconds: Number(gateway.timeout_seconds || 10),
 		username: '',
@@ -404,6 +408,8 @@ async function saveGateway() {
 			host: gatewayForm.host,
 			port: gatewayForm.port,
 			from_email: gatewayForm.from_email,
+			from_name: gatewayForm.from_name,
+			reply_to_email: gatewayForm.reply_to_email,
 			starttls: gatewayForm.starttls,
 			timeout_seconds: gatewayForm.timeout_seconds,
 			clear_credentials: gatewayForm.clear_credentials,
@@ -638,15 +644,15 @@ onMounted(async () => {
 
 					<div v-if="canManage && ['draft','scheduled'].includes(selected.status)" class="cp-actions mail-launch-actions">
 						<BaseButton variant="outline" text="Рассчитать аудиторию" @click="previewSelectedAudience" />
-						<BaseButton variant="primary" text="Запустить сейчас" :disabled="!meta.gateway?.ready || !meta.gateway?.enabled" @click="requestConfirmation('launch')" />
+						<BaseButton variant="primary" text="Запустить сейчас" :disabled="!meta.gateway?.marketing_ready" @click="requestConfirmation('launch')" />
 					</div>
-					<div v-if="!meta.gateway?.ready || !meta.gateway?.enabled" class="cp-info-callout">
-						<strong>Отправка пока недоступна.</strong>
-						<span>Настройте и включите почтовый шлюз во вкладке «Почтовый шлюз».</span>
+					<div v-if="!meta.gateway?.marketing_ready" class="cp-info-callout">
+						<strong>Маркетинговая отправка пока недоступна.</strong>
+						<span>Нужны готовый SMTP, включённые кампании и безопасный one-click unsubscribe. Проверьте вкладку «Почтовый шлюз».</span>
 					</div>
 					<div v-if="canManage && ['draft','scheduled'].includes(selected.status)" class="mail-schedule">
 						<label>Запланировать запуск<input v-model="scheduleAt" type="datetime-local" :min="minScheduleAt"></label>
-						<BaseButton variant="outline" text="Запланировать" :disabled="!scheduleAt || !meta.gateway?.ready || !meta.gateway?.enabled" @click="scheduleCampaign" />
+						<BaseButton variant="outline" text="Запланировать" :disabled="!scheduleAt || !meta.gateway?.marketing_ready" @click="scheduleCampaign" />
 					</div>
 					<div v-if="canManage && !['draft','completed','cancelled','failed'].includes(selected.status)" class="cp-actions"><BaseButton variant="outline" text="Остановить" @click="requestConfirmation('cancel')" /></div>
 					<div v-if="canManage" class="mail-test"><input v-model.trim="testEmail" type="email" placeholder="Email для тестового письма"><BaseButton variant="outline" text="Отправить тест" :disabled="!testEmail || !meta.gateway?.ready || !meta.gateway?.enabled" @click="sendTest" /></div>
@@ -695,7 +701,9 @@ onMounted(async () => {
 						<label class="wide"><span>SMTP host</span><input v-model.trim="gatewayForm.host" placeholder="smtp.provider.ru"></label>
 						<label><span>Port</span><input v-model.number="gatewayForm.port" type="number" min="1" max="65535"></label>
 						<label><span>Timeout, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
-						<label class="wide"><span>Email отправителя</span><input v-model.trim="gatewayForm.from_email" type="email" placeholder="no-reply@jsinteractive.ru"></label>
+						<label><span>Имя отправителя</span><input v-model.trim="gatewayForm.from_name" maxlength="160" placeholder="WB Insight"></label>
+						<label><span>Email отправителя</span><input v-model.trim="gatewayForm.from_email" type="email" placeholder="news@jsinteractive.ru"></label>
+						<label class="wide"><span>Reply-To</span><input v-model.trim="gatewayForm.reply_to_email" type="email" placeholder="support@jsinteractive.ru"></label>
 						<label class="switch-line wide"><input v-model="gatewayForm.starttls" type="checkbox"> Использовать STARTTLS</label>
 						<label><span>Логин</span><input v-model.trim="gatewayForm.username" autocomplete="off" :placeholder="meta.gateway?.credentials_configured ? 'Пусто = оставить текущий' : 'SMTP username'"></label>
 						<label><span>Пароль</span><input v-model="gatewayForm.password" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured ? 'Пусто = оставить текущий' : 'SMTP password'"></label>
@@ -715,6 +723,30 @@ onMounted(async () => {
 						<strong>SMTP сейчас управляется переменными окружения.</strong>
 						<span>Чтобы редактировать шлюз из панели, установите <code>MAIL_CONFIG_SOURCE=auto</code> или <code>MAIL_CONFIG_SOURCE=database</code> и перезапустите backend.</span>
 					</div>
+				</div>
+			</section>
+
+			<section class="cp-card deliverability-card">
+				<div class="section-caption">
+					<div>
+						<p class="cp-eyebrow">Доставляемость</p>
+						<h3>Защита от спама и подмены отправителя</h3>
+						<span>Часть требований контролирует приложение, SPF/DKIM/DMARC/PTR настраиваются у DNS/SMTP-провайдера.</span>
+					</div>
+				</div>
+				<div class="deliverability-grid">
+					<div :class="{ ok: meta.gateway?.deliverability?.tls }"><strong>STARTTLS</strong><span>{{ meta.gateway?.deliverability?.tls ? 'Включён' : 'Требует настройки' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.sender_identity }"><strong>From identity</strong><span>{{ meta.gateway?.deliverability?.sender_identity ? 'Настроен' : 'Требует настройки' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : 'Нужны URL + HMAC key' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.reply_to_configured }"><strong>Reply-To</strong><span>{{ meta.gateway?.deliverability?.reply_to_configured ? 'Настроен' : 'Рекомендуется' }}</span></div>
+					<div class="external"><strong>SPF</strong><span>Проверить DNS</span></div>
+					<div class="external"><strong>DKIM</strong><span>Включить у SMTP-провайдера</span></div>
+					<div class="external"><strong>DMARC</strong><span>Проверить DNS</span></div>
+					<div class="external"><strong>PTR / rDNS</strong><span>Проверить у провайдера IP</span></div>
+				</div>
+				<div class="cp-info-callout">
+					<strong>Для маркетинговых писем приложение добавляет служебные заголовки автоматически.</strong>
+					<span>Date, Message-ID, Reply-To, List-ID, List-Unsubscribe, List-Unsubscribe-Post и Precedence: bulk. Транзакционные письма подтверждения и recovery не помечаются как bulk.</span>
 				</div>
 			</section>
 
@@ -846,8 +878,18 @@ onMounted(async () => {
 .gateway-test-action { width:min(520px,100%); display:flex; gap:8px; }
 .mail-confirm__text { margin:0; color:var(--text-muted); line-height:1.5; }
 
+.deliverability-card { padding:20px; display:grid; gap:16px; }
+.deliverability-card h3 { margin:2px 0 0; }
+.deliverability-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.deliverability-grid > div { display:grid; gap:4px; padding:12px; border:1px solid var(--border-color); border-radius:9px; background:var(--light-bg); }
+.deliverability-grid strong { font-size:12px; }
+.deliverability-grid span { color:var(--text-muted); font-size:11px; }
+.deliverability-grid .ok { border-color:color-mix(in srgb,var(--success-color) 32%,var(--border-color)); background:color-mix(in srgb,var(--success-color) 7%,var(--card-bg)); }
+.deliverability-grid .external { border-style:dashed; }
+
 @media(max-width:1100px) {
 	.audience-groups { grid-template-columns:1fr; }
+	.deliverability-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 	.mail-layout,.gateway-grid { grid-template-columns:1fr; }
 }
 @media(max-width:760px) {
