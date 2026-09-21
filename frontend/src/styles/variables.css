@@ -18,6 +18,7 @@
   --text-color: #18213a;
   --text-muted: #667085;
   --text-subtle: #8a93a5;
+  --text-secondary: var(--text-muted);
   --border-color: #e1e6ef;
   --border-strong: #cbd3e1;
 
