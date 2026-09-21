@@ -413,7 +413,7 @@ onMounted(loadData)
 .section-card,
 .table-card {
   border: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.98));
+  background: linear-gradient(180deg, var(--card-bg-elevated), var(--card-bg));
   box-shadow: var(--shadow-sm);
 }
 
