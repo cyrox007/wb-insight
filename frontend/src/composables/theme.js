@@ -1,4 +1,4 @@
-import { readonly, ref } from 'vue'
+import { computed, readonly, ref } from 'vue'
 
 const STORAGE_KEY = 'wb-theme'
 const THEME_LIGHT = 'light'
@@ -69,11 +69,7 @@ export const useTheme = () => {
 
   return {
     theme: readonly(theme),
-    isDark: readonly({
-      get value() {
-        return theme.value === THEME_DARK
-      },
-    }),
+    isDark: computed(() => theme.value === THEME_DARK),
     setTheme,
     toggleTheme,
   }
