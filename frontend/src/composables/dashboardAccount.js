@@ -7,6 +7,9 @@ const selectedTokenId = ref(
     typeof window !== 'undefined' ? (window.localStorage.getItem(STORAGE_KEY) || '') : ''
 )
 const dashboardVersion = ref(0)
+const accountsLoaded = ref(false)
+const accountsLoading = ref(false)
+const accountsError = ref('')
 let loaded = false
 let loadingPromise = null
 
@@ -26,9 +29,12 @@ export function useDashboardAccount() {
         dashboardVersion.value += 1
     }
 
-    const loadAccounts = async () => {
-        if (loaded) return accounts.value
+    const loadAccounts = async ({ force = false } = {}) => {
+        if (loaded && !force) return accounts.value
         if (loadingPromise) return loadingPromise
+
+        accountsLoading.value = true
+        accountsError.value = ''
 
         loadingPromise = ProfileServices.getProfile()
             .then((response) => {
@@ -47,10 +53,22 @@ export function useDashboardAccount() {
                 ) {
                     setSelectedTokenId('')
                 }
+
                 loaded = true
+                accountsLoaded.value = true
+                return accounts.value
+            })
+            .catch((error) => {
+                console.error('Не удалось загрузить список кабинетов Wildberries:', error)
+                accounts.value = []
+                accountsLoaded.value = true
+                accountsError.value =
+                    error.response?.data?.error?.message ||
+                    'Не удалось проверить доступные кабинеты Wildberries.'
                 return accounts.value
             })
             .finally(() => {
+                accountsLoading.value = false
                 loadingPromise = null
             })
 
@@ -65,6 +83,9 @@ export function useDashboardAccount() {
 
     return {
         accounts,
+        accountsLoaded,
+        accountsLoading,
+        accountsError,
         selectedTokenId,
         dashboardVersion,
         loadAccounts,
