@@ -21,7 +21,7 @@
 }
 
 .cp-eyebrow {
-  color: #6259d9;
+  color: var(--secondary-color);
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -75,9 +75,9 @@
 }
 
 .cp-nav__link.router-link-active {
-  color: #4f46c8;
-  border-color: rgba(167, 139, 250, 0.28);
-  background: rgba(91, 82, 214, 0.09);
+  color: var(--secondary-color);
+  border-color: color-mix(in srgb, var(--secondary-color) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--secondary-color) 9%, var(--card-bg));
 }
 
 .cp-page {
@@ -106,6 +106,7 @@
 }
 
 .cp-overview-grid,
+.cp-health-grid,
 .cp-tariff-grid {
   display: grid;
   gap: 14px;
@@ -113,6 +114,15 @@
 
 .cp-overview-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cp-health-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.cp-overview-grid--shortcuts {
+  margin-top: 0;
 }
 
 .cp-tariff-grid {
@@ -136,7 +146,7 @@
   width: 128px;
   height: 128px;
   border-radius: 999px;
-  background: rgba(124, 58, 237, 0.08);
+  background: color-mix(in srgb, var(--secondary-color) 8%, transparent);
   pointer-events: none;
 }
 
@@ -185,7 +195,7 @@
 }
 
 .cp-shortcut-card__action {
-  color: #5b52d6;
+  color: var(--secondary-color);
   font-size: 13px;
   font-weight: 700;
 }
@@ -220,9 +230,9 @@
 
 .cp-state--error {
   border-style: solid;
-  border-color: rgba(251, 113, 133, 0.3);
-  color: #b4233f;
-  background: rgba(180, 35, 63, 0.07);
+  border-color: color-mix(in srgb, var(--danger-color) 30%, var(--border-color));
+  color: var(--danger-color);
+  background: color-mix(in srgb, var(--danger-color) 7%, var(--card-bg));
 }
 
 .cp-state__stack {
@@ -303,10 +313,10 @@
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid rgba(167, 139, 250, 0.25);
+  border: 1px solid color-mix(in srgb, var(--secondary-color) 25%, var(--border-color));
   border-radius: 999px;
-  color: #4f46c8;
-  background: rgba(91, 82, 214, 0.09);
+  color: var(--secondary-color);
+  background: color-mix(in srgb, var(--secondary-color) 9%, var(--card-bg));
   font-size: 13px;
   font-weight: 750;
 }
@@ -325,10 +335,10 @@
   align-items: center;
   padding: 4px 8px;
   overflow: hidden;
-  border: 1px solid rgba(96, 165, 250, 0.2);
+  border: 1px solid color-mix(in srgb, var(--info-color) 22%, var(--border-color));
   border-radius: 7px;
-  color: #3568a8;
-  background: rgba(53, 104, 168, 0.08);
+  color: var(--info-color);
+  background: color-mix(in srgb, var(--info-color) 8%, var(--card-bg));
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   text-overflow: ellipsis;
@@ -356,33 +366,33 @@
 
 .cp-chip--active,
 .cp-chip--success {
-  border-color: rgba(52, 211, 153, 0.24);
-  color: #16805f;
-  background: rgba(22, 128, 95, 0.08);
+  border-color: color-mix(in srgb, var(--success-color) 28%, var(--border-color));
+  color: var(--success-color);
+  background: color-mix(in srgb, var(--success-color) 8%, var(--card-bg));
 }
 
 .cp-chip--inactive,
 .cp-chip--danger {
-  border-color: rgba(251, 113, 133, 0.24);
-  color: #b4233f;
-  background: rgba(180, 35, 63, 0.07);
+  border-color: color-mix(in srgb, var(--danger-color) 28%, var(--border-color));
+  color: var(--danger-color);
+  background: color-mix(in srgb, var(--danger-color) 7%, var(--card-bg));
 }
 
 .cp-chip--info {
-  border-color: rgba(96, 165, 250, 0.24);
-  color: #3568a8;
-  background: rgba(53, 104, 168, 0.08);
+  border-color: color-mix(in srgb, var(--info-color) 28%, var(--border-color));
+  color: var(--info-color);
+  background: color-mix(in srgb, var(--info-color) 8%, var(--card-bg));
 }
 
 .cp-chip--warning {
-  border-color: rgba(251, 191, 36, 0.24);
-  color: #a66b08;
-  background: rgba(166, 107, 8, 0.08);
+  border-color: color-mix(in srgb, var(--warning-color) 28%, var(--border-color));
+  color: var(--warning-color);
+  background: color-mix(in srgb, var(--warning-color) 8%, var(--card-bg));
 }
 
 .cp-chip--accent {
   border-color: rgba(167, 139, 250, 0.26);
-  color: #5b52d6;
+  color: var(--secondary-color);
   background: rgba(91, 82, 214, 0.09);
 }
 
@@ -534,7 +544,7 @@
 }
 
 .cp-price {
-  color: #16805f;
+  color: var(--success-color);
   font-size: 24px;
   font-weight: 760;
   letter-spacing: -0.03em;
@@ -594,7 +604,8 @@
 }
 
 @media (max-width: 900px) {
-  .cp-overview-grid {
+  .cp-overview-grid,
+  .cp-health-grid {
     grid-template-columns: 1fr 1fr;
   }
 
@@ -618,6 +629,7 @@
   }
 
   .cp-overview-grid,
+  .cp-health-grid,
   .cp-tariff-grid {
     grid-template-columns: 1fr;
   }
