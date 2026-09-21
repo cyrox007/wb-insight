@@ -22,18 +22,26 @@
       </form>
     </header>
 
-    <div v-if="errorMessage" class="status-banner status-banner--error" role="alert">
-      <strong>Не удалось загрузить аналитику.</strong>
-      <span>{{ errorMessage }}</span>
-      <button type="button" @click="loadDashboard">Повторить</button>
-    </div>
+    <DashboardState
+      v-if="isLoading && !hasLoadedOnce"
+      kind="loading"
+    />
+
+    <DashboardState
+      v-else-if="errorMessage"
+      kind="error"
+      title="Не удалось загрузить аналитику"
+      :message="errorMessage"
+      action-label="Повторить"
+      @retry="loadDashboard"
+    />
 
     <div v-else-if="isSyncing" class="status-banner" role="status">
       <strong>Данные синхронизируются с Wildberries.</strong>
       <span>Показатели появятся автоматически после завершения синхронизации.</span>
     </div>
 
-    <div v-if="!errorMessage" class="kpi-grid" aria-label="Ключевые показатели">
+    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="kpi-grid" aria-label="Ключевые показатели">
       <article v-for="item in primaryKpis" :key="item.key" class="kpi-card">
         <div class="kpi-card__topline">
           <span>{{ item.label }}</span>
@@ -46,7 +54,7 @@
       </article>
     </div>
 
-    <section v-if="!errorMessage" class="section-card plan-card">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="section-card plan-card">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Текущий месяц</p>
@@ -87,7 +95,7 @@
       </div>
     </section>
 
-    <section v-if="!errorMessage" class="analytics-grid">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="analytics-grid">
       <article class="section-card chart-card">
         <div class="section-heading">
           <div>
@@ -125,7 +133,7 @@
       </article>
     </section>
 
-    <section v-if="!errorMessage" class="context-grid">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="context-grid">
       <article class="section-card compact-card">
         <div class="section-heading">
           <div>
@@ -147,7 +155,7 @@
       </article>
     </section>
 
-    <section v-if="!errorMessage" class="abc-section">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="abc-section">
       <div class="section-heading section-heading--outside">
         <div>
           <p class="eyebrow">Товары</p>
@@ -172,6 +180,7 @@ import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
 import WarehouseChart from '@/components/Diagrams/WarehouseChart.vue'
 import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue'
 import DonutChart from '@/components/Diagrams/DonutChart.vue'
+import DashboardState from '@/components/DashboardState.vue'
 
 const stats = ref({})
 const chartData = ref([])
@@ -180,6 +189,7 @@ const warehouseData = ref([])
 const categoryData = ref([])
 
 const isLoading = ref(false)
+const hasLoadedOnce = ref(false)
 const isChartsLoading = ref(false)
 const isSyncing = ref(false)
 const errorMessage = ref('')
@@ -344,6 +354,7 @@ async function loadDashboard() {
     notify.error(message, 3000)
   } finally {
     isLoading.value = false
+    hasLoadedOnce.value = true
   }
 }
 
