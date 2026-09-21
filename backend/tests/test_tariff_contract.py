@@ -115,3 +115,36 @@ async def test_required_limit_cannot_be_deleted_from_active_tariff(monkeypatch):
 
     assert response.status_code == 409
     assert payload["error"]["code"] == "REQUIRED_TARIFF_LIMIT_PROTECTED"
+
+
+@pytest.mark.asyncio
+async def test_public_catalog_hides_incomplete_tariffs(monkeypatch):
+    ready = SimpleNamespace(id=uuid4(), code="PRO")
+    incomplete = SimpleNamespace(id=uuid4(), code="STARTER")
+
+    async def fake_list(_session, **_kwargs):
+        return [ready, incomplete]
+
+    async def fake_missing(_session, tariff_id):
+        return [] if tariff_id == ready.id else ["sync_frequency_hours"]
+
+    monkeypatch.setattr(tariff_service, "get_tariffs_list", fake_list)
+    monkeypatch.setattr(tariff_service, "get_missing_required_limits", fake_missing)
+
+    result = await tariff_service.get_public_runtime_ready_tariffs(object())
+
+    assert result == [ready]
+
+
+@pytest.mark.asyncio
+async def test_service_refuses_system_tariff_delete(monkeypatch):
+    demo = SimpleNamespace(id=uuid4(), code="demo")
+
+    async def fake_get(_session, _tariff_id):
+        return demo
+
+    monkeypatch.setattr(tariff_service, "get_tariff_by_id", fake_get)
+
+    deleted = await tariff_service.delete_tariff_by_id(object(), demo.id)
+
+    assert deleted is False
