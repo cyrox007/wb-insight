@@ -43,9 +43,13 @@ const form = reactive({
 })
 
 const gatewayForm = reactive({
+	provider: 'smtp',
 	enabled: false,
 	host: '',
 	port: 587,
+	api_base_url: 'https://api.rusender.ru',
+	key_id: '',
+	api_token: '',
 	from_email: '',
 	from_name: 'WB Insight',
 	reply_to_email: '',
@@ -198,9 +202,13 @@ async function loadMeta() {
 
 function fillGatewayForm(gateway) {
 	Object.assign(gatewayForm, {
+		provider: gateway.provider || 'smtp',
 		enabled: Boolean(gateway.enabled),
 		host: gateway.host || '',
 		port: Number(gateway.port || 587),
+		api_base_url: gateway.api_base_url || 'https://api.rusender.ru',
+		key_id: gateway.key_id || '',
+		api_token: '',
 		from_email: gateway.from_email || '',
 		from_name: gateway.from_name || 'WB Insight',
 		reply_to_email: gateway.reply_to_email || '',
@@ -404,20 +412,27 @@ async function saveGateway() {
 	setMessage('')
 	try {
 		const payload = {
-			enabled: gatewayForm.enabled,
-			host: gatewayForm.host,
-			port: gatewayForm.port,
+			provider: gatewayForm.provider,
+			enabled: gatewayForm.provider === 'smtp' ? gatewayForm.enabled : false,
 			from_email: gatewayForm.from_email,
 			from_name: gatewayForm.from_name,
-			reply_to_email: gatewayForm.reply_to_email,
-			starttls: gatewayForm.starttls,
+			reply_to_email: gatewayForm.provider === 'smtp' ? gatewayForm.reply_to_email : '',
 			timeout_seconds: gatewayForm.timeout_seconds,
 			clear_credentials: gatewayForm.clear_credentials,
 		}
-		if (gatewayForm.username) payload.username = gatewayForm.username
-		if (gatewayForm.password) payload.password = gatewayForm.password
+		if (gatewayForm.provider === 'smtp') {
+			payload.host = gatewayForm.host
+			payload.port = gatewayForm.port
+			payload.starttls = gatewayForm.starttls
+			if (gatewayForm.username) payload.username = gatewayForm.username
+			if (gatewayForm.password) payload.password = gatewayForm.password
+		} else {
+			payload.api_base_url = gatewayForm.api_base_url || 'https://api.rusender.ru'
+			payload.key_id = gatewayForm.key_id
+			if (gatewayForm.api_token) payload.api_token = gatewayForm.api_token
+		}
 		const { data } = await CP_Mail.updateGateway(payload)
-		if (data?.status !== 'success') throw new Error(data?.error?.message || 'Не удалось сохранить SMTP')
+		if (data?.status !== 'success') throw new Error(data?.error?.message || 'Не удалось сохранить транспорт')
 		meta.value.gateway = data.gateway
 		fillGatewayForm(data.gateway)
 		setMessage('Настройки почтового шлюза сохранены.')
@@ -433,8 +448,8 @@ async function testGateway() {
 	gatewayBusy.value = true
 	try {
 		const { data } = await CP_Mail.testGateway(gatewayTestEmail.value)
-		if (data?.status !== 'success') throw new Error(data?.error?.message || 'SMTP test failed')
-		setMessage('Тестовое письмо отправлено через текущий SMTP-шлюз.')
+		if (data?.status !== 'success') throw new Error(data?.error?.message || 'Mail transport test failed')
+		setMessage('Тестовое письмо отправлено через текущий почтовый транспорт.')
 	} catch (e) {
 		setMessage(e.response?.data?.error?.message || e.message || 'Не удалось отправить тестовое письмо.', true)
 	} finally {
