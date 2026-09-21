@@ -167,7 +167,11 @@ class LifecycleConfig:
         if self.MAIL_CONFIG_SOURCE not in {"auto", "environment", "database"}:
             raise RuntimeError("MAIL_CONFIG_SOURCE must be auto, environment or database")
 
-        if self.MAIL_PROVIDER == "rusender" and self.MAIL_DELIVERY_ENABLED:
+        if (
+            self.MAIL_CONFIG_SOURCE == "environment"
+            and self.MAIL_PROVIDER == "rusender"
+            and self.MAIL_DELIVERY_ENABLED
+        ):
             raise RuntimeError(
                 "RuSender transactional adapter does not support marketing campaigns; set MAIL_DELIVERY_ENABLED=false"
             )
