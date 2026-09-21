@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { isStaffUser, ROLE_LABELS } from '@/security/roles'
 import { notify } from '@/composables/notification'
 import ProfileServices from '@/API/Dashboard/ProfileServices'
 import SellerInputsService from '@/API/Dashboard/SellerInputsService'
@@ -8,6 +9,12 @@ import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTar
 import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue'
 
 const authStore = useAuthStore()
+const isStaff = computed(() => isStaffUser(authStore.getUser))
+const staffRoleLabels = computed(() =>
+  (authStore.getUser?.roles || [])
+    .filter(role => role !== 'user')
+    .map(role => ROLE_LABELS[role] || role)
+)
 const activeTab = ref('profile')
 const isLoading = ref(true)
 const isSavingProfile = ref(false)
@@ -55,12 +62,18 @@ const expenseForm = reactive({
   description: '',
 })
 
-const tabs = [
+const sellerTabs = [
   { key: 'profile', label: 'Профиль и налог' },
   { key: 'connections', label: 'Кабинеты WB' },
   { key: 'costs', label: 'Себестоимость' },
   { key: 'expenses', label: 'Прочие расходы' },
 ]
+
+const tabs = computed(() => (
+  isStaff.value
+    ? [{ key: 'profile', label: 'Профиль' }]
+    : sellerTabs
+))
 
 const entityTypes = [
   { value: 'individual', label: 'Физическое лицо' },
@@ -185,22 +198,26 @@ async function loadProfile() {
 async function saveProfile() {
   const taxPercent = Number(profileForm.tax_percent)
   if (!profileForm.full_name.trim()) {
-    notify.error('Укажите имя или название компании')
+    notify.error(isStaff.value ? 'Укажите имя' : 'Укажите имя или название компании')
     return
   }
-  if (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100) {
+  if (!isStaff.value && (!Number.isFinite(taxPercent) || taxPercent < 0 || taxPercent > 100)) {
     notify.error('Налоговая ставка должна быть от 0 до 100%')
     return
   }
 
   isSavingProfile.value = true
   try {
-    const response = await ProfileServices.updateProfile({
+    const payload = {
       full_name: profileForm.full_name.trim(),
-      entity_type: profileForm.entity_type,
-      tax_rate: taxPercent / 100,
       timezone: profileForm.timezone,
-    })
+    }
+    if (!isStaff.value) {
+      payload.entity_type = profileForm.entity_type
+      payload.tax_rate = taxPercent / 100
+    }
+
+    const response = await ProfileServices.updateProfile(payload)
     const result = response.data
     if (result.status === 'error') {
       notify.error(result.error?.message || 'Не удалось сохранить настройки')
@@ -489,14 +506,16 @@ async function selectTab(key) {
 }
 
 onMounted(async () => {
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  expensePeriodStart.value = inputDate(monthStart)
-  expensePeriodEnd.value = inputDate(now)
-  resetCostForm()
-  resetExpenseForm()
+  if (!isStaff.value) {
+    const now = new Date()
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    expensePeriodStart.value = inputDate(monthStart)
+    expensePeriodEnd.value = inputDate(now)
+    resetCostForm()
+    resetExpenseForm()
+  }
   await loadProfile()
-  resetExpenseForm()
+  if (!isStaff.value) resetExpenseForm()
 })
 </script>
 
@@ -504,11 +523,15 @@ onMounted(async () => {
   <section class="settings-page">
     <header class="settings-header">
       <div>
-        <p class="eyebrow">Настройки продавца</p>
-        <h1>Исходные данные и подключения</h1>
-        <p>WB Insight получает маркетплейс-данные автоматически. Здесь остаются только параметры, которые Wildberries не знает: налог, себестоимость, собственные расходы и подключения.</p>
+        <p class="eyebrow">{{ isStaff ? 'Рабочий аккаунт' : 'Настройки продавца' }}</p>
+        <h1>{{ isStaff ? 'Профиль сотрудника' : 'Исходные данные и подключения' }}</h1>
+        <p v-if="isStaff">Личные данные рабочего аккаунта отделены от клиентского контура. Кабинеты Wildberries, себестоимость и расходы здесь не показываются.</p>
+        <p v-else>WB Insight получает маркетплейс-данные автоматически. Здесь остаются только параметры, которые Wildberries не знает: налог, себестоимость, собственные расходы и подключения.</p>
+        <div v-if="isStaff && staffRoleLabels.length" class="staff-role-row">
+          <span v-for="role in staffRoleLabels" :key="role" class="staff-role-chip">{{ role }}</span>
+        </div>
       </div>
-      <div class="subscription-chip">
+      <div v-if="!isStaff" class="subscription-chip">
         <span>{{ subscription?.tariff_name || 'DEMO' }}</span>
         <strong>{{ getStatusLabel(subscription?.status) }}</strong>
         <button type="button" @click="showTariffModal = true">Тариф</button>
@@ -533,26 +556,26 @@ onMounted(async () => {
       <section v-if="activeTab === 'profile'" class="settings-card">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Расчётные параметры</p>
-            <h2>Профиль продавца</h2>
+            <p class="eyebrow">{{ isStaff ? 'Аккаунт' : 'Расчётные параметры' }}</p>
+            <h2>{{ isStaff ? 'Личные настройки' : 'Профиль продавца' }}</h2>
           </div>
           <span class="section-note">Email и телефон меняются через отдельное подтверждение.</span>
         </div>
 
         <form class="form-grid" @submit.prevent="saveProfile">
           <label class="field field--wide">
-            <span>Имя или название компании</span>
+            <span>{{ isStaff ? 'Имя' : 'Имя или название компании' }}</span>
             <input v-model="profileForm.full_name" maxlength="255" autocomplete="name" />
           </label>
 
-          <label class="field">
+          <label v-if="!isStaff" class="field">
             <span>Тип продавца</span>
             <select v-model="profileForm.entity_type">
               <option v-for="item in entityTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
             </select>
           </label>
 
-          <label class="field">
+          <label v-if="!isStaff" class="field">
             <span>Налоговая ставка, %</span>
             <input v-model="profileForm.tax_percent" type="number" min="0" max="100" step="0.01" />
             <small>Используется в юнит-экономике и прибыли.</small>
@@ -779,8 +802,8 @@ onMounted(async () => {
     </template>
   </section>
 
-  <SelectTariffModal v-if="showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
-  <AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false" @success="handleTokenAdded" />
+  <SelectTariffModal v-if="!isStaff && showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
+  <AddTokenModal v-if="!isStaff && showAddTokenModal" :is-open="true" @close="showAddTokenModal = false" @success="handleTokenAdded" />
 </template>
 
 <style scoped>
@@ -788,7 +811,9 @@ onMounted(async () => {
 .settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .settings-header h1 { margin-top: 3px; font-size: clamp(26px, 3vw, 36px); line-height: 1.08; letter-spacing: -0.035em; }
 .settings-header > div:first-child > p:last-child { max-width: 760px; margin-top: 9px; color: var(--text-muted); font-size: 14px; }
-.eyebrow { color: #6259d9; font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.eyebrow { color: var(--secondary-color); font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.staff-role-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.staff-role-chip { padding:4px 8px; border:1px solid color-mix(in srgb,var(--secondary-color) 24%,var(--border-color)); border-radius:999px; background:color-mix(in srgb,var(--secondary-color) 8%,var(--card-bg)); color:var(--secondary-color); font-size:10px; font-weight:750; }
 .subscription-chip { min-width: 180px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; border: 1px solid var(--border-color); border-radius: var(--radius); background: var(--card-bg); }
 .subscription-chip span { color: var(--text-muted); font-size: 11px; }
 .subscription-chip strong { font-size: 12px; }
@@ -796,7 +821,7 @@ onMounted(async () => {
 .settings-tabs { margin: 20px 0 12px; padding: 5px; display: flex; gap: 4px; overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--radius); background: var(--header-bg-soft); }
 .settings-tabs button { padding: 9px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); white-space: nowrap; font-weight: 650; cursor: pointer; }
 .settings-tabs button:hover { color: var(--text-color); background: var(--hover-bg); }
-.settings-tabs button.active { color: #4f46c8; background: rgba(99,91,255,.11); }
+.settings-tabs button.active { color: var(--secondary-color); background: color-mix(in srgb, var(--secondary-color) 11%, transparent); }
 .settings-card { padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: linear-gradient(180deg, var(--card-bg-elevated), var(--card-bg)); box-shadow: var(--shadow-sm); }
 .settings-stack { display: flex; flex-direction: column; gap: 12px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
@@ -808,7 +833,7 @@ onMounted(async () => {
 .field > span { color: var(--text-muted); font-size: 11px; font-weight: 650; }
 .field input, .field select, .expense-filters input, .expense-filters select { min-height: 40px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--light-bg); color: var(--text-color); }
 .field small { color: var(--text-subtle); font-size: 10px; }
-.profile-readonly { min-height: 58px; padding: 10px; display: flex; flex-direction: column; gap: 5px; border: 1px solid rgba(148,163,184,.08); border-radius: 8px; background: rgba(239,242,249,.9); }
+.profile-readonly { min-height: 58px; padding: 10px; display: flex; flex-direction: column; gap: 5px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--light-bg); }
 .profile-readonly span { color: var(--text-subtle); font-size: 10px; }
 .profile-readonly strong { font-size: 12px; font-weight: 600; }
 .form-actions, .secondary-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -816,23 +841,23 @@ onMounted(async () => {
 .primary-button { border: 1px solid var(--secondary-color); background: var(--secondary-color); color: #fff; }
 .secondary-button, .row-actions button { border: 1px solid var(--border-color); background: transparent; color: var(--text-muted); }
 .primary-button:disabled, .secondary-button:disabled { opacity: .5; cursor: default; }
-.danger-link { border: 0; background: transparent; color: #c83b55; }
+.danger-link { border: 0; background: transparent; color: var(--danger-color); }
 .connection-list { display: flex; flex-direction: column; }
 .connection-row { min-height: 68px; padding: 11px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; border-bottom: 1px solid rgba(148,163,184,.09); }
 .connection-row:last-child { border-bottom: 0; }
 .connection-main { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .connection-main > div { min-width: 0; display: flex; flex-direction: column; }
 .connection-main small { color: var(--text-subtle); font-size: 10px; }
-.connection-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: rgba(99,91,255,.09); color: #5b52d6; font-size: 11px; font-weight: 800; }
-.connection-status { padding: 4px 7px; border-radius: 999px; background: rgba(22,128,95,.08); color: #16805f; font-size: 10px; font-weight: 700; }
-.connection-status.bad { background: rgba(200,59,85,.08); color: #c83b55; }
-.connection-status.limited { background: rgba(166,107,8,.08); color: #a66b08; }
+.connection-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: color-mix(in srgb, var(--secondary-color) 9%, var(--card-bg)); color: var(--secondary-color); font-size: 11px; font-weight: 800; }
+.connection-status { padding: 4px 7px; border-radius: 999px; background: color-mix(in srgb, var(--success-color) 8%, var(--card-bg)); color: var(--success-color); font-size: 10px; font-weight: 700; }
+.connection-status.bad { background: color-mix(in srgb, var(--danger-color) 8%, var(--card-bg)); color: var(--danger-color); }
+.connection-status.limited { background: color-mix(in srgb, var(--warning-color) 8%, var(--card-bg)); color: var(--warning-color); }
 .loading-state, .empty-state { min-height: 110px; padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: var(--text-muted); text-align: center; }
 .empty-state strong { color: var(--text-color); font-size: 13px; }
 .empty-state span { max-width: 520px; color: var(--text-subtle); font-size: 11px; }
 .hidden-input { display: none; }
 .csv-hint { margin-top: 12px; color: var(--text-subtle); font-size: 10px; }
-.csv-hint code { color: #5b52d6; }
+.csv-hint code { color: var(--secondary-color); }
 .table-wrapper { width: 100%; overflow-x: auto; }
 table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 12px; }
 th, td { padding: 11px 9px; border-bottom: 1px solid rgba(148,163,184,.09); text-align: left; vertical-align: middle; }
