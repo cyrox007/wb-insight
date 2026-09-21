@@ -51,7 +51,7 @@
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--header-bg-soft);
   box-shadow: var(--shadow-sm);
 }
 
