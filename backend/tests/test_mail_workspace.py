@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 
+from integrations.mail.rusender import RuSenderAPIError, RuSenderMailProvider
 from integrations.mail.smtp import SMTPMailProvider
 from services import mail_transport_service as transport
 from services import mail_unsubscribe_service as unsubscribe
@@ -273,6 +274,147 @@ def test_smtp_provider_emits_sender_identity_and_bulk_headers(monkeypatch):
     assert message["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert message["Precedence"] == "bulk"
     assert message.is_multipart()
+
+
+@pytest.mark.asyncio
+async def test_rusender_provider_uses_bearer_key_id_and_idempotency(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"uuid": "018e1234-abcd-7000-8000-000000000001"}
+
+    class FakeClient:
+        def __init__(self, *, timeout):
+            captured["timeout"] = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, url, *, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("integrations.mail.rusender.httpx.AsyncClient", FakeClient)
+
+    provider = RuSenderMailProvider(
+        SimpleNamespace(
+            RUSENDER_API_BASE_URL="https://api.rusender.ru",
+            RUSENDER_KEY_ID="15074",
+            RUSENDER_API_TOKEN="secret-token",
+            RUSENDER_TIMEOUT_SECONDS=12,
+        )
+    )
+    receipt = await provider.send(
+        sender="no-reply@mail.jsinteractive.ru",
+        sender_name="WB Insight",
+        recipient="seller@example.org",
+        subject="Подтверждение email",
+        body="Текст",
+        html_body="<p>Текст</p>",
+        idempotency_key="verify:abc",
+        headers={"List-Unsubscribe": "<https://ignored.example>", "X-WB-Trace": "trace-1"},
+    )
+
+    assert captured["url"] == "https://api.rusender.ru/api/v1/external-mails/send/15074"
+    assert captured["headers"]["Authorization"] == "Bearer secret-token"
+    assert captured["json"]["idempotencyKey"] == "verify:abc"
+    assert captured["json"]["mail"]["from"]["email"] == "no-reply@mail.jsinteractive.ru"
+    assert captured["json"]["mail"]["html"] == "<p>Текст</p>"
+    assert captured["json"]["mail"]["text"] == "Текст"
+    assert captured["json"]["mail"]["headers"] == {"X-WB-Trace": "trace-1"}
+    assert receipt.provider_message_id == "018e1234-abcd-7000-8000-000000000001"
+
+
+@pytest.mark.asyncio
+async def test_rusender_provider_classifies_retryable_statuses(monkeypatch):
+    class FakeResponse:
+        status_code = 429
+
+        def json(self):
+            return {}
+
+    class FakeClient:
+        def __init__(self, *, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr("integrations.mail.rusender.httpx.AsyncClient", FakeClient)
+    provider = RuSenderMailProvider(
+        SimpleNamespace(
+            RUSENDER_API_BASE_URL="https://api.rusender.ru",
+            RUSENDER_KEY_ID="15074",
+            RUSENDER_API_TOKEN="secret-token",
+            RUSENDER_TIMEOUT_SECONDS=10,
+        )
+    )
+
+    with pytest.raises(RuSenderAPIError) as exc_info:
+        await provider.send(
+            sender="no-reply@mail.jsinteractive.ru",
+            recipient="seller@example.org",
+            subject="Test",
+            body="Text",
+        )
+
+    assert exc_info.value.code == "rusender_http_429"
+    assert exc_info.value.retryable is True
+
+
+@pytest.mark.asyncio
+async def test_rusender_transport_encrypts_token_and_hides_it_from_payload(monkeypatch):
+    session = _FakeSession()
+    captured = {}
+
+    async def no_existing(_session):
+        return None
+
+    def fake_encrypt(payload, *, context):
+        captured["payload"] = dict(payload)
+        captured["context"] = context
+        return "encrypted-rusender"
+
+    monkeypatch.setattr(transport, "get_mail_provider_config", no_existing)
+    monkeypatch.setattr(transport, "encrypt_secret_payload", fake_encrypt)
+    monkeypatch.setattr(transport.lifecycle_config, "MAIL_CONFIG_SOURCE", "auto")
+    monkeypatch.setattr(transport.config, "IS_PRODUCTION", False)
+
+    row = await transport.upsert_mail_transport(
+        session,
+        actor_id=uuid4(),
+        values={
+            "provider": "rusender",
+            "from_email": "no-reply@mail.jsinteractive.ru",
+            "from_name": "WB Insight",
+            "key_id": "15074",
+            "api_token": "rs_ck_v1_secret",
+            "timeout_seconds": 10,
+        },
+    )
+
+    assert row.provider == "rusender"
+    assert row.host == "https://api.rusender.ru"
+    assert row.enabled is False
+    assert captured["payload"] == {
+        "key_id": "15074",
+        "api_token": "rs_ck_v1_secret",
+    }
+    assert captured["context"] == "mail-provider:rusender"
 
 
 def test_smtp_provider_rejects_header_injection(monkeypatch):

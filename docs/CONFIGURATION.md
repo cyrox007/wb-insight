@@ -94,6 +94,31 @@ Seller credentials проходят отдельную validation policy. См. 
 
 Production activation запрещена до merchant onboarding и smoke. Подробно: [`SBER_ACQUIRING.md`](SBER_ACQUIRING.md).
 
+## Почтовый транспорт
+
+WB Insight поддерживает два транспорта:
+
+- `smtp` — универсальный SMTP-адаптер; может использоваться для транзакционной почты и маркетинговых кампаний;
+- `rusender` — нативный RuSender HTTPS API для транзакционных писем (email verification, password recovery, системные уведомления и gateway test).
+
+Общие параметры:
+
+- `MAIL_CONFIG_SOURCE` — `auto`, `environment` или `database`;
+- `MAIL_PROVIDER` — `smtp` или `rusender` для ENV-конфигурации;
+- `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` — sender identity, используются обоими адаптерами;
+- `MAIL_DELIVERY_ENABLED` — разрешает маркетинговые кампании. Для текущего RuSender transactional adapter должен оставаться `false`.
+
+RuSender ENV:
+
+- `RUSENDER_API_BASE_URL=https://api.rusender.ru`;
+- `RUSENDER_KEY_ID` — числовой ID активированного ключа отправки;
+- `RUSENDER_API_TOKEN` — bearer token с permission `external_mail.send`;
+- `RUSENDER_TIMEOUT_SECONDS`.
+
+При `MAIL_CONFIG_SOURCE=auto` или `database` RuSender можно настроить из Control Panel. API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
+
+RuSender transport передаёт `idempotencyKey` и сохраняет возвращаемый `uuid` как `provider_message_id`. Маркетинговые кампании пока не используют transactional endpoint RuSender: текущий контракт custom headers допускает только `X-*`, поэтому приложение не заявляет через него RFC 8058 one-click unsubscribe.
+
 ## Operations monitoring
 
 - `OPS_SYNC_STALE_MINUTES`;

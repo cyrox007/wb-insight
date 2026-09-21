@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.access_control import Permission
 from core.authorization import require_permission
 from core.dependencies import get_db_session
+from integrations.mail.rusender import RuSenderAPIError
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage, MailStatus
 from models.subscription_model import SubscriptionStatus
 from models.tariffs_model import TariffPlan
@@ -251,11 +252,29 @@ async def gateway_test(
     except ValueError as exc:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code="MAIL_GATEWAY_TEST_INVALID", message=str(exc))
+    except RuSenderAPIError as exc:
+        response.status_code = status.HTTP_502_BAD_GATEWAY
+        messages = {
+            "rusender_http_401": "RuSender отклонил API token. Проверьте или перевыпустите токен.",
+            "rusender_http_402": "RuSender сообщает, что лимит или баланс отправок исчерпан.",
+            "rusender_http_403": "RuSender запретил отправку. Проверьте право external_mail.send и активность ключа отправки.",
+            "rusender_http_404": "RuSender не нашёл ключ отправки или домен From. Проверьте Key ID и email отправителя.",
+            "rusender_http_422": "RuSender не может доставлять на этот тестовый адрес.",
+            "rusender_http_429": "Превышен лимит запросов RuSender. Повторите тест позже.",
+            "rusender_http_503": "RuSender временно недоступен. Повторите тест позже.",
+            "rusender_timeout": "RuSender не ответил вовремя. Повторите тест позже.",
+            "rusender_network_error": "Не удалось подключиться к RuSender по HTTPS.",
+        }
+        return response_error(
+            code="MAIL_GATEWAY_TEST_FAILED",
+            message=messages.get(exc.code, "RuSender не принял тестовое письмо."),
+            details={"provider_code": exc.code},
+        )
     except Exception:
         response.status_code = status.HTTP_502_BAD_GATEWAY
         return response_error(
             code="MAIL_GATEWAY_TEST_FAILED",
-            message="SMTP-сервер не принял тестовое письмо. Проверьте host, port, STARTTLS и credentials.",
+            message="Почтовый провайдер не принял тестовое письмо. Проверьте настройки транспорта и credentials.",
         )
     return response_success(provider_message_id=message_id)
 

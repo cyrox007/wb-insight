@@ -75,6 +75,7 @@ class SMTPMailProvider:
         sender_name: str | None = None,
         reply_to: str | None = None,
         headers: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
     ) -> MailDeliveryReceipt:
         provider_message_id = await asyncio.to_thread(
             self._send_sync,
