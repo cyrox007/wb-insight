@@ -169,6 +169,15 @@ async def test_retry_job_keeps_job_active_and_delays_next_claim(monkeypatch):
     assert job.error == "temporary"
 
 
+def test_worker_auth_rejection_classification_is_explicit():
+    assert job_processor._auth_error_rejects_credential(
+        WBAuthError("rejected", endpoint="test", status_code=401)
+    )
+    assert not job_processor._auth_error_rejects_credential(
+        WBAuthError("server config", endpoint="authorization")
+    )
+
+
 def test_worker_retry_classification_is_explicit():
     assert job_processor._is_retryable(
         WBRateLimitError("rate", endpoint="test", status_code=429)
