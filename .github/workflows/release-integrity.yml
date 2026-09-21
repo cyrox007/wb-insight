@@ -92,9 +92,11 @@ jobs:
             ops/acceptance/data_accuracy.py \
             ops/data_accuracy_acceptance.py \
             ops/ux_acceptance.py \
+            ops/imap_mail_token_hook.py \
             ops/release_evidence.py
           python3 ops/data_accuracy_acceptance.py --help >/dev/null
           python3 ops/ux_acceptance.py --self-test
+          python3 ops/imap_mail_token_hook.py --self-test
           python3 ops/release_evidence.py --help >/dev/null
       - name: Verify data accuracy completeness and tolerance contracts
         shell: bash
