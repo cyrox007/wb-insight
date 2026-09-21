@@ -227,3 +227,58 @@ async def admin_verify_email(
     )
     await session.flush()
     return True
+
+
+
+async def admin_change_email_identity(
+    session: AsyncSession,
+    user: User,
+    *,
+    new_email: str,
+    actor_user_id,
+) -> None:
+    """Apply an admin email correction without silently preserving verification.
+
+    The new address becomes the current login identity but returns to the
+    unverified state. Existing sessions and recovery/verification capabilities
+    are revoked so the administrator may either use the normal verification
+    flow or explicitly perform the audited manual verification action.
+    """
+    normalized = _normalized_email(new_email)
+    if not normalized or "@" not in normalized or len(normalized) > 254:
+        raise ValueError("invalid_email")
+    if normalized == _normalized_email(user.email):
+        return
+
+    now = datetime.now(timezone.utc)
+    old_email = _normalized_email(user.email)
+    user.email = normalized
+    user.email_verified_at = None
+    user.pending_email = None
+    user.session_version += 1
+
+    await session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    await session.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    await record_lifecycle_event(
+        session,
+        user_id=user.id,
+        actor_user_id=actor_user_id,
+        event_type="email_changed_by_admin",
+        event_data={"previous_email": old_email, "verified": False},
+    )
+    await session.flush()
