@@ -61,6 +61,10 @@ async def insert_tariff(
     session: AsyncSession,
     tariff,
 ) -> Optional[TariffPlan]:
+    if normalized_tariff_code(tariff.get("code")) in SYSTEM_TARIFF_CODES:
+        logger.warning("Refusing to create reserved system tariff code=%s", tariff.get("code"))
+        return None
+
     new_tariff = TariffPlan(
         code=tariff["code"],
         name=tariff["name"],
@@ -126,6 +130,18 @@ async def update_tariff(
     tariff_data: dict,
 ) -> Optional[TariffPlan]:
     try:
+        if is_system_tariff(tariff):
+            requested_price = tariff_data.get("price_rub", tariff.price_rub)
+            requested_active = tariff_data.get("is_active", tariff.is_active)
+            requested_public = tariff_data.get("is_public", tariff.is_public)
+            if (
+                float(requested_price) != 0.0
+                or not bool(requested_active)
+                or bool(requested_public)
+            ):
+                logger.warning("Refusing unsafe update of system demo tariff")
+                return None
+
         for key, value in tariff_data.items():
             if hasattr(tariff, key):
                 setattr(tariff, key, value)
@@ -152,12 +168,41 @@ async def delete_tariff_by_id(
     tariff_id: UUID,
 ) -> bool:
     try:
+        tariff = await get_tariff_by_id(session, tariff_id)
+        if tariff is None or is_system_tariff(tariff):
+            return False
+
         query = delete(TariffPlan).where(TariffPlan.id == tariff_id)
         await session.execute(query)
         return True
     except Exception as exc:
         logger.error("Error deleting tariff: %s", exc)
         return False
+
+
+async def get_public_runtime_ready_tariffs(
+    session: AsyncSession,
+    *,
+    offset: int = 0,
+    limit: int = 10,
+) -> list[TariffPlan]:
+    tariffs = await get_tariffs_list(
+        session,
+        offset=offset,
+        limit=limit,
+        only_active=True,
+        only_public=True,
+    )
+    ready: list[TariffPlan] = []
+    for tariff in tariffs:
+        if not await get_missing_required_limits(session, tariff.id):
+            ready.append(tariff)
+        else:
+            logger.warning(
+                "Hiding incomplete public tariff code=%s from catalog",
+                tariff.code,
+            )
+    return ready
 
 
 async def upsert_limit(
