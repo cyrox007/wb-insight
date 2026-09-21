@@ -14,6 +14,7 @@ from models.mail_delivery import MailSuppression
 from schemas.auth import LoginRequest
 from services.legal_service import LegalConsentError, record_consents, validate_consent_payload
 from services.mail_service import queue_transactional_email
+from services.mail_transport_service import get_mail_transport_runtime
 from services.session_identity import session_user_payload
 from services.subscription_service import create_demo_subscription
 from services.tariff_service import get_tariff_by_code
@@ -98,6 +99,15 @@ async def registration(request: Request, response: Response, db_session: AsyncSe
     data = await request.json()
     reg_data = data.get("registrationData") or {}
     legal_context = "registration_legal" if reg_data.get("entity_type") == "legal_entity" else "registration"
+
+    if lifecycle_config.EMAIL_VERIFICATION_ENABLED:
+        mail_runtime = await get_mail_transport_runtime(db_session)
+        if not mail_runtime.ready:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return response_error(
+                code="EMAIL_VERIFICATION_DELIVERY_UNAVAILABLE",
+                message="Регистрация временно недоступна: сервис подтверждения email не готов",
+            )
 
     try:
         legal_documents = validate_consent_payload(reg_data.get("legal_consents"), context=legal_context)
