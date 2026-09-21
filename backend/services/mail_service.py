@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config as config
-from integrations.mail import mail_provider_registry
+from integrations.mail.smtp import SMTPMailProvider
 from models.mail_delivery import (
     CampaignStatus,
     MailCampaign,
@@ -18,6 +18,8 @@ from models.mail_delivery import (
 from models.users_model import User
 from services.account_lifecycle_service import issue_password_reset_token
 from services.email_verification_service import issue_email_verification_token
+from services.mail_transport_service import get_mail_transport_runtime
+from utils.mail_html import render_mail_document
 
 
 TRANSACTIONAL_TEMPLATES = {"email_verification": 1, "password_reset": 1}
@@ -44,20 +46,33 @@ def _password_reset_url(token: str) -> str:
     return _token_url(config.PASSWORD_RESET_BASE_URL, token)
 
 
-async def _smtp_send(recipient: str, subject: str, body: str) -> str:
-    """Backward-compatible helper that dispatches through the configured provider."""
-    if not (
-        config.MAIL_DELIVERY_ENABLED
+async def _smtp_send(
+    session: AsyncSession | None,
+    recipient: str,
+    subject: str,
+    body: str,
+    *,
+    html_body: str | None = None,
+) -> str:
+    """Dispatch through the effective SMTP runtime without exposing secrets."""
+    runtime = await get_mail_transport_runtime(session)
+    feature_enabled = (
+        runtime.MAIL_DELIVERY_ENABLED
         or config.PASSWORD_RESET_ENABLED
         or config.EMAIL_VERIFICATION_ENABLED
-    ):
+    )
+    if not feature_enabled:
         raise RuntimeError("mail_delivery_disabled")
-    provider = mail_provider_registry.get(config.MAIL_PROVIDER)
+    if not runtime.ready:
+        raise RuntimeError("mail_transport_not_ready")
+
+    provider = SMTPMailProvider(runtime)
     receipt = await provider.send(
-        sender=config.SMTP_FROM_EMAIL,
+        sender=runtime.SMTP_FROM_EMAIL,
         recipient=recipient,
         subject=subject,
         body=body,
+        html_body=html_body,
     )
     return receipt.provider_message_id or ""
 
@@ -102,6 +117,7 @@ async def queue_test_email(
     subject: str,
     body: str,
     actor_id,
+    html_body: str | None = None,
 ) -> MailMessage:
     message = MailMessage(
         user_id=actor_id,
@@ -109,6 +125,7 @@ async def queue_test_email(
         kind=MailKind.TEST.value,
         subject=subject.strip()[:255],
         body=body,
+        body_html=html_body,
         status=MailStatus.QUEUED.value,
         max_attempts=config.MAIL_MAX_ATTEMPTS,
         idempotency_key=f"test:{actor_id}:{uuid.uuid4()}",
@@ -238,13 +255,22 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
     message.last_attempt_at = now
     await session.flush()
 
+    html_body = None
     if message.kind == MailKind.TRANSACTIONAL.value:
         subject, body = await _render_transactional(session, message)
     else:
         subject = (message.subject or "WB Insight")[:255]
         body = message.body or ""
+        if message.body_html:
+            html_body = render_mail_document(message.body_html)
 
-    provider_id = await _smtp_send(message.recipient_email, subject, body)
+    provider_id = await _smtp_send(
+        session,
+        message.recipient_email,
+        subject,
+        body,
+        html_body=html_body,
+    )
     message.attempt_count += 1
     message.provider_message_id = provider_id
     message.status = MailStatus.SENT.value
@@ -331,6 +357,7 @@ async def send_password_reset_email(email: str, token: str) -> None:
     """Compatibility helper for legacy callers/tests; request flow uses the queue."""
     reset_url = _password_reset_url(token)
     await _smtp_send(
+        None,
         email,
         "Восстановление доступа к WB Insight",
         "Для установки нового пароля откройте ссылку:\n\n"

@@ -184,6 +184,7 @@
 import { computed, onMounted, ref } from 'vue'
 import FinanceService from '@/API/Dashboard/FinanceService.js'
 import DashboardState from '@/components/DashboardState.vue'
+import { finiteOrZero, formatFiniteNumber, toFiniteNumber } from '@/utils/safeNumber'
 
 const iso = (date) => date.toISOString().slice(0, 10)
 const today = new Date()
@@ -223,9 +224,9 @@ const filteredReports = computed(() => {
 })
 
 const logisticsAndStorage = computed(() =>
-  Number(summary.value.delivery || 0) +
-  Number(summary.value.storage || 0) +
-  Number(summary.value.acceptance || 0)
+  finiteOrZero(summary.value.delivery) +
+  finiteOrZero(summary.value.storage) +
+  finiteOrZero(summary.value.acceptance)
 )
 
 const balanceCaption = computed(() => {
@@ -234,15 +235,19 @@ const balanceCaption = computed(() => {
   return `${balances.value.length} кабинет(а)`
 })
 
-const number = (value) => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(Number(value || 0))
+const number = (value) => formatFiniteNumber(value, {
+  maximumFractionDigits: 0,
+  fallback: '0',
+})
 
 const money = (value, currency = 'RUB') => {
-  if (value == null) return '—'
+  const numeric = toFiniteNumber(value)
+  if (numeric === null) return '—'
   const symbol = !currency || currency === 'RUB' ? '₽' : currency
-  return `${new Intl.NumberFormat('ru-RU', {
+  return `${formatFiniteNumber(numeric, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(Number(value || 0))} ${symbol}`
+  })} ${symbol}`
 }
 
 const shortDate = (value) => {
@@ -272,7 +277,7 @@ const statusClass = (status) => ({
 })
 
 const maxDiscrepancy = (report) => {
-  const values = Object.values(report.discrepancies || {}).map((value) => Math.abs(Number(value || 0)))
+  const values = Object.values(report.discrepancies || {}).map((value) => Math.abs(finiteOrZero(value)))
   return values.length ? Math.max(...values) : 0
 }
 

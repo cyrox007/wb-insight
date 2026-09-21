@@ -127,6 +127,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { formatFiniteNumber, toFiniteNumber } from '@/utils/safeNumber';
 
 const props = defineProps({
 	stats: {
@@ -145,23 +146,17 @@ const hasData = computed(() => {
 });
 
 const formatValue = (value) => {
-	if (value === null || value === undefined) return '-';
-	if (typeof value === 'number') {
-		if (value % 1 === 0) {
-			return value.toLocaleString('ru-RU');
-		}
-		return value.toLocaleString('ru-RU', {
-			minimumFractionDigits: 2,
-			maximumFractionDigits: 2
-		});
-	}
-	return value;
+	const numeric = toFiniteNumber(value);
+	if (numeric === null) return '-';
+	return formatFiniteNumber(numeric, {
+		minimumFractionDigits: Number.isInteger(numeric) ? 0 : 2,
+		maximumFractionDigits: Number.isInteger(numeric) ? 0 : 2,
+		fallback: '-',
+	});
 };
 
-const formatPercentage = (value) => {
-	if (value === null || value === undefined) return '-';
-	return value.toFixed(1);
-};
+const formatPercentage = (value) =>
+	formatFiniteNumber(value, { maximumFractionDigits: 1, fallback: '-' });
 </script>
 
 <style scoped>

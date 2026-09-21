@@ -186,6 +186,7 @@ async def launch_campaign(
                 kind=MailKind.CAMPAIGN.value,
                 subject=campaign.subject,
                 body=campaign.body,
+                body_html=campaign.body_html,
                 status=(
                     MailStatus.SUPPRESSED.value
                     if is_suppressed

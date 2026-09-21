@@ -156,3 +156,32 @@ async def test_own_consent_endpoint_does_not_expose_evidence_hmacs():
     assert consent["document_code"] == "terms"
     assert "ip_hmac" not in consent
     assert "user_agent_hmac" not in consent
+
+
+
+@pytest.mark.asyncio
+async def test_registration_fails_closed_when_verification_transport_is_unavailable(monkeypatch):
+    session = TransactionSessionStub()
+    request = RegistrationRequestStub(
+        {"registrationData": {"entity_type": "individual", "legal_consents": []}}
+    )
+    response = Response()
+    insert_called = False
+
+    async def fake_runtime(_session):
+        return SimpleNamespace(ready=False)
+
+    async def unexpected_insert(*_args, **_kwargs):
+        nonlocal insert_called
+        insert_called = True
+        return None
+
+    monkeypatch.setattr(auth_handler.lifecycle_config, "EMAIL_VERIFICATION_ENABLED", True)
+    monkeypatch.setattr(auth_handler, "get_mail_transport_runtime", fake_runtime)
+    monkeypatch.setattr(auth_handler, "insert_user", unexpected_insert)
+
+    payload = await auth_handler.registration(request, response, session)
+
+    assert response.status_code == 503
+    assert payload["error"]["code"] == "EMAIL_VERIFICATION_DELIVERY_UNAVAILABLE"
+    assert insert_called is False
