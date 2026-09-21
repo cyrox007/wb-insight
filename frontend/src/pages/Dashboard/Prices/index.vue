@@ -16,22 +16,25 @@
       </button>
     </header>
 
-    <div v-if="errorMessage" class="status-banner status-banner--error" role="alert">
-      <div>
-        <strong>Не удалось загрузить цены.</strong>
-        <span>{{ errorMessage }}</span>
-      </div>
-      <button type="button" @click="loadData">Повторить</button>
-    </div>
+    <DashboardState v-if="isLoading && !hasLoadedOnce" kind="loading" />
 
-    <div class="method-note">
+    <DashboardState
+      v-if="errorMessage"
+      kind="error"
+      title="Не удалось загрузить цены"
+      :message="errorMessage"
+      action-label="Повторить"
+      @retry="loadData"
+    />
+
+    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce)" class="method-note">
       <strong>Источник: WB Prices & Discounts API.</strong>
       <span>
         История создаётся только при реальном изменении цены или скидки; первая синхронизация становится исходной точкой и не считается изменением.
       </span>
     </div>
 
-    <div class="kpi-grid" aria-label="Сводка цен">
+    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce)" class="kpi-grid" aria-label="Сводка цен">
       <article class="kpi-card">
         <span>Товаров</span>
         <strong>{{ formatNumber(summary.products) }}</strong>
@@ -59,7 +62,7 @@
       </article>
     </div>
 
-    <section class="table-card">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce)" class="table-card">
       <div class="section-heading section-heading--controls">
         <div>
           <p class="eyebrow">Текущее состояние</p>
@@ -183,6 +186,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import PriceService from '@/API/Dashboard/PriceService.js'
+import DashboardState from '@/components/DashboardState.vue'
 
 const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
