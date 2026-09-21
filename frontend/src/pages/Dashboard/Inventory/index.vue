@@ -261,7 +261,7 @@ onMounted(loadData)
 
 .eyebrow {
   margin: 0 0 5px;
-  color: #a78bfa;
+  color: #6259d9;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: .09em;
@@ -399,7 +399,7 @@ h2 {
 }
 
 .kpi-card--danger strong {
-  color: #fda4af;
+  color: #c83b55;
 }
 
 .kpi-card--warning {
@@ -407,7 +407,7 @@ h2 {
 }
 
 .kpi-card--warning strong {
-  color: #fcd34d;
+  color: #a66b08;
 }
 
 .table-card {
@@ -487,11 +487,11 @@ tbody tr:hover td {
 }
 
 .row--critical td:first-child {
-  box-shadow: inset 3px 0 0 #fb7185;
+  box-shadow: inset 3px 0 0 #d84c64;
 }
 
 .row--replenish td:first-child {
-  box-shadow: inset 3px 0 0 #fbbf24;
+  box-shadow: inset 3px 0 0 #c98713;
 }
 
 .product-cell {
@@ -525,11 +525,11 @@ tbody tr:hover td {
 }
 
 .supply-value {
-  color: #c4b5fd;
+  color: #5b52d6;
 }
 
 .excess-value {
-  color: #86efac;
+  color: #16805f;
   font-size: 11px;
 }
 
@@ -547,20 +547,20 @@ tbody tr:hover td {
 .status-pill--out_of_stock,
 .status-pill--critical {
   border-color: rgba(244, 63, 94, .35);
-  background: rgba(244, 63, 94, .09);
-  color: #fda4af;
+  background: rgba(200, 59, 85, .08);
+  color: #c83b55;
 }
 
 .status-pill--replenish {
   border-color: rgba(245, 158, 11, .35);
-  background: rgba(245, 158, 11, .08);
-  color: #fcd34d;
+  background: rgba(166, 107, 8, .08);
+  color: #a66b08;
 }
 
 .status-pill--healthy {
   border-color: rgba(34, 197, 94, .3);
-  background: rgba(34, 197, 94, .07);
-  color: #86efac;
+  background: rgba(22, 128, 95, .07);
+  color: #16805f;
 }
 
 .status-pill--no_demand,
