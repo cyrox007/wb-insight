@@ -448,7 +448,7 @@
   padding: 14px;
   border: 1px solid rgba(205, 213, 225, 0.86);
   border-radius: var(--radius-sm);
-  background: var(--light-bg)
+  background: var(--light-bg);
 }
 
 .cp-info-value {
