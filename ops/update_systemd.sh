@@ -187,7 +187,10 @@ log "[4/9] Installing frontend dependencies from lockfile..."
 log "[5/9] Building frontend..."
 (
   cd "$FRONTEND_DIR"
-  npm run build
+  # Systemd/nginx deployment always exposes the backend on the same public
+  # origin under /api. Force this value so stale host-level Vite overrides
+  # cannot bake an old IP/HTTP endpoint into production assets.
+  VITE_API_BASE_URL=/api npm run build
 )
 
 log "[6/9] Installing canonical Celery systemd overrides..."
