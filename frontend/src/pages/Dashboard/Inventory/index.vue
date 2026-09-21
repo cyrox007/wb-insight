@@ -156,6 +156,7 @@
 import { computed, onMounted, ref } from 'vue'
 import InventoryService from '@/API/Dashboard/InventoryService.js'
 import DashboardState from '@/components/DashboardState.vue'
+import { formatFiniteNumber } from '@/utils/safeNumber'
 
 const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
@@ -195,14 +196,16 @@ const filteredItems = computed(() => {
   })
 })
 
-const formatNumber = (value) => new Intl.NumberFormat('ru-RU', {
+const formatNumber = (value) => formatFiniteNumber(value, {
   maximumFractionDigits: 0,
-}).format(Number(value || 0))
+  fallback: '0',
+})
 
-const formatDecimal = (value) => new Intl.NumberFormat('ru-RU', {
+const formatDecimal = (value) => formatFiniteNumber(value, {
   minimumFractionDigits: 0,
   maximumFractionDigits: 2,
-}).format(Number(value || 0))
+  fallback: '0',
+})
 
 const statusLabel = (status) => ({
   out_of_stock: 'Нет остатка',
