@@ -101,6 +101,8 @@
 </template>
 
 <script>
+import { finiteOrZero, formatFiniteNumber } from '@/utils/safeNumber';
+
 export default {
 	name: "AbcAnalysis",
 	props: {
@@ -143,8 +145,8 @@ export default {
 			// Здесь я сделал % от кол-ва товаров для примера
 			const calcPercent = (arr) => Math.round((arr.length / totalItems) * 100);
 			const calcRevenueShare = (arr) => {
-				const totalRev = this.items.reduce((acc, i) => acc + (i.revenue || 0), 0);
-				const catRev = arr.reduce((acc, i) => acc + (i.revenue || 0), 0);
+				const totalRev = this.items.reduce((acc, i) => acc + finiteOrZero(i.revenue), 0);
+				const catRev = arr.reduce((acc, i) => acc + finiteOrZero(i.revenue), 0);
 				return totalRev > 0 ? Math.round((catRev / totalRev) * 100) : 0;
 			};
 
@@ -160,12 +162,11 @@ export default {
 			return str ? str.charAt(0).toUpperCase() : "?";
 		},
 		formatMoney(value) {
-			if (value === null || value === undefined) return "—";
-			return new Intl.NumberFormat("ru-RU").format(value) + " ₽";
+			return formatFiniteNumber(value, { maximumFractionDigits: 2 }) + (formatFiniteNumber(value, { maximumFractionDigits: 2 }) === "—" ? "" : " ₽");
 		},
 		formatPercent(value) {
-			if (value === null || value === undefined) return "—";
-			return value + "%";
+			const formatted = formatFiniteNumber(value, { maximumFractionDigits: 1 });
+			return formatted === "—" ? formatted : formatted + "%";
 		},
 		handleAction(type, item) {
 			this.$emit(type, item);
