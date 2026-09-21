@@ -243,6 +243,7 @@ const selectTariff = async () => {
 				Выберите тариф, чтобы продолжить
 			</p>
 			<LegalConsentChecklist
+				v-if="tariffs.length"
 				v-model="legalConsents"
 				context="billing"
 				@valid="legalValid = $event"
