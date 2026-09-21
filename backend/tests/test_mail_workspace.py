@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 
+from integrations.mail.smtp import SMTPMailProvider
 from services import mail_transport_service as transport
 from services import mail_unsubscribe_service as unsubscribe
 from utils.mail_html import html_to_text, render_mail_document, sanitize_mail_html
@@ -211,3 +212,97 @@ def test_signed_unsubscribe_token_round_trip_and_tamper_rejection(monkeypatch):
 
     with pytest.raises(ValueError, match="unsubscribe_token_invalid"):
         unsubscribe.parse_unsubscribe_token(token[:-1] + ("A" if token[-1] != "A" else "B"))
+
+
+
+def test_smtp_provider_emits_sender_identity_and_bulk_headers(monkeypatch):
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def starttls(self, **_kwargs):
+            return None
+
+        def login(self, *_args, **_kwargs):
+            return None
+
+        def send_message(self, message):
+            sent["message"] = message
+
+    monkeypatch.setattr("integrations.mail.smtp.smtplib.SMTP", FakeSMTP)
+
+    provider = SMTPMailProvider(
+        SimpleNamespace(
+            SMTP_HOST="smtp.example.net",
+            SMTP_PORT=587,
+            SMTP_TIMEOUT_SECONDS=10,
+            SMTP_STARTTLS=True,
+            SMTP_USERNAME=None,
+            SMTP_PASSWORD=None,
+        )
+    )
+    provider._send_sync(
+        sender="news@example.net",
+        sender_name="WB Insight",
+        reply_to="support@example.net",
+        recipient="seller@example.org",
+        subject="Новости",
+        body="Текст",
+        html_body="<p>Текст</p>",
+        headers={
+            "List-Unsubscribe": "<https://app.example.net/unsubscribe/token>",
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            "List-ID": "WB Insight marketing <marketing.example.net>",
+            "Precedence": "bulk",
+        },
+    )
+
+    message = sent["message"]
+    assert message["From"] == "WB Insight <news@example.net>"
+    assert message["Reply-To"] == "support@example.net"
+    assert message["Date"]
+    assert message["Message-ID"].endswith("@example.net>")
+    assert message["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert message["Precedence"] == "bulk"
+    assert message.is_multipart()
+
+
+def test_smtp_provider_rejects_header_injection(monkeypatch):
+    class FakeSMTP:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+    monkeypatch.setattr("integrations.mail.smtp.smtplib.SMTP", FakeSMTP)
+
+    provider = SMTPMailProvider(
+        SimpleNamespace(
+            SMTP_HOST="smtp.example.net",
+            SMTP_PORT=587,
+            SMTP_TIMEOUT_SECONDS=10,
+            SMTP_STARTTLS=False,
+            SMTP_USERNAME=None,
+            SMTP_PASSWORD=None,
+        )
+    )
+    with pytest.raises(ValueError, match="unsafe_mail_header"):
+        provider._send_sync(
+            sender="news@example.net",
+            recipient="seller@example.org",
+            subject="Новости",
+            body="Текст",
+            headers={"X-Test": "ok\r\nBcc: attacker@example.org"},
+        )
