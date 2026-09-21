@@ -4,18 +4,25 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
-## [0.9.0-beta.1] — candidate, 2026-09-18
+## [0.9.0-beta.1] — candidate, обновлено 2026-09-21
 
 Подготовлен exact beta candidate для P40 production-like acceptance. Эта запись фиксирует candidate metadata; публикация `v0.9.0-beta.1` остаётся заблокированной до полного green P40 evidence.
 
 - завершён code-side P40 hardening: production nginx `/api` routing, strict release-smoke provenance и cleanup authenticated sessions;
 - live-WB/data provenance связывает credential validation/cleanup с тем же seller account и защищённым data-accuracy input;
 - добавлен условный Sber sandbox merchant proof без сохранения merchant secrets/order/form URL в evidence;
+- role-aware staff workspace отделяет рабочие приоритеты super_admin/admin/manager/support/analyst от seller dashboard; обычный клиент не получает Control Panel;
+- расширено администрирование пользователей: профиль/контакты/staff-атрибуты, ручная email-верификация, activation/deactivation и revoke sessions с lifecycle/audit evidence;
+- transactional mail получил нативный RuSender HTTPS provider: encrypted bearer token, provider idempotency/retry classification, Control Panel selector и тест отправки без зависимости от SMTP-портов хостинга;
+- password recovery доведён до production flow: anti-enumeration, resend throttle, durable idempotency, digest-only one-time token, browser URL cleanup и session-version rotation;
+- Control Panel приведён к единому responsive UI pattern для overview/users/user-detail/roles/tariffs/payments/mail/audit, включая light/dark/reduced-motion и доступные segmented/filter controls;
+- UX acceptance расширен на role-aware staff states, lifecycle user-detail states и RuSender gateway; Release integrity теперь self-test-ит этот контракт;
+- добавлен provider-neutral IMAP helper для real-mail acceptance: credentials только через environment, mailbox read-only, наружу выдаётся только URL с `#token=`;
 - dev-first release flow закреплён: рабочие ветки идут в `dev`, а `main` принимает только release/release-candidate promotion;
 - self-hosted CI переведён на consolidated validation и защищён от повторного накопления PostgreSQL anonymous volumes/CI images;
 - frontend package metadata и lockfile синхронизированы с каноническим `VERSION`.
 
-До фактического release обязательны consolidated exact-head CI, production-like deploy/rollback, real-mail lifecycle, WB seller/data-accuracy, UX, secrets и backup/restore evidence, затем complete beta manifest.
+До фактического release обязательны consolidated exact-head CI, production-like deploy/rollback, real RuSender verification/recovery lifecycle, WB seller/data-accuracy, staff/client UX, secrets и backup/restore evidence, затем complete beta manifest.
 
 ## [0.9.0-alpha.11] — 2026-09-16
 
