@@ -15,7 +15,7 @@ router = APIRouter(
 )
 
 @router.get('/')
-async def get_roles(response: Response, db_session: AsyncSession = Depends(get_db_session)):
+async def get_roles(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)):
     roles_list = [
         {
             "code": role.value,
@@ -28,6 +28,10 @@ async def get_roles(response: Response, db_session: AsyncSession = Depends(get_d
     return response_success(
         roles=roles_list,
         permissions=[permission.value for permission in Permission],
+        can_manage=(
+            Permission.ROLES_WRITE.value
+            in set(getattr(request.state, "permissions", set()))
+        ),
     )
 
 @router.post('/', dependencies=[Depends(require_permission(Permission.ROLES_WRITE))])
