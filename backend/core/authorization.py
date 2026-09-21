@@ -102,6 +102,7 @@ def require_permission(permission: Permission):
                 },
             )
 
+    dependency.required_permission = permission.value
     return dependency
 
 
