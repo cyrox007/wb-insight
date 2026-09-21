@@ -16,6 +16,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'select', 'payment']);
 const tariffs = ref([]);
+const tariffsLoading = ref(false);
+const tariffsLoaded = ref(false);
+const tariffsError = ref('');
 const selectedTariff = ref(props.currentTariffCode || '');
 const currentSubscription = ref(null);
 const loadingPayment = ref(false);
@@ -36,7 +39,7 @@ const formatDate = (value) => {
 };
 
 onMounted(async () => {
-	await Promise.all([loadTariffs(), loadSubscription()]);
+	await Promise.allSettled([loadTariffs(), loadSubscription()]);
 });
 
 watch(
@@ -53,12 +56,35 @@ watch(selectedTariff, () => {
 });
 
 const loadTariffs = async () => {
+	tariffsLoading.value = true;
+	tariffsError.value = '';
+
 	try {
 		const response = await ProfileServices.get_tariffs();
-		tariffs.value = response.data?.tariffs || [];
-	} catch (e) {
-		console.error('Ошибка загрузки тарифов', e);
+		const payload = response.data || {};
+
+		if (payload.status === 'error') {
+			throw new Error(payload.error?.message || 'Не удалось загрузить тарифы');
+		}
+
+		tariffs.value = Array.isArray(payload.tariffs) ? payload.tariffs : [];
+
+		if (
+			selectedTariff.value &&
+			!tariffs.value.some((tariff) => tariff.code === selectedTariff.value)
+		) {
+			selectedTariff.value = '';
+		}
+	} catch (error) {
+		console.error('Ошибка загрузки тарифов', error);
 		tariffs.value = [];
+		tariffsError.value =
+			error.response?.data?.error?.message ||
+			error.message ||
+			'Не удалось загрузить доступные тарифы.';
+	} finally {
+		tariffsLoaded.value = true;
+		tariffsLoading.value = false;
 	}
 };
 
@@ -181,7 +207,24 @@ const selectTariff = async () => {
 				</template>
 			</div>
 
-			<div class="tariffs-grid">
+			<div v-if="tariffsLoading" class="tariff-state" role="status">
+				<div class="tariff-state__spinner" aria-hidden="true"></div>
+				<strong>Загружаем тарифы…</strong>
+				<span>Проверяем доступные варианты подписки.</span>
+			</div>
+
+			<div v-else-if="tariffsError" class="tariff-state tariff-state--error" role="alert">
+				<strong>Не удалось загрузить тарифы</strong>
+				<span>{{ tariffsError }}</span>
+				<button type="button" class="tariff-state__button" @click="loadTariffs">Повторить</button>
+			</div>
+
+			<div v-else-if="tariffsLoaded && tariffs.length === 0" class="tariff-state">
+				<strong>Сейчас нет опубликованных тарифов</strong>
+				<span>Список успешно загружен, но активных тарифов, доступных пользователям, сейчас нет.</span>
+			</div>
+
+			<div v-else class="tariffs-grid">
 				<div v-for="tariff in tariffs" :key="tariff.code" class="tariff-card"
 					:class="{ selected: selectedTariff === tariff.code }" @click="selectedTariff = tariff.code">
 					<div class="tariff-header">
@@ -196,10 +239,11 @@ const selectTariff = async () => {
 					</div>
 				</div>
 			</div>
-			<p v-if="!selectedTariff" class="selection-hint">
+			<p v-if="tariffs.length && !selectedTariff" class="selection-hint">
 				Выберите тариф, чтобы продолжить
 			</p>
 			<LegalConsentChecklist
+				v-if="tariffs.length"
 				v-model="legalConsents"
 				context="billing"
 				@valid="legalValid = $event"
@@ -209,7 +253,7 @@ const selectTariff = async () => {
 			<ButtonCancel @click="$emit('close')" text="Отмена" />
 			<ButtonPrimary
 				@click="selectTariff"
-				:disabled="!selectedTariff || !legalValid"
+				:disabled="tariffsLoading || Boolean(tariffsError) || !selectedTariff || !legalValid"
 				text="Перейти к оплате"
 				:loading="loadingPayment"
 			/>
@@ -229,9 +273,9 @@ const selectTariff = async () => {
 	border-radius: 10px;
 	background: var(--medium-bg);
 }
-.subscription-lifecycle p { margin: 5px 0 0; color: #bbb; font-size: .9rem; }
+.subscription-lifecycle p { margin: 5px 0 0; color: var(--text-muted); font-size: .9rem; }
 .lifecycle-button { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
-.lifecycle-button.danger { color: #fda4af; border-color: rgba(251,113,133,.35); }
+.lifecycle-button.danger { color: var(--danger-color); border-color: color-mix(in srgb, var(--danger-color) 35%, var(--border-color)); }
 .lifecycle-button:disabled { opacity: .55; cursor: wait; }
 .tariffs-grid {
 	display: grid;
@@ -281,7 +325,7 @@ const selectTariff = async () => {
 }
 
 .tariff-description {
-	color: #ccc;
+	color: var(--text-muted);
 	font-size: 0.95rem;
 	line-height: 1.5;
 	margin: 0 0 16px 0;
@@ -300,10 +344,65 @@ const selectTariff = async () => {
 }
 
 .selection-hint {
-	color: #888;
+	color: var(--text-muted);
 	font-style: italic;
 	text-align: center;
 	margin-top: 8px;
+}
+
+
+.tariff-state {
+	min-height: 160px;
+	margin-bottom: 16px;
+	padding: 26px 20px;
+	display: grid;
+	place-items: center;
+	align-content: center;
+	gap: 7px;
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	background: var(--light-bg);
+	color: var(--text-muted);
+	text-align: center;
+}
+
+.tariff-state strong {
+	color: var(--text-color);
+	font-size: 15px;
+}
+
+.tariff-state--error {
+	border-color: color-mix(in srgb, var(--danger-color) 30%, var(--border-color));
+}
+
+.tariff-state__spinner {
+	width: 24px;
+	height: 24px;
+	margin-bottom: 4px;
+	border: 2px solid var(--border-color);
+	border-top-color: var(--secondary-color);
+	border-radius: 50%;
+	animation: tariff-spin .8s linear infinite;
+}
+
+.tariff-state__button {
+	min-height: 36px;
+	margin-top: 4px;
+	padding: 7px 12px;
+	border: 1px solid var(--secondary-color);
+	border-radius: 8px;
+	background: var(--secondary-color);
+	color: #fff;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+@keyframes tariff-spin {
+	to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tariff-state__spinner { animation: none; }
 }
 
 @media (max-width: 640px) {
