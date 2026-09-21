@@ -90,7 +90,7 @@ async def _transport_send(
         )
     except RuSenderAPIError as exc:
         if not exc.retryable:
-            raise PermanentMailDeliveryError(exc.code) from exc
+            raise PermanentMailDeliveryError(exc.safe_code) from exc
         raise
     return receipt.provider_message_id or ""
 

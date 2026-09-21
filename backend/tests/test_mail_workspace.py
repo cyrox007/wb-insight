@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from integrations.mail.rusender import RuSenderAPIError, RuSenderMailProvider
+from integrations.mail.rusender import RuSenderAPIError, RuSenderMailProvider, _safe_provider_error_code
 from integrations.mail.smtp import SMTPMailProvider
 from services import mail_transport_service as transport
 from services import mail_unsubscribe_service as unsubscribe
@@ -438,6 +438,69 @@ async def test_rusender_provider_classifies_retryable_statuses(monkeypatch):
 
     assert exc_info.value.code == "rusender_http_429"
     assert exc_info.value.retryable is True
+
+
+def test_rusender_provider_error_code_extractor_keeps_only_bounded_machine_code():
+    response = SimpleNamespace(
+        json=lambda: {
+            "code": "external_mail_key_not_found",
+            "description": "diagnostic with request/provider context that must not escape",
+        }
+    )
+
+    assert _safe_provider_error_code(response) == "external_mail_key_not_found"
+
+    unsafe = SimpleNamespace(json=lambda: {"code": "bad code\nAuthorization: Bearer secret"})
+    assert _safe_provider_error_code(unsafe) is None
+
+
+@pytest.mark.asyncio
+async def test_rusender_provider_attaches_safe_machine_code_to_http_error(monkeypatch):
+    class FakeResponse:
+        status_code = 404
+
+        def json(self):
+            return {
+                "code": "external_mail_key_not_found",
+                "description": "raw provider diagnostic must never be returned",
+            }
+
+    class FakeClient:
+        def __init__(self, *, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr("integrations.mail.rusender.httpx.AsyncClient", FakeClient)
+    provider = RuSenderMailProvider(
+        SimpleNamespace(
+            RUSENDER_API_BASE_URL="https://api.rusender.ru",
+            RUSENDER_KEY_ID="15074",
+            RUSENDER_API_TOKEN="secret-token",
+            RUSENDER_TIMEOUT_SECONDS=10,
+        )
+    )
+
+    with pytest.raises(RuSenderAPIError) as exc_info:
+        await provider.send(
+            sender="no-reply@mail.jsinteractive.ru",
+            recipient="seller@example.org",
+            subject="Test",
+            body="Text",
+        )
+
+    error = exc_info.value
+    assert error.code == "rusender_http_404"
+    assert error.provider_error_code == "external_mail_key_not_found"
+    assert error.safe_code == "rusender_http_404:external_mail_key_not_found"
+    assert "raw provider diagnostic" not in str(error)
 
 
 @pytest.mark.asyncio

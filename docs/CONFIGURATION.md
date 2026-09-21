@@ -130,7 +130,7 @@ RuSender ENV:
 
 При `MAIL_CONFIG_SOURCE=auto` или `database` RuSender можно настроить из Control Panel. API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. Экран шлюза отдельно показывает готовность transport, email verification и password recovery, поэтому наличие рабочего provider не маскирует выключенный feature flag или отсутствующий HTTPS base URL. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
 
-RuSender transport передаёт `idempotencyKey` и сохраняет возвращаемый `uuid` как `provider_message_id`. Маркетинговые кампании пока не используют transactional endpoint RuSender: текущий контракт custom headers допускает только `X-*`, поэтому приложение не заявляет через него RFC 8058 one-click unsubscribe.
+RuSender transport передаёт `idempotencyKey` и сохраняет возвращаемый `uuid` как `provider_message_id`. При HTTP-ошибке adapter извлекает только bounded machine-readable provider code из JSON-ответа; raw description/body не сохраняются и не возвращаются. Gateway test показывает этот безопасный код администратору для диагностики. Маркетинговые кампании пока не используют transactional endpoint RuSender: текущий контракт custom headers допускает только `X-*`, поэтому приложение не заявляет через него RFC 8058 one-click unsubscribe.
 
 ## Operations monitoring
 

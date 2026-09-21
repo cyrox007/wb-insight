@@ -265,10 +265,13 @@ async def gateway_test(
             "rusender_timeout": "RuSender не ответил вовремя. Повторите тест позже.",
             "rusender_network_error": "Не удалось подключиться к RuSender по HTTPS.",
         }
+        details = {"transport_code": exc.code}
+        if exc.provider_error_code:
+            details["provider_error_code"] = exc.provider_error_code
         return response_error(
             code="MAIL_GATEWAY_TEST_FAILED",
             message=messages.get(exc.code, "RuSender не принял тестовое письмо."),
-            details={"provider_code": exc.code},
+            details=details,
         )
     except Exception:
         response.status_code = status.HTTP_502_BAD_GATEWAY
