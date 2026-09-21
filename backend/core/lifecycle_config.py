@@ -38,6 +38,7 @@ class LifecycleConfig:
 
     MAIL_DELIVERY_ENABLED = os.getenv("MAIL_DELIVERY_ENABLED", "false").lower() == "true"
     MAIL_PROVIDER = os.getenv("MAIL_PROVIDER", "smtp").strip().lower() or "smtp"
+    MAIL_CONFIG_SOURCE = os.getenv("MAIL_CONFIG_SOURCE", "auto").strip().lower() or "auto"
     MAIL_BATCH_SIZE = int(os.getenv("MAIL_BATCH_SIZE", "25"))
     MAIL_MAX_ATTEMPTS = int(os.getenv("MAIL_MAX_ATTEMPTS", "5"))
     MAIL_RETRY_BASE_SECONDS = int(os.getenv("MAIL_RETRY_BASE_SECONDS", "30"))
@@ -110,13 +111,22 @@ class LifecycleConfig:
         if self.ACCOUNT_DEACTIVATION_RETENTION_DAYS <= 0:
             raise RuntimeError("ACCOUNT_DEACTIVATION_RETENTION_DAYS must be positive")
 
+        if self.MAIL_CONFIG_SOURCE not in {"auto", "environment", "database"}:
+            raise RuntimeError("MAIL_CONFIG_SOURCE must be auto, environment or database")
+
         needs_mail = (
             self.PASSWORD_RESET_ENABLED
             or self.EMAIL_VERIFICATION_ENABLED
             or self.MAIL_DELIVERY_ENABLED
         )
-        if needs_mail:
+        if needs_mail and self.MAIL_CONFIG_SOURCE == "environment":
             self._validate_mail_transport(production=production)
+        elif needs_mail and self.MAIL_CONFIG_SOURCE == "auto":
+            # In auto mode the database runtime configuration may be the
+            # effective transport. Validate ENV only when an ENV transport is
+            # actually present as a fallback.
+            if self.SMTP_HOST or self.SMTP_FROM_EMAIL:
+                self._validate_mail_transport(production=production)
 
         if self.PASSWORD_RESET_ENABLED:
             if not self.PASSWORD_RESET_BASE_URL:
