@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.lifecycle_config import lifecycle_config
 from integrations.mail.smtp import SMTPMailProvider
 from models.mail_delivery import MailProviderConfig
+from settings import config
 from utils.secret_crypto import decrypt_secret_payload, encrypt_secret_payload
 
 
@@ -228,10 +229,12 @@ async def upsert_mail_transport(
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
         source="database",
     )
-    if row.enabled and not runtime.ready:
+    if not runtime.ready:
         raise ValueError(
-            "Для включения шлюза заполните host, from email и согласованную пару username/password"
+            "Заполните host, from email и согласованную пару username/password"
         )
+    if config.IS_PRODUCTION and not runtime.SMTP_STARTTLS:
+        raise ValueError("В production SMTP должен использовать STARTTLS")
 
     await session.flush()
     return row
