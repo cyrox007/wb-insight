@@ -4,6 +4,22 @@
 		<meta charset="UTF-8">
 		<link rel="icon" href="/favicon.ico">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta id="theme-color" name="theme-color" content="#f5f7fb">
+		<script>
+			(() => {
+				try {
+					const saved = localStorage.getItem('wb-theme')
+					const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+					const theme = saved === 'light' || saved === 'dark' ? saved : (systemDark ? 'dark' : 'light')
+					document.documentElement.dataset.theme = theme
+					document.documentElement.style.colorScheme = theme
+					const themeColor = document.getElementById('theme-color')
+					if (themeColor) themeColor.content = theme === 'dark' ? '#111720' : '#f5f7fb'
+				} catch {
+					document.documentElement.dataset.theme = 'light'
+				}
+			})()
+		</script>
 		<title>WBInsight &lt;&lt; AI &gt;&gt;</title>
 		<link rel="stylesheet" href="/css/font-awesome.min.css">
 
