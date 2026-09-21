@@ -86,6 +86,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { formatFiniteNumber, toFiniteNumber } from '@/utils/safeNumber';
 
 const props = defineProps({
 	data: {
@@ -101,29 +102,30 @@ const props = defineProps({
 const hasData = computed(() => props.data && props.data.length > 0);
 
 const formatCurrency = (value) => {
-	if (value === null || value === undefined || isNaN(value)) return '—';
-	return new Intl.NumberFormat('ru-RU', {
+	const formatted = formatFiniteNumber(value, {
 		minimumFractionDigits: 2,
-		maximumFractionDigits: 2
-	}).format(value) + ' ₽';
+		maximumFractionDigits: 2,
+	});
+	return formatted === '—' ? formatted : formatted + ' ₽';
 };
 
 const formatNumber = (value) => {
-	if (value === null || value === undefined || isNaN(value)) return '—';
-	return new Intl.NumberFormat('ru-RU').format(Math.round(value));
+	const numeric = toFiniteNumber(value);
+	return numeric === null ? '—' : formatFiniteNumber(Math.round(numeric), { maximumFractionDigits: 0 });
 };
 
 const formatPercent = (value) => {
-	if (value === null || value === undefined || isNaN(value)) return '—';
-	return new Intl.NumberFormat('ru-RU', {
+	const formatted = formatFiniteNumber(value, {
 		minimumFractionDigits: 2,
-		maximumFractionDigits: 2
-	}).format(value) + '%';
+		maximumFractionDigits: 2,
+	});
+	return formatted === '—' ? formatted : formatted + '%';
 };
 
 // Подсветка процента выкупа
 const getBuyoutClass = (value) => {
-	if (value === null || value === undefined) return '';
+	value = toFiniteNumber(value);
+	if (value === null) return '';
 	if (value >= 50) return 'value-excellent';    // Отлично (зеленый)
 	if (value >= 40) return 'value-good';         // Хорошо (светло-зеленый)
 	if (value >= 30) return 'value-warning';      // Нормально (желтый)
@@ -132,7 +134,8 @@ const getBuyoutClass = (value) => {
 
 // Подсветка прибыли
 const getProfitClass = (value) => {
-	if (value === null || value === undefined) return '';
+	value = toFiniteNumber(value);
+	if (value === null) return '';
 	if (value > 0) return 'value-positive';       // Положительная (зеленый)
 	if (value > -1000) return 'value-warning';    // Небольшой убыток (желтый)
 	return 'value-negative';                      // Убыток (красный)
@@ -140,7 +143,8 @@ const getProfitClass = (value) => {
 
 // Подсветка маржинальности
 const getMarginClass = (value) => {
-	if (value === null || value === undefined) return '';
+	value = toFiniteNumber(value);
+	if (value === null) return '';
 	if (value >= 60) return 'value-excellent';    // Отлично
 	if (value >= 40) return 'value-good';         // Хорошо
 	if (value >= 20) return 'value-warning';      // Нормально
@@ -149,7 +153,8 @@ const getMarginClass = (value) => {
 
 // Подсветка рентабельности
 const getProfitabilityClass = (value) => {
-	if (value === null || value === undefined) return '';
+	value = toFiniteNumber(value);
+	if (value === null) return '';
 	if (value >= 100) return 'value-excellent';   // Отлично
 	if (value >= 50) return 'value-good';         // Хорошо
 	if (value >= 20) return 'value-warning';      // Нормально
