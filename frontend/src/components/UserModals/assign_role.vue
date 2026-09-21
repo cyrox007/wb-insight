@@ -37,10 +37,16 @@ async function loadRoles() {
 		if (response.data?.status !== 'success' || !Array.isArray(response.data?.roles)) {
 			throw new Error('Некорректный ответ API ролей')
 		}
-		rolesList.value = response.data.roles.map((role) => ({
-			value: role,
-			label: ROLE_LABELS[role] || role
-		}))
+		rolesList.value = response.data.roles.map((role) => {
+			const code = typeof role === 'string' ? role : role?.code
+			return {
+				value: code,
+				label: ROLE_LABELS[code] || code,
+				permissions: typeof role === 'object' && Array.isArray(role.permissions)
+					? role.permissions
+					: []
+			}
+		}).filter((role) => Boolean(role.value))
 	} catch (error) {
 		console.error('Ошибка загрузки списка ролей:', error)
 		rolesList.value = []
