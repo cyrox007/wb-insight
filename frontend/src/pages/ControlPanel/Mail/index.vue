@@ -737,7 +737,7 @@ onMounted(async () => {
 				<div class="deliverability-grid">
 					<div :class="{ ok: meta.gateway?.deliverability?.tls }"><strong>STARTTLS</strong><span>{{ meta.gateway?.deliverability?.tls ? 'Включён' : 'Требует настройки' }}</span></div>
 					<div :class="{ ok: meta.gateway?.deliverability?.sender_identity }"><strong>From identity</strong><span>{{ meta.gateway?.deliverability?.sender_identity ? 'Настроен' : 'Требует настройки' }}</span></div>
-					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : 'Нужны URL + HMAC key' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : 'Нужны MAIL_UNSUBSCRIBE_BASE_URL + HMAC key' }}</span></div>
 					<div :class="{ ok: meta.gateway?.deliverability?.reply_to_configured }"><strong>Reply-To</strong><span>{{ meta.gateway?.deliverability?.reply_to_configured ? 'Настроен' : 'Рекомендуется' }}</span></div>
 					<div class="external"><strong>SPF</strong><span>Проверить DNS</span></div>
 					<div class="external"><strong>DKIM</strong><span>Включить у SMTP-провайдера</span></div>
@@ -746,7 +746,7 @@ onMounted(async () => {
 				</div>
 				<div class="cp-info-callout">
 					<strong>Для маркетинговых писем приложение добавляет служебные заголовки автоматически.</strong>
-					<span>Date, Message-ID, Reply-To, List-ID, List-Unsubscribe, List-Unsubscribe-Post и Precedence: bulk. Транзакционные письма подтверждения и recovery не помечаются как bulk.</span>
+					<span>Date, Message-ID, Reply-To, List-ID, List-Unsubscribe, List-Unsubscribe-Post и Precedence: bulk. Транзакционные письма подтверждения и recovery не помечаются как bulk. Безопасная подпись отписки задаётся на сервере через MAIL_UNSUBSCRIBE_HMAC_KEY.</span>
 				</div>
 			</section>
 
