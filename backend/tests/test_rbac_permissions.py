@@ -211,6 +211,30 @@ def test_control_panel_routes_enforce_granular_permissions():
         "mail:read",
         "mail:write",
     }
+    assert _route_permissions(
+        mail_router,
+        "/control-panel/mail/gateway",
+        "PUT",
+    ) == {
+        "mail:read",
+        "mail:write",
+    }
+    assert _route_permissions(
+        mail_router,
+        "/control-panel/mail/gateway/test",
+        "POST",
+    ) == {
+        "mail:read",
+        "mail:write",
+    }
+    assert _route_permissions(
+        mail_router,
+        "/control-panel/mail/campaigns/{campaign_id}",
+        "PUT",
+    ) == {
+        "mail:read",
+        "mail:write",
+    }
 
     assert _route_permissions(
         operations_router,
