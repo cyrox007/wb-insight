@@ -85,7 +85,7 @@ def _reject_sensitive_target(response: Response) -> dict:
 async def get_users(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    user_list = await get_user_list(db_session)
+    user_list = await get_user_list(db_session, limit=None)
     return response_success(user_list=[_user_to_dict(user) for user in user_list])
 
 
