@@ -216,6 +216,11 @@ defineEmits(['retry'])
   to { transform: translateX(100%); }
 }
 
+:global(.dashboard-page) > .dashboard-state {
+  width: 100%;
+  margin-inline: 0;
+}
+
 @media (max-width: 900px) {
   .dashboard-skeleton__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
