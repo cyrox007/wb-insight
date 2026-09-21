@@ -150,19 +150,19 @@ const handleClick = (event) => {
 }
 
 .btn-primary:hover:not(:disabled):not(.btn-loading) {
-	background-color: #2980b9;
-	border-color: #2980b9;
+	background-color: var(--secondary-hover);
+	border-color: var(--secondary-hover);
 }
 
 .btn-secondary {
-	background-color: #6c757d;
-	border-color: #6c757d;
+	background-color: #667085;
+	border-color: #667085;
 	color: white;
 }
 
 .btn-secondary:hover:not(:disabled):not(.btn-loading) {
-	background-color: #5a6268;
-	border-color: #545b62;
+	background-color: #596174;
+	border-color: #596174;
 }
 
 .btn-success {
@@ -172,8 +172,8 @@ const handleClick = (event) => {
 }
 
 .btn-success:hover:not(:disabled):not(.btn-loading) {
-	background-color: #27ae60;
-	border-color: #229954;
+	background-color: #116c50;
+	border-color: #116c50;
 }
 
 .btn-danger {
@@ -183,8 +183,8 @@ const handleClick = (event) => {
 }
 
 .btn-danger:hover:not(:disabled):not(.btn-loading) {
-	background-color: #c0392b;
-	border-color: #b03a2e;
+	background-color: #ab3048;
+	border-color: #ab3048;
 }
 
 .btn-outline {
@@ -217,7 +217,7 @@ const handleClick = (event) => {
 
 .btn-link:hover:not(:disabled):not(.btn-loading) {
 	text-decoration: none;
-	color: #2980b9;
+	color: var(--secondary-hover);
 }
 
 /* Модификаторы */
