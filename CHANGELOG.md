@@ -18,6 +18,10 @@
 - Control Panel приведён к единому responsive UI pattern для overview/users/user-detail/roles/tariffs/payments/mail/audit, включая light/dark/reduced-motion и доступные segmented/filter controls;
 - UX acceptance расширен на role-aware staff states, lifecycle user-detail states и RuSender gateway; Release integrity теперь self-test-ит этот контракт;
 - добавлен provider-neutral IMAP helper для real-mail acceptance: credentials только через environment, mailbox read-only, наружу выдаётся только URL с `#token=`;
+- mail bootstrap для `MAIL_CONFIG_SOURCE=auto` переведён на DB-first runtime semantics: placeholder ENV fallback больше не блокирует запуск, если реальный encrypted provider настроен из Control Panel; verification/recovery readiness отображаются отдельно;
+- backend release warnings дочищены: современный SQLAlchemy declarative import, реальный PostgreSQL application_name, уникальные OpenAPI operation IDs для Sber callback и корректный CI JWT secret;
+- release smoke получил authenticated mail-gateway preflight: проверяет effective provider, transport readiness и отдельно readiness email verification/password recovery до real-mail lifecycle;
+- staff account profile отделён от seller-настроек: сотрудники больше не видят тариф/WB-подключения/себестоимость/расходы в своём основном профиле, seller-функции остаются во вторичном analytics workspace;
 - dev-first release flow закреплён: рабочие ветки идут в `dev`, а `main` принимает только release/release-candidate promotion;
 - self-hosted CI переведён на consolidated validation и защищён от повторного накопления PostgreSQL anonymous volumes/CI images;
 - frontend package metadata и lockfile синхронизированы с каноническим `VERSION`.

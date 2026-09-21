@@ -7,7 +7,7 @@
 ## 0.9.0-beta.1 — P40 exact candidate
 
 **Candidate branch:** `dev`.  
-**Статус:** code-side candidate актуализирован через P45; production-like P40 evidence ещё не выполнен, immutable tag не создаётся.
+**Статус:** code-side candidate актуализирован через P50; production-like P40 evidence ещё не выполнен, immutable tag не создаётся.
 
 В candidate вошёл весь code-side hardening поверх `0.9.0-alpha.11`:
 
@@ -24,6 +24,10 @@
 - payment test/live isolation и условный Sber sandbox merchant proof;
 - human-reviewed desktop/mobile UX evidence contract, включая staff-role states, user lifecycle states и RuSender gateway;
 - provider-neutral IMAP inbox helper для real-mail acceptance без вывода message body/credentials в evidence;
+- DB-first mail bootstrap в `auto` mode с runtime fail-closed fallback diagnostics и отдельной readiness-индикацией verification/recovery;
+- authenticated mail-gateway preflight в release smoke до real-mail acceptance;
+- staff account profile отделён от seller-only WB/tariff/COGS/expenses UX;
+- backend release warnings очищены без изменения billing semantics;
 - dev-first integration/release promotion flow;
 - CI/release integrity hardening.
 
@@ -33,7 +37,11 @@
 - **#120 / P42** — RuSender HTTPS mail provider, merge `cf11b3c60cb24b74ce7dd9f1dc615bca6848343f`;
 - **#121 / P43** — password recovery hardening, merge `560322d264bde219338498cdb076e920de2ab9c9`;
 - **#122 / P44** — Control Panel UI/RBAC UX unification, merge `f9d775e25a49df765d7839b42bcd15f8b60976e1`;
-- **#123 / P45** — current P40 acceptance contract + built-in IMAP hook, merge `2ba4120c97bf8aa215d13922cd9c800d6e3da476`.
+- **#123 / P45** — current P40 acceptance contract + built-in IMAP hook, merge `2ba4120c97bf8aa215d13922cd9c800d6e3da476`;
+- **#125 / P47** — DB-first mail bootstrap + auth-mail readiness diagnostics, merge `cf40d2738a3ac9028936a7c6a65e35e9fd6811fe`;
+- **#126 / P48** — backend release warning cleanup, merge `aafac5564c4d4b1dcbb708f5787df56f8e499061`;
+- **#127 / P49** — mail readiness preflight in release smoke, merge `46e08f966b0862dc523de718e4a20bc49eea3bdb`;
+- **#128 / P50** — role-aware staff profile, merge `0118ce67e4bf79e7cbdffd285381ed48e668a991`.
 
 Это milestone candidate, а не объявление опубликованного релиза. `v0.9.0-beta.1` допускается только после полного P40 evidence manifest со статусом `complete` и promotion `dev -> main` без новых функциональных изменений.
 
