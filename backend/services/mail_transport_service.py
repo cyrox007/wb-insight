@@ -166,7 +166,7 @@ async def get_mail_transport_runtime(
     provider = str(row.provider or "smtp").lower()
     return MailTransportRuntime(
         MAIL_PROVIDER=provider,
-        MAIL_DELIVERY_ENABLED=bool(row.enabled),
+        MAIL_DELIVERY_ENABLED=(bool(row.enabled) if provider == "smtp" else False),
         SMTP_HOST=str(row.host or "") if provider == "smtp" else "",
         SMTP_PORT=int(row.port),
         SMTP_USERNAME=str(secrets.get("username") or "") or None,
@@ -294,8 +294,10 @@ async def upsert_mail_transport(
         row.starttls = provider == "smtp"
         existing = {}
 
-    if "enabled" in values:
-        row.enabled = bool(values["enabled"]) if provider == "smtp" else False
+    if provider == "rusender":
+        row.enabled = False
+    elif "enabled" in values:
+        row.enabled = bool(values["enabled"])
 
     if "from_email" in values:
         from_email = str(values.get("from_email") or "").strip().lower()
