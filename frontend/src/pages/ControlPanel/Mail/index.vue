@@ -692,7 +692,7 @@ onMounted(async () => {
 					<div class="gateway-status-head">
 						<div>
 							<p class="cp-eyebrow">Транспорт</p>
-							<h3>SMTP</h3>
+							<h3>{{ meta.gateway?.provider === 'rusender' ? 'RuSender API' : 'SMTP' }}</h3>
 						</div>
 						<span class="cp-chip" :class="meta.gateway?.ready ? 'cp-chip--active' : 'cp-chip--inactive'">
 							{{ meta.gateway?.ready ? 'Готов' : 'Не готов' }}
@@ -700,19 +700,47 @@ onMounted(async () => {
 					</div>
 					<dl>
 						<div><dt>Источник</dt><dd>{{ meta.gateway?.source || '—' }}</dd></div>
-						<div><dt>Кампании</dt><dd>{{ meta.gateway?.enabled ? 'Разрешены' : 'Выключены' }}</dd></div>
+						<div><dt>Системная почта</dt><dd>{{ meta.gateway?.ready ? 'Готова' : 'Не готова' }}</dd></div>
+						<div><dt>Кампании</dt><dd>{{ meta.gateway?.marketing_ready ? 'Готовы' : 'Выключены' }}</dd></div>
 						<div><dt>Credentials</dt><dd>{{ meta.gateway?.credentials_configured ? 'Настроены' : 'Не настроены' }}</dd></div>
-						<div><dt>Пользователь</dt><dd>{{ meta.gateway?.username_hint || '—' }}</dd></div>
+						<div v-if="meta.gateway?.provider === 'rusender'"><dt>Key ID</dt><dd>{{ meta.gateway?.key_id || '—' }}</dd></div>
+						<div v-else><dt>Пользователь</dt><dd>{{ meta.gateway?.username_hint || '—' }}</dd></div>
 					</dl>
-					<p class="cp-card-note">Один шлюз используется для пользовательских кампаний и системной почты. Переключатель кампаний не отключает подтверждение email и recovery, если эти функции включены отдельно. Пароль после сохранения обратно в браузер не возвращается.</p>
+					<p v-if="meta.gateway?.provider === 'rusender'" class="cp-card-note">
+						RuSender работает по HTTPS и не зависит от исходящих SMTP-портов хостера. Этот адаптер сейчас используется для подтверждения email, recovery и системных писем. Маркетинговые кампании через него намеренно не включаются.
+					</p>
+					<p v-else class="cp-card-note">
+						SMTP используется и для системной почты, и для пользовательских кампаний. Пароль после сохранения обратно в браузер не возвращается.
+					</p>
 				</article>
 
 				<form v-if="canManage && meta.gateway?.editable" class="cp-card gateway-form" @submit.prevent="saveGateway">
 					<div class="gateway-form-head">
 						<div><p class="cp-eyebrow">Настройка</p><h3>Почтовый шлюз</h3></div>
-						<label class="switch-line"><input v-model="gatewayForm.enabled" type="checkbox"> Разрешить пользовательские кампании</label>
 					</div>
-					<div class="gateway-fields">
+
+					<div class="provider-choice" role="radiogroup" aria-label="Тип почтового транспорта">
+						<label :class="{ active: gatewayForm.provider === 'rusender' }">
+							<input v-model="gatewayForm.provider" type="radio" value="rusender">
+							<span><strong>RuSender API</strong><small>HTTPS :443 · системные письма</small></span>
+						</label>
+						<label :class="{ active: gatewayForm.provider === 'smtp' }">
+							<input v-model="gatewayForm.provider" type="radio" value="smtp">
+							<span><strong>SMTP</strong><small>Классический почтовый шлюз</small></span>
+						</label>
+					</div>
+
+					<div v-if="gatewayForm.provider === 'rusender'" class="gateway-fields">
+						<label class="wide"><span>API endpoint</span><input value="https://api.rusender.ru" disabled></label>
+						<label><span>Key ID</span><input v-model.trim="gatewayForm.key_id" inputmode="numeric" placeholder="15074"></label>
+						<label><span>Timeout, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
+						<label><span>Имя отправителя</span><input v-model.trim="gatewayForm.from_name" maxlength="160" placeholder="WB Insight"></label>
+						<label><span>Email отправителя</span><input v-model.trim="gatewayForm.from_email" type="email" placeholder="no-reply@mail.jsinteractive.ru"></label>
+						<label class="wide"><span>API token</span><input v-model="gatewayForm.api_token" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && meta.gateway?.provider === 'rusender' ? 'Пусто = оставить текущий токен' : 'rs_ck_v1_…'"></label>
+						<label class="switch-line wide danger-toggle"><input v-model="gatewayForm.clear_credentials" type="checkbox"> Очистить сохранённый API token</label>
+					</div>
+
+					<div v-else class="gateway-fields">
 						<label class="wide"><span>SMTP host</span><input v-model.trim="gatewayForm.host" placeholder="smtp.provider.ru"></label>
 						<label><span>Port</span><input v-model.number="gatewayForm.port" type="number" min="1" max="65535"></label>
 						<label><span>Timeout, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
@@ -720,14 +748,23 @@ onMounted(async () => {
 						<label><span>Email отправителя</span><input v-model.trim="gatewayForm.from_email" type="email" placeholder="news@jsinteractive.ru"></label>
 						<label class="wide"><span>Reply-To</span><input v-model.trim="gatewayForm.reply_to_email" type="email" placeholder="support@jsinteractive.ru"></label>
 						<label class="switch-line wide"><input v-model="gatewayForm.starttls" type="checkbox"> Использовать STARTTLS</label>
-						<label><span>Логин</span><input v-model.trim="gatewayForm.username" autocomplete="off" :placeholder="meta.gateway?.credentials_configured ? 'Пусто = оставить текущий' : 'SMTP username'"></label>
-						<label><span>Пароль</span><input v-model="gatewayForm.password" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured ? 'Пусто = оставить текущий' : 'SMTP password'"></label>
+						<label><span>Логин</span><input v-model.trim="gatewayForm.username" autocomplete="off" :placeholder="meta.gateway?.credentials_configured && meta.gateway?.provider === 'smtp' ? 'Пусто = оставить текущий' : 'SMTP username'"></label>
+						<label><span>Пароль</span><input v-model="gatewayForm.password" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && meta.gateway?.provider === 'smtp' ? 'Пусто = оставить текущий' : 'SMTP password'"></label>
 						<label class="switch-line wide danger-toggle"><input v-model="gatewayForm.clear_credentials" type="checkbox"> Очистить сохранённые credentials</label>
+						<label class="switch-line wide"><input v-model="gatewayForm.enabled" type="checkbox"> Разрешить пользовательские кампании</label>
 					</div>
+
 					<div class="cp-info-callout">
 						<strong>Секреты хранятся зашифрованно.</strong>
-						<span>Пароль SMTP шифруется сервером ключом приложения и никогда не возвращается через API после сохранения.</span>
+						<span v-if="gatewayForm.provider === 'rusender'">API token шифруется сервером и после сохранения никогда не возвращается в браузер. Для текущего ключа отправки укажите Key ID 15074 и адрес на домене mail.jsinteractive.ru.</span>
+						<span v-else>Пароль SMTP шифруется сервером ключом приложения и никогда не возвращается через API после сохранения.</span>
 					</div>
+
+					<div v-if="gatewayForm.provider === 'rusender'" class="cp-info-callout">
+						<strong>Кампании пока остаются на SMTP-транспорте.</strong>
+						<span>Транзакционный RuSender API документирует только X-* custom headers, поэтому мы не заявляем через него RFC 8058 one-click unsubscribe. Verification/recovery и системные письма работают через RuSender уже сейчас.</span>
+					</div>
+
 					<div class="editor-actions">
 						<BaseButton type="submit" variant="primary" text="Сохранить шлюз" loading-text="Сохраняем…" :loading="gatewayBusy" />
 					</div>
@@ -735,7 +772,7 @@ onMounted(async () => {
 
 				<div v-else-if="canManage" class="cp-card gateway-form">
 					<div class="cp-info-callout">
-						<strong>SMTP сейчас управляется переменными окружения.</strong>
+						<strong>Почтовый транспорт сейчас управляется переменными окружения.</strong>
 						<span>Чтобы редактировать шлюз из панели, установите <code>MAIL_CONFIG_SOURCE=auto</code> или <code>MAIL_CONFIG_SOURCE=database</code> и перезапустите backend.</span>
 					</div>
 				</div>
