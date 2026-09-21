@@ -51,6 +51,8 @@ async def test_mail_transport_payload_never_returns_password(monkeypatch):
         SMTP_USERNAME="mailer-user",
         SMTP_PASSWORD="super-secret",
         SMTP_FROM_EMAIL="no-reply@example.net",
+        SMTP_FROM_NAME="WB Insight",
+        SMTP_REPLY_TO_EMAIL="support@example.net",
         SMTP_STARTTLS=True,
         SMTP_TIMEOUT_SECONDS=10,
         source="database",
@@ -62,6 +64,16 @@ async def test_mail_transport_payload_never_returns_password(monkeypatch):
 
     monkeypatch.setattr(transport, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(transport.lifecycle_config, "MAIL_CONFIG_SOURCE", "auto")
+    monkeypatch.setattr(
+        transport.lifecycle_config,
+        "MAIL_UNSUBSCRIBE_BASE_URL",
+        "https://app.example.net/api/account/mail/unsubscribe",
+    )
+    monkeypatch.setattr(
+        transport.lifecycle_config,
+        "MAIL_UNSUBSCRIBE_HMAC_KEY",
+        "x" * 40,
+    )
 
     payload = await transport.mail_transport_payload(object())
 
@@ -69,6 +81,10 @@ async def test_mail_transport_payload_never_returns_password(monkeypatch):
     assert payload["username_hint"] != "mailer-user"
     assert "password" not in payload
     assert "super-secret" not in str(payload)
+    assert payload["from_name"] == "WB Insight"
+    assert payload["reply_to_email"] == "support@example.net"
+    assert payload["marketing_ready"] is True
+    assert payload["deliverability"]["one_click_unsubscribe"] is True
 
 
 class _FakeSession:
@@ -151,3 +167,15 @@ async def test_production_mail_transport_requires_starttls(monkeypatch):
                 "password": "smtp-password",
             },
         )
+
+
+
+def test_marketing_document_contains_visible_unsubscribe_link():
+    url = "https://app.example.net/api/account/mail/unsubscribe/signed-token"
+    document = render_mail_document(
+        "<h2>Новости</h2><p>Текст письма.</p>",
+        unsubscribe_url=url,
+    )
+
+    assert url in document
+    assert "Отписаться от маркетинговых писем" in document
