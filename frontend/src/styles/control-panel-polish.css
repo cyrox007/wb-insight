@@ -1,10 +1,6 @@
 /* Final code-side polish for the administrative shell.
    Keep overrides scoped to .cp-shell so customer-facing flows stay untouched. */
 
-.cp-shell {
-  color-scheme: light;
-}
-
 .cp-shell .cp-nav {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;

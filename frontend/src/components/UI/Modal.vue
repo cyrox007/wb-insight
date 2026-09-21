@@ -144,7 +144,7 @@ onBeforeUnmount(restorePreviousFocus)
 	right: 0;
 	bottom: 0;
 	padding: 16px;
-	background-color: rgba(24, 33, 58, 0.36);
+	background-color: var(--overlay-bg);
 	backdrop-filter: blur(4px);
 	display: flex;
 	align-items: center;

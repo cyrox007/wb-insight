@@ -7,11 +7,13 @@ import LoginModal from './components/CustomModals/AuthModals/LoginModal.vue'
 import RegistrationModal from './components/CustomModals/AuthModals/RegistrationModal.vue'
 import DashboardAccountSelect from './components/DashboardAccountSelect.vue'
 import { useDashboardAccount } from './composables/dashboardAccount.js'
+import { useTheme } from './composables/theme.js'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const { selectedTokenId, dashboardVersion } = useDashboardAccount()
+const { isDark, toggleTheme } = useTheme()
 
 const navItems = [
   { name: 'dashboard.home', label: 'Обзор' },
@@ -80,6 +82,22 @@ const logout = async () => {
       </nav>
 
       <div class="header-actions">
+        <button
+          class="theme-toggle"
+          type="button"
+          :aria-label="isDark ? 'Включить светлую тему' : 'Включить тёмную тему'"
+          :title="isDark ? 'Светлая тема' : 'Тёмная тема'"
+          @click="toggleTheme"
+        >
+          <svg v-if="isDark" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.25" />
+            <path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 15.4A8.3 8.3 0 0 1 8.6 4 8.5 8.5 0 1 0 20 15.4Z" />
+          </svg>
+        </button>
+
         <details v-if="isAuthenticated && user" class="user-menu">
           <summary class="user-menu__trigger" aria-label="Меню пользователя">
             <span class="avatar" aria-hidden="true">{{ user.full_name?.charAt(0) || user.email?.charAt(0) || 'U' }}</span>
@@ -148,32 +166,32 @@ const logout = async () => {
   top: 0;
   z-index: 50;
   border-bottom: 1px solid rgba(99, 91, 255, 0.1);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--header-bg);
   backdrop-filter: blur(16px);
 }
 
 .app-header--landing {
   border-bottom-color: rgba(99, 91, 255, 0.1);
-  background: rgba(255, 255, 255, 0.88);
-  color: #14213d;
+  background: var(--header-bg-soft);
+  color: var(--text-color);
 }
 
 .app-header--landing .brand__name {
-  color: #14213d;
+  color: var(--text-color);
 }
 
 .app-header--landing .brand__badge {
-  color: #635bff;
+  color: var(--secondary-color);
   border-color: rgba(99, 91, 255, 0.22);
 }
 
 .app-header--landing .button--ghost {
-  color: #3a425a;
-  border-color: #e1e3ef;
+  color: var(--text-color);
+  border-color: var(--border-color);
 }
 
 .app-header--landing .button--ghost:hover {
-  background: #f5f5ff;
+  background: var(--hover-bg);
 }
 
 .landing-header-nav {
@@ -182,7 +200,7 @@ const logout = async () => {
   gap: 24px;
   margin-left: auto;
   margin-right: 24px;
-  color: #697086;
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 700;
 }
@@ -192,7 +210,7 @@ const logout = async () => {
 }
 
 .landing-header-nav a:hover {
-  color: #635bff;
+  color: var(--secondary-color);
 }
 
 .app-header__inner {
@@ -234,7 +252,7 @@ const logout = async () => {
   padding: 2px 6px;
   border: 1px solid rgba(99, 91, 255, 0.22);
   border-radius: 6px;
-  color: #5b52d6;
+  color: var(--secondary-color);
   font-size: 10px;
   font-weight: 700;
 }
@@ -244,6 +262,38 @@ const logout = async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.theme-toggle {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--medium-bg);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition), transform var(--transition);
+}
+
+.theme-toggle:hover {
+  color: var(--secondary-color);
+  border-color: color-mix(in srgb, var(--secondary-color) 36%, var(--border-color));
+  background: var(--hover-bg);
+  transform: translateY(-1px);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .button {
@@ -305,8 +355,8 @@ const logout = async () => {
   display: grid;
   place-items: center;
   border-radius: 9px;
-  background: #eceaff;
-  color: #5b52d6;
+  background: var(--hover-bg);
+  color: var(--secondary-color);
   font-weight: 700;
 }
 
@@ -390,7 +440,7 @@ const logout = async () => {
   gap: 16px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--header-bg-soft);
   box-shadow: var(--shadow-sm);
 }
 
@@ -415,8 +465,8 @@ const logout = async () => {
 }
 
 .workspace-nav__item--active {
-  color: #4f46c8;
-  background: rgba(99, 91, 255, 0.1);
+  color: var(--secondary-color);
+  background: color-mix(in srgb, var(--secondary-color) 11%, transparent);
 }
 
 .workspace-account {

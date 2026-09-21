@@ -783,11 +783,11 @@ onMounted(async () => {
 .subscription-chip span { color: var(--text-muted); font-size: 11px; }
 .subscription-chip strong { font-size: 12px; }
 .subscription-chip button { grid-column: 1 / -1; margin-top: 5px; padding: 6px; border: 0; border-radius: 7px; background: var(--hover-bg); color: var(--text-color); cursor: pointer; }
-.settings-tabs { margin: 20px 0 12px; padding: 5px; display: flex; gap: 4px; overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--radius); background: rgba(255,255,255,.88); }
+.settings-tabs { margin: 20px 0 12px; padding: 5px; display: flex; gap: 4px; overflow-x: auto; border: 1px solid var(--border-color); border-radius: var(--radius); background: var(--header-bg-soft); }
 .settings-tabs button { padding: 9px 13px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); white-space: nowrap; font-weight: 650; cursor: pointer; }
 .settings-tabs button:hover { color: var(--text-color); background: var(--hover-bg); }
 .settings-tabs button.active { color: #4f46c8; background: rgba(99,91,255,.11); }
-.settings-card { padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,255,.98)); box-shadow: var(--shadow-sm); }
+.settings-card { padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: linear-gradient(180deg, var(--card-bg-elevated), var(--card-bg)); box-shadow: var(--shadow-sm); }
 .settings-stack { display: flex; flex-direction: column; gap: 12px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .section-heading h2 { margin-top: 2px; font-size: 18px; }
