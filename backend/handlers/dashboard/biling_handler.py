@@ -31,6 +31,7 @@ from services.payment_service import (
     record_payment_event,
     safe_sber_provider_data,
 )
+from services.tariff_service import get_missing_required_limits
 from services.subscription_service import (
     create_subscription,
     deactivate_active_subscriptions,
@@ -170,6 +171,15 @@ async def create_payment_handler(
     if tariff is None:
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="TARIFF_NOT_FOUND", message="Тариф не найден")
+
+    missing_limits = await get_missing_required_limits(db_session, tariff.id)
+    if missing_limits:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="TARIFF_NOT_READY",
+            message="Тариф временно недоступен: конфигурация ограничений неполная",
+            missing_limits=missing_limits,
+        )
 
     amount = Decimal(tariff.price_rub)
     if amount <= 0:
