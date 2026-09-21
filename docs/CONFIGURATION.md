@@ -94,6 +94,17 @@ Seller credentials проходят отдельную validation policy. См. 
 
 Production activation запрещена до merchant onboarding и smoke. Подробно: [`SBER_ACQUIRING.md`](SBER_ACQUIRING.md).
 
+## Восстановление доступа
+
+Password recovery включается отдельно от маркетинговой почты:
+
+- `PASSWORD_RESET_ENABLED=true` — включает публичный recovery flow;
+- `PASSWORD_RESET_BASE_URL` — HTTPS-страница `/reset-password`;
+- `PASSWORD_RESET_TOKEN_TTL_MINUTES` — срок жизни одноразовой ссылки;
+- `PASSWORD_RESET_RESEND_SECONDS` — минимальный интервал между письмами восстановления для одного аккаунта.
+
+Endpoint не раскрывает существование аккаунта: одинаковый успешный ответ возвращается для неизвестного, неактивного, неподтверждённого и throttled адреса. Одноразовый token создаётся только worker-ом непосредственно перед отправкой письма, в БД хранится только SHA-256 digest, а после смены пароля `session_version` отзывают ранее выданные сессии.
+
 ## Почтовый транспорт
 
 WB Insight поддерживает два транспорта:
