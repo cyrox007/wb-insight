@@ -8,7 +8,7 @@ def test_password_reset_secret_is_kept_in_url_fragment(monkeypatch):
     monkeypatch.setattr(
         lifecycle_config,
         "PASSWORD_RESET_BASE_URL",
-        "https://app.example.com/reset-password",
+        "https://app.jsinteractive.ru/reset-password",
     )
 
     url = mail_service._password_reset_url("secret-token")
@@ -24,8 +24,10 @@ def test_production_password_recovery_requires_starttls(monkeypatch):
         "PASSWORD_RESET_BASE_URL",
         "https://app.example.com/reset-password",
     )
-    monkeypatch.setattr(lifecycle_config, "SMTP_HOST", "smtp.example.com")
-    monkeypatch.setattr(lifecycle_config, "SMTP_FROM_EMAIL", "no-reply@example.com")
+    monkeypatch.setattr(lifecycle_config, "MAIL_CONFIG_SOURCE", "environment")
+    monkeypatch.setattr(lifecycle_config, "MAIL_PROVIDER", "smtp")
+    monkeypatch.setattr(lifecycle_config, "SMTP_HOST", "smtp.mail-provider.ru")
+    monkeypatch.setattr(lifecycle_config, "SMTP_FROM_EMAIL", "no-reply@jsinteractive.ru")
     monkeypatch.setattr(lifecycle_config, "SMTP_STARTTLS", False)
     monkeypatch.setattr(lifecycle_config, "SMTP_USERNAME", None)
     monkeypatch.setattr(lifecycle_config, "SMTP_PASSWORD", None)
