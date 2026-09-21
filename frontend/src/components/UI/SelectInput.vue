@@ -32,24 +32,25 @@ defineProps({
 
 .ui-label {
 	font-size: 13px;
-	color: #666;
+	color: var(--text-muted);
 }
 
 .ui-select {
 	padding: 10px 12px;
 	border-radius: 8px;
-	border: 1px solid #ddd;
+	border: 1px solid var(--border-color);
 	font-size: 14px;
-	background: #fff;
+	background: var(--medium-bg);
+	color: var(--text-color);
 }
 
 .ui-select:disabled {
-	background: #f5f5f5;
+	background: var(--dark-bg);
 	cursor: not-allowed;
 }
 
 .ui-error {
-	color: #ff4d4f;
+	color: var(--danger-color);
 	font-size: 12px;
 }
 </style>
