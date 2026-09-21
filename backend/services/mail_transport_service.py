@@ -36,6 +36,7 @@ class MailTransportRuntime:
     RUSENDER_KEY_ID: str | None = None
     RUSENDER_API_TOKEN: str | None = None
     RUSENDER_TIMEOUT_SECONDS: float = 10.0
+    diagnostic_code: str | None = None
 
     @property
     def credentials_configured(self) -> bool:
@@ -97,6 +98,30 @@ async def get_mail_provider_config(
     return result.scalar_one_or_none()
 
 
+def _unconfigured_runtime(
+    *,
+    source: str,
+    provider: str = "smtp",
+    diagnostic_code: str | None = None,
+) -> MailTransportRuntime:
+    return MailTransportRuntime(
+        MAIL_PROVIDER=provider if provider in _SUPPORTED_PROVIDERS else "smtp",
+        MAIL_DELIVERY_ENABLED=False,
+        SMTP_HOST="",
+        SMTP_PORT=587,
+        SMTP_USERNAME=None,
+        SMTP_PASSWORD=None,
+        SMTP_FROM_EMAIL="",
+        SMTP_FROM_NAME="WB Insight",
+        SMTP_REPLY_TO_EMAIL=None,
+        SMTP_STARTTLS=True,
+        SMTP_TIMEOUT_SECONDS=10.0,
+        RUSENDER_API_BASE_URL=_DEFAULT_RUSENDER_API_BASE_URL,
+        source=source,
+        diagnostic_code=diagnostic_code,
+    )
+
+
 def _environment_runtime() -> MailTransportRuntime:
     provider = lifecycle_config.MAIL_PROVIDER
     return MailTransportRuntime(
@@ -125,46 +150,41 @@ async def get_mail_transport_runtime(
     source_mode = lifecycle_config.MAIL_CONFIG_SOURCE
     row = await get_mail_provider_config(session) if source_mode != "environment" else None
 
-    if source_mode == "environment" or (source_mode == "auto" and row is None):
+    if source_mode == "environment":
+        return _environment_runtime()
+
+    if source_mode == "auto" and row is None:
         runtime = _environment_runtime()
-        if source_mode == "auto" and not runtime.ready:
-            return MailTransportRuntime(
-                MAIL_PROVIDER=runtime.MAIL_PROVIDER,
-                MAIL_DELIVERY_ENABLED=False,
-                SMTP_HOST="",
-                SMTP_PORT=587,
-                SMTP_USERNAME=None,
-                SMTP_PASSWORD=None,
-                SMTP_FROM_EMAIL="",
-                SMTP_FROM_NAME="WB Insight",
-                SMTP_REPLY_TO_EMAIL=None,
-                SMTP_STARTTLS=True,
-                SMTP_TIMEOUT_SECONDS=10.0,
-                RUSENDER_API_BASE_URL=_DEFAULT_RUSENDER_API_BASE_URL,
+        if not runtime.ready:
+            return _unconfigured_runtime(
                 source="unconfigured",
+                provider=runtime.MAIL_PROVIDER,
+                diagnostic_code="environment_fallback_incomplete",
+            )
+        try:
+            # Startup validation deliberately cannot inspect DB configuration.
+            # Once runtime selection knows DB has no provider row, validate the
+            # environment fallback before it becomes effective.
+            lifecycle_config._validate_mail_transport(
+                production=config.IS_PRODUCTION,
+            )
+        except RuntimeError:
+            return _unconfigured_runtime(
+                source="unconfigured",
+                provider=runtime.MAIL_PROVIDER,
+                diagnostic_code="environment_fallback_invalid",
             )
         return runtime
 
     if row is None:
-        return MailTransportRuntime(
-            MAIL_PROVIDER="smtp",
-            MAIL_DELIVERY_ENABLED=False,
-            SMTP_HOST="",
-            SMTP_PORT=587,
-            SMTP_USERNAME=None,
-            SMTP_PASSWORD=None,
-            SMTP_FROM_EMAIL="",
-            SMTP_FROM_NAME="WB Insight",
-            SMTP_REPLY_TO_EMAIL=None,
-            SMTP_STARTTLS=True,
-            SMTP_TIMEOUT_SECONDS=10.0,
-            RUSENDER_API_BASE_URL=_DEFAULT_RUSENDER_API_BASE_URL,
+        return _unconfigured_runtime(
             source="database",
+            diagnostic_code="database_transport_missing",
         )
 
     secrets = _read_secrets(row)
     provider = str(row.provider or "smtp").lower()
-    return MailTransportRuntime(
+    runtime = MailTransportRuntime(
         MAIL_PROVIDER=provider,
         MAIL_DELIVERY_ENABLED=(bool(row.enabled) if provider == "smtp" else False),
         SMTP_HOST=str(row.host or "") if provider == "smtp" else "",
@@ -187,6 +207,14 @@ async def get_mail_transport_runtime(
         source="database",
         updated_at=row.updated_at.isoformat() if row.updated_at else None,
     )
+    if not runtime.ready:
+        return MailTransportRuntime(
+            **{
+                **runtime.__dict__,
+                "diagnostic_code": "database_transport_incomplete",
+            }
+        )
+    return runtime
 
 
 async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
@@ -239,6 +267,31 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
         "updated_at": runtime.updated_at,
         "config_source": lifecycle_config.MAIL_CONFIG_SOURCE,
         "editable": lifecycle_config.MAIL_CONFIG_SOURCE in {"auto", "database"},
+        "diagnostic_code": runtime.diagnostic_code,
+        "system_mail": {
+            "email_verification": {
+                "enabled": lifecycle_config.EMAIL_VERIFICATION_ENABLED,
+                "base_url_configured": bool(lifecycle_config.EMAIL_VERIFICATION_BASE_URL),
+                "ready": bool(
+                    runtime.ready
+                    and lifecycle_config.EMAIL_VERIFICATION_ENABLED
+                    and lifecycle_config.EMAIL_VERIFICATION_BASE_URL
+                ),
+                "ttl_minutes": lifecycle_config.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES,
+                "resend_seconds": lifecycle_config.EMAIL_VERIFICATION_RESEND_SECONDS,
+            },
+            "password_reset": {
+                "enabled": lifecycle_config.PASSWORD_RESET_ENABLED,
+                "base_url_configured": bool(lifecycle_config.PASSWORD_RESET_BASE_URL),
+                "ready": bool(
+                    runtime.ready
+                    and lifecycle_config.PASSWORD_RESET_ENABLED
+                    and lifecycle_config.PASSWORD_RESET_BASE_URL
+                ),
+                "ttl_minutes": lifecycle_config.PASSWORD_RESET_TOKEN_TTL_MINUTES,
+                "resend_seconds": lifecycle_config.PASSWORD_RESET_RESEND_SECONDS,
+            },
+        },
         "deliverability": {
             "tls": bool(
                 runtime.MAIL_PROVIDER == "rusender"
