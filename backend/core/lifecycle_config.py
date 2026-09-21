@@ -26,6 +26,7 @@ class LifecycleConfig:
     PASSWORD_RESET_ENABLED = os.getenv("PASSWORD_RESET_ENABLED", "false").lower() == "true"
     PASSWORD_RESET_BASE_URL = os.getenv("PASSWORD_RESET_BASE_URL", "").strip()
     PASSWORD_RESET_TOKEN_TTL_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_TTL_MINUTES", "30"))
+    PASSWORD_RESET_RESEND_SECONDS = int(os.getenv("PASSWORD_RESET_RESEND_SECONDS", "60"))
 
     EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "false").lower() == "true"
     EMAIL_VERIFICATION_BASE_URL = os.getenv("EMAIL_VERIFICATION_BASE_URL", "").strip()
@@ -142,6 +143,8 @@ class LifecycleConfig:
     def validate(self, *, production: bool) -> None:
         if self.PASSWORD_RESET_TOKEN_TTL_MINUTES <= 0:
             raise RuntimeError("PASSWORD_RESET_TOKEN_TTL_MINUTES must be positive")
+        if self.PASSWORD_RESET_RESEND_SECONDS <= 0:
+            raise RuntimeError("PASSWORD_RESET_RESEND_SECONDS must be positive")
         if self.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES <= 0:
             raise RuntimeError("EMAIL_VERIFICATION_TOKEN_TTL_MINUTES must be positive")
         if self.EMAIL_VERIFICATION_RESEND_SECONDS <= 0:

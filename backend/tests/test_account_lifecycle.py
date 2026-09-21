@@ -266,6 +266,7 @@ async def test_password_reset_request_does_not_disclose_account_existence(monkey
 @pytest.mark.asyncio
 async def test_password_reset_request_queues_transactional_mail_without_raw_token(monkeypatch):
     monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_ENABLED", True)
+    monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_RESEND_SECONDS", 60)
     monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "EMAIL_VERIFICATION_ENABLED", False)
 
     async def ready_transport(_session):
@@ -307,8 +308,48 @@ async def test_password_reset_request_queues_transactional_mail_without_raw_toke
     assert payload["status"] == "success"
     assert queued["user"] is user
     assert queued["template_code"] == "password_reset"
+    assert queued["idempotency_key"].startswith(f"password-reset:{USER_ID}:")
     assert "token" not in queued
     assert session.rollbacks == 0
+
+
+@pytest.mark.asyncio
+async def test_password_reset_request_is_throttled_without_disclosing_state(monkeypatch):
+    monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_ENABLED", True)
+    monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_RESEND_SECONDS", 60)
+    monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "EMAIL_VERIFICATION_ENABLED", False)
+
+    async def ready_transport(_session):
+        return SimpleNamespace(ready=True)
+
+    async def existing_user(_session, _email):
+        return SimpleNamespace(
+            id=USER_ID,
+            email="seller@example.com",
+            is_active=True,
+            email_verified_at=None,
+        )
+
+    async def must_not_queue(*_args, **_kwargs):
+        raise AssertionError("throttled password reset must not queue another email")
+
+    monkeypatch.setattr(account_lifecycle_handler, "get_mail_transport_runtime", ready_transport)
+    monkeypatch.setattr(account_lifecycle_handler, "get_user_by_email", existing_user)
+    monkeypatch.setattr(account_lifecycle_handler, "queue_transactional_email", must_not_queue)
+
+    session = _FakeSession([_Result(uuid4())])
+    response = Response()
+    payload = await account_lifecycle_handler.request_password_reset(
+        _request(
+            "/auth/password-reset/request",
+            body=b'{"email":"seller@example.com"}',
+        ),
+        response,
+        session,
+    )
+
+    assert payload["status"] == "success"
+    assert "Если активный аккаунт" in payload["message"]
 
 
 @pytest.mark.asyncio

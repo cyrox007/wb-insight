@@ -1,6 +1,6 @@
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
@@ -51,6 +51,7 @@ async def request_password_reset(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
+    request.state.audit_action = "auth.password_reset.request"
     if not lifecycle_config.PASSWORD_RESET_ENABLED:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return response_error(code="PASSWORD_RECOVERY_NOT_CONFIGURED", message="Восстановление доступа временно недоступно")
@@ -79,13 +80,35 @@ async def request_password_reset(
         )
     )
     if verified_for_recovery:
-        # The worker creates the one-time reset token only immediately before SMTP
-        # delivery. Raw reset secrets therefore never live in the durable mail queue.
-        await queue_transactional_email(
-            db_session,
-            user=user,
-            template_code="password_reset",
+        # Keep recovery anti-enumeration while preventing a public endpoint from
+        # becoming an inbox-spam amplifier. The response is intentionally
+        # identical whether the account exists, is ineligible, or is throttled.
+        cutoff = datetime.now(timezone.utc) - timedelta(
+            seconds=lifecycle_config.PASSWORD_RESET_RESEND_SECONDS
         )
+        recent = await db_session.execute(
+            select(MailMessage.id)
+            .where(
+                MailMessage.user_id == user.id,
+                MailMessage.template_code == "password_reset",
+                MailMessage.created_at >= cutoff,
+            )
+            .limit(1)
+        )
+        if recent.scalar_one_or_none() is None:
+            bucket = int(
+                datetime.now(timezone.utc).timestamp()
+                // lifecycle_config.PASSWORD_RESET_RESEND_SECONDS
+            )
+            # The worker creates the one-time reset token only immediately before
+            # provider delivery. Raw reset secrets therefore never live in the
+            # durable mail queue or audit trail.
+            await queue_transactional_email(
+                db_session,
+                user=user,
+                template_code="password_reset",
+                idempotency_key=f"password-reset:{user.id}:{bucket}",
+            )
 
     return response_success(message="Если активный аккаунт с таким email существует, письмо отправлено")
 
@@ -96,6 +119,7 @@ async def confirm_password_reset(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
+    request.state.audit_action = "auth.password_reset.confirm"
     body = await request.json()
     raw_token = str(body.get("token") or "").strip()
     new_password = str(body.get("new_password") or "")
