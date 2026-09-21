@@ -151,7 +151,7 @@ async function openLogin() {
   padding: 28px 16px;
   background:
     radial-gradient(circle at 18% 10%, color-mix(in srgb, var(--secondary-color) 10%, transparent), transparent 26rem),
-    var(--bg-color);
+    var(--dark-bg);
 }
 
 .recovery-card {
@@ -160,7 +160,7 @@ async function openLogin() {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   background: var(--card-bg);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow);
 }
 
 .recovery-heading {
