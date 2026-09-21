@@ -234,6 +234,15 @@ async def test_access_token_current_session_version_is_accepted(monkeypatch):
 async def test_password_reset_request_does_not_disclose_account_existence(monkeypatch):
     monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_ENABLED", True)
 
+    async def ready_transport(_session):
+        return SimpleNamespace(ready=True)
+
+    monkeypatch.setattr(
+        account_lifecycle_handler,
+        "get_mail_transport_runtime",
+        ready_transport,
+    )
+
     async def missing_user(_session, _email):
         return None
 
@@ -258,6 +267,15 @@ async def test_password_reset_request_does_not_disclose_account_existence(monkey
 async def test_password_reset_request_queues_transactional_mail_without_raw_token(monkeypatch):
     monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "PASSWORD_RESET_ENABLED", True)
     monkeypatch.setattr(account_lifecycle_handler.lifecycle_config, "EMAIL_VERIFICATION_ENABLED", False)
+
+    async def ready_transport(_session):
+        return SimpleNamespace(ready=True)
+
+    monkeypatch.setattr(
+        account_lifecycle_handler,
+        "get_mail_transport_runtime",
+        ready_transport,
+    )
     user = SimpleNamespace(
         id=USER_ID,
         email="seller@example.com",
