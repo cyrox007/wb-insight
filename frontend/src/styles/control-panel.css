@@ -21,7 +21,7 @@
 }
 
 .cp-eyebrow {
-  color: #a78bfa;
+  color: #6259d9;
   font-size: 11px;
   font-weight: 750;
   letter-spacing: 0.08em;
@@ -51,7 +51,7 @@
   overflow-x: auto;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background: rgba(24, 33, 46, 0.78);
+  background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow-sm);
 }
 
@@ -75,9 +75,9 @@
 }
 
 .cp-nav__link.router-link-active {
-  color: #ede9fe;
+  color: #4f46c8;
   border-color: rgba(167, 139, 250, 0.28);
-  background: rgba(124, 58, 237, 0.18);
+  background: rgba(91, 82, 214, 0.09);
 }
 
 .cp-page {
@@ -179,7 +179,7 @@
 }
 
 .cp-shortcut-card__action {
-  color: #c4b5fd;
+  color: #5b52d6;
   font-size: 13px;
   font-weight: 700;
 }
@@ -192,15 +192,15 @@
   border: 1px dashed var(--border-color);
   border-radius: var(--radius);
   color: var(--text-muted);
-  background: rgba(21, 28, 39, 0.55);
+  background: rgba(247, 249, 253, 0.96);
   text-align: center;
 }
 
 .cp-state--error {
   border-style: solid;
   border-color: rgba(251, 113, 133, 0.3);
-  color: #fecdd3;
-  background: rgba(127, 29, 29, 0.12);
+  color: #b4233f;
+  background: rgba(180, 35, 63, 0.07);
 }
 
 .cp-state__stack {
@@ -237,7 +237,7 @@
 .cp-table td {
   padding: 14px;
   color: var(--text-color);
-  border-bottom: 1px solid rgba(43, 57, 75, 0.72);
+  border-bottom: 1px solid rgba(205, 213, 225, 0.86);
   vertical-align: middle;
   font-size: 14px;
 }
@@ -251,7 +251,7 @@
 }
 
 .cp-table tbody tr:hover {
-  background: rgba(34, 47, 64, 0.72);
+  background: rgba(99, 91, 255, 0.055);
 }
 
 .cp-table__toolbar {
@@ -283,8 +283,8 @@
   place-items: center;
   border: 1px solid rgba(167, 139, 250, 0.25);
   border-radius: 999px;
-  color: #ede9fe;
-  background: rgba(124, 58, 237, 0.18);
+  color: #4f46c8;
+  background: rgba(91, 82, 214, 0.09);
   font-size: 13px;
   font-weight: 750;
 }
@@ -305,8 +305,8 @@
   overflow: hidden;
   border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 7px;
-  color: #bfdbfe;
-  background: rgba(30, 64, 175, 0.12);
+  color: #3568a8;
+  background: rgba(53, 104, 168, 0.08);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   text-overflow: ellipsis;
@@ -335,33 +335,33 @@
 .cp-chip--active,
 .cp-chip--success {
   border-color: rgba(52, 211, 153, 0.24);
-  color: #a7f3d0;
-  background: rgba(6, 95, 70, 0.16);
+  color: #16805f;
+  background: rgba(22, 128, 95, 0.08);
 }
 
 .cp-chip--inactive,
 .cp-chip--danger {
   border-color: rgba(251, 113, 133, 0.24);
-  color: #fecdd3;
-  background: rgba(127, 29, 29, 0.14);
+  color: #b4233f;
+  background: rgba(180, 35, 63, 0.07);
 }
 
 .cp-chip--info {
   border-color: rgba(96, 165, 250, 0.24);
-  color: #bfdbfe;
-  background: rgba(30, 64, 175, 0.14);
+  color: #3568a8;
+  background: rgba(53, 104, 168, 0.08);
 }
 
 .cp-chip--warning {
   border-color: rgba(251, 191, 36, 0.24);
-  color: #fde68a;
-  background: rgba(146, 64, 14, 0.14);
+  color: #a66b08;
+  background: rgba(166, 107, 8, 0.08);
 }
 
 .cp-chip--accent {
   border-color: rgba(167, 139, 250, 0.26);
-  color: #ddd6fe;
-  background: rgba(124, 58, 237, 0.16);
+  color: #5b52d6;
+  background: rgba(91, 82, 214, 0.09);
 }
 
 .cp-icon-button {
@@ -385,8 +385,8 @@
 
 .cp-icon-button--danger:hover {
   border-color: rgba(251, 113, 133, 0.36);
-  color: #fecdd3;
-  background: rgba(127, 29, 29, 0.16);
+  color: #b4233f;
+  background: rgba(180, 35, 63, 0.08);
 }
 
 .cp-detail-card {
@@ -424,9 +424,9 @@
 .cp-info-item {
   min-width: 0;
   padding: 14px;
-  border: 1px solid rgba(43, 57, 75, 0.72);
+  border: 1px solid rgba(205, 213, 225, 0.86);
   border-radius: var(--radius-sm);
-  background: rgba(21, 28, 39, 0.6);
+  background: rgba(247, 249, 253, 0.96);
 }
 
 .cp-info-value {
@@ -484,7 +484,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 14px;
-  border: 1px solid rgba(43, 57, 75, 0.72);
+  border: 1px solid rgba(205, 213, 225, 0.86);
   border-radius: var(--radius-sm);
   background: var(--medium-bg);
   transition: background var(--transition), border-color var(--transition);
@@ -512,7 +512,7 @@
 }
 
 .cp-price {
-  color: #a7f3d0;
+  color: #16805f;
   font-size: 24px;
   font-weight: 760;
   letter-spacing: -0.03em;
@@ -563,7 +563,7 @@
 .cp-description-box {
   margin-top: 16px;
   padding: 14px;
-  border: 1px solid rgba(43, 57, 75, 0.72);
+  border: 1px solid rgba(205, 213, 225, 0.86);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   background: var(--medium-bg);
