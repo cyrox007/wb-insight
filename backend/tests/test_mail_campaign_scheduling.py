@@ -61,6 +61,7 @@ def _campaign(status=CampaignStatus.DRAFT.value):
         segment={},
         subject="Тест",
         body="Сообщение",
+        body_html="<p>Сообщение</p>",
         audience_count=0,
         queued_count=0,
         sent_count=0,
@@ -113,6 +114,7 @@ async def test_launch_campaign_is_idempotent_for_existing_recipient(monkeypatch)
     created = [item for item in first.added if isinstance(item, MailMessage)]
     assert len(created) == 1
     assert created[0].idempotency_key == f"campaign:{campaign.id}:{user.id}"
+    assert created[0].body_html == "<p>Сообщение</p>"
     assert campaign.queued_count == 1
     assert campaign.status == CampaignStatus.QUEUED.value
 
