@@ -1,27 +1,42 @@
 # WB Insight — подробная история версий
 
-Дата полной ревизии: 18 сентября 2026 года.
+Дата полной ревизии: 21 сентября 2026 года.
 
 Документ фиксирует продуктовые milestones, а не каждый commit. Версии до введения formal release policy являются ретроспективно реконструированными и не означают наличие соответствующего Git tag.
 
 ## 0.9.0-beta.1 — P40 exact candidate
 
 **Candidate branch:** `dev`.  
-**Статус:** подготовлен к consolidated CI и production-like acceptance; immutable tag ещё не создаётся.
+**Статус:** code-side candidate актуализирован через P45; production-like P40 evidence ещё не выполнен, immutable tag не создаётся.
 
-В candidate вошёл весь code-side P40 hardening поверх `0.9.0-alpha.11`:
+В candidate вошёл весь code-side hardening поверх `0.9.0-alpha.11`:
 
 - public production API contract через nginx `/api`;
 - strict VERSION/commit/environment binding release evidence;
 - production-like database upgrade, backup/restore и deployment evidence tooling;
-- real-mail account lifecycle/audit smoke contract;
+- verified email identity + durable provider-neutral transactional mail;
+- native RuSender HTTPS transactional provider с encrypted bearer token, idempotency и retry classification;
+- password recovery с anti-enumeration, resend throttle, digest-only one-time token и session-version rotation;
+- role-aware staff workspace для `super_admin/admin/manager/support/analyst` с least-privilege backend permissions;
+- расширенная карточка пользователя и audited manual verification/reactivation/session revocation;
+- единый responsive Control Panel UI/RBAC UX;
 - live-WB credential validation/cleanup + seller-bound data-accuracy provenance;
 - payment test/live isolation и условный Sber sandbox merchant proof;
-- human-reviewed desktop/mobile UX evidence contract;
+- human-reviewed desktop/mobile UX evidence contract, включая staff-role states, user lifecycle states и RuSender gateway;
+- provider-neutral IMAP inbox helper для real-mail acceptance без вывода message body/credentials в evidence;
 - dev-first integration/release promotion flow;
-- self-hosted CI hardening против PostgreSQL anonymous-volume и CI image accumulation.
+- CI/release integrity hardening.
+
+Ключевые post-baseline PR:
+
+- **#119 / P41** — role-aware staff workspace + расширенное user administration;
+- **#120 / P42** — RuSender HTTPS mail provider, merge `cf11b3c60cb24b74ce7dd9f1dc615bca6848343f`;
+- **#121 / P43** — password recovery hardening, merge `560322d264bde219338498cdb076e920de2ab9c9`;
+- **#122 / P44** — Control Panel UI/RBAC UX unification, merge `f9d775e25a49df765d7839b42bcd15f8b60976e1`;
+- **#123 / P45** — current P40 acceptance contract + built-in IMAP hook, merge `2ba4120c97bf8aa215d13922cd9c800d6e3da476`.
 
 Это milestone candidate, а не объявление опубликованного релиза. `v0.9.0-beta.1` допускается только после полного P40 evidence manifest со статусом `complete` и promotion `dev -> main` без новых функциональных изменений.
+
 
 ## 0.1.0-alpha.1 — реконструкция проекта
 
@@ -279,13 +294,13 @@ Release integrity exact-head P35 прошёл полностью зелёным:
 
 Допускается только после:
 
-- feature freeze WB Web v1 на текущем `0.9.0-alpha.11` baseline и отсутствия известных необработанных code-side blockers;
+- feature freeze WB Web v1 на exact current `dev` candidate и отсутствия известных необработанных code-side blockers;
 - production-like HTTPS deployment из repo с реальными non-placeholder secrets/hosts;
 - systemd backend/Celery/Beat фактически работают из Python 3.12 environment, frontend build — на поддерживаемом Node;
 - clean-tree deploy/rollback evidence;
 - фактического core release smoke, включая disposable registration/demo/legal evidence;
-- реального SMTP/recovery и account-lifecycle smoke;
-- desktop/mobile UX smoke и secrets review;
+- реального RuSender verification/recovery и account-lifecycle smoke;
+- desktop/mobile client + role-aware staff + Control Panel UX smoke и secrets review;
 - data-accuracy acceptance на реальном WB seller account: все policy-required metrics, `missing=0`, tolerance overrides только с `override_reason`;
 - отсутствия необъяснённых существенных денежных расхождений;
 - сохранённого beta release-evidence manifest v2 для exact `*-beta.N` commit.
