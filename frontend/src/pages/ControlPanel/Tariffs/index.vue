@@ -18,6 +18,8 @@ const confirmDialog = ref({
 	onConfirm: null
 })
 
+const isSystemTariff = (tariff) => String(tariff?.code || '').toLowerCase() === 'demo'
+
 onMounted(loadTariffs)
 
 async function loadTariffs() {
@@ -44,7 +46,7 @@ function closeConfirm() {
 }
 
 function toggleActive(tariff) {
-	if (actionLoading.value) return
+	if (actionLoading.value || isSystemTariff(tariff)) return
 	const newStatus = !tariff.is_active
 	const action = newStatus ? 'активировать' : 'деактивировать'
 
@@ -118,7 +120,10 @@ async function handleConfirm() {
 						<p class="cp-eyebrow">Тариф</p>
 						<h3 class="cp-tariff-card__name">{{ tariff.name }}</h3>
 					</div>
-					<code class="cp-code">{{ tariff.code }}</code>
+					<div class="cp-chip-row">
+						<span v-if="isSystemTariff(tariff)" class="cp-chip cp-chip--info">Системный</span>
+						<code class="cp-code">{{ tariff.code }}</code>
+					</div>
 				</div>
 
 				<p class="cp-tariff-card__description">{{ tariff.description || 'Описание не добавлено.' }}</p>
@@ -127,11 +132,18 @@ async function handleConfirm() {
 				<div class="cp-tariff-card__footer">
 					<div class="cp-chip-row">
 						<span class="cp-chip" :class="tariff.is_active ? 'cp-chip--active' : 'cp-chip--inactive'">{{ tariff.is_active ? 'Активен' : 'Неактивен' }}</span>
+						<span class="cp-chip" :class="tariff.is_public ? 'cp-chip--active' : 'cp-chip--inactive'">{{ tariff.is_public ? 'Публичный' : 'Скрытый' }}</span>
 					</div>
 					<div class="cp-divider"></div>
 					<div class="cp-actions">
 						<BaseButton variant="outline" size="small" text="Редактировать" :disabled="actionLoading" @click="$router.push({ name: 'control-panel.edit-tariff', params: { id: tariff.id } })" />
-						<BaseButton :variant="tariff.is_active ? 'danger' : 'success'" size="small" :text="tariff.is_active ? 'Деактивировать' : 'Активировать'" :disabled="actionLoading" @click="toggleActive(tariff)" />
+						<BaseButton
+							:variant="tariff.is_active ? 'danger' : 'success'"
+							size="small"
+							:text="isSystemTariff(tariff) ? 'Системный тариф' : (tariff.is_active ? 'Деактивировать' : 'Активировать')"
+							:disabled="actionLoading || isSystemTariff(tariff)"
+							@click="toggleActive(tariff)"
+						/>
 					</div>
 				</div>
 			</article>
