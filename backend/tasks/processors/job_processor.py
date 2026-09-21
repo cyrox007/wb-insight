@@ -36,6 +36,11 @@ class PermanentSyncJobError(RuntimeError):
     """The same job payload/account should not be retried unchanged."""
 
 
+def _auth_error_rejects_credential(exc: WBAuthError) -> bool:
+    """Only an explicit 401 from WB proves that the stored credential is bad."""
+    return exc.status_code == 401
+
+
 def _is_retryable(exc: Exception) -> bool:
     if isinstance(
         exc,
@@ -121,12 +126,19 @@ async def process_job(session: AsyncSession, job: SyncJob) -> None:
 
     try:
         await call_wb_api(session=session, token=token, job=job)
-    except WBAuthError:
-        token.is_active = False
-        state.last_error = (
-            "Ошибка авторизации: подключение недействительно или истекло. "
-            "Обновите кабинет Wildberries в настройках."
-        )
+    except WBAuthError as exc:
+        if _auth_error_rejects_credential(exc):
+            token.is_active = False
+            token.is_revoked = True
+            state.last_error = (
+                "Ошибка авторизации: подключение отозвано или недействительно. "
+                "Обновите кабинет Wildberries в настройках."
+            )
+        else:
+            state.last_error = (
+                "Синхронизация остановлена из-за серверной конфигурации "
+                "авторизации Wildberries. Подключение пользователя не отключено."
+            )
         raise
 
     if job.entity in {"orders", "sales"}:
@@ -164,22 +176,31 @@ async def _record_failure(
         logger.exception("Unable to update sync state after job failure id=%s", job.id)
 
     if isinstance(exc, WBAuthError):
+        credential_rejected = _auth_error_rejects_credential(exc)
         token = await get_token_by_id(session, job.token_id)
-        if token is not None:
+        if token is not None and credential_rejected:
             token.is_active = False
+            token.is_revoked = True
         if state is not None:
             state.last_error = (
-                "Ошибка авторизации: подключение недействительно или истекло. "
+                "Ошибка авторизации: подключение отозвано или недействительно. "
                 "Обновите кабинет Wildberries в настройках."
+                if credential_rejected
+                else (
+                    "Синхронизация остановлена из-за серверной конфигурации "
+                    "авторизации Wildberries. Подключение пользователя не отключено."
+                )
             )
         await fail_job(session, job, error_text, now=now)
         logger.warning(
-            "[JOB %s] WB authorization rejected user=%s token=%s entity=%s status=%s",
+            "[JOB %s] WB authorization failure user=%s token=%s entity=%s "
+            "status=%s credential_rejected=%s",
             job.id,
             job.user_id,
             job.token_id,
             job.entity,
             exc.status_code,
+            credential_rejected,
         )
         return
 
