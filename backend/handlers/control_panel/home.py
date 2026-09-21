@@ -50,6 +50,39 @@ async def _account_health(db_session: AsyncSession) -> dict[str, int]:
     }
 
 
+async def _client_health(db_session: AsyncSession) -> dict[str, int]:
+    """Seller/client account health, explicitly excluding internal staff accounts."""
+    result = await db_session.execute(
+        select(
+            func.count(User.id).filter(User.is_staff.is_(False)).label("total"),
+            func.count(User.id).filter(
+                User.is_staff.is_(False),
+                User.is_active.is_(True),
+            ).label("active"),
+            func.count(User.id).filter(
+                User.is_staff.is_(False),
+                User.is_active.is_(False),
+            ).label("inactive"),
+            func.count(User.id).filter(
+                User.is_staff.is_(False),
+                User.email_verified_at.is_not(None),
+            ).label("verified"),
+            func.count(User.id).filter(
+                User.is_staff.is_(False),
+                User.email_verified_at.is_(None),
+            ).label("unverified"),
+        )
+    )
+    row = result.one()
+    return {
+        "total": int(row.total or 0),
+        "active": int(row.active or 0),
+        "inactive": int(row.inactive or 0),
+        "verified": int(row.verified or 0),
+        "unverified": int(row.unverified or 0),
+    }
+
+
 async def _attention_summary(
     db_session: AsyncSession,
     *,
@@ -149,6 +182,7 @@ async def get_control_panel(
 ):
     permissions = set(getattr(request.state, "permissions", set()))
     account_health = await _account_health(db_session)
+    client_health = await _client_health(db_session)
     user_count = (
         await get_user_count(db_session)
         if Permission.USERS_READ.value in permissions
@@ -157,10 +191,11 @@ async def get_control_panel(
     return response_success(
         user_count=user_count,
         account_health=account_health,
+        client_health=client_health,
         attention=await _attention_summary(
             db_session,
             permissions=permissions,
-            account_health=account_health,
+            account_health=client_health,
         ),
         permissions=sorted(permissions),
     )

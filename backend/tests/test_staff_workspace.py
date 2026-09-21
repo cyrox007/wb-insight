@@ -1,9 +1,38 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 import pytest
 
 from core.access_control import Permission
 from handlers.control_panel import home
+
+
+@pytest.mark.asyncio
+async def test_client_health_explicitly_excludes_staff_accounts():
+    captured = {}
+
+    class FakeSession:
+        async def execute(self, statement):
+            captured["statement"] = str(statement)
+            row = SimpleNamespace(
+                total=12,
+                active=9,
+                inactive=3,
+                verified=8,
+                unverified=4,
+            )
+            return SimpleNamespace(one=lambda: row)
+
+    result = await home._client_health(FakeSession())  # type: ignore[arg-type]
+
+    assert result == {
+        "total": 12,
+        "active": 9,
+        "inactive": 3,
+        "verified": 8,
+        "unverified": 4,
+    }
+    assert "users.is_staff IS false" in captured["statement"]
 
 
 @pytest.mark.asyncio

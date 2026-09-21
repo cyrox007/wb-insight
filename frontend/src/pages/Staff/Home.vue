@@ -193,7 +193,7 @@ async function loadWorkspace() {
 		const response = await CP_Main.getControlPanel()
 		if (response.data?.status !== 'success') throw new Error('Некорректный ответ API')
 		permissions.value = Array.isArray(response.data?.permissions) ? response.data.permissions : []
-		health.value = { ...health.value, ...(response.data?.account_health || {}) }
+		health.value = { ...health.value, ...(response.data?.client_health || response.data?.account_health || {}) }
 		attention.value = response.data?.attention || {}
 	} catch (error) {
 		console.error('Ошибка загрузки рабочего стола сотрудника:', error)
@@ -229,24 +229,24 @@ onMounted(loadWorkspace)
 		<template v-else>
 			<section class="health-grid" aria-label="Состояние пользовательских аккаунтов">
 				<article>
-					<span>Всего аккаунтов</span>
+					<span>Клиенты</span>
 					<strong>{{ health.total }}</strong>
-					<small>Зарегистрировано в системе</small>
+					<small>Клиентских аккаунтов в системе</small>
 				</article>
 				<article>
 					<span>Активны</span>
 					<strong>{{ health.active }}</strong>
-					<small>Могут использовать сервис</small>
+					<small>Активные клиентские аккаунты</small>
 				</article>
 				<article>
 					<span>Без верификации</span>
 					<strong>{{ health.unverified }}</strong>
-					<small>Требуют подтверждения email</small>
+					<small>Клиенты ожидают подтверждения email</small>
 				</article>
 				<article>
 					<span>Деактивированы</span>
 					<strong>{{ health.inactive }}</strong>
-					<small>Доступ к аккаунту остановлен</small>
+					<small>Клиентский доступ остановлен</small>
 				</article>
 			</section>
 
