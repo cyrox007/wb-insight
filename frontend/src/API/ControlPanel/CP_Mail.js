@@ -1,6 +1,26 @@
 import $api from '..'
 
 export default class CP_Mail {
+	static async getMeta() {
+		return await $api.get('/control-panel/mail/meta')
+	}
+
+	static async getGateway() {
+		return await $api.get('/control-panel/mail/gateway')
+	}
+
+	static async updateGateway(payload) {
+		return await $api.put('/control-panel/mail/gateway', payload)
+	}
+
+	static async testGateway(email) {
+		return await $api.post('/control-panel/mail/gateway/test', { email })
+	}
+
+	static async previewAudience(segment) {
+		return await $api.post('/control-panel/mail/audience/preview', { segment })
+	}
+
 	static async getCampaigns(params = {}) {
 		return await $api.get('/control-panel/mail/campaigns', { params })
 	}
@@ -11,6 +31,10 @@ export default class CP_Mail {
 
 	static async createCampaign(payload) {
 		return await $api.post('/control-panel/mail/campaigns', payload)
+	}
+
+	static async updateCampaign(id, payload) {
+		return await $api.put(`/control-panel/mail/campaigns/${id}`, payload)
 	}
 
 	static async previewCampaign(id) {

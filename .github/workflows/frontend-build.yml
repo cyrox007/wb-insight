@@ -57,5 +57,8 @@ jobs:
           grep -F "localStorage.removeItem('access_token')" src/security/session.js
           grep -F "sessionStorage.removeItem('access_token')" src/security/session.js
 
+      - name: Verify Control Panel API client contracts
+        run: npm run check:api-contracts
+
       - name: Build
         run: npm run build
