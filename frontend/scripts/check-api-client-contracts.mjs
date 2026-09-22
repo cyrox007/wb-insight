@@ -71,6 +71,18 @@ const sessionIsolationChecks = [
   },
   {
     ok:
+      dashboardAccountSource.includes('if (loadingPromise && force)') &&
+      dashboardAccountSource.includes('stateGeneration += 1'),
+    message: 'Принудительное обновление должно инвалидировать незавершённый запрос предыдущего состояния.',
+  },
+  {
+    ok:
+      dashboardAccountSource.includes('token.connection_status') &&
+      dashboardAccountSource.includes("connectionStatus(token) === 'active'"),
+    message: 'Список аналитики должен использовать единый статус доступности подключения Wildberries.',
+  },
+  {
+    ok:
       dashboardAccountSource.includes("persistSelectedTokenId('')") &&
       dashboardAccountSource.includes('allWbAccounts.value = []') &&
       dashboardAccountSource.includes('accounts.value = []'),
