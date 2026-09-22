@@ -430,9 +430,11 @@ async def test_rusender_provider_uses_bearer_key_id_and_idempotency(monkeypatch)
         sender="no-reply@mail.jsinteractive.ru",
         sender_name="WB Insight",
         recipient="seller@example.org",
+        recipient_name="Иван",
         subject="Подтверждение email",
         body="Текст",
         html_body="<p>Текст</p>",
+        preview_title="Подтвердите email в WB Insight",
         idempotency_key="verify:abc",
         headers={"List-Unsubscribe": "<https://ignored.example>", "X-WB-Trace": "trace-1"},
     )
@@ -441,6 +443,8 @@ async def test_rusender_provider_uses_bearer_key_id_and_idempotency(monkeypatch)
     assert captured["headers"]["Authorization"] == "Bearer secret-token"
     assert captured["json"]["idempotencyKey"] == "verify:abc"
     assert captured["json"]["mail"]["from"]["email"] == "no-reply@mail.jsinteractive.ru"
+    assert captured["json"]["mail"]["to"]["name"] == "Иван"
+    assert captured["json"]["mail"]["previewTitle"] == "Подтвердите email в WB Insight"
     assert captured["json"]["mail"]["html"] == "<p>Текст</p>"
     assert captured["json"]["mail"]["text"] == "Текст"
     assert captured["json"]["mail"]["headers"] == {"X-WB-Trace": "trace-1"}
@@ -489,7 +493,7 @@ async def test_rusender_provider_accepts_201_created_with_uuid(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rusender_provider_rejects_2xx_without_uuid(monkeypatch):
+async def test_rusender_provider_treats_accepted_2xx_without_uuid_as_success(monkeypatch):
     class FakeResponse:
         status_code = 201
 
@@ -519,16 +523,55 @@ async def test_rusender_provider_rejects_2xx_without_uuid(monkeypatch):
         )
     )
 
-    with pytest.raises(RuSenderAPIError) as exc_info:
-        await provider.send(
-            sender="no-reply@mail.jsinteractive.ru",
-            recipient="seller@example.org",
-            subject="Test",
-            body="Text",
-        )
+    receipt = await provider.send(
+        sender="no-reply@mail.jsinteractive.ru",
+        recipient="seller@example.org",
+        subject="Test",
+        body="Text",
+    )
 
-    assert exc_info.value.code == "rusender_invalid_success_response"
-    assert exc_info.value.retryable is True
+    assert receipt.provider_message_id is None
+
+
+@pytest.mark.asyncio
+async def test_rusender_provider_treats_empty_204_as_accepted(monkeypatch):
+    class FakeResponse:
+        status_code = 204
+
+        def json(self):
+            raise ValueError("empty body")
+
+    class FakeClient:
+        def __init__(self, *, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr("integrations.mail.rusender.httpx.AsyncClient", FakeClient)
+    provider = RuSenderMailProvider(
+        SimpleNamespace(
+            RUSENDER_API_BASE_URL="https://api.rusender.ru",
+            RUSENDER_KEY_ID="15074",
+            RUSENDER_API_TOKEN="secret-token",
+            RUSENDER_TIMEOUT_SECONDS=10,
+        )
+    )
+
+    receipt = await provider.send(
+        sender="no-reply@mail.jsinteractive.ru",
+        recipient="seller@example.org",
+        subject="Test",
+        body="Text",
+    )
+
+    assert receipt.provider_message_id is None
 
 
 @pytest.mark.asyncio
