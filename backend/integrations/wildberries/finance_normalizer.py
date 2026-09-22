@@ -86,7 +86,7 @@ def normalize_finance_row(item: dict[str, Any], user_id: UUID, account_id: UUID)
     operation = text(pick(item, "sellerOperName", "supplierOperName", "supplier_oper_name"))
 
     if not rrd_id or not nm_id or rr_date is None or not operation:
-        raise ValueError("WB finance row is missing required identity fields")
+        raise ValueError("В финансовой строке Wildberries отсутствуют обязательные идентификаторы")
 
     return {
         "user_id": user_id,

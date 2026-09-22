@@ -38,7 +38,7 @@ def flatten_sales_funnel_history(
     user_id: UUID,
     token_id: UUID,
 ) -> list[dict[str, Any]]:
-    """Flatten WB Analytics v3 product history into one row per product/day."""
+    """Преобразует историю аналитики WB v3 в одну строку на товар и день."""
     rows: list[dict[str, Any]] = []
     now = datetime.now(timezone.utc)
 

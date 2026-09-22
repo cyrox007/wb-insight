@@ -47,7 +47,7 @@ class WBRateLimitError(WBAPIError):
 
 
 class WBClient:
-    """Wildberries HTTP client with bounded retry and distributed throttling."""
+    """HTTP-клиент Wildberries с ограниченными повторами и распределённым лимитированием."""
 
     def __init__(
         self,
@@ -88,7 +88,7 @@ class WBClient:
             service_secret = config.WB_SERVICE_SECRET
             if not service_secret:
                 raise WBAuthError(
-                    "Wildberries partner service secret is not configured",
+                    "Секрет партнёрского сервиса Wildberries не настроен",
                     endpoint="authorization",
                 )
             headers["X-Client-Secret"] = service_secret
@@ -171,13 +171,13 @@ class WBClient:
                 last_transport_error = exc
                 if attempt >= config.WB_API_MAX_ATTEMPTS:
                     raise WBAPIError(
-                        "Wildberries transport error after retry budget was exhausted",
+                        "Ошибка транспорта Wildberries после исчерпания попыток повтора",
                         endpoint=endpoint,
                     ) from exc
 
                 delay = self._backoff_seconds(attempt)
                 logger.warning(
-                    "WB transport error endpoint=%s attempt=%s/%s; retrying",
+                    "Ошибка транспорта Wildberries маршрут=%s попытка=%s/%s; выполняется повтор",
                     endpoint,
                     attempt,
                     config.WB_API_MAX_ATTEMPTS,
@@ -192,36 +192,36 @@ class WBClient:
 
             if response.status_code == 401:
                 logger.warning(
-                    "WB authorization rejected endpoint=%s status=%s",
+                    "Wildberries отклонил авторизацию маршрут=%s статус=%s",
                     endpoint,
                     response.status_code,
                 )
                 raise WBAuthError(
-                    "Wildberries authorization rejected the marketplace credential",
+                    "Wildberries отклонил учётные данные кабинета",
                     endpoint=endpoint,
                     status_code=response.status_code,
                 )
 
             if response.status_code == 402:
                 logger.warning(
-                    "WB feature unavailable endpoint=%s status=%s",
+                    "Функция Wildberries недоступна маршрут=%s статус=%s",
                     endpoint,
                     response.status_code,
                 )
                 raise WBFeatureUnavailableError(
-                    "Wildberries feature is unavailable for the current account plan",
+                    "Функция Wildberries недоступна на текущем тарифе кабинета",
                     endpoint=endpoint,
                     status_code=response.status_code,
                 )
 
             if response.status_code == 403:
                 logger.warning(
-                    "WB permission denied endpoint=%s status=%s",
+                    "Недостаточно прав Wildberries маршрут=%s статус=%s",
                     endpoint,
                     response.status_code,
                 )
                 raise WBPermissionError(
-                    "Wildberries credential lacks permission for this API category",
+                    "Токен Wildberries не имеет доступа к этой категории API",
                     endpoint=endpoint,
                     status_code=response.status_code,
                 )
@@ -239,13 +239,13 @@ class WBClient:
 
                 if attempt >= config.WB_API_MAX_ATTEMPTS:
                     raise WBRateLimitError(
-                        "Wildberries rate limit retry budget was exhausted",
+                        "Исчерпаны попытки повтора после ограничения частоты запросов Wildberries",
                         endpoint=endpoint,
                         status_code=429,
                     )
 
                 logger.warning(
-                    "WB rate limited endpoint=%s attempt=%s/%s cooldown=%.2fs",
+                    "Wildberries ограничил частоту запросов маршрут=%s попытка=%s/%s пауза=%.2fс",
                     endpoint,
                     attempt,
                     config.WB_API_MAX_ATTEMPTS,
@@ -257,14 +257,14 @@ class WBClient:
             if 500 <= response.status_code <= 599:
                 if attempt >= config.WB_API_MAX_ATTEMPTS:
                     raise WBAPIError(
-                        "Wildberries server error after retry budget was exhausted",
+                        "Ошибка сервера Wildberries после исчерпания попыток повтора",
                         endpoint=endpoint,
                         status_code=response.status_code,
                     )
 
                 delay = self._backoff_seconds(attempt)
                 logger.warning(
-                    "WB server error endpoint=%s status=%s attempt=%s/%s; retrying",
+                    "Ошибка сервера Wildberries маршрут=%s статус=%s попытка=%s/%s; выполняется повтор",
                     endpoint,
                     response.status_code,
                     attempt,
@@ -275,12 +275,12 @@ class WBClient:
 
             if not response.is_success:
                 logger.warning(
-                    "WB request rejected endpoint=%s status=%s",
+                    "Wildberries отклонил запрос маршрут=%s статус=%s",
                     endpoint,
                     response.status_code,
                 )
                 raise WBAPIError(
-                    "Wildberries API rejected the request",
+                    "API Wildberries отклонил запрос",
                     endpoint=endpoint,
                     status_code=response.status_code,
                 )
@@ -288,15 +288,15 @@ class WBClient:
             try:
                 return response.json()
             except ValueError as exc:
-                logger.warning("WB returned invalid JSON endpoint=%s", endpoint)
+                logger.warning("Wildberries вернул некорректный JSON маршрут=%s", endpoint)
                 raise WBAPIError(
-                    "Wildberries returned an invalid JSON response",
+                    "Wildberries вернул некорректный JSON-ответ",
                     endpoint=endpoint,
                     status_code=response.status_code,
                 ) from exc
 
         raise WBAPIError(
-            "Wildberries request failed",
+            "Запрос к Wildberries завершился ошибкой",
             endpoint=endpoint,
         ) from last_transport_error
 

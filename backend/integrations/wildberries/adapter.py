@@ -39,7 +39,7 @@ class WildberriesAdapter(MarketplaceAdapter):
         handler = self.handlers.get(job.entity)
         if handler is None:
             raise ValueError(
-                f"Unknown {self.marketplace.value} entity: {job.entity}"
+                f"Неизвестная сущность {self.marketplace.value}: {job.entity}"
             )
 
         await handler(session, job, token)

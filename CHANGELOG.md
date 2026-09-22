@@ -45,6 +45,7 @@
 - необработанные серверные ошибки получают единый безопасный ответ `500` с русским сообщением без внутренних деталей исключения;
 - системные сообщения, комментарии и описания в ядре БД, авторизации, доступа к кабинетам и семантических метрик переведены на русский язык; регрессионный тест блокирует возврат известных англоязычных фраз;
 - общая граница маркетплейсов, почтовые адаптеры RuSender/SMTP и клиент эквайринга Сбера приведены к русскому системному контракту; человекочитаемые исключения интеграций теперь формулируются по-русски, машинные коды провайдеров сохранены неизменными;
+- весь runtime-слой интеграции Wildberries — HTTP client, rate limiter, token metadata/live validation, endpoints и normalizer’ы — приведён к русскому системному контракту без изменения endpoint names, JWT claims и машинных error codes;
 - frontend package metadata и lockfile синхронизированы с каноническим `VERSION`.
 
 До фактического release обязательны consolidated exact-head CI, production-like deploy/rollback, real RuSender verification/recovery lifecycle, WB seller/data-accuracy, staff/client UX, secrets и backup/restore evidence, затем complete beta manifest.
