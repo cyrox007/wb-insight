@@ -55,8 +55,14 @@ for (const [clientName, clientPath] of Object.entries(clients)) {
 
 const dashboardAccountPath = path.join(root, 'composables/dashboardAccount.js')
 const appPath = path.join(root, 'App.vue')
+const apiPath = path.join(root, 'API/index.js')
+const authServicePath = path.join(root, 'API/AuthService.js')
+const authStorePath = path.join(root, 'stores/auth.js')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
+const apiSource = fs.readFileSync(apiPath, 'utf8')
+const authServiceSource = fs.readFileSync(authServicePath, 'utf8')
+const authStoreSource = fs.readFileSync(authStorePath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -99,6 +105,50 @@ const sessionIsolationChecks = [
 ]
 
 for (const check of sessionIsolationChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const authSessionRaceChecks = [
+  {
+    ok:
+      apiSource.includes('let sessionGeneration = 0') &&
+      apiSource.includes('requestGeneration !== sessionGeneration'),
+    message: 'Ответ обновления старого поколения сессии должен отбрасываться.',
+  },
+  {
+    ok:
+      apiSource.includes('let refreshPromise = null') &&
+      apiSource.includes('refreshPromise === requestPromise'),
+    message: 'Все refresh-запросы должны использовать единый promise без гонки очистки.',
+  },
+  {
+    ok:
+      apiSource.includes("const STALE_REFRESH_CODE = 'STALE_SESSION_REFRESH'") &&
+      apiSource.includes('isStaleSessionRefreshError(refreshError)'),
+    message: 'Устаревший refresh должен отличаться от реальной ошибки текущей сессии.',
+  },
+  {
+    ok:
+      apiSource.includes("'/auth/login'") &&
+      apiSource.includes("'/auth/logout'") &&
+      apiSource.includes('SESSION_REFRESH_EXCLUDED_ENDPOINTS.has(requestPath)'),
+    message: 'Login/logout и публичные auth-маршруты не должны запускать автоматический refresh после 401.',
+  },
+  {
+    ok:
+      authServiceSource.includes('invalidateSessionRefresh()') &&
+      /static async logout\(\)[\s\S]*?invalidateSessionRefresh\(\)[\s\S]*?\/auth\/logout/.test(authServiceSource),
+    message: 'Logout должен инвалидировать незавершённый refresh до серверного запроса.',
+  },
+  {
+    ok:
+      authStoreSource.includes('establishClientSession(accessToken)') &&
+      authStoreSource.includes('isStaleSessionRefreshError(error)'),
+    message: 'Новая login-сессия должна начинать новое поколение, а поздний restore не должен очищать её.',
+  },
+]
+
+for (const check of authSessionRaceChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
