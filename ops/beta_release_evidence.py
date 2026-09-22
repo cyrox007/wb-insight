@@ -54,6 +54,33 @@ def _artifact_path(artifacts: list[str], kind: str) -> Path:
     return matches[0]
 
 
+def _validate_beta_mail_gateway_binding(core_smoke_path: Path) -> None:
+    """Require the current P40 beta candidate to prove the RuSender auth-mail path."""
+    report = _load_json(core_smoke_path, label="core_smoke artifact")
+    checks = report.get("checks")
+    if not isinstance(checks, dict) or checks.get("mail_gateway_ready") is not True:
+        raise ValueError("beta core_smoke must prove authenticated mail gateway readiness")
+
+    gateway = report.get("mail_gateway")
+    if not isinstance(gateway, dict):
+        raise ValueError("beta core_smoke is missing sanitized mail gateway metadata")
+
+    provider = str(gateway.get("provider") or "").strip().lower()
+    expected_provider = str(gateway.get("expected_provider") or "").strip().lower()
+    if provider != "rusender" or expected_provider != "rusender":
+        raise ValueError(
+            "P40 beta mail evidence must pin and observe the RuSender provider"
+        )
+    if gateway.get("email_verification_ready") is not True:
+        raise ValueError("P40 beta mail evidence must prove email verification readiness")
+    if gateway.get("password_reset_ready") is not True:
+        raise ValueError("P40 beta mail evidence must prove password reset readiness")
+
+    source = str(gateway.get("source") or "").strip().lower()
+    if source not in {"database", "environment"}:
+        raise ValueError("P40 beta mail evidence has an invalid effective config source")
+
+
 def _validate_wb_live_binding(
     proof_path: Path,
     *,
@@ -193,7 +220,9 @@ def main() -> int:
         validate_version_for_stage(version, "beta")
         data_accuracy_path = _artifact_path(args.artifact, "data_accuracy")
         deployment_path = _artifact_path(args.artifact, "deployment")
+        core_smoke_path = _artifact_path(args.artifact, "core_smoke")
 
+        _validate_beta_mail_gateway_binding(core_smoke_path)
         validate_backup_restore_evidence(
             args.backup_restore_proof,
             version=version,
