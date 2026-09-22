@@ -988,6 +988,10 @@ def main() -> int:
         args.expected_mail_provider = str(args.expected_mail_provider).strip().lower()
         if args.expected_mail_provider not in {"smtp", "rusender"}:
             raise SmokeFailure("expected mail provider must be smtp or rusender")
+    if args.evidence_output and args.mail_gateway_smoke and not args.expected_mail_provider:
+        raise SmokeFailure(
+            "structured mail gateway evidence requires SMOKE_EXPECTED_MAIL_PROVIDER"
+        )
     if args.evidence_output:
         commit = str(args.commit or "").strip().lower()
         if len(commit) != 40 or any(char not in "0123456789abcdef" for char in commit):
