@@ -23,6 +23,7 @@ const {
   selectedTokenId,
   dashboardVersion,
   loadAccounts,
+  resetAccounts,
 } = useDashboardAccount()
 const { isDark, toggleTheme } = useTheme()
 
@@ -189,6 +190,7 @@ const logout = async () => {
     localStorage.removeItem('user')
     localStorage.removeItem('redirectPath')
     localStorage.removeItem('wb-dashboard-token-id')
+    resetAccounts()
     authStore.logout()
     await router.push('/')
   }
