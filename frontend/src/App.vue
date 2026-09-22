@@ -102,7 +102,9 @@ const dashboardAccountIssue = computed(() => {
 
   if ((counts.outside_tariff || 0) === tokens.length) {
     return {
-      title: 'Кабинет Wildberries вне лимита тарифа',
+      title: tokens.length > 1
+        ? 'Кабинеты Wildberries вне лимита тарифа'
+        : 'Кабинет Wildberries вне лимита тарифа',
       message: 'Подключение действует, но текущий тариф не даёт использовать этот кабинет в аналитике. Проверьте тариф или состав подключённых кабинетов.',
     }
   }
