@@ -2,6 +2,7 @@ import asyncio
 import smtplib
 import ssl
 from datetime import datetime, timezone
+from html import escape
 from email.message import EmailMessage
 from email.utils import format_datetime, formataddr, make_msgid
 
@@ -49,7 +50,16 @@ class SMTPMailProvider:
             message[name] = header_value
         message.set_content(body)
         if html_body:
-            message.add_alternative(html_body, subtype="html")
+            html_payload = html_body
+            if preview_title:
+                preheader = (
+                    '<div style="display:none!important;visibility:hidden;opacity:0;'
+                    'color:transparent;height:0;width:0;overflow:hidden;mso-hide:all;">'
+                    + escape(str(preview_title))
+                    + '</div>'
+                )
+                html_payload = preheader + html_payload
+            message.add_alternative(html_payload, subtype="html")
 
         with smtplib.SMTP(
             self._config.SMTP_HOST,
@@ -90,6 +100,7 @@ class SMTPMailProvider:
             html_body=html_body,
             sender_name=sender_name,
             recipient_name=recipient_name,
+            preview_title=preview_title,
             reply_to=reply_to,
             headers=headers,
         )
