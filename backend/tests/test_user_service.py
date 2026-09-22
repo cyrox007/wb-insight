@@ -1,6 +1,12 @@
 import pytest
 
-from services.user_service import insert_user, update_user
+from services.user_service import (
+    create_user_role_association,
+    delete_role_association,
+    delete_user,
+    insert_user,
+    update_user,
+)
 
 
 class FakeSession:
@@ -80,3 +86,66 @@ async def test_update_user_flushes_mutation_before_refresh():
     assert user.full_name == "After"
     assert session.flush_count == 1
     assert session.refresh_count == 1
+
+
+
+@pytest.mark.asyncio
+async def test_update_user_propagates_flush_failure_to_transaction_owner():
+    class FailingSession(FakeSession):
+        async def flush(self):
+            self.flush_count += 1
+            raise RuntimeError("ошибка обновления пользователя")
+
+    session = FailingSession()
+
+    class UserStub:
+        full_name = "Before"
+
+    with pytest.raises(RuntimeError, match="ошибка обновления пользователя"):
+        await update_user(session, UserStub(), {"full_name": "After"})
+
+
+@pytest.mark.asyncio
+async def test_delete_user_propagates_database_failure():
+    class FailingSession:
+        async def execute(self, _statement):
+            raise RuntimeError("ошибка удаления пользователя")
+
+    class UserStub:
+        id = "11111111-1111-4111-8111-111111111111"
+
+    with pytest.raises(RuntimeError, match="ошибка удаления пользователя"):
+        await delete_user(FailingSession(), UserStub())
+
+
+@pytest.mark.asyncio
+async def test_create_role_association_propagates_flush_failure():
+    class FailingSession:
+        def add(self, _obj):
+            pass
+
+        async def flush(self):
+            raise RuntimeError("ошибка назначения роли")
+
+    with pytest.raises(RuntimeError, match="ошибка назначения роли"):
+        await create_user_role_association(
+            FailingSession(),
+            user_id="11111111-1111-4111-8111-111111111111",
+            role_code="user",
+        )
+
+
+@pytest.mark.asyncio
+async def test_delete_role_association_propagates_flush_failure():
+    class FailingSession:
+        async def delete(self, _obj):
+            pass
+
+        async def flush(self):
+            raise RuntimeError("ошибка удаления роли")
+
+    with pytest.raises(RuntimeError, match="ошибка удаления роли"):
+        await delete_role_association(
+            FailingSession(),
+            object(),
+        )
