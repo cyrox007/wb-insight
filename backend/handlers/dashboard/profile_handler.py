@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 
@@ -37,6 +38,29 @@ def _current_user_id(request: Request) -> UUID:
     return UUID(str(request.state.user["sub"]))
 
 
+def _token_connection_status(
+    token,
+    *,
+    dashboard_available: bool | None = None,
+) -> str:
+    """Возвращает безопасную причину доступности подключения Wildberries."""
+    if token.is_revoked:
+        return "revoked"
+
+    expires_at = getattr(token, "expires_at", None)
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            return "expired"
+
+    if not token.is_active:
+        return "inactive"
+    if dashboard_available is False:
+        return "outside_tariff"
+    return "active"
+
+
 def _public_token(token, *, dashboard_available: bool | None = None) -> dict:
     data = {
         "id": str(token.id),
@@ -49,6 +73,10 @@ def _public_token(token, *, dashboard_available: bool | None = None) -> dict:
         "is_active": token.is_active,
         "is_revoked": token.is_revoked,
         "is_valid": token.is_valid,
+        "connection_status": _token_connection_status(
+            token,
+            dashboard_available=dashboard_available,
+        ),
     }
     if dashboard_available is not None:
         data["dashboard_available"] = dashboard_available

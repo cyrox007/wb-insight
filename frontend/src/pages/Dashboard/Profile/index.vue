@@ -3,12 +3,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { isStaffUser, ROLE_LABELS } from '@/security/roles'
 import { notify } from '@/composables/notification'
+import { useDashboardAccount } from '@/composables/dashboardAccount.js'
 import ProfileServices from '@/API/Dashboard/ProfileServices'
 import SellerInputsService from '@/API/Dashboard/SellerInputsService'
 import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTariffModal.vue'
 import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue'
 
 const authStore = useAuthStore()
+const { loadAccounts: refreshDashboardAccounts } = useDashboardAccount()
 const isStaff = computed(() => isStaffUser(authStore.getUser))
 const staffRoleLabels = computed(() =>
   (authStore.getUser?.roles || [])
@@ -99,7 +101,7 @@ const timezoneOptions = [
 const availableTokens = computed(() => tokens.value.filter(token =>
   token.marketplace === 'wildberries' &&
   token.dashboard_available !== false &&
-  !isTokenExpired(token)
+  tokenConnectionStatus(token) === 'active'
 ))
 
 const totalExpenses = computed(() => expenses.value.reduce(
@@ -127,9 +129,39 @@ const inputDate = (date) => {
   return `${year}-${month}-${day}`
 }
 
+function tokenConnectionStatus(token) {
+  if (token.connection_status) return token.connection_status
+  if (token.is_revoked) return 'revoked'
+  if (token.expires_at && new Date(token.expires_at) < new Date()) return 'expired'
+  if (token.is_active === false || token.is_valid === false) return 'inactive'
+  if (token.dashboard_available === false) return 'outside_tariff'
+  return 'active'
+}
+
 function isTokenExpired(token) {
-  if (token.is_revoked || token.is_active === false || token.is_valid === false) return true
-  return Boolean(token.expires_at && new Date(token.expires_at) < new Date())
+  return ['revoked', 'expired', 'inactive'].includes(tokenConnectionStatus(token))
+}
+
+function tokenStatusLabel(token) {
+  const labels = {
+    active: 'Активен',
+    revoked: 'Отозван',
+    expired: 'Истёк',
+    inactive: 'Отключён',
+    outside_tariff: 'Вне лимита тарифа',
+  }
+  return labels[tokenConnectionStatus(token)] || 'Недоступен'
+}
+
+function tokenStatusHint(token) {
+  const hints = {
+    active: 'Кабинет доступен для аналитики.',
+    revoked: 'Wildberries отклонил сохранённое подключение. Добавьте новый действующий токен.',
+    expired: 'Срок действия токена закончился. Выпустите и подключите новый токен.',
+    inactive: 'Подключение отключено и не участвует в синхронизации.',
+    outside_tariff: 'Подключение действует, но не входит в лимит кабинетов текущего тарифа.',
+  }
+  return hints[tokenConnectionStatus(token)] || 'Подключение недоступно для аналитики.'
 }
 
 function getStatusLabel(status) {
@@ -265,9 +297,11 @@ async function openAddTokenModal() {
 }
 
 async function handleTokenAdded() {
-  await loadProfile()
+  await Promise.all([
+    loadProfile(),
+    refreshDashboardAccounts({ force: true }),
+  ])
   showAddTokenModal.value = false
-  notify.success('Кабинет Wildberries подключён')
 }
 
 async function deleteToken(id) {
@@ -280,6 +314,7 @@ async function deleteToken(id) {
     }
     tokens.value = tokens.value.filter(token => token.id !== id)
     if (expenseForm.token_id === id) resetExpenseForm()
+    await refreshDashboardAccounts({ force: true })
     notify.success('Подключение удалено')
   } catch (error) {
     notify.error(error.response?.data?.error?.message || 'Не удалось удалить подключение')
@@ -630,8 +665,15 @@ onMounted(async () => {
                 <small>{{ token.id.slice(0, 8) }} · добавлен {{ dateLabel(token.issued_at) }}</small>
               </div>
             </div>
-            <div class="connection-status" :class="{ bad: isTokenExpired(token), limited: token.dashboard_available === false }">
-              {{ isTokenExpired(token) ? 'Недоступен' : token.dashboard_available === false ? 'Вне лимита тарифа' : 'Активен' }}
+            <div
+              class="connection-status"
+              :class="{
+                bad: isTokenExpired(token),
+                limited: tokenConnectionStatus(token) === 'outside_tariff'
+              }"
+              :title="tokenStatusHint(token)"
+            >
+              {{ tokenStatusLabel(token) }}
             </div>
             <button class="danger-link" type="button" @click="deleteToken(token.id)">Удалить</button>
           </article>
