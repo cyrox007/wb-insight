@@ -144,8 +144,10 @@ const submit = async () => {
 			return
 		}
 
-		notify.success('Кабинет Wildberries успешно добавлен')
-		emit('success')
+		notify.success(
+			result.message || 'Кабинет Wildberries подключён. Первичная синхронизация поставлена в очередь.'
+		)
+		emit('success', result.data)
 	} catch (e) {
 		console.error(e)
 		errorMessage.value =
