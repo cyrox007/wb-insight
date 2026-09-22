@@ -316,6 +316,8 @@ def run_disposable_registration_smoke(
     mail_token_timeout: int = 180,
     require_email_verification: bool = False,
     require_password_reset: bool = False,
+    mail_admin_email: str | None = None,
+    mail_admin_password: str | None = None,
 ) -> dict[str, bool]:
     """Prove registration, real mail, demo, consent and session lifecycle."""
     client = SmokeClient(base_url)
@@ -407,6 +409,11 @@ def run_disposable_registration_smoke(
             raise SmokeFailure("registration legal consent evidence was not persisted exactly")
 
         if require_password_reset:
+            if not mail_admin_email or not mail_admin_password:
+                raise SmokeFailure(
+                    "password reset throttle smoke requires staff/admin mail diagnostics credentials"
+                )
+
             reset_request = client.request(
                 "POST",
                 "/auth/password-reset/request",
@@ -415,6 +422,25 @@ def run_disposable_registration_smoke(
             )
             if reset_request.get("status") != "success":
                 raise SmokeFailure("password reset request did not enter the mail queue")
+
+            repeated_request = client.request(
+                "POST",
+                "/auth/password-reset/request",
+                body={"email": email},
+                expected=(202,),
+            )
+            if repeated_request.get("status") != "success":
+                raise SmokeFailure("repeated password reset request changed the public contract")
+            if repeated_request.get("message") != reset_request.get("message"):
+                raise SmokeFailure("password reset throttle broke the anti-enumeration response contract")
+
+            run_password_reset_throttle_smoke(
+                base_url,
+                email=mail_admin_email,
+                password=mail_admin_password,
+                user_id=user_id,
+            )
+
             reset_token = _mail_token_from_hook(
                 mail_token_command or "",
                 kind="password_reset",
@@ -422,6 +448,7 @@ def run_disposable_registration_smoke(
                 timeout_seconds=mail_token_timeout,
             )
             new_password = f"{password}-R1"
+            stale_access_token = client.access_token
             reset = client.request(
                 "POST",
                 "/auth/password-reset/confirm",
@@ -429,12 +456,31 @@ def run_disposable_registration_smoke(
             )
             if reset.get("status") != "success":
                 raise SmokeFailure("password reset confirmation did not succeed")
+
+            # From this point cleanup must use the rotated credential even if a
+            # subsequent session-revocation assertion fails.
+            password = new_password
             client.access_token = None
+
+            if stale_access_token:
+                stale_client = SmokeClient(base_url)
+                stale_client.access_token = stale_access_token
+                stale_access = stale_client.request(
+                    "GET",
+                    "/dashboard/profile/",
+                    auth=True,
+                    expected=(401,),
+                )
+                error_type = (stale_access.get("detail") or {}).get("error_type")
+                if error_type != "session_revoked":
+                    raise SmokeFailure("password reset did not revoke the previously issued access token")
+
             restored_user_id = _login_disposable(client, email, new_password)
             if restored_user_id != user_id:
                 raise SmokeFailure("password reset login restored the wrong identity")
-            password = new_password
-            print("[ok] password reset delivered through real mail and rotated credentials")
+            print(
+                "[ok] password reset delivered through real mail, throttle held and old session was revoked"
+            )
 
         # Browser reload semantics for a newly registered account as well.
         client.access_token = None
@@ -509,6 +555,8 @@ def run_disposable_registration_smoke(
         "disposable_registration": True,
         "email_verification": verification_required,
         "password_reset": require_password_reset,
+        "password_reset_throttle": require_password_reset,
+        "password_reset_session_revoked": require_password_reset,
         "demo_activation": True,
         "legal_consent_evidence": True,
         "refresh_restore": True,
@@ -527,6 +575,58 @@ def _login_smoke_client(client: SmokeClient, email: str, password: str) -> dict:
         raise SmokeFailure("login did not return access token and user identity")
     client.access_token = login["access_token"]
     return login
+
+
+def _validate_password_reset_throttle_payload(payload: dict) -> None:
+    if payload.get("status") != "success":
+        raise SmokeFailure("password reset throttle diagnostics returned an invalid envelope")
+    try:
+        message_count = int(payload.get("password_reset_messages"))
+        resend_seconds = int(payload.get("resend_seconds"))
+    except (TypeError, ValueError) as exc:
+        raise SmokeFailure("password reset throttle diagnostics returned invalid counters") from exc
+    if message_count != 1:
+        raise SmokeFailure(
+            f"password reset throttle expected one durable mail row, got {message_count}"
+        )
+    if resend_seconds <= 0:
+        raise SmokeFailure("password reset resend throttle is not configured")
+
+
+def run_password_reset_throttle_smoke(
+    base_url: str,
+    *,
+    email: str,
+    password: str,
+    user_id: str,
+) -> None:
+    """Prove two immediate public reset requests materialize one durable mail row."""
+    client = SmokeClient(base_url)
+    probe_error: SmokeFailure | None = None
+    try:
+        _login_smoke_client(client, email, password)
+        payload = client.request(
+            "GET",
+            f"/control-panel/mail/diagnostics/password-reset/{user_id}",
+            auth=True,
+        )
+        _validate_password_reset_throttle_payload(payload)
+        print("[ok] password reset resend throttle and idempotent queue materialization")
+    except SmokeFailure as exc:
+        probe_error = exc
+    finally:
+        if client.access_token or any(True for _ in client.cookies):
+            try:
+                run_logout_smoke(client)
+            except SmokeFailure as cleanup_exc:
+                if probe_error is not None:
+                    raise SmokeFailure(
+                        f"{probe_error}; password reset throttle probe logout cleanup also failed"
+                    ) from cleanup_exc
+                raise
+
+    if probe_error is not None:
+        raise probe_error
 
 
 def run_authenticated_smoke(client: SmokeClient, email: str, password: str) -> None:
@@ -858,6 +958,26 @@ def _self_test() -> None:
         "password_reset_ready": True,
     }
 
+    _validate_password_reset_throttle_payload(
+        {
+            "status": "success",
+            "password_reset_messages": 1,
+            "resend_seconds": 60,
+        }
+    )
+    try:
+        _validate_password_reset_throttle_payload(
+            {
+                "status": "success",
+                "password_reset_messages": 2,
+                "resend_seconds": 60,
+            }
+        )
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("duplicate password reset queue rows unexpectedly passed throttle proof")
+
     class _FakeLoginClient:
         access_token = None
 
@@ -1011,6 +1131,8 @@ def main() -> int:
         "disposable_registration": False,
         "email_verification": False,
         "password_reset": False,
+        "password_reset_throttle": False,
+        "password_reset_session_revoked": False,
         "demo_activation": False,
         "legal_consent_evidence": False,
         "disposable_refresh_restore": False,
@@ -1063,6 +1185,8 @@ def main() -> int:
             mail_token_timeout=args.mail_token_timeout,
             require_email_verification=args.require_email_verification,
             require_password_reset=args.require_password_reset,
+            mail_admin_email=args.email,
+            mail_admin_password=args.password,
         )
         checks.update(disposable)
         checks["disposable_refresh_restore"] = disposable["refresh_restore"]

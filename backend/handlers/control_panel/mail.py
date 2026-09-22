@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.access_control import Permission
 from core.authorization import require_permission
 from core.dependencies import get_db_session
+from core.lifecycle_config import lifecycle_config
 from integrations.mail.rusender import RuSenderAPIError
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage, MailStatus
 from models.subscription_model import SubscriptionStatus
@@ -280,6 +281,29 @@ async def gateway_test(
             message="Почтовый провайдер не принял тестовое письмо. Проверьте настройки транспорта и credentials.",
         )
     return response_success(provider_message_id=message_id)
+
+
+@router.get("/diagnostics/password-reset/{user_id}")
+async def password_reset_diagnostics(
+    user_id: UUID,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Return a PII-free aggregate used to verify recovery throttling.
+
+    The caller already needs MAIL_READ. The response intentionally exposes only
+    a count and configured resend window: no recipient address, message id,
+    provider id, token, subject, body, or provider response is returned.
+    """
+    total = await db_session.scalar(
+        select(func.count(MailMessage.id)).where(
+            MailMessage.user_id == user_id,
+            MailMessage.template_code == "password_reset",
+        )
+    )
+    return response_success(
+        password_reset_messages=int(total or 0),
+        resend_seconds=int(lifecycle_config.PASSWORD_RESET_RESEND_SECONDS),
+    )
 
 
 @router.post("/audience/preview")

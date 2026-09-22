@@ -195,6 +195,52 @@ def main() -> int:
         else:
             raise AssertionError("missing lifecycle check unexpectedly passed")
 
+        broken_throttle = {
+            "schema_version": 1,
+            "kind": "release_smoke",
+            "status": "pass",
+            "version": VERSION,
+            "commit": COMMIT,
+            "environment": ENVIRONMENT,
+            "base_origin": "https://staging.example.com",
+            "checks": {
+                name: True
+                for name in CORE_SMOKE_REQUIRED_CHECKS | ACCOUNT_LIFECYCLE_REQUIRED_CHECKS
+            },
+        }
+        broken_throttle["checks"]["password_reset_throttle"] = False
+        _write(smoke, broken_throttle)
+        try:
+            validate_release_smoke_evidence(
+                smoke,
+                version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
+                artifact_kind="account_lifecycle",
+            )
+        except ValueError as exc:
+            assert "password_reset_throttle" in str(exc)
+        else:
+            raise AssertionError("missing password reset throttle proof unexpectedly passed")
+
+        broken_revocation = dict(broken_throttle)
+        broken_revocation["checks"] = dict(broken_throttle["checks"])
+        broken_revocation["checks"]["password_reset_throttle"] = True
+        broken_revocation["checks"]["password_reset_session_revoked"] = False
+        _write(smoke, broken_revocation)
+        try:
+            validate_release_smoke_evidence(
+                smoke,
+                version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
+                artifact_kind="account_lifecycle",
+            )
+        except ValueError as exc:
+            assert "password_reset_session_revoked" in str(exc)
+        else:
+            raise AssertionError("missing password reset session revocation proof unexpectedly passed")
+
         broken_core = {
             "schema_version": 1,
             "kind": "release_smoke",
