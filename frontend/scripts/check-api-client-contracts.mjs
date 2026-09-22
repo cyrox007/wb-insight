@@ -58,11 +58,15 @@ const appPath = path.join(root, 'App.vue')
 const apiPath = path.join(root, 'API/index.js')
 const authServicePath = path.join(root, 'API/AuthService.js')
 const authStorePath = path.join(root, 'stores/auth.js')
+const cpUsersPath = path.join(root, 'API/ControlPanel/CP_Users.js')
+const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
 const apiSource = fs.readFileSync(apiPath, 'utf8')
 const authServiceSource = fs.readFileSync(authServicePath, 'utf8')
 const authStoreSource = fs.readFileSync(authStorePath, 'utf8')
+const cpUsersSource = fs.readFileSync(cpUsersPath, 'utf8')
+const editUserSource = fs.readFileSync(editUserPath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -149,6 +153,38 @@ const authSessionRaceChecks = [
 ]
 
 for (const check of authSessionRaceChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const permanentUserDeleteChecks = [
+  {
+    ok:
+      cpUsersSource.includes('/control-panel/users/${userId}/purge') &&
+      cpUsersSource.includes('confirm_email: confirmEmail'),
+    message: 'Permanent delete должен использовать отдельный purge-маршрут и подтверждение email.',
+  },
+  {
+    ok:
+      editUserSource.includes('const canPermanentlyDelete = computed') &&
+      editUserSource.includes('targetUser.value.is_active === false') &&
+      editUserSource.includes('!isSelf.value'),
+    message: 'Кнопка необратимого удаления должна быть доступна только для неактивной чужой учётной записи.',
+  },
+  {
+    ok:
+      editUserSource.includes('confirmation !== expectedEmail') &&
+      editUserSource.includes('CP_Users.permanentlyDeleteUser'),
+    message: 'Интерфейс должен требовать точное подтверждение email до вызова permanent delete.',
+  },
+  {
+    ok:
+      editUserSource.includes('Удалить пользователя навсегда') &&
+      editUserSource.includes('Аккаунт и связанные пользовательские данные будут удалены необратимо'),
+    message: 'Опасная операция должна иметь отдельное явное предупреждение о необратимости.',
+  },
+]
+
+for (const check of permanentUserDeleteChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
