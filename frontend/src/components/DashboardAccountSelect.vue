@@ -43,11 +43,32 @@
         <p v-else-if="route.name === 'dashboard.home' && accounts.length" class="plan-hint">
             Выберите один кабинет, чтобы задать месячный план.
         </p>
+
+        <div
+            v-if="accounts.length"
+            class="sync-summary"
+            :class="`sync-summary--${syncTone}`"
+            role="status"
+            :title="syncDetails"
+        >
+            <span class="sync-summary__dot" aria-hidden="true"></span>
+            <span>{{ syncSummaryText }}</span>
+            <button
+                class="sync-summary__refresh"
+                type="button"
+                :disabled="syncStatusLoading"
+                aria-label="Обновить статус синхронизации"
+                title="Обновить статус синхронизации"
+                @click="loadSyncStatus"
+            >
+                ↻
+            </button>
+        </div>
     </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification'
@@ -57,6 +78,11 @@ const emit = defineEmits(['change'])
 const route = useRoute()
 const planTarget = ref('')
 const isSaving = ref(false)
+const syncStatus = ref(null)
+const syncStatusLoading = ref(false)
+const syncStatusError = ref('')
+let syncStatusTimer = null
+
 const {
     accounts,
     accountsLoading,
@@ -65,6 +91,94 @@ const {
     setSelectedTokenId,
     refreshDashboard,
 } = useDashboardAccount()
+
+const formatSyncTime = (value) => {
+    if (!value) return ''
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return ''
+    return new Intl.DateTimeFormat('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(parsed)
+}
+
+const syncTone = computed(() => {
+    if (syncStatusError.value) return 'error'
+    if (syncStatusLoading.value && !syncStatus.value) return 'loading'
+    if (!syncStatus.value) return 'neutral'
+    if (syncStatus.value.is_syncing) return 'syncing'
+    if (syncStatus.value.complete) return 'ready'
+    if (Number(syncStatus.value.error_entities || 0) > 0) return 'error'
+    return 'warning'
+})
+
+const syncSummaryText = computed(() => {
+    if (syncStatusLoading.value && !syncStatus.value) return 'Проверяем свежесть данных…'
+    if (syncStatusError.value) return syncStatusError.value
+    if (!syncStatus.value) return 'Статус синхронизации недоступен'
+
+    const ready = Number(syncStatus.value.ready_entities || 0)
+    const total = Number(syncStatus.value.total_entities || 0)
+    const oldest = formatSyncTime(syncStatus.value.oldest_success_at)
+
+    if (syncStatus.value.is_syncing) {
+        return `Обновляем данные · готово ${ready}/${total}`
+    }
+    if (syncStatus.value.complete) {
+        return oldest ? `Актуально · не старше ${oldest}` : 'Данные актуальны'
+    }
+
+    const errorCount = Number(syncStatus.value.error_entities || 0)
+    const waitingCount = Number(syncStatus.value.waiting_entities || 0)
+    const staleCount = Number(syncStatus.value.stale_entities || 0)
+    const details = []
+    if (errorCount) details.push(`ошибки: ${errorCount}`)
+    if (waitingCount) details.push(`ожидают: ${waitingCount}`)
+    if (staleCount) details.push(`устарели: ${staleCount}`)
+    return `Актуально ${ready}/${total}${details.length ? ` · ${details.join(' · ')}` : ''}`
+})
+
+const syncDetails = computed(() => {
+    if (!syncStatus.value?.entities?.length) return syncSummaryText.value
+    const labels = {
+        ready: 'актуально',
+        stale: 'устарело',
+        error: 'ошибка',
+        waiting: 'ожидает синхронизации',
+    }
+    return syncStatus.value.entities
+        .map((item) => `${item.label}: ${labels[item.status] || item.status}`)
+        .join('\n')
+})
+
+const loadSyncStatus = async () => {
+    if (!accounts.value.length || syncStatusLoading.value) return
+
+    syncStatusLoading.value = true
+    syncStatusError.value = ''
+    try {
+        const params = selectedTokenId.value
+            ? { token_id: selectedTokenId.value }
+            : {}
+        const response = await DashboardService.get_sync_status(params)
+        const result = response.data || {}
+        if (result.status === 'error') {
+            syncStatus.value = null
+            syncStatusError.value =
+                result.error?.message || 'Не удалось проверить свежесть данных'
+            return
+        }
+        syncStatus.value = result.sync_status || null
+    } catch (error) {
+        syncStatusError.value =
+            error.response?.data?.error?.message ||
+            'Не удалось проверить свежесть данных'
+    } finally {
+        syncStatusLoading.value = false
+    }
+}
 
 const onChange = (event) => {
     planTarget.value = ''
@@ -114,7 +228,24 @@ const removePlan = async () => {
     }
 }
 
-onMounted(loadAccounts)
+watch(
+    () => [selectedTokenId.value, accounts.value.length],
+    () => {
+        if (accounts.value.length) loadSyncStatus()
+    }
+)
+
+onMounted(async () => {
+    await loadAccounts()
+    await loadSyncStatus()
+    syncStatusTimer = window.setInterval(loadSyncStatus, 60000)
+})
+
+onBeforeUnmount(() => {
+    if (syncStatusTimer !== null) {
+        window.clearInterval(syncStatusTimer)
+    }
+})
 </script>
 
 <style scoped>
@@ -220,6 +351,70 @@ onMounted(loadAccounts)
     line-height: 1.35;
 }
 
+.sync-summary {
+    grid-column: 1 / -1;
+    justify-self: end;
+    min-height: 24px;
+    max-width: 100%;
+    padding: 4px 7px 4px 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--card-bg);
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.25;
+}
+
+.sync-summary__dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--text-subtle);
+}
+
+.sync-summary--ready .sync-summary__dot {
+    background: #22a06b;
+}
+
+.sync-summary--syncing .sync-summary__dot,
+.sync-summary--loading .sync-summary__dot {
+    background: #4f86da;
+}
+
+.sync-summary--warning .sync-summary__dot {
+    background: #d49a2b;
+}
+
+.sync-summary--error .sync-summary__dot {
+    background: var(--danger-color);
+}
+
+.sync-summary__refresh {
+    width: 19px;
+    height: 19px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-subtle);
+    cursor: pointer;
+}
+
+.sync-summary__refresh:hover:not(:disabled) {
+    background: var(--hover-bg);
+    color: var(--text-color);
+}
+
+.sync-summary__refresh:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
 @media (max-width: 1100px) {
     .account-tools {
         grid-template-columns: minmax(205px, 1fr);
@@ -234,6 +429,12 @@ onMounted(loadAccounts)
     .plan-hint {
         max-width: none;
     }
+
+    .sync-summary {
+        justify-self: stretch;
+        width: 100%;
+        border-radius: 8px;
+    }
 }
 
 @media (max-width: 600px) {
@@ -245,6 +446,10 @@ onMounted(loadAccounts)
 
     .plan-editor {
         flex-wrap: wrap;
+    }
+
+    .sync-summary {
+        align-items: flex-start;
     }
 }
 </style>
