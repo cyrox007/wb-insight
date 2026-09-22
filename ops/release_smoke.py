@@ -824,6 +824,40 @@ def _self_test() -> None:
     else:
         raise AssertionError("not-ready mail gateway unexpectedly passed preflight")
 
+    class _FakeGatewayClient:
+        def request(self, method, path, *, auth=False, **_kwargs):
+            assert method == "GET"
+            assert path == "/control-panel/mail/gateway"
+            assert auth is True
+            return {
+                "status": "success",
+                "gateway": {
+                    "provider": "rusender",
+                    "ready": True,
+                    "source": "database",
+                    "config_source": "auto",
+                    "system_mail": {
+                        "email_verification": {"ready": True},
+                        "password_reset": {"ready": True},
+                    },
+                },
+            }
+
+    gateway_evidence = run_mail_gateway_readiness_smoke(
+        _FakeGatewayClient(),  # type: ignore[arg-type]
+        expected_provider="rusender",
+        require_email_verification=True,
+        require_password_reset=True,
+    )
+    assert gateway_evidence == {
+        "provider": "rusender",
+        "expected_provider": "rusender",
+        "source": "database",
+        "config_source": "auto",
+        "email_verification_ready": True,
+        "password_reset_ready": True,
+    }
+
     class _FakeLoginClient:
         access_token = None
 
