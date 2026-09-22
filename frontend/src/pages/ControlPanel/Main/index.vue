@@ -70,7 +70,8 @@ onMounted(loadOverview)
 			<router-link v-if="can('audit:read')" :to="{ name: 'control-panel.audit' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': auditActive }" :aria-current="auditActive ? 'page' : undefined">Аудит</router-link>
 		</nav>
 
-		<div v-if="isOverview" class="cp-page">
+		<Transition name="cp-page-motion" mode="out-in">
+			<div v-if="isOverview" key="overview" class="cp-page">
 			<div v-if="isLoading" class="cp-state" role="status">Загружаем административную сводку…</div>
 			<div v-else-if="loadError" class="cp-state cp-state--error" role="alert"><div class="cp-state__stack"><strong>{{ loadError }}</strong><BaseButton variant="outline" size="small" text="Повторить" @click="loadOverview" /></div></div>
 
@@ -112,8 +113,54 @@ onMounted(loadOverview)
 					<span>Клиентские карточки, платежи и другие чувствительные разделы не открываются без отдельного backend permission.</span>
 				</div>
 			</template>
-		</div>
+			</div>
 
-		<RouterView />
+			<div v-else :key="String(route.name || route.path)" class="cp-route-frame">
+				<RouterView />
+			</div>
+		</Transition>
 	</section>
 </template>
+
+<style scoped>
+.cp-route-frame {
+	min-width: 0;
+	transform-origin: 50% 10%;
+	will-change: opacity, transform;
+}
+
+.cp-page-motion-enter-active {
+	transition:
+		opacity 220ms ease-out,
+		transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cp-page-motion-leave-active {
+	transition:
+		opacity 125ms ease-in,
+		transform 145ms ease-in;
+}
+
+.cp-page-motion-enter-from {
+	opacity: 0;
+	transform: translateY(8px) scale(0.997);
+}
+
+.cp-page-motion-leave-to {
+	opacity: 0;
+	transform: translateY(-3px) scale(0.999);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.cp-page-motion-enter-active,
+	.cp-page-motion-leave-active {
+		transition: none;
+	}
+
+	.cp-page-motion-enter-from,
+	.cp-page-motion-leave-to {
+		opacity: 1;
+		transform: none;
+	}
+}
+</style>

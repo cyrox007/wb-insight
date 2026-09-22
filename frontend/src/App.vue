@@ -40,6 +40,8 @@ const user = computed(() => authStore.getUser)
 const isControlPanelRoute = computed(() => route.path.startsWith('/control-panel'))
 const showAccountFilter = computed(() => navItems.some(item => item.name === route.name))
 const dashboardViewKey = computed(() => `${route.fullPath}:${selectedTokenId.value || 'all'}:${dashboardVersion.value}`)
+const rootRouteMotionKey = computed(() => isControlPanelRoute.value ? 'control-panel' : route.path)
+const rootViewComponentKey = computed(() => isControlPanelRoute.value ? 'control-panel-shell' : dashboardViewKey.value)
 const isStaff = computed(() => isStaffUser(user.value))
 const canControlPanel = computed(() => canAccessControlPanel(user.value))
 const isSellerAnalyticsRoute = computed(() => navItems.some(item => item.name === route.name))
@@ -289,7 +291,13 @@ const logout = async () => {
       action-label="Профиль и подключения"
       :action-to="{ name: 'dashboard.profile' }"
     />
-    <RouterView v-else :key="dashboardViewKey" />
+    <RouterView v-else v-slot="{ Component }">
+      <Transition name="page-motion" mode="out-in">
+        <div :key="rootRouteMotionKey" class="route-motion-frame">
+          <component :is="Component" :key="rootViewComponentKey" />
+        </div>
+      </Transition>
+    </RouterView>
   </main>
 
   <footer v-if="!isAuthenticated && !isLandingGuest" class="app-footer">
@@ -707,6 +715,47 @@ const logout = async () => {
   color: var(--text-subtle);
   text-align: center;
   font-size: 12px;
+}
+
+.route-motion-frame {
+  min-width: 0;
+  transform-origin: 50% 18%;
+  will-change: opacity, transform;
+}
+
+.page-motion-enter-active {
+  transition:
+    opacity 230ms ease-out,
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.page-motion-leave-active {
+  transition:
+    opacity 135ms ease-in,
+    transform 155ms ease-in;
+}
+
+.page-motion-enter-from {
+  opacity: 0;
+  transform: translateY(9px) scale(0.996);
+}
+
+.page-motion-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.998);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-motion-enter-active,
+  .page-motion-leave-active {
+    transition: none;
+  }
+
+  .page-motion-enter-from,
+  .page-motion-leave-to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (max-width: 900px) {
