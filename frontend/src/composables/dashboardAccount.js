@@ -13,17 +13,35 @@ const accountsLoading = ref(false)
 const accountsError = ref('')
 let loaded = false
 let loadingPromise = null
+let stateGeneration = 0
+
+const persistSelectedTokenId = (value) => {
+    selectedTokenId.value = value || ''
+    if (typeof window === 'undefined') return
+
+    if (selectedTokenId.value) {
+        window.localStorage.setItem(STORAGE_KEY, selectedTokenId.value)
+    } else {
+        window.localStorage.removeItem(STORAGE_KEY)
+    }
+}
+
+export function resetDashboardAccountState() {
+    stateGeneration += 1
+    accounts.value = []
+    allWbAccounts.value = []
+    accountsLoaded.value = false
+    accountsLoading.value = false
+    accountsError.value = ''
+    loaded = false
+    loadingPromise = null
+    persistSelectedTokenId('')
+    dashboardVersion.value += 1
+}
 
 export function useDashboardAccount() {
     const setSelectedTokenId = (value) => {
-        selectedTokenId.value = value || ''
-        if (typeof window !== 'undefined') {
-            if (selectedTokenId.value) {
-                window.localStorage.setItem(STORAGE_KEY, selectedTokenId.value)
-            } else {
-                window.localStorage.removeItem(STORAGE_KEY)
-            }
-        }
+        persistSelectedTokenId(value)
     }
 
     const refreshDashboard = () => {
@@ -34,11 +52,14 @@ export function useDashboardAccount() {
         if (loaded && !force) return accounts.value
         if (loadingPromise) return loadingPromise
 
+        const requestGeneration = stateGeneration
         accountsLoading.value = true
         accountsError.value = ''
 
-        loadingPromise = ProfileServices.getProfile()
+        const requestPromise = ProfileServices.getProfile()
             .then((response) => {
+                if (requestGeneration !== stateGeneration) return accounts.value
+
                 const payload = response?.data || {}
                 const tokens = payload.tokens || payload.data?.tokens || []
                 allWbAccounts.value = tokens.filter(
@@ -62,6 +83,8 @@ export function useDashboardAccount() {
                 return accounts.value
             })
             .catch((error) => {
+                if (requestGeneration !== stateGeneration) return accounts.value
+
                 console.error('Не удалось загрузить список кабинетов Wildberries:', error)
                 accounts.value = []
                 allWbAccounts.value = []
@@ -72,11 +95,15 @@ export function useDashboardAccount() {
                 return accounts.value
             })
             .finally(() => {
+                if (requestGeneration !== stateGeneration) return
                 accountsLoading.value = false
-                loadingPromise = null
+                if (loadingPromise === requestPromise) {
+                    loadingPromise = null
+                }
             })
 
-        return loadingPromise
+        loadingPromise = requestPromise
+        return requestPromise
     }
 
     const withAccount = (params = {}) => {
@@ -94,6 +121,7 @@ export function useDashboardAccount() {
         selectedTokenId,
         dashboardVersion,
         loadAccounts,
+        resetDashboardAccountState,
         setSelectedTokenId,
         refreshDashboard,
         withAccount,
