@@ -4,7 +4,7 @@
 
 ## Текущий статус
 
-- release baseline `main`: **`0.9.0-alpha.11`**; exact beta candidate в `dev`: **`0.9.0-beta.1`**.
+- release baseline `main`: **`0.9.0-alpha.11`**; зафиксированный beta acceptance-candidate: **`release/0.9.0-beta.1-acceptance` → `71aa437198f872a4285a4ee7539b771b097acd42`**, VERSION **`0.9.0-beta.1`**; `dev` после фиксации candidate используется для параллельных улучшений.
 - P31–P36 release-hardening baseline закрыт.
 - P37 durable audit trail закрыт PR #74, merge `31434c26e98960c0f591bdcb969ba12d96af8263`.
 - payment administration foundation закрыт PR #71, merge `e42c691eaa2f75d7149e78222ae605d039f2eabd`.
@@ -37,9 +37,10 @@
 - P77 русский системный контракт общей интеграционной границы закрыт PR #157, merge `3238cbed127b1e179cd0cffc86eb1cdd229c6bd5`.
 - P78 русский системный контракт интеграции Wildberries закрыт PR #158, merge `30559538d4a6368da979c92150709cfa46ed2b4c`.
 - P79 русский контракт SQLAlchemy/PostgreSQL-комментариев `api_tokens` закрыт PR #159, merge `e3fb8ea6dbe435a61b7fddbb92583c32bf067d56`.
+- P80 полный exact-head CI на каждом push в `dev/main` закрыт PR #160, merge `71aa437198f872a4285a4ee7539b771b097acd42`; все шесть обязательных workflow зелёные на этом SHA.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
-- candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact `dev` commit.
+- candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
 
 ## Code-side status: baseline закрыт; новая интеграция идёт через dev
 
@@ -56,6 +57,7 @@
 - Wildberries runtime integration — HTTP client, распределённый лимитер, метаданные/онлайн-проверка токена, маршруты и нормализаторы — приведена к русскому системному контракту;
 - SQLAlchemy metadata и PostgreSQL-комментарии `api_tokens` синхронизированы на русском языке отдельной Alembic-миграцией;
 - обязательные release workflow запускаются на каждом `push` в `dev/main` без path-фильтров, чтобы exact-head CI evidence всегда мог быть собран на финальном merge SHA;
+- post-candidate auth hardening использует единый refresh single-flight и поколение клиентской сессии: поздний refresh старой сессии отбрасывается и не может восстановить или очистить более новую login-сессию;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;

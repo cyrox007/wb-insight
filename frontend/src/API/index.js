@@ -43,6 +43,42 @@ const $api = axios.create({
 });
 
 let refreshPromise = null;
+let sessionGeneration = 0;
+
+const STALE_REFRESH_CODE = 'STALE_SESSION_REFRESH';
+
+const staleRefreshError = () => {
+    const error = new Error('Ответ обновления относится к устаревшей клиентской сессии');
+    error.code = STALE_REFRESH_CODE;
+    return error;
+};
+
+export const isStaleSessionRefreshError = (error) =>
+    error?.code === STALE_REFRESH_CODE;
+
+export const invalidateSessionRefresh = () => {
+    sessionGeneration += 1;
+    refreshPromise = null;
+};
+
+export const establishClientSession = (accessToken) => {
+    invalidateSessionRefresh();
+    setAccessToken(accessToken);
+};
+
+const SESSION_REFRESH_EXCLUDED_ENDPOINTS = new Set([
+    '/auth/refresh',
+    '/auth/login',
+    '/auth/logout',
+    '/auth/registration',
+    '/auth/password-reset/request',
+    '/auth/password-reset/confirm',
+    '/auth/email-verification/confirm',
+    '/auth/email-verification/resend',
+    '/auth/check-email',
+    '/auth/check-phone',
+    '/auth/check-inn',
+]);
 
 const ACCOUNT_SCOPED_ENDPOINTS = new Set([
     '/dashboard/',
@@ -62,31 +98,43 @@ const ACCOUNT_SCOPED_ENDPOINTS = new Set([
 ]);
 
 const clearClientSession = () => {
+    invalidateSessionRefresh();
     clearAccessToken();
     purgeLegacyPersistentAuth();
     localStorage.removeItem('redirectPath');
 };
 
-export const refreshSessionRequest = async () => {
+const performRefreshSessionRequest = async (requestGeneration) => {
     const response = await axios.post(
         `${apiBaseURL}/auth/refresh`,
         {},
         { withCredentials: true },
     );
+    if (requestGeneration !== sessionGeneration) {
+        throw staleRefreshError();
+    }
+
     const accessToken = response.data?.access_token;
     if (!accessToken) {
         throw new Error('Ответ обновления сессии не содержит access_token');
     }
+
     setAccessToken(accessToken);
     return response;
 };
 
-const refreshAccessToken = async () => {
+export const refreshSessionRequest = async () => {
     if (!refreshPromise) {
-        refreshPromise = refreshSessionRequest().finally(() => {
-            refreshPromise = null;
-        });
+        const requestGeneration = sessionGeneration;
+        const requestPromise = performRefreshSessionRequest(requestGeneration)
+            .finally(() => {
+                if (refreshPromise === requestPromise) {
+                    refreshPromise = null;
+                }
+            });
+        refreshPromise = requestPromise;
     }
+
     return refreshPromise;
 };
 
@@ -119,16 +167,20 @@ $api.interceptors.response.use(
             error.response?.status === 401 &&
             originalRequest &&
             !originalRequest._isRetry &&
-            requestPath !== '/auth/refresh'
+            !SESSION_REFRESH_EXCLUDED_ENDPOINTS.has(requestPath)
         ) {
             originalRequest._isRetry = true;
             try {
-                const refreshResponse = await refreshAccessToken();
+                const refreshResponse = await refreshSessionRequest();
                 const accessToken = refreshResponse.data.access_token;
                 originalRequest.headers = originalRequest.headers || {};
                 originalRequest.headers.Authorization = `Bearer ${accessToken}`;
                 return $api(originalRequest);
             } catch (refreshError) {
+                if (isStaleSessionRefreshError(refreshError)) {
+                    return Promise.reject(refreshError);
+                }
+
                 clearClientSession();
                 if (window.location.pathname !== '/') {
                     window.location.assign('/');
@@ -156,5 +208,5 @@ $api.interceptors.response.use(
 
 purgeLegacyPersistentAuth();
 
-export { clearClientSession, setAccessToken };
+export { clearClientSession };
 export default $api;
