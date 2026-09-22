@@ -509,7 +509,7 @@ def run_disposable_registration_smoke(
     }
 
 
-def run_authenticated_smoke(client: SmokeClient, email: str, password: str) -> None:
+def _login_smoke_client(client: SmokeClient, email: str, password: str) -> dict:
     login = client.request(
         "POST",
         "/auth/login",
@@ -518,6 +518,11 @@ def run_authenticated_smoke(client: SmokeClient, email: str, password: str) -> N
     if login.get("status") != "success" or not login.get("access_token") or not login.get("user"):
         raise SmokeFailure("login did not return access token and user identity")
     client.access_token = login["access_token"]
+    return login
+
+
+def run_authenticated_smoke(client: SmokeClient, email: str, password: str) -> None:
+    login = _login_smoke_client(client, email, password)
     user_id = login["user"].get("id")
 
     profile = client.request("GET", "/dashboard/profile/", auth=True)
@@ -598,6 +603,43 @@ def run_mail_gateway_readiness_smoke(
     )
     provider = str((payload.get("gateway") or {}).get("provider") or "unknown")
     print(f"[ok] mail gateway readiness: provider={provider}")
+
+
+def run_mail_gateway_authenticated_preflight(
+    base_url: str,
+    *,
+    email: str,
+    password: str,
+    expected_provider: str | None,
+    require_email_verification: bool,
+    require_password_reset: bool,
+) -> None:
+    """Authenticate a staff account, validate mail readiness, and revoke that session."""
+    client = SmokeClient(base_url)
+    preflight_error: SmokeFailure | None = None
+    try:
+        _login_smoke_client(client, email, password)
+        run_mail_gateway_readiness_smoke(
+            client,
+            expected_provider=expected_provider,
+            require_email_verification=require_email_verification,
+            require_password_reset=require_password_reset,
+        )
+    except SmokeFailure as exc:
+        preflight_error = exc
+    finally:
+        if client.access_token or any(True for _ in client.cookies):
+            try:
+                run_logout_smoke(client)
+            except SmokeFailure as cleanup_exc:
+                if preflight_error is not None:
+                    raise SmokeFailure(
+                        f"{preflight_error}; mail gateway preflight logout cleanup also failed"
+                    ) from cleanup_exc
+                raise
+
+    if preflight_error is not None:
+        raise preflight_error
 
 
 def run_audit_correlation_smoke(client: SmokeClient) -> None:
@@ -906,6 +948,20 @@ def main() -> int:
             _write_evidence(args.evidence_output, args=args, checks=checks)
         return 0
 
+    if not args.email or not args.password:
+        raise SmokeFailure("SMOKE_EMAIL and SMOKE_PASSWORD are required for authenticated smoke")
+
+    if args.mail_gateway_smoke:
+        run_mail_gateway_authenticated_preflight(
+            args.base_url,
+            email=args.email,
+            password=args.password,
+            expected_provider=args.expected_mail_provider,
+            require_email_verification=args.require_email_verification,
+            require_password_reset=args.require_password_reset,
+        )
+        checks["mail_gateway_ready"] = True
+
     if not args.skip_disposable_registration:
         disposable = run_disposable_registration_smoke(
             args.base_url,
@@ -919,23 +975,12 @@ def main() -> int:
         checks["disposable_refresh_restore"] = disposable["refresh_restore"]
         checks.pop("refresh_restore", None)
 
-    if not args.email or not args.password:
-        raise SmokeFailure("SMOKE_EMAIL and SMOKE_PASSWORD are required for authenticated smoke")
-
     authenticated_error: SmokeFailure | None = None
     try:
         run_authenticated_smoke(client, args.email, args.password)
         checks["authenticated_profile"] = True
         checks["authenticated_refresh_restore"] = True
         checks["dashboard_contract"] = True
-        if args.mail_gateway_smoke:
-            run_mail_gateway_readiness_smoke(
-                client,
-                expected_provider=args.expected_mail_provider,
-                require_email_verification=args.require_email_verification,
-                require_password_reset=args.require_password_reset,
-            )
-            checks["mail_gateway_ready"] = True
         if args.audit_smoke:
             run_audit_correlation_smoke(client)
             checks["audit_correlation"] = True
