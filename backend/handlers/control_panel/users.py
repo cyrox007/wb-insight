@@ -30,7 +30,7 @@ from utils.responce_helps import response_error, response_success
 
 router = APIRouter(
     prefix='/control-panel/users',
-    tags=['Control Panel'],
+    tags=['Пользователи'],
     dependencies=[Depends(require_permission(Permission.USERS_READ))],
 )
 
@@ -66,7 +66,7 @@ def _user_to_dict(user) -> dict:
 
 
 def _can_manage_sensitive_target(request: Request, target_user) -> bool:
-    """Only a super-admin may perform access mutations on another super-admin."""
+    """Разрешает изменения super_admin только другому super_admin."""
     target_roles = {str(role.role) for role in target_user.roles if role.role}
     if UserRole.SUPER_ADMIN.value not in target_roles:
         return True
@@ -212,7 +212,7 @@ async def edit_user(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -348,7 +348,7 @@ async def verify_user_email(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code='USER_NOT_FOUND')
+        return response_error(message='Пользователь не найден', code='USER_NOT_FOUND')
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -376,11 +376,11 @@ async def remove_user(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Soft-deactivate an account; destructive purge is never an admin default."""
+    """Мягко деактивирует аккаунт без необратимого удаления данных."""
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -517,7 +517,7 @@ async def reactivate_user(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -544,7 +544,7 @@ async def revoke_sessions(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -567,7 +567,7 @@ async def get_lifecycle_events(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     events = await list_lifecycle_events(db_session, user_id=user_uuid)
     return response_success(
         events=[
@@ -592,16 +592,16 @@ async def add_support_lifecycle_event(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Record a bounded support action without direct production DB edits.
+    """Фиксирует ограниченное support-действие без прямого редактирования БД.
 
-    This endpoint deliberately does not perform a provider refund or alter a
-    payment. It creates durable evidence around a support/provider action whose
-    actual monetary execution remains subject to the approved payment policy.
+    Маршрут не выполняет возврат средств и не изменяет платёж. Он сохраняет
+    долговечное подтверждение действия поддержки или провайдера, а денежная
+    операция остаётся в рамках утверждённого платёжного процесса.
     """
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
 
     body = await request.json()
     event_type = str(body.get('event_type') or '').strip()
