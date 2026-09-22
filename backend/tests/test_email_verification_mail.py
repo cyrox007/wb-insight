@@ -255,11 +255,82 @@ async def test_verification_mail_mints_token_for_exact_queue_recipient(monkeypat
     monkeypatch.setattr(mail_service.config, "EMAIL_VERIFICATION_BASE_URL", "https://app.company.test/verify-email")
     session = _FakeSession([_Result(user)])
 
-    subject, body = await mail_service._render_transactional(session, message)
+    rendered = await mail_service._render_transactional(session, message)
 
     assert captured["email"] == "new@example.com"
-    assert "новый email" in subject.lower()
-    assert "raw-secret" in body
+    assert "новый email" in rendered.subject.lower()
+    assert "raw-secret" in rendered.text
+    assert "raw-secret" in rendered.html
+    assert rendered.preview_title
+
+
+def test_transactional_provider_idempotency_is_attempt_scoped():
+    message = SimpleNamespace(
+        id=uuid4(),
+        kind=MailKind.TRANSACTIONAL.value,
+        template_code="password_reset",
+        attempt_count=0,
+        idempotency_key="password-reset:stable-db-key",
+    )
+
+    first = mail_service._provider_idempotency_key(message)
+    message.attempt_count = 1
+    second = mail_service._provider_idempotency_key(message)
+
+    assert first.endswith(":1")
+    assert second.endswith(":2")
+    assert first != second
+    assert len(first) < 150
+    assert len(second) < 150
+
+
+def test_campaign_provider_idempotency_remains_stable_across_retries():
+    message = SimpleNamespace(
+        id=uuid4(),
+        kind=MailKind.CAMPAIGN.value,
+        template_code=None,
+        attempt_count=3,
+        idempotency_key="campaign:stable-provider-key",
+    )
+
+    assert mail_service._provider_idempotency_key(message) == "campaign:stable-provider-key"
+
+
+@pytest.mark.asyncio
+async def test_password_reset_transactional_render_is_multipart_ready(monkeypatch):
+    user = SimpleNamespace(
+        id=USER_ID,
+        email="seller@example.com",
+        full_name="Иван Иванов",
+        pending_email=None,
+        is_active=True,
+        email_verified_at=datetime.now(timezone.utc),
+    )
+    message = SimpleNamespace(
+        user_id=USER_ID,
+        recipient_email="seller@example.com",
+        template_code="password_reset",
+    )
+
+    async def issue(_session, _user):
+        return "reset-secret"
+
+    monkeypatch.setattr(mail_service, "issue_password_reset_token", issue)
+    monkeypatch.setattr(
+        mail_service.config,
+        "PASSWORD_RESET_BASE_URL",
+        "https://wb.jsinteractive.ru/reset-password",
+    )
+    session = _FakeSession([_Result(user)])
+
+    rendered = await mail_service._render_transactional(session, message)
+
+    assert rendered.recipient_name == "Иван Иванов"
+    assert rendered.preview_title == "Ссылка для установки нового пароля в WB Insight"
+    assert "reset-secret" in rendered.text
+    assert "reset-secret" in rendered.html
+    assert "data-mail-button" not in rendered.html
+    assert "background:#6557ff" in rendered.html
 
 
 @pytest.mark.asyncio
