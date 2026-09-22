@@ -7,7 +7,7 @@
 ## 0.9.0-beta.1 — P40 exact candidate
 
 **Candidate branch:** `dev`.  
-**Статус:** code-side candidate актуализирован через P50; production-like P40 evidence ещё не выполнен, immutable tag не создаётся.
+**Статус:** code-side candidate актуализирован через P61; production-like P40 evidence ещё не выполнен, immutable tag не создаётся.
 
 В candidate вошёл весь code-side hardening поверх `0.9.0-alpha.11`:
 
@@ -28,6 +28,13 @@
 - authenticated mail-gateway preflight в release smoke до real-mail acceptance;
 - staff account profile отделён от seller-only WB/tariff/COGS/expenses UX;
 - backend release warnings очищены без изменения billing semantics;
+- staff workspace показывает только permission-scoped operational attention, а client health отделён от внутренних staff accounts;
+- user administration масштабируется через server-side search/filter/pagination; lifecycle target guards закрывают super_admin/self-deactivation gap;
+- RuSender test diagnostics используют только безопасный machine-readable provider code;
+- P40 mail preflight выполняется до disposable registration и обязательно отражается в strict beta evidence;
+- release evidence pin'ит expected/observed RuSender provider без credentials;
+- password-reset smoke доказывает resend throttle/idempotent queue materialization и отзыв старого access JWT;
+- fail-closed `--beta-gate` проверяет обязательные P40 inputs до первого сетевого запроса;
 - dev-first integration/release promotion flow;
 - CI/release integrity hardening.
 
@@ -41,7 +48,18 @@
 - **#125 / P47** — DB-first mail bootstrap + auth-mail readiness diagnostics, merge `cf40d2738a3ac9028936a7c6a65e35e9fd6811fe`;
 - **#126 / P48** — backend release warning cleanup, merge `aafac5564c4d4b1dcbb708f5787df56f8e499061`;
 - **#127 / P49** — mail readiness preflight in release smoke, merge `46e08f966b0862dc523de718e4a20bc49eea3bdb`;
-- **#128 / P50** — role-aware staff profile, merge `0118ce67e4bf79e7cbdffd285381ed48e668a991`.
+- **#128 / P50** — role-aware staff profile, merge `0118ce67e4bf79e7cbdffd285381ed48e668a991`;
+- **#129 / P51** — release documentation sync through P50, merge `05061201a17932f0ec21371314ede701a4ae959e`;
+- **#130 / P52** — permission-scoped staff operational attention, merge `59e186bb4c802adae243327d1499422a916956d8`;
+- **#131 / P53** — safe RuSender machine error diagnostics, merge `5ecbf3039d4b1d41404f0eecc73f36647130d331`;
+- **#132 / P54** — client-health separation from internal staff accounts, merge `1e741cee7561aee8f4e118954009658cd9e31636`;
+- **#133 / P55** — admin deactivation target guards, merge `1c65c049d8a3731bfd957efa03b73371d9f40169`;
+- **#134 / P56** — server-side Control Panel user search/filter/pagination, merge `41fc7a6792d6395c5af4914613920d1dc9d57332`;
+- **#135 / P57** — true fail-fast mail preflight ordering, merge `9c2e6b21a56bfa7e22d08d439f018bf8533eae88`;
+- **#136 / P58** — mandatory mail readiness proof in beta evidence, merge `2626dc8a829a7de657d1d1098665acae6dba1add`;
+- **#137 / P59** — strict beta evidence binding to RuSender transport, merge `be242c71f5d52c1bd84af4b6f7b8a4d0a3af76a7`;
+- **#138 / P60** — production-like password-reset throttle + old-session revocation proof, merge `569547acaa3d12ed808bc906703ec2869f39c532`;
+- **#139 / P61** — fail-closed P40 beta smoke mode, merge `8f5f001bb4f8321e31cc50f96627e84025e39eb2`.
 
 Это milestone candidate, а не объявление опубликованного релиза. `v0.9.0-beta.1` допускается только после полного P40 evidence manifest со статусом `complete` и promotion `dev -> main` без новых функциональных изменений.
 
