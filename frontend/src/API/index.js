@@ -66,6 +66,20 @@ export const establishClientSession = (accessToken) => {
     setAccessToken(accessToken);
 };
 
+const SESSION_REFRESH_EXCLUDED_ENDPOINTS = new Set([
+    '/auth/refresh',
+    '/auth/login',
+    '/auth/logout',
+    '/auth/registration',
+    '/auth/password-reset/request',
+    '/auth/password-reset/confirm',
+    '/auth/email-verification/confirm',
+    '/auth/email-verification/resend',
+    '/auth/check-email',
+    '/auth/check-phone',
+    '/auth/check-inn',
+]);
+
 const ACCOUNT_SCOPED_ENDPOINTS = new Set([
     '/dashboard/',
     '/dashboard/charts',
@@ -153,7 +167,7 @@ $api.interceptors.response.use(
             error.response?.status === 401 &&
             originalRequest &&
             !originalRequest._isRetry &&
-            requestPath !== '/auth/refresh'
+            !SESSION_REFRESH_EXCLUDED_ENDPOINTS.has(requestPath)
         ) {
             originalRequest._isRetry = true;
             try {
