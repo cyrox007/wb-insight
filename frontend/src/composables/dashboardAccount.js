@@ -26,6 +26,15 @@ const persistSelectedTokenId = (value) => {
     }
 }
 
+const connectionStatus = (token) => {
+    if (token.connection_status) return token.connection_status
+    if (token.is_revoked) return 'revoked'
+    if (token.expires_at && new Date(token.expires_at) < new Date()) return 'expired'
+    if (token.is_active === false || token.is_valid === false) return 'inactive'
+    if (token.dashboard_available === false) return 'outside_tariff'
+    return 'active'
+}
+
 export function resetDashboardAccountState() {
     stateGeneration += 1
     accounts.value = []
@@ -50,7 +59,12 @@ export function useDashboardAccount() {
 
     const loadAccounts = async ({ force = false } = {}) => {
         if (loaded && !force) return accounts.value
-        if (loadingPromise) return loadingPromise
+        if (loadingPromise && !force) return loadingPromise
+
+        if (loadingPromise && force) {
+            stateGeneration += 1
+            loadingPromise = null
+        }
 
         const requestGeneration = stateGeneration
         accountsLoading.value = true
@@ -66,9 +80,7 @@ export function useDashboardAccount() {
                     (token) => token.marketplace === 'wildberries'
                 )
                 accounts.value = allWbAccounts.value.filter(
-                    (token) =>
-                        token.is_valid &&
-                        token.dashboard_available !== false
+                    (token) => connectionStatus(token) === 'active'
                 )
 
                 if (
