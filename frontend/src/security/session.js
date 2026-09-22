@@ -11,8 +11,8 @@ export const clearAccessToken = () => {
 }
 
 export const purgeLegacyPersistentAuth = () => {
-  // P28 deliberately keeps access credentials out of persistent browser storage.
-  // Remove values left by pre-P28 builds during the first load after upgrade.
+  // Начиная с P28 токены доступа не хранятся в постоянном хранилище браузера.
+  // При первом запуске после обновления удаляем значения от старых сборок.
   localStorage.removeItem('access_token')
   localStorage.removeItem('user')
   sessionStorage.removeItem('access_token')
