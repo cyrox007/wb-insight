@@ -729,6 +729,7 @@ onMounted(async () => {
 						<div><dt>Кампании</dt><dd>{{ meta.gateway?.marketing_ready ? 'Готовы' : 'Выключены' }}</dd></div>
 						<div><dt>Credentials</dt><dd>{{ meta.gateway?.credentials_configured ? 'Настроены' : 'Не настроены' }}</dd></div>
 						<div v-if="meta.gateway?.provider === 'rusender'"><dt>Key ID</dt><dd>{{ meta.gateway?.key_id || '—' }}</dd></div>
+						<div v-if="meta.gateway?.provider === 'rusender'"><dt>Token fingerprint</dt><dd><code>{{ meta.gateway?.credential_fingerprint || '—' }}</code></dd></div>
 						<div v-else><dt>Пользователь</dt><dd>{{ meta.gateway?.username_hint || '—' }}</dd></div>
 					</dl>
 					<div v-if="meta.gateway?.diagnostic_code" class="cp-info-callout gateway-diagnostic">
@@ -768,7 +769,11 @@ onMounted(async () => {
 						<label><span>Timeout, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
 						<label><span>Имя отправителя</span><input v-model.trim="gatewayForm.from_name" maxlength="160" placeholder="WB Insight"></label>
 						<label><span>Email отправителя</span><input v-model.trim="gatewayForm.from_email" type="email" placeholder="no-reply@mail.jsinteractive.ru"></label>
-						<label class="wide"><span>API token</span><input v-model="gatewayForm.api_token" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && meta.gateway?.provider === 'rusender' ? 'Пусто = оставить текущий токен' : 'rs_ck_v1_…'"></label>
+						<label class="wide">
+							<span>API token</span>
+							<input v-model="gatewayForm.api_token" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && meta.gateway?.provider === 'rusender' ? 'Пусто = оставить текущий токен' : 'rs_ck_v1_…'">
+							<small v-if="meta.gateway?.credential_fingerprint">Сейчас сохранён {{ meta.gateway.credential_fingerprint }}. Вставьте рабочий токен заново, чтобы гарантированно заменить старый.</small>
+						</label>
 						<label class="switch-line wide danger-toggle"><input v-model="gatewayForm.clear_credentials" type="checkbox"> Очистить сохранённый API token</label>
 					</div>
 
