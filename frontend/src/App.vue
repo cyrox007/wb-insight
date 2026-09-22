@@ -88,11 +88,13 @@ const dashboardAccountIssue = computed(() => {
     const key = token.connection_status || (
       token.is_revoked
         ? 'revoked'
-        : token.is_valid === false
-          ? 'inactive'
-          : token.dashboard_available === false
-            ? 'outside_tariff'
-            : 'active'
+        : token.expires_at && new Date(token.expires_at) < new Date()
+          ? 'expired'
+          : token.is_active === false || token.is_valid === false
+            ? 'inactive'
+            : token.dashboard_available === false
+              ? 'outside_tariff'
+              : 'active'
     )
     result[key] = (result[key] || 0) + 1
     return result
