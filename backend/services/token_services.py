@@ -32,7 +32,7 @@ async def insert_token(
     marketplace_code: str = "wb",
     label: str = "Токен для аналитики",
 ) -> APIToken:
-    """Проверяет WB credential и сохраняет зашифрованный секрет кабинета."""
+    """Проверяет учётные данные Wildberries и сохраняет зашифрованный секрет кабинета."""
     normalized_marketplace = marketplace_code.strip().lower()
     if normalized_marketplace not in {"wb", "wildberries"}:
         raise WBTokenValidationError(
