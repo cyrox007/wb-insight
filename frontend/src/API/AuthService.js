@@ -1,4 +1,4 @@
-import $api, { refreshSessionRequest } from ".";
+import $api, { invalidateSessionRefresh, refreshSessionRequest } from ".";
 import LegalService from "@/API/LegalService";
 
 export default class AuthService {
@@ -11,6 +11,7 @@ export default class AuthService {
     }
 
     static async logout() {
+        invalidateSessionRefresh()
         return await $api.post('/auth/logout')
     }
 
