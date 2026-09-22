@@ -37,6 +37,15 @@ export default class CP_Users {
         return await this.deactivateUser(userId)
     }
 
+    static async permanentlyDeleteUser(userId, confirmEmail, reason = '') {
+        return await $api.delete(`/control-panel/users/${userId}/purge`, {
+            data: {
+                confirm_email: confirmEmail,
+                reason,
+            },
+        })
+    }
+
     static async getLifecycleEvents(userId) {
         return await $api.get(`/control-panel/users/${userId}/lifecycle-events`)
     }
