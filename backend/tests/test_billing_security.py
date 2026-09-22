@@ -8,6 +8,7 @@ from handlers.dashboard.biling_handler import create_payment_handler, pay_now, r
 from handlers.dashboard.profile_handler import _public_token
 from models.subscription_model import Subscription, SubscriptionStatus
 from models.tokens_model import Marketplace
+from services import payment_provider_service as provider_service
 from settings import config
 
 
@@ -75,3 +76,16 @@ def test_sber_callback_openapi_operations_are_unique():
     assert len(callback_routes) == 2
     operation_ids = {route.operation_id for route in callback_routes}
     assert operation_ids == {"sber_callback_get", "sber_callback_post"}
+
+
+
+@pytest.mark.parametrize("value", ["false", "true", "0", "1", 0, 1, None])
+def test_payment_admin_flags_accept_only_json_boolean(value):
+    with pytest.raises(ValueError, match="логическим значением"):
+        provider_service._optional_bool({"enabled": value}, "enabled")
+
+
+def test_payment_admin_flags_preserve_real_boolean_values():
+    assert provider_service._optional_bool({"enabled": False}, "enabled") is False
+    assert provider_service._optional_bool({"enabled": True}, "enabled") is True
+    assert provider_service._optional_bool({}, "enabled") is None
