@@ -15,11 +15,6 @@ on:
       - dev
       - p0-production-safety
       - p1-account-scoped-sync
-    paths:
-      - 'VERSION'
-      - 'backend/**'
-      - 'ops/database_upgrade_acceptance.py'
-      - '.github/workflows/database-migrations.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

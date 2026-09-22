@@ -19,19 +19,6 @@ on:
       - .github/workflows/systemd-updater.yml
   push:
     branches: [main, dev]
-    paths:
-      - VERSION
-      - update.sh
-      - ops/update_systemd.sh
-      - ops/publish_frontend.sh
-      - ops/systemd/**
-      - docs/SYSTEMD_DEPLOYMENT.md
-      - docs/INSTALLATION.md
-      - docs/TROUBLESHOOTING.md
-      - docs/SYSTEM_REQUIREMENTS.md
-      - docs/PRODUCTION_DEPLOYMENT.md
-      - docs/README.md
-      - .github/workflows/systemd-updater.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
