@@ -23,6 +23,7 @@ const {
   selectedTokenId,
   dashboardVersion,
   loadAccounts,
+  resetDashboardAccountState,
 } = useDashboardAccount()
 const { isDark, toggleTheme } = useTheme()
 
@@ -129,6 +130,22 @@ const dashboardAccountIssue = computed(() => {
 })
 
 watch(
+  () => user.value?.id || null,
+  (currentUserId, previousUserId) => {
+    if (
+      currentUserId &&
+      previousUserId &&
+      currentUserId !== previousUserId
+    ) {
+      resetDashboardAccountState()
+      if (showAccountFilter.value) {
+        loadAccounts({ force: true })
+      }
+    }
+  }
+)
+
+watch(
   () => [isAuthenticated.value, showAccountFilter.value],
   ([authenticated, shouldLoad]) => {
     if (authenticated && shouldLoad) loadAccounts()
@@ -189,6 +206,7 @@ const logout = async () => {
     localStorage.removeItem('user')
     localStorage.removeItem('redirectPath')
     localStorage.removeItem('wb-dashboard-token-id')
+    resetDashboardAccountState()
     authStore.logout()
     await router.push('/')
   }
