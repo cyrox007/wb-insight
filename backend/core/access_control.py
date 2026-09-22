@@ -5,12 +5,12 @@ from models.users_model import UserRole
 
 
 class Permission(str, Enum):
-    """Application permissions derived directly from system roles."""
+    """Разрешения приложения, напрямую определяемые системными ролями."""
 
     CONTROL_PANEL_ACCESS = "control_panel:access"
     SYSTEM_MANAGE = "system:manage"
     USERS_READ = "users:read"
-    USERS_WRITE = "users:write"
+    USERS_WRITE = "users:write"\n    USERS_DELETE = "users:delete"
     ROLES_READ = "roles:read"
     ROLES_WRITE = "roles:write"
     TARIFFS_READ = "tariffs:read"
@@ -30,7 +30,7 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
         {
             Permission.CONTROL_PANEL_ACCESS,
             Permission.USERS_READ,
-            Permission.USERS_WRITE,
+            Permission.USERS_WRITE,\n            Permission.USERS_DELETE,
             Permission.ROLES_READ,
             Permission.TARIFFS_READ,
             Permission.TARIFFS_WRITE,
@@ -39,9 +39,9 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.MAIL_READ,
         }
     ),
-    # Staff roles deliberately receive only the minimum operational surface they
-    # need. Seller analytics remain available as a secondary workspace, but the
-    # default staff experience is the role-aware operations workspace.
+    # Сотрудники получают только минимально необходимый операционный доступ.
+    # Клиентская аналитика остаётся вторичной рабочей областью, а основной
+    # интерфейс сотрудников определяется их служебной ролью.
     UserRole.MANAGER: frozenset(
         {
             Permission.CONTROL_PANEL_ACCESS,
