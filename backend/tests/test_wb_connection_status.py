@@ -21,7 +21,6 @@ def _token(**overrides):
         "expires_at": now + timedelta(days=30),
         "is_active": True,
         "is_revoked": False,
-        "is_expired": False,
         "is_valid": True,
         "encrypted_token": "секрет-не-должен-попасть-в-ответ",
     }
@@ -40,7 +39,10 @@ def test_connection_status_distinguishes_revoked_expired_and_inactive():
         dashboard_available=False,
     ) == "revoked"
     assert _token_connection_status(
-        _token(is_expired=True, is_valid=False),
+        _token(
+            expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+            is_valid=False,
+        ),
         dashboard_available=False,
     ) == "expired"
     assert _token_connection_status(
