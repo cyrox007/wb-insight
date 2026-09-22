@@ -1,5 +1,7 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from html import escape
 from urllib.parse import quote
 
 from sqlalchemy import func, or_, select
@@ -24,6 +26,33 @@ from utils.mail_html import render_mail_document
 
 
 TRANSACTIONAL_TEMPLATES = {"email_verification": 1, "password_reset": 1}
+
+
+@dataclass(frozen=True)
+class TransactionalMailContent:
+    subject: str
+    text: str
+    html: str
+    preview_title: str
+    recipient_name: str | None = None
+
+
+def _provider_idempotency_key(message: MailMessage) -> str:
+    """Bind token-bearing payloads to one provider attempt, not one DB message.
+
+    Verification/reset tokens are minted inside the delivery transaction. If a
+    provider accepted attempt times out before our response arrives, the DB
+    transaction is rolled back and the next attempt mints a different token.
+    Reusing the same provider idempotency key with changed content could cause
+    the provider to return the first accepted message whose token no longer
+    exists locally. A short attempt-scoped key keeps retry bodies consistent.
+    """
+    if (
+        message.kind == MailKind.TRANSACTIONAL.value
+        and message.template_code in TRANSACTIONAL_TEMPLATES
+    ):
+        return f"tx:{message.id}:{int(message.attempt_count) + 1}"
+    return message.idempotency_key
 
 
 class PermanentMailDeliveryError(RuntimeError):
@@ -54,6 +83,8 @@ async def _transport_send(
     body: str,
     *,
     html_body: str | None = None,
+    recipient_name: str | None = None,
+    preview_title: str | None = None,
     headers: dict[str, str] | None = None,
     idempotency_key: str | None = None,
 ) -> str:
@@ -69,10 +100,13 @@ async def _transport_send(
     if not runtime.ready:
         raise RuntimeError("mail_transport_not_ready")
 
-    # RuSender's transactional endpoint does not accept our RFC list headers.
-    # Marketing delivery therefore remains disabled for this adapter at the
-    # scheduling/worker layer until a campaign-native provider is added.
-    if headers and runtime.MAIL_PROVIDER == "rusender":
+    # RuSender accepts only custom X-* headers. RFC list/unsubscribe headers
+    # remain SMTP-only, while transactional trace metadata can pass through.
+    if (
+        headers
+        and runtime.MAIL_PROVIDER == "rusender"
+        and any(not str(name).lower().startswith("x-") for name in headers)
+    ):
         raise PermanentMailDeliveryError("rusender_marketing_transport_unsupported")
 
     provider = mail_provider_for_runtime(runtime)
@@ -85,6 +119,8 @@ async def _transport_send(
             subject=subject,
             body=body,
             html_body=html_body,
+            recipient_name=recipient_name,
+            preview_title=preview_title,
             headers=headers,
             idempotency_key=idempotency_key,
         )
@@ -158,7 +194,10 @@ async def queue_test_email(
     return message
 
 
-async def _render_transactional(session: AsyncSession, message: MailMessage) -> tuple[str, str]:
+async def _render_transactional(
+    session: AsyncSession,
+    message: MailMessage,
+) -> TransactionalMailContent:
     if message.user_id is None:
         raise PermanentMailDeliveryError("mail_user_missing")
     result = await session.execute(select(User).where(User.id == message.user_id).with_for_update())
@@ -167,6 +206,13 @@ async def _render_transactional(session: AsyncSession, message: MailMessage) -> 
         raise PermanentMailDeliveryError("mail_user_unavailable")
 
     recipient = _normalized_email(message.recipient_email)
+    recipient_name = str(getattr(user, "full_name", "") or "").strip()[:255] or None
+    greeting = (
+        f"Здравствуйте, {recipient_name}."
+        if recipient_name
+        else "Здравствуйте."
+    )
+
     if message.template_code == "email_verification":
         try:
             raw_token = await issue_email_verification_token(session, user, email=recipient)
@@ -174,16 +220,43 @@ async def _render_transactional(session: AsyncSession, message: MailMessage) -> 
             raise PermanentMailDeliveryError(str(exc) or "email_verification_target_stale") from exc
         verify_url = _token_url(config.EMAIL_VERIFICATION_BASE_URL, raw_token)
         is_change = recipient == _normalized_email(getattr(user, "pending_email", None))
-        return (
-            "Подтвердите новый email в WB Insight" if is_change else "Подтвердите email в WB Insight",
-            (
-                "Подтвердите новый адрес электронной почты для аккаунта WB Insight:\n\n"
-                if is_change
-                else "Подтвердите адрес электронной почты, чтобы завершить регистрацию:\n\n"
-            )
-            + f"{verify_url}\n\n"
-            + f"Ссылка действует {config.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES} минут. "
-            + "Если вы не запрашивали это действие, проигнорируйте письмо.",
+        subject = "Подтвердите новый email в WB Insight" if is_change else "Подтвердите email в WB Insight"
+        preview = (
+            "Подтвердите новый адрес электронной почты для аккаунта WB Insight"
+            if is_change
+            else "Подтвердите email, чтобы завершить регистрацию в WB Insight"
+        )
+        action = "Подтвердить новый email" if is_change else "Подтвердить email"
+        intro = (
+            "Вы запросили изменение адреса электронной почты для аккаунта WB Insight."
+            if is_change
+            else "Подтвердите адрес электронной почты, чтобы завершить регистрацию."
+        )
+        text = (
+            f"{greeting}\n\n"
+            f"{intro}\n\n"
+            f"{verify_url}\n\n"
+            f"Ссылка действует {config.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES} минут.\n"
+            "Если вы не запрашивали это действие, просто проигнорируйте письмо."
+        )
+        html = render_mail_document(
+            "<h2>" + escape(subject) + "</h2>"
+            "<p>" + escape(greeting) + "</p>"
+            "<p>" + escape(intro) + "</p>"
+            '<p><a data-mail-button="1" href="' + escape(verify_url, quote=True) + '">'
+            + escape(action)
+            + "</a></p>"
+            "<p>Ссылка действует "
+            + escape(str(config.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES))
+            + " минут.</p>"
+            "<p>Если вы не запрашивали это действие, просто проигнорируйте письмо.</p>"
+        )
+        return TransactionalMailContent(
+            subject=subject,
+            text=text,
+            html=html,
+            preview_title=preview,
+            recipient_name=recipient_name,
         )
 
     if message.template_code == "password_reset":
@@ -193,12 +266,32 @@ async def _render_transactional(session: AsyncSession, message: MailMessage) -> 
             raise PermanentMailDeliveryError("password_reset_target_stale")
         raw_token = await issue_password_reset_token(session, user)
         reset_url = _password_reset_url(raw_token)
-        return (
-            "Восстановление доступа к WB Insight",
+        subject = "Восстановление доступа к WB Insight"
+        preview = "Ссылка для установки нового пароля в WB Insight"
+        text = (
+            f"{greeting}\n\n"
             "Для установки нового пароля откройте ссылку:\n\n"
             f"{reset_url}\n\n"
-            f"Ссылка действует {config.PASSWORD_RESET_TOKEN_TTL_MINUTES} минут. "
-            "Если вы не запрашивали восстановление, проигнорируйте письмо.",
+            f"Ссылка действует {config.PASSWORD_RESET_TOKEN_TTL_MINUTES} минут.\n"
+            "Если вы не запрашивали восстановление, просто проигнорируйте письмо."
+        )
+        html = render_mail_document(
+            "<h2>Восстановление доступа</h2>"
+            "<p>" + escape(greeting) + "</p>"
+            "<p>Мы получили запрос на установку нового пароля для вашего аккаунта WB Insight.</p>"
+            '<p><a data-mail-button="1" href="' + escape(reset_url, quote=True) + '">'
+            "Установить новый пароль</a></p>"
+            "<p>Ссылка действует "
+            + escape(str(config.PASSWORD_RESET_TOKEN_TTL_MINUTES))
+            + " минут.</p>"
+            "<p>Если вы не запрашивали восстановление, просто проигнорируйте письмо.</p>"
+        )
+        return TransactionalMailContent(
+            subject=subject,
+            text=text,
+            html=html,
+            preview_title=preview,
+            recipient_name=recipient_name,
         )
 
     raise PermanentMailDeliveryError("mail_template_unknown")
@@ -279,9 +372,21 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
     await session.flush()
 
     html_body = None
+    recipient_name = None
+    preview_title = None
     delivery_headers: dict[str, str] | None = None
     if message.kind == MailKind.TRANSACTIONAL.value:
-        subject, body = await _render_transactional(session, message)
+        rendered = await _render_transactional(session, message)
+        subject = rendered.subject
+        body = rendered.text
+        html_body = rendered.html
+        recipient_name = rendered.recipient_name
+        preview_title = rendered.preview_title
+        delivery_headers = {
+            "X-WB-Message-Type": "transactional",
+            "X-WB-Template": str(message.template_code or "unknown")[:64],
+            "X-WB-Message-ID": str(message.id),
+        }
     else:
         subject = (message.subject or "WB Insight")[:255]
         body = message.body or ""
@@ -320,8 +425,10 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
         subject,
         body,
         html_body=html_body,
+        recipient_name=recipient_name,
+        preview_title=preview_title,
         headers=delivery_headers,
-        idempotency_key=message.idempotency_key,
+        idempotency_key=_provider_idempotency_key(message),
     )
     message.attempt_count += 1
     message.provider_message_id = provider_id
