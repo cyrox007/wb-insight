@@ -11,7 +11,7 @@ MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 def _required_text(row: dict[str, Any], key: str) -> str:
     value = row.get(key)
     if value is None or str(value).strip() == "":
-        raise ValueError(f"WB operational row is missing required field: {key}")
+        raise ValueError(f"В операционной строке Wildberries отсутствует обязательное поле: {key}")
     return str(value)
 
 
@@ -56,7 +56,7 @@ def _boolean(value: Any) -> bool | None:
 def _datetime(value: Any, *, required: bool = False) -> datetime | None:
     if value in (None, ""):
         if required:
-            raise ValueError("WB operational row is missing required datetime")
+            raise ValueError("В операционной строке Wildberries отсутствует обязательная дата")
         return None
 
     if isinstance(value, datetime):
@@ -66,7 +66,7 @@ def _datetime(value: Any, *, required: bool = False) -> datetime | None:
             parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         except ValueError as exc:
             if required:
-                raise ValueError("WB operational row contains invalid datetime") from exc
+                raise ValueError("Операционная строка Wildberries содержит некорректную дату") from exc
             return None
 
     if parsed.tzinfo is None:
