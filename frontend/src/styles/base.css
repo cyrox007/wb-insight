@@ -58,6 +58,79 @@ a {
   color: var(--text-color);
 }
 
+/*
+ * Global scrollbar skin. Firefox uses scrollbar-color/width, Chromium/WebKit
+ * use the pseudo elements below. Component-specific "scrollbar-width: none"
+ * rules still take precedence where we intentionally hide compact nav scroll.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: content-box;
+  transition: background-color var(--transition);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-active);
+  background-clip: content-box;
+}
+
+/* Scrollable product surfaces get a subtle track only while they matter. */
+.cp-table-scroll,
+.cp-nav,
+textarea,
+select {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.cp-table-scroll::-webkit-scrollbar-track,
+.cp-nav::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track,
+select::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: var(--scrollbar-track);
+}
+
+@media (max-width: 640px) {
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border-width: 2px;
+  }
+}
+
 #app {
   min-height: 100vh;
 }
