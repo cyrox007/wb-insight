@@ -6,9 +6,9 @@ import {
     setAccessToken,
 } from '@/security/session';
 
-// Systemd/nginx production exposes the backend under /api. Keep local Vite
-// development on the direct backend port, while still allowing an explicit
-// VITE_API_BASE_URL override for Docker/custom deployments.
+// В production systemd/nginx публикует backend под /api. Локальная разработка
+// через Vite использует прямой порт backend, при этом VITE_API_BASE_URL можно
+// явно переопределить для Docker и нестандартных развёртываний.
 const defaultApiBaseURL = import.meta.env.PROD ? '/api' : 'http://localhost:9000';
 
 const resolveApiBaseURL = () => {
@@ -20,13 +20,13 @@ const resolveApiBaseURL = () => {
             const configuredURL = new URL(configuredBaseURL, window.location.href);
             if (configuredURL.origin !== window.location.origin) {
                 console.warn(
-                    'Ignoring cross-origin VITE_API_BASE_URL in production; falling back to same-origin /api.',
+                    'В production отклонён VITE_API_BASE_URL с другим origin; используется same-origin /api.',
                 );
                 return '/api';
             }
         } catch {
             console.warn(
-                'Ignoring invalid VITE_API_BASE_URL in production; falling back to same-origin /api.',
+                'В production отклонён некорректный VITE_API_BASE_URL; используется same-origin /api.',
             );
             return '/api';
         }
@@ -47,6 +47,7 @@ let refreshPromise = null;
 const ACCOUNT_SCOPED_ENDPOINTS = new Set([
     '/dashboard/',
     '/dashboard/charts',
+    '/dashboard/sync-status',
     '/dashboard/plan',
     '/dashboard/ads',
     '/dashboard/ads/',
@@ -74,7 +75,7 @@ export const refreshSessionRequest = async () => {
     );
     const accessToken = response.data?.access_token;
     if (!accessToken) {
-        throw new Error('Refresh response does not contain access_token');
+        throw new Error('Ответ обновления сессии не содержит access_token');
     }
     setAccessToken(accessToken);
     return response;
