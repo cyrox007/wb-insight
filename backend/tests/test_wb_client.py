@@ -116,7 +116,7 @@ async def test_partner_token_fails_closed_without_service_secret(monkeypatch):
         rate_limiter=limiter,
     )
 
-    with pytest.raises(WBAuthError, match="service secret"):
+    with pytest.raises(WBAuthError, match="Секрет партнёрского сервиса Wildberries не настроен"):
         await client.get_products({"settings": {}})
 
     await client.aclose()
