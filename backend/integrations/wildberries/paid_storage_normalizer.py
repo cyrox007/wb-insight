@@ -49,10 +49,10 @@ def normalize_paid_storage_rows(
     token_id: UUID,
     task_id: str | None,
 ) -> list[dict[str, Any]]:
-    """Normalize the current WB Paid Storage report without inventing keys.
+    """Нормализует актуальный отчёт Wildberries по платному хранению.
 
-    Rows without a valid report date cannot be assigned to a replacement
-    period and are therefore ignored.
+    Новые ключи не придумываются. Строки без корректной даты отчёта нельзя
+    отнести к периоду замены, поэтому они игнорируются.
     """
     now = datetime.now(timezone.utc)
     result: list[dict[str, Any]] = []
