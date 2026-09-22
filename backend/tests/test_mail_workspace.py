@@ -808,3 +808,44 @@ def test_smtp_provider_rejects_header_injection(monkeypatch):
             body="Текст",
             headers={"X-Test": "ok\r\nBcc: attacker@example.org"},
         )
+
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["enabled", "clear_credentials", "starttls"],
+)
+@pytest.mark.parametrize("value", ["false", "true", "0", "1", 0, 1, None])
+def test_mail_admin_flags_accept_only_json_boolean(field, value):
+    with pytest.raises(ValueError, match="логическим значением"):
+        transport._optional_bool({field: value}, field)
+
+
+def test_mail_admin_flags_preserve_real_boolean_values():
+    assert transport._optional_bool({"enabled": False}, "enabled") is False
+    assert transport._optional_bool({"enabled": True}, "enabled") is True
+    assert transport._optional_bool({}, "enabled") is None
+
+
+def test_admin_config_sources_do_not_coerce_raw_json_flags_with_bool():
+    payment_source = provider_service_path = (
+        __import__("pathlib").Path(__file__).resolve().parents[1]
+        / "services"
+        / "payment_provider_service.py"
+    ).read_text(encoding="utf-8")
+    mail_source = (
+        __import__("pathlib").Path(__file__).resolve().parents[1]
+        / "services"
+        / "mail_transport_service.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden = (
+        'bool(values.get("enabled"',
+        'bool(values.get("is_default"',
+        'bool(values["enabled"])',
+        'bool(values["starttls"])',
+        'bool(values.get("clear_credentials"))',
+    )
+    for phrase in forbidden:
+        assert phrase not in payment_source
+        assert phrase not in mail_source
