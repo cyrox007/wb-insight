@@ -1,12 +1,14 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import models
 from core.audit import AuditMiddleware
 from core.http_metrics import HTTPMetricsMiddleware
+from core.logger import setup_logger
 from core.session_security import SessionSecurityMiddleware
 from core.version import APP_VERSION
 from handlers.account_lifecycle_handler import account_router, auth_router as account_auth_router
@@ -39,11 +41,13 @@ from handlers.legal_handler import router as legal_router
 from handlers.session_handler import router as session_router
 from handlers.users_handler import routers as user_router
 from settings import config
+from utils.responce_helps import response_error
 
 
 ALLOWED_ORIGINS = config.get_allowed_origins
 ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 STATIC_DIRECTORIES = {"static": "/static", "uploads": "/uploads"}
+logger = setup_logger(__name__)
 
 
 def _setup_cors(app: FastAPI) -> None:
@@ -100,8 +104,29 @@ def _register_routers(app: FastAPI) -> None:
         app.include_router(router)
 
 
+async def _handle_unexpected_exception(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "Необработанная ошибка HTTP-запроса %s %s",
+        request.method,
+        request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=response_error(
+            code="INTERNAL_SERVER_ERROR",
+            message="Внутренняя ошибка сервера",
+        ),
+    )
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="WB Insight API", description="Seller analytics API for WB Insight", version=APP_VERSION)
+    app = FastAPI(
+        title="WB Insight API",
+        description="API аналитики продавца WB Insight",
+        version=APP_VERSION,
+    )
+    app.add_exception_handler(Exception, _handle_unexpected_exception)
     app.add_middleware(HTTPMetricsMiddleware)
     app.add_middleware(SessionSecurityMiddleware)
     app.add_middleware(AuditMiddleware)
