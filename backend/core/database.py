@@ -99,7 +99,7 @@ class Database:
 
     @classmethod
     async def session_generator(cls) -> AsyncGenerator[AsyncSession, None]:
-        """Предоставляет FastAPI-сессию с автоматическим commit или rollback."""
+        """Предоставляет FastAPI-сессию с автоматической фиксацией или откатом транзакции."""
         session = await cls.get_session()
         try:
             yield session
