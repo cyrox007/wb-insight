@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
 import CP_Audit from '@/API/ControlPanel/CP_Audit'
@@ -12,7 +12,7 @@ const offset = ref(0)
 const isLoading = ref(false)
 const loadError = ref('')
 const selected = ref(null)
-const detailLoading = ref(false)
+const detailLoadingId = ref(null)
 
 const filters = reactive({
 	action: '',
@@ -96,23 +96,50 @@ function nextPage() {
 	loadEvents()
 }
 
+function closeEvent() {
+	selected.value = null
+}
+
 async function openEvent(event) {
-	detailLoading.value = true
+	// Open immediately from the already loaded row so the click always has
+	// visible feedback; refresh from the canonical detail endpoint in-place.
+	selected.value = event
+	detailLoadingId.value = event.id
 	try {
 		const { data } = await CP_Audit.getEvent(event.id)
 		if (data?.status !== 'success' || !data?.event) throw new Error('Некорректный ответ API')
-		selected.value = data.event
+		if (selected.value?.id === event.id) selected.value = data.event
 	} catch (error) {
 		console.error('Ошибка загрузки события аудита:', error)
-		loadError.value = 'Не удалось загрузить детали события.'
+		if (selected.value?.id === event.id) {
+			selected.value = {
+				...selected.value,
+				detail_load_error: 'Не удалось обновить детали события.',
+			}
+		}
 	} finally {
-		detailLoading.value = false
+		if (detailLoadingId.value === event.id) detailLoadingId.value = null
 	}
 }
 
+function handleEscape(event) {
+	if (event.key === 'Escape' && selected.value) closeEvent()
+}
+
+watch(selected, (value) => {
+	if (typeof document === 'undefined') return
+	document.documentElement.classList.toggle('audit-detail-open', Boolean(value))
+})
+
 onMounted(() => {
 	if (route.query.actor_id) filters.actor_id = String(route.query.actor_id)
+	window.addEventListener('keydown', handleEscape)
 	loadEvents()
+})
+
+onBeforeUnmount(() => {
+	window.removeEventListener('keydown', handleEscape)
+	document.documentElement.classList.remove('audit-detail-open')
 })
 </script>
 
@@ -192,7 +219,7 @@ onMounted(() => {
 							<td><span class="cp-chip" :class="resultClass(event.result)">{{ resultLabel(event.result) }}</span></td>
 							<td>{{ event.source }}</td>
 							<td><code class="cp-code audit-request-id">{{ event.request_id || '—' }}</code></td>
-							<td><BaseButton variant="ghost" size="small" text="Детали" :loading="detailLoading && selected?.id === event.id" @click="openEvent(event)" /></td>
+							<td><BaseButton variant="ghost" size="small" text="Детали" :loading="detailLoadingId === event.id" @click="openEvent(event)" /></td>
 						</tr>
 					</tbody>
 				</table>
@@ -207,36 +234,57 @@ onMounted(() => {
 			</div>
 		</div>
 
-		<Transition name="cp-expand">
-			<article v-if="selected" class="cp-card audit-detail">
-			<div class="audit-detail__head">
-				<div>
-					<p class="cp-eyebrow">Событие</p>
-					<h3 class="audit-detail__title">{{ selected.action }}</h3>
+		<Teleport to="body">
+			<Transition name="audit-drawer">
+				<div
+					v-if="selected"
+					class="audit-detail-overlay"
+					role="presentation"
+					@click.self="closeEvent"
+				>
+					<aside
+						class="audit-detail-drawer"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="audit-detail-title"
+					>
+						<div class="audit-detail__head">
+							<div>
+								<p class="cp-eyebrow">Событие аудита</p>
+								<h3 id="audit-detail-title" class="audit-detail__title">{{ selected.action }}</h3>
+								<p v-if="detailLoadingId === selected.id" class="audit-detail__loading">Обновляем детали…</p>
+								<p v-else-if="selected.detail_load_error" class="audit-detail__error">{{ selected.detail_load_error }}</p>
+							</div>
+							<BaseButton variant="ghost" size="small" text="Закрыть" @click="closeEvent" />
+						</div>
+
+						<div class="audit-detail__scroll">
+							<div class="audit-detail__grid">
+								<div><span>Время</span><strong>{{ formatDate(selected.created_at) }}</strong></div>
+								<div><span>Пользователь</span><strong>{{ selected.actor_email || selected.actor_user_id || 'Система / неизвестно' }}</strong></div>
+								<div><span>Роли</span><strong>{{ selected.actor_roles?.join(', ') || '—' }}</strong></div>
+								<div><span>Результат</span><strong>{{ resultLabel(selected.result) }}</strong></div>
+								<div><span>HTTP</span><strong>{{ selected.method || '—' }} {{ selected.path || '' }}</strong></div>
+								<div><span>Request ID</span><strong>{{ selected.request_id || '—' }}</strong></div>
+								<div><span>Объект</span><strong>{{ selected.target_type || '—' }} {{ selected.target_id || '' }}</strong></div>
+								<div><span>Ошибка</span><strong>{{ selected.error_code || '—' }}</strong></div>
+							</div>
+
+							<div class="audit-evidence">
+								<span>Client evidence</span>
+								<code>IP: {{ selected.client_ip_hash || '—' }}</code>
+								<code>UA: {{ selected.user_agent_hash || '—' }}</code>
+							</div>
+
+							<div>
+								<span class="cp-muted">Безопасные metadata</span>
+								<pre class="audit-json">{{ JSON.stringify(selected.metadata || {}, null, 2) }}</pre>
+							</div>
+						</div>
+					</aside>
 				</div>
-				<BaseButton variant="ghost" size="small" text="Закрыть" @click="selected = null" />
-			</div>
-			<div class="audit-detail__grid">
-				<div><span>Время</span><strong>{{ formatDate(selected.created_at) }}</strong></div>
-				<div><span>Пользователь</span><strong>{{ selected.actor_email || selected.actor_user_id || 'Система / неизвестно' }}</strong></div>
-				<div><span>Роли</span><strong>{{ selected.actor_roles?.join(', ') || '—' }}</strong></div>
-				<div><span>Результат</span><strong>{{ resultLabel(selected.result) }}</strong></div>
-				<div><span>HTTP</span><strong>{{ selected.method || '—' }} {{ selected.path || '' }}</strong></div>
-				<div><span>Request ID</span><strong>{{ selected.request_id || '—' }}</strong></div>
-				<div><span>Объект</span><strong>{{ selected.target_type || '—' }} {{ selected.target_id || '' }}</strong></div>
-				<div><span>Ошибка</span><strong>{{ selected.error_code || '—' }}</strong></div>
-			</div>
-			<div class="audit-evidence">
-				<span>Client evidence</span>
-				<code>IP: {{ selected.client_ip_hash || '—' }}</code>
-				<code>UA: {{ selected.user_agent_hash || '—' }}</code>
-			</div>
-			<div>
-				<span class="cp-muted">Безопасные metadata</span>
-				<pre class="audit-json">{{ JSON.stringify(selected.metadata || {}, null, 2) }}</pre>
-			</div>
-			</article>
-		</Transition>
+			</Transition>
+		</Teleport>
 	</section>
 </template>
 
@@ -265,16 +313,85 @@ onMounted(() => {
 	display: inline-block;
 	overflow-wrap: anywhere;
 }
-.audit-detail {
-	max-height: 1100px;
+:global(html.audit-detail-open),
+:global(html.audit-detail-open body) {
 	overflow: hidden;
+}
+
+.audit-detail-overlay {
+	position: fixed;
+	z-index: 1200;
+	inset: 0;
+	display: flex;
+	justify-content: flex-end;
+	background: color-mix(in srgb, var(--overlay-bg) 82%, transparent);
+	backdrop-filter: blur(3px);
+}
+
+.audit-detail-drawer {
+	width: min(620px, calc(100vw - 24px));
+	height: 100dvh;
+	display: flex;
+	flex-direction: column;
+	border-left: 1px solid var(--border-color);
+	background: var(--card-bg);
+	box-shadow: -20px 0 60px rgba(0, 0, 0, 0.18);
+}
+
+.audit-detail__head {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 20px;
+	border-bottom: 1px solid var(--border-color);
+	background: var(--header-bg-soft);
+	backdrop-filter: blur(14px);
+}
+
+.audit-detail__title {
+	margin: 3px 0 0;
+	overflow-wrap: anywhere;
+}
+
+.audit-detail__loading,
+.audit-detail__error {
+	margin: 6px 0 0;
+	font-size: 12px;
+}
+
+.audit-detail__loading { color: var(--text-muted); }
+.audit-detail__error { color: var(--danger-color); }
+
+.audit-detail__scroll {
+	min-height: 0;
+	flex: 1 1 auto;
+	overflow: auto;
 	padding: 20px;
 }
-.audit-detail__head {
-	justify-content: space-between;
-	margin-bottom: 1rem;
+
+.audit-drawer-enter-active,
+.audit-drawer-leave-active {
+	transition: background 180ms ease;
 }
-.audit-detail__title { margin: 0; }
+
+.audit-drawer-enter-active .audit-detail-drawer,
+.audit-drawer-leave-active .audit-detail-drawer {
+	transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
+}
+
+.audit-drawer-enter-from,
+.audit-drawer-leave-to {
+	background: transparent;
+}
+
+.audit-drawer-enter-from .audit-detail-drawer,
+.audit-drawer-leave-to .audit-detail-drawer {
+	opacity: 0;
+	transform: translateX(24px);
+}
+
 .audit-detail__grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -305,5 +422,31 @@ onMounted(() => {
 }
 @media (max-width: 720px) {
 	.audit-pagination { align-items: flex-start; flex-direction: column; }
+
+	.audit-detail-overlay {
+		align-items: flex-end;
+	}
+
+	.audit-detail-drawer {
+		width: 100%;
+		height: min(88dvh, 760px);
+		border-top: 1px solid var(--border-color);
+		border-left: 0;
+		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+	}
+
+	.audit-drawer-enter-from .audit-detail-drawer,
+	.audit-drawer-leave-to .audit-detail-drawer {
+		transform: translateY(20px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.audit-drawer-enter-active,
+	.audit-drawer-leave-active,
+	.audit-drawer-enter-active .audit-detail-drawer,
+	.audit-drawer-leave-active .audit-detail-drawer {
+		transition: none;
+	}
 }
 </style>
