@@ -520,19 +520,26 @@ async def send_mail_transport_test(
         sender_name=runtime.SMTP_FROM_NAME,
         reply_to=runtime.SMTP_REPLY_TO_EMAIL,
         recipient=recipient,
-        subject="[TEST] WB Insight · проверка почтового шлюза",
+        subject="WB Insight — проверка доставки",
         body=(
-            "Почтовый шлюз WB Insight настроен корректно.\n\n"
-            "Это тестовое письмо из Панели управления."
+            "Проверка доставки WB Insight выполнена.\n\n"
+            "Это служебное письмо было отправлено по запросу администратора "
+            "из Панели управления. Никаких действий выполнять не требуется."
         ),
         html_body=(
             '<!doctype html><html><body style="font-family:Arial,sans-serif;'
             'background:#f5f6fb;padding:24px;color:#182033;">'
             '<div style="max-width:620px;margin:auto;background:#fff;padding:28px;'
-            'border-radius:14px;"><h2 style="margin-top:0;">Почтовый шлюз работает</h2>'
-            '<p>WB Insight успешно отправил тестовое письмо через текущий транспорт.</p>'
+            'border-radius:14px;"><h2 style="margin-top:0;">Проверка доставки WB Insight</h2>'
+            '<p>Транзакционный почтовый транспорт принял тестовое письмо.</p>'
+            '<p>Это служебная проверка по запросу администратора. '
+            'Никаких действий выполнять не требуется.</p>'
             '</div></body></html>'
         ),
+        preview_title="Проверка транзакционной доставки WB Insight",
+        headers={
+            "X-WB-Message-Type": "gateway-test",
+        },
         idempotency_key=f"gateway-test:{uuid4()}",
     )
     return receipt.provider_message_id or ""
