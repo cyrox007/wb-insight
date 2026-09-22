@@ -12,7 +12,30 @@ import './styles/control-panel.css'
 import './styles/control-panel-forms.css'
 import './styles/control-panel-polish.css'
 
-initializeTheme()
+const enforceCanonicalHttps = () => {
+	if (
+		!import.meta.env.PROD ||
+		typeof window === 'undefined' ||
+		window.location.protocol !== 'http:'
+	) {
+		return false
+	}
+
+	const hostname = window.location.hostname
+	if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+		return false
+	}
+
+	const target = new URL(window.location.href)
+	target.protocol = 'https:'
+	if (target.port === '80') target.port = ''
+	window.location.replace(target.toString())
+	return true
+}
+
+const redirectedToHttps = enforceCanonicalHttps()
+
+if (!redirectedToHttps) initializeTheme()
 
 const initializeSmoothAnchorScrolling = () => {
 	if (typeof document === 'undefined') return
@@ -69,7 +92,7 @@ const initializeSmoothAnchorScrolling = () => {
 	})
 }
 
-initializeSmoothAnchorScrolling()
+if (!redirectedToHttps) initializeSmoothAnchorScrolling()
 
 const bootstrap = async () => {
 	const app = createApp(App)
@@ -82,4 +105,4 @@ const bootstrap = async () => {
 	app.mount('#app')
 }
 
-bootstrap()
+if (!redirectedToHttps) bootstrap()

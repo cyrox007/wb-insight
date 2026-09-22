@@ -15,16 +15,21 @@ const resolveApiBaseURL = () => {
     const configuredBaseURL = (import.meta.env.VITE_API_BASE_URL || '').trim();
     if (!configuredBaseURL) return defaultApiBaseURL;
 
-    if (
-        import.meta.env.PROD &&
-        typeof window !== 'undefined' &&
-        window.location.protocol === 'https:' &&
-        /^http:\/\//i.test(configuredBaseURL)
-    ) {
-        console.warn(
-            'Ignoring insecure VITE_API_BASE_URL on HTTPS origin; falling back to same-origin /api.',
-        );
-        return '/api';
+    if (import.meta.env.PROD && typeof window !== 'undefined') {
+        try {
+            const configuredURL = new URL(configuredBaseURL, window.location.href);
+            if (configuredURL.origin !== window.location.origin) {
+                console.warn(
+                    'Ignoring cross-origin VITE_API_BASE_URL in production; falling back to same-origin /api.',
+                );
+                return '/api';
+            }
+        } catch {
+            console.warn(
+                'Ignoring invalid VITE_API_BASE_URL in production; falling back to same-origin /api.',
+            );
+            return '/api';
+        }
     }
 
     return configuredBaseURL;
