@@ -91,14 +91,14 @@ async def _probe_stored_wb_token(token, user_id: UUID) -> str:
             return "expired"
 
         logger.warning(
-            "Онлайн-проверка квоты Wildberries не дала однозначного результата token_id=%s code=%s",
+            "Онлайн-проверка квоты Wildberries не дала однозначного результата идентификатор_токена=%s код=%s",
             token.id,
             exc.code,
         )
         return "unknown"
     except Exception as exc:
         logger.warning(
-            "Онлайн-проверка квоты Wildberries завершилась ошибкой token_id=%s error=%s",
+            "Онлайн-проверка квоты Wildberries завершилась ошибкой идентификатор_токена=%s тип_ошибки=%s",
             token.id,
             type(exc).__name__,
         )
@@ -124,14 +124,14 @@ async def _release_stale_wb_quota(
             token.is_revoked = True
             released += 1
             logger.info(
-                "Токен Wildberries исключён из квоты после подтверждённого отказа token_id=%s",
+                "Токен Wildberries исключён из квоты после подтверждённого отказа идентификатор_токена=%s",
                 token.id,
             )
         elif probe == "expired":
             token.is_active = False
             released += 1
             logger.info(
-                "Токен Wildberries исключён из квоты после истечения срока token_id=%s",
+                "Токен Wildberries исключён из квоты после истечения срока идентификатор_токена=%s",
                 token.id,
             )
 
