@@ -73,6 +73,15 @@ def _normalize_mode(mode: str) -> str:
     return value
 
 
+def _optional_bool(values: dict[str, Any], field: str) -> bool | None:
+    if field not in values:
+        return None
+    value = values[field]
+    if not isinstance(value, bool):
+        raise ValueError(f"Поле {field} должно быть логическим значением")
+    return value
+
+
 def _mask_identifier(value: str | None) -> str | None:
     if not value:
         return None
@@ -313,8 +322,9 @@ async def upsert_provider_config(
             raise ValueError("options должен быть объектом")
         row.options = values["options"] or {}
 
+    clear_secrets = _optional_bool(values, "clear_secrets")
     existing_secrets = _read_secrets(row)
-    if values.get("clear_secrets") is True:
+    if clear_secrets is True:
         existing_secrets = {}
     secrets = dict(existing_secrets)
     for field in ("username", "password"):
@@ -326,8 +336,10 @@ async def upsert_provider_config(
         else None
     )
 
-    requested_enabled = bool(values.get("enabled", row.enabled))
-    requested_default = bool(values.get("is_default", row.is_default))
+    enabled_value = _optional_bool(values, "enabled")
+    default_value = _optional_bool(values, "is_default")
+    requested_enabled = row.enabled if enabled_value is None else enabled_value
+    requested_default = row.is_default if default_value is None else default_value
     if provider == "fake" and mode != "test" and requested_enabled:
         raise ValueError("Fake-провайдер разрешён только в test-режиме")
     if provider == "fake" and config.IS_PRODUCTION and requested_enabled:
