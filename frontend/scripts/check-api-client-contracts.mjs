@@ -47,16 +47,53 @@ for (const [clientName, clientPath] of Object.entries(clients)) {
   for (const [method, locations] of referenced.entries()) {
     if (!implemented.has(method)) {
       errors.push(
-        `${clientName}.${method}() is referenced but not implemented in ${path.relative(process.cwd(), clientPath)}\n  used by: ${[...new Set(locations)].join(', ')}`,
+        `${clientName}.${method}() используется, но не реализован в ${path.relative(process.cwd(), clientPath)}\n  места использования: ${[...new Set(locations)].join(', ')}`,
       )
     }
   }
 }
 
+const dashboardAccountPath = path.join(root, 'composables/dashboardAccount.js')
+const appPath = path.join(root, 'App.vue')
+const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
+const appSource = fs.readFileSync(appPath, 'utf8')
+
+const sessionIsolationChecks = [
+  {
+    ok: dashboardAccountSource.includes('export function resetDashboardAccountState()'),
+    message: 'Кэш кабинетов должен иметь явную функцию сброса между сессиями.',
+  },
+  {
+    ok:
+      dashboardAccountSource.includes('let stateGeneration = 0') &&
+      dashboardAccountSource.includes('requestGeneration !== stateGeneration'),
+    message: 'Поздний ответ запроса предыдущей сессии должен отбрасываться по поколению состояния.',
+  },
+  {
+    ok:
+      dashboardAccountSource.includes("persistSelectedTokenId('')") &&
+      dashboardAccountSource.includes('allWbAccounts.value = []') &&
+      dashboardAccountSource.includes('accounts.value = []'),
+    message: 'Сброс сессии должен очищать выбранный кабинет и оба списка подключений.',
+  },
+  {
+    ok: /finally\s*\{[\s\S]*?resetDashboardAccountState\(\)[\s\S]*?authStore\.logout\(\)/.test(appSource),
+    message: 'Штатный выход должен очистить кэш кабинетов до завершения клиентской сессии.',
+  },
+  {
+    ok: appSource.includes('currentUserId !== previousUserId'),
+    message: 'Смена пользователя без перезагрузки страницы должна сбрасывать кэш кабинетов.',
+  },
+]
+
+for (const check of sessionIsolationChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
 if (errors.length) {
-  console.error('Control Panel API client contract check failed:\n')
+  console.error('Проверка контрактов клиентского приложения завершилась ошибкой:\n')
   console.error(errors.join('\n\n'))
   process.exit(1)
 }
 
-console.log('Control Panel API client contracts are consistent.')
+console.log('Контракты клиентского приложения согласованы.')
