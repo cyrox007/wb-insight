@@ -151,6 +151,7 @@ async def test_dashboard_reports_primary_sync_instead_of_not_synced(monkeypatch)
     assert result["status"] == "success"
     assert result["is_syncing"] is True
     assert result["is_synced"] is False
+    assert result["initial_sync"] is True
     assert result["message"] == "Выполняется первичная синхронизация данных"
     assert result["sync_status"]["waiting_entities"] == len(SYNC_ENTITIES)
     assert result["sync_status"]["is_syncing"] is True
@@ -220,3 +221,106 @@ async def test_legacy_wb_connection_route_bootstraps_primary_sync(monkeypatch):
     assert len(bootstrap_calls) == 1
     assert bootstrap_calls[0]["user_id"] == user_id
     assert bootstrap_calls[0]["token_id"] == token_id
+
+
+
+@pytest.mark.asyncio
+async def test_dashboard_keeps_saved_metrics_visible_during_background_sync(monkeypatch):
+    user_id = uuid4()
+    token_id = uuid4()
+    now = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
+    scope = DashboardAccountScope(
+        token_ids=(token_id,),
+        selected_token_id=token_id,
+    )
+    states = [
+        _state(
+            token_id,
+            entity,
+            last_success_at=now,
+            last_sync_at=now,
+        )
+        for entity in SYNC_ENTITIES
+    ]
+
+    async def fake_scope(_session, _user_id, _token_id):
+        return scope, None
+
+    async def fake_states(*, session, user_id):
+        return states
+
+    async def fake_active_jobs(_session, _user_id, _scope):
+        return True
+
+    async def fake_stats(*_args, **_kwargs):
+        return {
+            "stats": {
+                "revenue": {"value": 125000.0},
+                "profit": {"value": 31000.0},
+            },
+            "base_stats": {"revenue": 125000.0},
+        }
+
+    monkeypatch.setattr(main_handler, "_resolve_scope_or_error", fake_scope)
+    monkeypatch.setattr(main_handler, "get_user_sync_states", fake_states)
+    monkeypatch.setattr(main_handler, "has_active_sync_jobs", fake_active_jobs)
+    monkeypatch.setattr(main_handler, "_calculate_stats", fake_stats)
+
+    result = await main_handler.dashboard(
+        FakeRequest(user_id),
+        db_session=object(),
+        token_id=token_id,
+    )
+
+    assert result["status"] == "success"
+    assert result["is_synced"] is True
+    assert result["is_syncing"] is True
+    assert result["initial_sync"] is False
+    assert result["stats"]["revenue"]["value"] == 125000.0
+    assert result["stats"]["profit"]["value"] == 31000.0
+    assert "последние успешно сохранённые значения" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_sync_status_endpoint_returns_lightweight_scoped_summary(monkeypatch):
+    user_id = uuid4()
+    token_id = uuid4()
+    now = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
+    scope = DashboardAccountScope(
+        token_ids=(token_id,),
+        selected_token_id=token_id,
+    )
+    states = [
+        _state(
+            token_id,
+            entity,
+            last_success_at=now,
+            last_sync_at=now,
+        )
+        for entity in SYNC_ENTITIES
+    ]
+
+    async def fake_scope(_session, _user_id, _token_id):
+        return scope, None
+
+    async def fake_states(*, session, user_id):
+        return states
+
+    async def fake_active_jobs(_session, _user_id, _scope):
+        return False
+
+    monkeypatch.setattr(main_handler, "_resolve_scope_or_error", fake_scope)
+    monkeypatch.setattr(main_handler, "get_user_sync_states", fake_states)
+    monkeypatch.setattr(main_handler, "has_active_sync_jobs", fake_active_jobs)
+
+    result = await main_handler.dashboard_sync_status(
+        FakeRequest(user_id),
+        db_session=object(),
+        token_id=token_id,
+    )
+
+    assert result["status"] == "success"
+    assert result["selected_token_id"] == str(token_id)
+    assert result["sync_status"]["complete"] is True
+    assert result["sync_status"]["ready_entities"] == len(SYNC_ENTITIES)
+    assert result["sync_status"]["is_syncing"] is False
