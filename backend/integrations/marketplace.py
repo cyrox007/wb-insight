@@ -7,7 +7,7 @@ from models.tokens_model import APIToken, Marketplace
 
 
 class MarketplaceAdapter(ABC):
-    """Marketplace-specific sync boundary used by the generic orchestration layer."""
+    """Граница синхронизации конкретного маркетплейса для общего оркестратора."""
 
     marketplace: Marketplace
 
@@ -18,11 +18,11 @@ class MarketplaceAdapter(ABC):
         job: SyncJob,
         token: APIToken,
     ) -> None:
-        """Synchronize one canonical entity for exactly one marketplace account."""
+        """Синхронизирует одну каноническую сущность одного кабинета маркетплейса."""
         raise NotImplementedError
 
 
 class MarketplaceAdapterNotFoundError(ValueError):
     def __init__(self, marketplace: Marketplace) -> None:
-        super().__init__(f"Marketplace adapter is not configured: {marketplace.value}")
+        super().__init__(f"Адаптер маркетплейса не настроен: {marketplace.value}")
         self.marketplace = marketplace

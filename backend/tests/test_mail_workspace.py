@@ -800,7 +800,7 @@ def test_smtp_provider_rejects_header_injection(monkeypatch):
             SMTP_PASSWORD=None,
         )
     )
-    with pytest.raises(ValueError, match="unsafe_mail_header"):
+    with pytest.raises(ValueError, match="Недопустимый почтовый заголовок"):
         provider._send_sync(
             sender="news@example.net",
             recipient="seller@example.org",

@@ -33,6 +33,7 @@
 - P73 понятные статусы подключений Wildberries закрыты PR #152, merge `5cac7b910fd17b7f598e7f9a7b1bd77ec0498bde`.
 - P74 изоляция кэша кабинетов между сессиями закрыта PR #153, merge `a8dbea2ace821cbc9f4f3009e27e927a9d4fdb6b`.
 - P75 транзакционная граница удаления WB-подключения закрыта PR #155, merge `c01aca53bc976d7cc2fc5c72c311fe5b2b77133e`.
+- P76 русский системный контракт runtime-ядра закрыт PR #156, merge `beb653830cdba48dbb988ad81ae5da60a512c457`.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact `dev` commit.
@@ -48,6 +49,7 @@
 - кэш кабинетов изолирован между пользовательскими сессиями; сброс сессии очищает выбранный кабинет и блокирует применение поздних ответов предыдущего пользователя;
 - ошибки записи БД при удалении WB-подключения не скрываются: транзакционная граница запроса выполняет откат, а общий обработчик `500` возвращает безопасное русское сообщение без деталей исключения;
 - системные сообщения и документационные строки ядра БД, авторизации, доступа к WB-кабинетам и семантических метрик приведены к русскому системному контракту;
+- общая интеграционная граница, mail adapters и Sber client используют русские комментарии/docstring и человекочитаемые ошибки без изменения машинных кодов внешних провайдеров;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;

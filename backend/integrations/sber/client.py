@@ -32,9 +32,9 @@ class SberOrderStatus:
 
     @property
     def is_paid(self) -> bool:
-        # For one-stage acquiring, the gateway's deposited status is the
-        # authoritative paid state. We require both documented indicators to
-        # avoid activating a subscription from an ambiguous intermediate state.
+        # Для одностадийного эквайринга подтверждённый шлюзом статус зачисления
+        # является достоверным признаком оплаты. Требуем оба документированных
+        # признака, чтобы не активировать подписку из промежуточного состояния.
         return self.order_status == 2 and self.payment_state == "DEPOSITED"
 
 
@@ -132,7 +132,7 @@ class SberAcquiringClient:
         currency: str = "643",
     ) -> SberRegisteredOrder:
         if amount_kopecks <= 0:
-            raise ValueError("amount_kopecks must be positive")
+            raise ValueError("Сумма платежа в копейках должна быть больше нуля")
 
         data = await self._post(
             "register.do",

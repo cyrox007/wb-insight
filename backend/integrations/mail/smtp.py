@@ -46,7 +46,7 @@ class SMTPMailProvider:
             if not name or not header_value or name.lower() in reserved:
                 continue
             if "\r" in name or "\n" in name or "\r" in header_value or "\n" in header_value:
-                raise ValueError("unsafe_mail_header")
+                raise ValueError("Недопустимый почтовый заголовок")
             message[name] = header_value
         message.set_content(body)
         if html_body:
