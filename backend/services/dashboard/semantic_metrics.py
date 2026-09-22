@@ -35,7 +35,7 @@ class AdvertisingTotals:
 
 def inclusive_days(start_date: date, end_date: date) -> int:
     if end_date < start_date:
-        raise ValueError("end_date must be on or after start_date")
+        raise ValueError("Дата окончания периода не может быть раньше даты начала")
     return (end_date - start_date).days + 1
 
 
@@ -196,7 +196,7 @@ async def get_advertising_spend_by_nm(
     end_date: date,
     scope: DashboardAccountScope,
 ) -> dict[int, float]:
-    """Return actual advertising spend grouped by WB article for Unit Economy."""
+    """Возвращает фактические рекламные расходы по артикулам WB для юнит-экономики."""
     query = (
         select(
             WbAdvertisingStats.nm_id.label("nm_id"),
