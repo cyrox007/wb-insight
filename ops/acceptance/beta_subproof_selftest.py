@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from beta_release_evidence import _bind_beta_proofs
+from beta_release_evidence import _bind_beta_proofs, _validate_beta_mail_gateway_binding
 
 
 def _sha256(path: Path) -> str:
@@ -44,6 +44,36 @@ def main() -> int:
         _write(wb_live, {"kind": "wb_live_data", "status": "pass"})
         _write(accuracy_input, {"dataset_id": "fixture", "wb_account_fingerprint": "b" * 64})
         _write(sber, {"kind": "sber_sandbox", "status": "pass"})
+
+        core_smoke = tmp / "core-smoke.json"
+        _write(
+            core_smoke,
+            {
+                "schema_version": 1,
+                "kind": "release_smoke",
+                "status": "pass",
+                "checks": {"mail_gateway_ready": True},
+                "mail_gateway": {
+                    "provider": "rusender",
+                    "expected_provider": "rusender",
+                    "source": "database",
+                    "config_source": "auto",
+                    "email_verification_ready": True,
+                    "password_reset_ready": True,
+                },
+            },
+        )
+        _validate_beta_mail_gateway_binding(core_smoke)
+
+        broken_mail = json.loads(core_smoke.read_text(encoding="utf-8"))
+        broken_mail["mail_gateway"]["provider"] = "smtp"
+        _write(core_smoke, broken_mail)
+        try:
+            _validate_beta_mail_gateway_binding(core_smoke)
+        except ValueError as exc:
+            assert "RuSender" in str(exc)
+        else:
+            raise AssertionError("SMTP mail evidence unexpectedly passed P40 beta binding")
 
         _write(manifest, _manifest())
         _bind_beta_proofs(
