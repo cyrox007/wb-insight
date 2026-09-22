@@ -66,16 +66,6 @@ const dashboardNeedsAccount = computed(
     accounts.value.length === 0
 )
 
-const dashboardAccountStateVisible = computed(
-  () =>
-    showAccountFilter.value &&
-    (
-      (accountsLoading.value && !accountsLoaded.value) ||
-      Boolean(accountsError.value) ||
-      dashboardNeedsAccount.value
-    )
-)
-
 const dashboardAccountIssue = computed(() => {
   const tokens = allWbAccounts.value || []
   if (!tokens.length) {
