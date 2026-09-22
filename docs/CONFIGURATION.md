@@ -130,7 +130,25 @@ RuSender ENV:
 
 При `MAIL_CONFIG_SOURCE=auto` или `database` RuSender можно настроить из Control Panel. API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. Вместо секрета UI показывает короткий SHA-256 fingerprint эффективного token-а, чтобы безопасно отличать старый сохранённый credential от нового рабочего token-а при диагностике. Экран шлюза отдельно показывает готовность transport, email verification и password recovery, поэтому наличие рабочего provider не маскирует выключенный feature flag или отсутствующий HTTPS base URL. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
 
-RuSender transport передаёт `idempotencyKey` и сохраняет возвращаемый `uuid` как `provider_message_id`. При HTTP-ошибке adapter извлекает только bounded machine-readable provider code из JSON-ответа; raw description/body не сохраняются и не возвращаются. Gateway test показывает этот безопасный код администратору для диагностики. Маркетинговые кампании пока не используют transactional endpoint RuSender: текущий контракт custom headers допускает только `X-*`, поэтому приложение не заявляет через него RFC 8058 one-click unsubscribe.
+RuSender transactional transport передаёт sender/recipient identity, subject, plain-text + HTML body, `previewTitle`, `idempotencyKey` и только безопасные custom `X-*` headers. Возвращаемый `uuid` сохраняется как `provider_message_id`, когда провайдер его прислал. Любой подтверждённый HTTP `2xx` считается accepted: повторять уже принятый запрос только из-за отсутствующего/нестандартного JSON body опасно дубликатами. При HTTP-ошибке adapter извлекает только bounded machine-readable provider code; raw description/body не сохраняются и не возвращаются.
+
+Для verification/password-reset provider idempotency key привязан к **attempt**, а не только к durable `MailMessage`: одноразовый token создаётся внутри транзакции непосредственно перед отправкой и откатывается при неопределённой transport-ошибке. Новый attempt получает новый token и новый provider key, поэтому provider не может дедуплицировать retry к уже недействительной первой ссылке. Durable queue idempotency при этом остаётся прежней и продолжает защищать от повторного создания одной и той же операции.
+
+Для RuSender приложение **не подделывает** transport/RFC headers, которые формирует почтовая инфраструктура: `Date`, `Message-ID`, `Return-Path`, MIME boundary, `Received`, `DKIM-Signature` и результаты SPF/DMARC. Их нужно проверять в исходнике реально доставленного письма. Текущий RuSender API документирует custom headers только `X-*`; `Reply-To` и RFC 8058 list headers через этот transactional endpoint приложение не заявляет.
+
+Маркетинговые кампании поэтому пока не используют transactional endpoint RuSender. Через SMTP приложение добавляет `List-Unsubscribe`, `List-Unsubscribe-Post`, `List-ID`, `Precedence: bulk` и видимую ссылку отписки. Verification/recovery остаются транзакционными и **не** получают bulk/unsubscribe metadata.
+
+### Диагностика попадания в спам
+
+Наличие корректного JSON payload и HTTP 2xx доказывает только приём письма провайдером. Inbox placement зависит также от доменной аутентификации и репутации. Для полученного письма проверяйте:
+
+- SPF = `PASS`;
+- DKIM = `PASS`, подпись относится к ожидаемому отправляющему домену/провайдеру;
+- DMARC = `PASS`, домен `From:` выровнен с SPF или DKIM identity;
+- TLS и корректные forward/reverse DNS/PTR на стороне транспортного провайдера;
+- низкую долю жалоб/отказов и отправку тестов только на существующие адреса.
+
+Произвольные дополнительные `X-*` headers не исправляют SPF/DKIM/DMARC или репутацию отправителя. Если все три проверки PASS, а письмо всё равно попадает в spam, следующим этапом являются reputation/warm-up/content diagnostics у RuSender и в postmaster-инструментах принимающей почты.
 
 ## Operations monitoring
 
