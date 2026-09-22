@@ -33,6 +33,8 @@
 - self-hosted CI переведён на consolidated validation и защищён от повторного накопления PostgreSQL anonymous volumes/CI images;
 - подключение нового кабинета Wildberries больше не ждёт 10-минутного фонового поиска: состояния и первичные задачи синхронизации создаются сразу в транзакции подключения; ошибки сохранения кабинета больше не скрываются, а устаревший `backend/services/sync.py` удалён;
 - фоновые WB-задачи получили однозначные названия по назначению: поиск недостающих состояний, постановка просроченных задач и обработчик очереди;
+- обзор продавца показывает безопасную сводку свежести по всем 10 сущностям синхронизации; для нескольких кабинетов готовность не считается полной, пока не обновлены все выбранные кабинеты;
+- первичная синхронизация нового кабинета больше не возвращает ложный `NOT_SYNCED`, пока фоновые задачи уже выполняются; старый маршрут подключения Wildberries использует тот же bootstrap, что и основной;
 - frontend package metadata и lockfile синхронизированы с каноническим `VERSION`.
 
 До фактического release обязательны consolidated exact-head CI, production-like deploy/rollback, real RuSender verification/recovery lifecycle, WB seller/data-accuracy, staff/client UX, secrets и backup/restore evidence, затем complete beta manifest.
