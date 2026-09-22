@@ -309,3 +309,29 @@ def test_tariff_handler_uses_request_transaction_boundary_and_russian_messages()
         assert phrase not in source, (
             f"В тарифном handler снова появился запрещённый контракт: {phrase}"
         )
+
+
+
+def test_tariff_service_does_not_swallow_database_errors():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "services"
+        / "tariff_service.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden = (
+        "except Exception",
+        "session.rollback(",
+        "Error inserting tariff",
+        "Error updating tariff",
+        "Error deleting tariff",
+        "Error updating limit",
+        "Error deleting limit",
+        "Hiding incomplete public tariff",
+        "Refusing unsafe update",
+    )
+
+    for phrase in forbidden:
+        assert phrase not in source, (
+            f"В tariff_service снова появился запрещённый контракт: {phrase}"
+        )
