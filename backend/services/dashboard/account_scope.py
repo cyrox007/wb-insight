@@ -8,7 +8,7 @@ from services.marketplace_access_service import get_allowed_wb_tokens
 
 
 class DashboardAccountUnavailableError(ValueError):
-    """Requested marketplace account is not available to the current user."""
+    """Выбранный кабинет маркетплейса недоступен текущему пользователю."""
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ async def resolve_dashboard_scope(
     user_id: UUID,
     token_id: UUID | None,
 ) -> DashboardAccountScope:
-    """Resolve dashboard data to the WB accounts currently allowed by tariff."""
+    """Ограничивает данные дашборда кабинетами WB, разрешёнными текущим тарифом."""
     allowed_tokens = await get_allowed_wb_tokens(session, user_id)
     allowed_ids = tuple(token.id for token in allowed_tokens)
 
