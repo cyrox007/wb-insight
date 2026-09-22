@@ -85,6 +85,8 @@ Runner **до создания disposable account** открывает отде�
 
 Для этой фазы `SMOKE_EMAIL` должен принадлежать staff/admin аккаунту с `mail:read`. Проверка не отправляет письмо и не раскрывает credentials. Если provider/config/verification/recovery не готовы, smoke завершается **до регистрации тестового пользователя и до ожидания почты**, поэтому причина blocker-а не маскируется timeout-ом inbox hook.
 
+При `--evidence-output` runner сохраняет только безопасную mail metadata: observed/expected provider, effective config source и boolean readiness verification/recovery. Host credentials, API token, Key ID, sender address и provider response body в evidence не попадают. Для structured evidence `SMOKE_EXPECTED_MAIL_PROVIDER` обязателен; strict P40 beta binder требует, чтобы expected и observed provider были `rusender`.
+
 Beta disposable flow доказывает:
 
 1. registration возвращает `email_verification_required=true`;
