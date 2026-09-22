@@ -4,6 +4,15 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
+## [Unreleased]
+
+Параллельные улучшения после фиксации acceptance-candidate. Они не входят в тестируемую ветку `release/0.9.0-beta.1-acceptance` на SHA `71aa437198f872a4285a4ee7539b771b097acd42`.
+
+- P81: все refresh-пути используют один запрос; logout и новая login-сессия инвалидируют незавершённый refresh/restore предыдущего поколения;
+- поздний ответ старой сессии больше не может восстановить access JWT или очистить более новую сессию;
+- публичные auth-маршруты, включая login/logout/password reset/email verification, исключены из автоматического refresh-retry после `401`;
+- frontend CI закрепляет generation-guard, single-flight и stale-session контракт.
+
 ## [0.9.0-beta.1] — candidate, обновлено 2026-09-22
 
 Подготовлен exact beta candidate для P40 production-like acceptance. Эта запись фиксирует candidate metadata; публикация `v0.9.0-beta.1` остаётся заблокированной до полного green P40 evidence.
