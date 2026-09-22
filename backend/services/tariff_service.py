@@ -3,7 +3,6 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import and_, delete, func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
@@ -62,7 +61,10 @@ async def insert_tariff(
     tariff,
 ) -> Optional[TariffPlan]:
     if normalized_tariff_code(tariff.get("code")) in SYSTEM_TARIFF_CODES:
-        logger.warning("Refusing to create reserved system tariff code=%s", tariff.get("code"))
+        logger.warning(
+            "Отклонено создание зарезервированного системного тарифа код=%s",
+            tariff.get("code"),
+        )
         return None
 
     new_tariff = TariffPlan(
@@ -73,18 +75,9 @@ async def insert_tariff(
         is_active=tariff["is_active"],
         is_public=tariff.get("is_public", True),
     )
-
-    try:
-        session.add(new_tariff)
-        await session.flush()
-        return new_tariff
-    except IntegrityError:
-        await session.rollback()
-        logger.warning("Tariff with code %s already exists", tariff["code"])
-        return None
-    except Exception as exc:
-        logger.error("Error inserting tariff: %s", exc)
-        return None
+    session.add(new_tariff)
+    await session.flush()
+    return new_tariff
 
 
 async def get_tariffs_list(
@@ -129,29 +122,27 @@ async def update_tariff(
     tariff: TariffPlan,
     tariff_data: dict,
 ) -> Optional[TariffPlan]:
-    try:
-        if is_system_tariff(tariff):
-            requested_price = tariff_data.get("price_rub", tariff.price_rub)
-            requested_active = tariff_data.get("is_active", tariff.is_active)
-            requested_public = tariff_data.get("is_public", tariff.is_public)
-            if (
-                float(requested_price) != 0.0
-                or not bool(requested_active)
-                or bool(requested_public)
-            ):
-                logger.warning("Refusing unsafe update of system demo tariff")
-                return None
+    if is_system_tariff(tariff):
+        requested_price = tariff_data.get("price_rub", tariff.price_rub)
+        requested_active = tariff_data.get("is_active", tariff.is_active)
+        requested_public = tariff_data.get("is_public", tariff.is_public)
+        if (
+            float(requested_price) != 0.0
+            or not bool(requested_active)
+            or bool(requested_public)
+        ):
+            logger.warning(
+                "Отклонено небезопасное изменение системного тарифа demo"
+            )
+            return None
 
-        for key, value in tariff_data.items():
-            if hasattr(tariff, key):
-                setattr(tariff, key, value)
+    for key, value in tariff_data.items():
+        if hasattr(tariff, key):
+            setattr(tariff, key, value)
 
-        session.add(tariff)
-        await session.flush()
-        return tariff
-    except Exception as exc:
-        logger.error("Error updating tariff: %s", exc)
-        return None
+    session.add(tariff)
+    await session.flush()
+    return tariff
 
 
 async def get_tariff_limits_by_id(
@@ -167,17 +158,13 @@ async def delete_tariff_by_id(
     session: AsyncSession,
     tariff_id: UUID,
 ) -> bool:
-    try:
-        tariff = await get_tariff_by_id(session, tariff_id)
-        if tariff is None or is_system_tariff(tariff):
-            return False
-
-        query = delete(TariffPlan).where(TariffPlan.id == tariff_id)
-        await session.execute(query)
-        return True
-    except Exception as exc:
-        logger.error("Error deleting tariff: %s", exc)
+    tariff = await get_tariff_by_id(session, tariff_id)
+    if tariff is None or is_system_tariff(tariff):
         return False
+
+    query = delete(TariffPlan).where(TariffPlan.id == tariff_id)
+    await session.execute(query)
+    return True
 
 
 async def get_public_runtime_ready_tariffs(
@@ -199,7 +186,7 @@ async def get_public_runtime_ready_tariffs(
             ready.append(tariff)
         else:
             logger.warning(
-                "Hiding incomplete public tariff code=%s from catalog",
+                "Неполный публичный тариф скрыт из каталога код=%s",
                 tariff.code,
             )
     return ready
@@ -252,30 +239,22 @@ async def update_limit(
     session: AsyncSession,
     limit: TariffLimit,
     limit_data: dict,
-) -> Optional[TariffLimit]:
-    try:
-        if "limit_value" in limit_data:
-            validate_limit_value(limit.limit_type, int(limit_data["limit_value"]))
+) -> TariffLimit:
+    if "limit_value" in limit_data:
+        validate_limit_value(limit.limit_type, int(limit_data["limit_value"]))
 
-        for key, value in limit_data.items():
-            if hasattr(limit, key):
-                setattr(limit, key, value)
+    for key, value in limit_data.items():
+        if hasattr(limit, key):
+            setattr(limit, key, value)
 
-        session.add(limit)
-        await session.flush()
-        return limit
-    except Exception as exc:
-        logger.error("Error updating limit: %s", exc)
-        return None
+    session.add(limit)
+    await session.flush()
+    return limit
 
 
 async def delete_limit(
     session: AsyncSession,
     limit: TariffLimit,
 ) -> bool:
-    try:
-        await session.delete(limit)
-        return True
-    except Exception as exc:
-        logger.error("Error deleting limit: %s", exc)
-        return False
+    await session.delete(limit)
+    return True
