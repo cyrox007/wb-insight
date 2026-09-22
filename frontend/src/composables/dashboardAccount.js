@@ -3,6 +3,7 @@ import ProfileServices from '@/API/Dashboard/ProfileServices.js'
 
 const STORAGE_KEY = 'wb-dashboard-token-id'
 const accounts = ref([])
+const allWbAccounts = ref([])
 const selectedTokenId = ref(
     typeof window !== 'undefined' ? (window.localStorage.getItem(STORAGE_KEY) || '') : ''
 )
@@ -40,9 +41,11 @@ export function useDashboardAccount() {
             .then((response) => {
                 const payload = response?.data || {}
                 const tokens = payload.tokens || payload.data?.tokens || []
-                accounts.value = tokens.filter(
+                allWbAccounts.value = tokens.filter(
+                    (token) => token.marketplace === 'wildberries'
+                )
+                accounts.value = allWbAccounts.value.filter(
                     (token) =>
-                        token.marketplace === 'wildberries' &&
                         token.is_valid &&
                         token.dashboard_available !== false
                 )
@@ -61,6 +64,7 @@ export function useDashboardAccount() {
             .catch((error) => {
                 console.error('Не удалось загрузить список кабинетов Wildberries:', error)
                 accounts.value = []
+                allWbAccounts.value = []
                 accountsLoaded.value = true
                 accountsError.value =
                     error.response?.data?.error?.message ||
@@ -83,6 +87,7 @@ export function useDashboardAccount() {
 
     return {
         accounts,
+        allWbAccounts,
         accountsLoaded,
         accountsLoading,
         accountsError,
