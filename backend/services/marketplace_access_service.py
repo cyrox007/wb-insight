@@ -32,8 +32,8 @@ async def get_wb_account_limit(
         tariff_id=subscription.tariff_id,
         limit_type="wb_accounts",
     )
-    # Tariff configuration is the single source of truth for runtime limits.
-    # Missing limits fail closed instead of silently granting a default quota.
+    # Конфигурация тарифа — единственный источник истины для лимита кабинетов.
+    # Отсутствующий лимит трактуется как запрет, а не как неявная квота по умолчанию.
     return max(0, int(tariff_limit.limit_value)) if tariff_limit else 0
 
 
@@ -41,11 +41,11 @@ async def get_allowed_wb_tokens(
     session: AsyncSession,
     user_id: UUID,
 ):
-    """Return only WB tokens allowed by the user's current tariff.
+    """Возвращает только кабинеты Wildberries, разрешённые текущим тарифом.
 
-    Selection is deterministic so scheduler and worker cannot disagree about
-    which seller accounts are active when the user has more stored tokens than
-    their plan permits.
+    Выбор детерминирован, поэтому планировщик и обработчик задач используют
+    один и тот же набор кабинетов, даже если сохранённых подключений больше,
+    чем разрешено тарифом.
     """
     limit = await get_wb_account_limit(session, user_id)
     if limit <= 0:
@@ -67,11 +67,12 @@ async def get_allowed_wb_tokens(
 
 
 async def _probe_stored_wb_token(token, user_id: UUID) -> str:
-    """Live-check a stored credential only when it blocks the account quota.
+    """Проверяет сохранённый токен онлайн только когда он занимает всю квоту.
 
-    Returns valid, rejected, expired or unknown. Unknown deliberately keeps
-    the quota occupied: a WB outage, missing service credentials or a local
-    decrypt failure must never be interpreted as proof of revocation.
+    Возвращает машинное состояние valid, rejected, expired или unknown.
+    Состояние unknown намеренно оставляет место занятым: сбой Wildberries,
+    отсутствие сервисных реквизитов или локальная ошибка расшифровки не должны
+    считаться доказательством отзыва токена.
     """
     raw_token = None
     try:
@@ -90,14 +91,14 @@ async def _probe_stored_wb_token(token, user_id: UUID) -> str:
             return "expired"
 
         logger.warning(
-            "WB quota live-check was inconclusive token_id=%s code=%s",
+            "Онлайн-проверка квоты Wildberries не дала однозначного результата token_id=%s code=%s",
             token.id,
             exc.code,
         )
         return "unknown"
     except Exception as exc:
         logger.warning(
-            "WB quota live-check failed token_id=%s error=%s",
+            "Онлайн-проверка квоты Wildberries завершилась ошибкой token_id=%s error=%s",
             token.id,
             type(exc).__name__,
         )
@@ -112,7 +113,7 @@ async def _release_stale_wb_quota(
     user_id: UUID,
     tokens,
 ) -> int:
-    """Invalidate confirmed stale WB credentials and return released slots."""
+    """Освобождает места квоты для подтверждённо недействительных WB-токенов."""
     released = 0
 
     for token in tokens:
@@ -123,14 +124,14 @@ async def _release_stale_wb_quota(
             token.is_revoked = True
             released += 1
             logger.info(
-                "WB credential removed from quota after live rejection token_id=%s",
+                "Токен Wildberries исключён из квоты после подтверждённого отказа token_id=%s",
                 token.id,
             )
         elif probe == "expired":
             token.is_active = False
             released += 1
             logger.info(
-                "WB credential removed from quota after expiry token_id=%s",
+                "Токен Wildberries исключён из квоты после истечения срока token_id=%s",
                 token.id,
             )
 
@@ -144,12 +145,12 @@ async def get_wb_account_quota(
     session: AsyncSession,
     user_id: UUID,
 ) -> dict:
-    """Return the effective Wildberries account quota for a user.
+    """Возвращает фактическую квоту кабинетов Wildberries для пользователя.
 
-    A credential that has been remotely revoked may still look locally valid
-    until its JWT expiry is reached. When the quota is full, perform a bounded
-    live revalidation. Confirmed 401 rejections are marked revoked so they
-    cannot block adding a replacement credential.
+    Удалённо отозванный токен может локально выглядеть действующим до истечения
+    срока JWT. Когда квота заполнена, выполняется ограниченная онлайн-проверка.
+    Подтверждённый отказ Wildberries помечает токен отозванным, чтобы он не
+    блокировал подключение нового кабинета.
     """
     limit = await get_wb_account_limit(session, user_id)
     if limit <= 0:
@@ -168,8 +169,8 @@ async def get_wb_account_quota(
     ]
     used = len(valid_tokens)
 
-    # Keep normal quota checks local. Only touch WB when the stored state would
-    # otherwise reject a replacement credential.
+    # В обычном случае проверяем квоту локально. К Wildberries обращаемся только
+    # если сохранённое состояние иначе запретило бы подключить замену.
     if used >= limit and valid_tokens:
         released = await _release_stale_wb_quota(
             session,
