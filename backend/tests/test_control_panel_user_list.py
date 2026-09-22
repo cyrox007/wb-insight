@@ -10,7 +10,7 @@ from models.users_model import User, UserRoleAssociation
 
 
 def test_escape_like_treats_wildcards_as_literal_search_text():
-    assert control_panel_users._escape_like(r"seller_100%\\") == r"seller\_100\%\\"
+    assert control_panel_users._escape_like("seller_100%\\") == "seller\\_100\\%\\\\"
 
 
 def test_user_list_conditions_cover_client_status_and_role_filters():
