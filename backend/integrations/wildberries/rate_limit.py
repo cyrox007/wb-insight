@@ -23,13 +23,13 @@ return current
 
 
 class DistributedRateLimiter:
-    """Coordinate WB request spacing across processes through Redis.
+    """Координирует интервалы запросов Wildberries между процессами через Redis.
 
-    The limiter is intentionally keyed by an internal credential id plus a
-    logical endpoint name. Raw/encrypted marketplace credentials never become
-    Redis keys. If Redis is unavailable we fail open: Celery itself also uses
-    Redis, but direct HTTP flows should not become permanently unavailable just
-    because the proactive limiter cannot be reached.
+    Ключ строится из внутреннего идентификатора подключения и логического имени
+    маршрута. Сырые и зашифрованные токены маркетплейса никогда не становятся
+    ключами Redis. Если Redis недоступен, ограничитель пропускает запрос:
+    недоступность профилактического лимитера не должна полностью блокировать
+    прямые HTTP-сценарии.
     """
 
     def __init__(
@@ -70,7 +70,7 @@ class DistributedRateLimiter:
                 remaining_ms = await self._redis.pttl(key)
             except RedisError as exc:
                 logger.warning(
-                    "WB distributed rate limiter unavailable; proceeding without proactive throttle: %s",
+                    "Распределённый ограничитель запросов Wildberries недоступен; запрос продолжится без предварительного ограничения: %s",
                     type(exc).__name__,
                 )
                 return
@@ -87,7 +87,7 @@ class DistributedRateLimiter:
         endpoint: str,
         seconds: float,
     ) -> None:
-        """Publish a cooldown without shortening a longer concurrent cooldown."""
+        """Публикует паузу, не сокращая более длинную параллельную паузу."""
         if seconds <= 0:
             return
 
@@ -102,7 +102,7 @@ class DistributedRateLimiter:
             )
         except RedisError as exc:
             logger.warning(
-                "Unable to publish WB rate-limit cooldown to Redis: %s",
+                "Не удалось опубликовать паузу ограничения запросов Wildberries в Redis: %s",
                 type(exc).__name__,
             )
 
