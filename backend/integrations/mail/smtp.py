@@ -23,13 +23,15 @@ class SMTPMailProvider:
         body: str,
         html_body: str | None = None,
         sender_name: str | None = None,
+        recipient_name: str | None = None,
+        preview_title: str | None = None,
         reply_to: str | None = None,
         headers: dict[str, str] | None = None,
     ) -> str:
         message = EmailMessage()
         message["Subject"] = subject
         message["From"] = formataddr((sender_name or "", sender)) if sender_name else sender
-        message["To"] = recipient
+        message["To"] = formataddr((recipient_name or "", recipient)) if recipient_name else recipient
         if reply_to:
             message["Reply-To"] = reply_to
         message["Date"] = format_datetime(datetime.now(timezone.utc))
@@ -73,6 +75,8 @@ class SMTPMailProvider:
         body: str,
         html_body: str | None = None,
         sender_name: str | None = None,
+        recipient_name: str | None = None,
+        preview_title: str | None = None,
         reply_to: str | None = None,
         headers: dict[str, str] | None = None,
         idempotency_key: str | None = None,
@@ -85,6 +89,7 @@ class SMTPMailProvider:
             body=body,
             html_body=html_body,
             sender_name=sender_name,
+            recipient_name=recipient_name,
             reply_to=reply_to,
             headers=headers,
         )
