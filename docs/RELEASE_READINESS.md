@@ -39,7 +39,7 @@
 - role-aware staff workspace `/staff` для super_admin/admin/manager/support/analyst с least-privilege backend permissions;
 - account-scoped durable WB sync;
 - безопасная сводка свежести синхронизации по сущностям и выбранным кабинетам; первичная синхронизация отображается как выполняющаяся, а не как `NOT_SYNCED`;
-- повторная синхронизация не скрывает последние успешно сохранённые показатели; общий статус свежести доступен во всех seller-разделах через лёгкий read-only endpoint;
+- повторная синхронизация не скрывает последние успешно сохранённые показатели; общий статус свежести доступен во всех разделах аналитики продавца через лёгкий маршрут только для чтения;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
