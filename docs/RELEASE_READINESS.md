@@ -1,6 +1,6 @@
 # WB Insight — Release Readiness
 
-Дата ревизии: 21 сентября 2026 года.
+Дата ревизии: 22 сентября 2026 года.
 
 ## Текущий статус
 
@@ -17,6 +17,16 @@
 - P48 backend release warning cleanup закрыт PR #126, merge `aafac5564c4d4b1dcbb708f5787df56f8e499061`.
 - P49 release-smoke mail gateway preflight закрыт PR #127, merge `46e08f966b0862dc523de718e4a20bc49eea3bdb`.
 - P50 role-aware staff profile закрыт PR #128, merge `0118ce67e4bf79e7cbdffd285381ed48e668a991`.
+- P52 staff operational attention закрыт PR #130, merge `59e186bb4c802adae243327d1499422a916956d8`.
+- P53 safe RuSender machine diagnostics закрыт PR #131, merge `5ecbf3039d4b1d41404f0eecc73f36647130d331`.
+- P54 client-health separation закрыт PR #132, merge `1e741cee7561aee8f4e118954009658cd9e31636`.
+- P55 lifecycle admin target guards закрыты PR #133, merge `1c65c049d8a3731bfd957efa03b73371d9f40169`.
+- P56 server-side user search/filter/pagination закрыт PR #134, merge `41fc7a6792d6395c5af4914613920d1dc9d57332`.
+- P57 true fail-fast mail preflight ordering закрыт PR #135, merge `9c2e6b21a56bfa7e22d08d439f018bf8533eae88`.
+- P58 mandatory mail readiness proof в beta evidence закрыт PR #136, merge `2626dc8a829a7de657d1d1098665acae6dba1add`.
+- P59 strict RuSender evidence binding закрыт PR #137, merge `be242c71f5d52c1bd84af4b6f7b8a4d0a3af76a7`.
+- P60 password-reset throttle + old-session revocation proof закрыт PR #138, merge `569547acaa3d12ed808bc906703ec2869f39c532`.
+- P61 fail-closed beta smoke mode закрыт PR #139, merge `8f5f001bb4f8321e31cc50f96627e84025e39eb2`.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact `dev` commit.
@@ -53,6 +63,15 @@
 - расширенная карточка пользователя: профиль, staff-атрибуты, ручная email-верификация, activation/deactivation и revoke sessions с audit/lifecycle evidence;
 - единый responsive Control Panel UI pattern для overview/users/user-detail/roles/tariffs/payments/mail/audit;
 - staff account profile скрывает seller-only тариф/WB/COGS/expenses controls; seller analytics остаётся отдельным secondary workspace;
+- staff workspace содержит только permission-scoped operational attention; user/mail/payment/system агрегаты выдаются только при соответствующих backend permissions;
+- client health отделён от внутренних staff accounts, чтобы операционные метрики не смешивали сотрудников и клиентов;
+- Control Panel users использует server-side search/filter/pagination вместо unbounded full-list loading;
+- admin lifecycle target guards защищают super_admin и запрещают случайную self-deactivation оператора через Control Panel;
+- RuSender gateway/test diagnostics используют только bounded machine-readable provider error code без raw provider body/description;
+- mail readiness preflight выполняется до disposable registration/inbox wait и оставляет sanitized provider/readiness metadata в structured smoke evidence;
+- strict P40 evidence pin'ит expected/observed mail provider к RuSender без credentials/Key ID/sender address;
+- password-reset production-like smoke доказывает resend throttle/idempotent queue materialization и `session_revoked` для ранее выданного access JWT;
+- `ops/release_smoke.py --beta-gate` fail-closed валидирует обязательные P40 inputs до первого сетевого запроса;
 - versioned data-accuracy comparator и evidence manifest tooling;
 - beta manifest v2 требует `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`;
 - P40 live-WB/data provenance gate связывает passing `data_accuracy` с тем же live-validated seller account через secret-safe HMAC fingerprint, обязательный credential cleanup и SHA-256 binding защищённого input;
@@ -87,10 +106,10 @@ Beta разрешена только после:
 - production-like HTTPS deployment с реальными non-placeholder secrets/hosts;
 - миграций clean DB + upgrade копии существующей БД;
 - deploy/rollback smoke;
-- полного `ops/release_smoke.py` без `--skip-disposable-registration`; authenticated mail gateway preflight должен подтвердить effective `rusender` и readiness verification/recovery до disposable flow;
+- полного `ops/release_smoke.py --beta-gate` без `--skip-disposable-registration`; до первого HTTP-запроса strict mode должен подтвердить обязательные P40 inputs, а authenticated mail preflight — expected/observed `rusender` и readiness verification/recovery;
 - **реального email verification smoke** на deliverable disposable/catch-all адресе через текущий RuSender HTTPS transactional provider;
 - demo activation только после verification ownership proof;
-- **реального password reset** через тот же provider, включая повторный login после session-version rotation;
+- **реального password reset** через тот же provider: два немедленных request сохраняют одинаковый anti-enumeration response и материализуют ровно одну durable reset-mail row; старый access JWT после reset получает `session_revoked`; затем login новым паролем восстанавливает ту же identity;
 - login/refresh-cookie restore/logout/deactivation;
 - representative durable P37 audit correlation по request id;
 - desktop/mobile UX для client screens, role-aware staff workspace и Control Panel overview/users/user-detail/roles/tariffs/payments/audit/mail; обязательны состояния inactive/unverified user и RuSender gateway;
@@ -100,7 +119,7 @@ Beta разрешена только после:
 - backup + isolated restore evidence;
 - полного beta manifest v2 для exact `0.9.0-beta.N` candidate.
 
-До включения реальной почты `EMAIL_VERIFICATION_ENABLED=false` и `MAIL_DELIVERY_ENABLED=false` остаются безопасными deployment defaults; это позволяет выкатывать код/миграции без внезапной блокировки текущих пользователей, но **не закрывает beta acceptance**.
+До включения реальной почты `EMAIL_VERIFICATION_ENABLED=false` и `MAIL_DELIVERY_ENABLED=false` остаются безопасными deployment defaults; это позволяет выкатывать код/миграции без внезапной блокировки текущих пользователей, но **не закрывает beta acceptance**. Для P40 canonical invocation используется `--beta-gate`, который такие неполные условия не пропускает.
 
 ## Внешние blockers до RC
 

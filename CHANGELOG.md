@@ -4,7 +4,7 @@
 
 Версии до введения формальной release-policy 15 сентября 2026 года реконструированы по истории `main` и не означают существование соответствующих Git tags.
 
-## [0.9.0-beta.1] — candidate, обновлено 2026-09-21
+## [0.9.0-beta.1] — candidate, обновлено 2026-09-22
 
 Подготовлен exact beta candidate для P40 production-like acceptance. Эта запись фиксирует candidate metadata; публикация `v0.9.0-beta.1` остаётся заблокированной до полного green P40 evidence.
 
@@ -22,6 +22,13 @@
 - backend release warnings дочищены: современный SQLAlchemy declarative import, реальный PostgreSQL application_name, уникальные OpenAPI operation IDs для Sber callback и корректный CI JWT secret;
 - release smoke получил authenticated mail-gateway preflight: проверяет effective provider, transport readiness и отдельно readiness email verification/password recovery до real-mail lifecycle;
 - staff account profile отделён от seller-настроек: сотрудники больше не видят тариф/WB-подключения/себестоимость/расходы в своём основном профиле, seller-функции остаются во вторичном analytics workspace;
+- staff workspace получил permission-scoped operational attention: клиентские account health, mail/payment сигналы и system health показываются только ролям с соответствующими backend permissions;
+- клиентские health-метрики отделены от внутренних staff-аккаунтов, а Control Panel user list переведён на server-side search/filter/pagination вместо безлимитной выгрузки всей базы;
+- lifecycle admin hardening закрывает деактивацию super_admin обычным admin и случайную self-deactivation оператора через Control Panel;
+- RuSender diagnostics сохраняют/показывают только bounded machine-readable provider code без raw response body;
+- P40 mail preflight реально выполняется до disposable registration, а strict evidence требует `mail_gateway_ready` и связывает expected/observed provider именно с RuSender;
+- password-reset acceptance теперь фактически доказывает resend throttle/idempotent queue materialization двумя немедленными запросами и проверяет `session_revoked` для ранее выданного access JWT;
+- добавлен fail-closed `--beta-gate`: перед первым HTTP-запросом он требует HTTPS, beta VERSION, structured evidence, RuSender verification/recovery, audit, real WB token и полный disposable mail flow;
 - dev-first release flow закреплён: рабочие ветки идут в `dev`, а `main` принимает только release/release-candidate promotion;
 - self-hosted CI переведён на consolidated validation и защищён от повторного накопления PostgreSQL anonymous volumes/CI images;
 - frontend package metadata и lockfile синхронизированы с каноническим `VERSION`.
