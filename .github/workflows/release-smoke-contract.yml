@@ -31,31 +31,6 @@ on:
       - .github/workflows/release-smoke-contract.yml
   push:
     branches: [main, dev]
-    paths:
-      - VERSION
-      - ops/release_smoke.py
-      - ops/systemd_acceptance.py
-      - ops/database_upgrade_acceptance.py
-      - ops/payment_acceptance.py
-      - ops/sber_sandbox_acceptance.py
-      - ops/backup_restore_acceptance.py
-      - ops/wb_live_data_acceptance.py
-      - ops/beta_release_evidence.py
-      - ops/secrets_review.py
-      - ops/ux_acceptance.py
-      - ops/ci_acceptance.py
-      - ops/release_candidate_evidence.py
-      - ops/release_evidence.py
-      - ops/acceptance/structured_evidence_selftest.py
-      - ops/acceptance/release_candidate_selftest.py
-      - ops/acceptance/wb_live_data_selftest.py
-      - ops/acceptance/beta_subproof_selftest.py
-      - docs/RELEASE_SMOKE.md
-      - docs/RELEASE_EVIDENCE.md
-      - docs/DATA_ACCURACY_ACCEPTANCE.md
-      - docs/WB_LIVE_DATA_ACCEPTANCE.md
-      - docs/SBER_ACQUIRING.md
-      - .github/workflows/release-smoke-contract.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
