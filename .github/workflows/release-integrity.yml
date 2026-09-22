@@ -31,31 +31,6 @@ on:
       - .github/workflows/release-integrity.yml
   push:
     branches: [main, dev]
-    paths:
-      - VERSION
-      - CHANGELOG.md
-      - backend/app.py
-      - backend/settings.py
-      - backend/core/production_config.py
-      - backend/core/lifecycle_config.py
-      - backend/Dockerfile
-      - frontend/package.json
-      - frontend/package-lock.json
-      - frontend/Dockerfile
-      - frontend/nginx.conf
-      - compose.production.yml
-      - .env.production.example
-      - .dockerignore
-      - ops/**
-      - docs/OPERATIONS.md
-      - docs/RELEASE_SMOKE.md
-      - docs/RELEASE_EVIDENCE.md
-      - docs/DATA_ACCURACY_ACCEPTANCE.md
-      - docs/RELEASE_ROADMAP.md
-      - docs/VERSIONING.md
-      - docs/VERSION_HISTORY.md
-      - docs/RELEASE_READINESS.md
-      - .github/workflows/release-integrity.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
