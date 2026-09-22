@@ -154,6 +154,8 @@ const syncDetails = computed(() => {
         .map((item) => `${item.label}: ${labels[item.status] || item.status}`)
     if (interval) {
         lines.unshift(`Интервал обновления по тарифу: ${interval} ч`)
+    } else if (syncStatus.value.freshness_policy_available === false) {
+        lines.unshift('Интервал обновления по тарифу не настроен')
     }
     return lines.join('\n')
 })
