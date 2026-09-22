@@ -16,6 +16,7 @@ const router = useRouter()
 const route = useRoute()
 const {
   accounts,
+  allWbAccounts,
   accountsLoaded,
   accountsLoading,
   accountsError,
@@ -73,6 +74,55 @@ const dashboardAccountStateVisible = computed(
       dashboardNeedsAccount.value
     )
 )
+
+const dashboardAccountIssue = computed(() => {
+  const tokens = allWbAccounts.value || []
+  if (!tokens.length) {
+    return {
+      title: 'Нет подключённого кабинета Wildberries',
+      message: 'Добавьте кабинет Wildberries в профиле — после проверки система запустит первичную синхронизацию автоматически.',
+    }
+  }
+
+  const counts = tokens.reduce((result, token) => {
+    const key = token.connection_status || (
+      token.is_revoked
+        ? 'revoked'
+        : token.is_valid === false
+          ? 'inactive'
+          : token.dashboard_available === false
+            ? 'outside_tariff'
+            : 'active'
+    )
+    result[key] = (result[key] || 0) + 1
+    return result
+  }, {})
+
+  if ((counts.outside_tariff || 0) === tokens.length) {
+    return {
+      title: 'Кабинет Wildberries вне лимита тарифа',
+      message: 'Подключение действует, но текущий тариф не даёт использовать этот кабинет в аналитике. Проверьте тариф или состав подключённых кабинетов.',
+    }
+  }
+
+  const reasons = []
+  if (counts.revoked) reasons.push(`отозвано: ${counts.revoked}`)
+  if (counts.expired) reasons.push(`истёк срок: ${counts.expired}`)
+  if (counts.inactive) reasons.push(`отключено: ${counts.inactive}`)
+  if (counts.outside_tariff) reasons.push(`вне лимита тарифа: ${counts.outside_tariff}`)
+
+  if (reasons.length) {
+    return {
+      title: 'Подключение Wildberries требует внимания',
+      message: `${reasons.join(' · ')}. Откройте профиль, чтобы обновить, заменить или проверить подключение.`,
+    }
+  }
+
+  return {
+    title: 'Нет доступного кабинета Wildberries',
+    message: 'Проверьте подключение Wildberries и ограничения текущего тарифа в профиле.',
+  }
+})
 
 watch(
   () => [isAuthenticated.value, showAccountFilter.value],
@@ -286,9 +336,9 @@ const logout = async () => {
     <DashboardState
       v-else-if="dashboardNeedsAccount"
       kind="account"
-      title="Нет доступного кабинета Wildberries"
-      message="Добавьте действующий кабинет Wildberries или проверьте доступность аналитики на текущем тарифе. Все разделы аналитики используют один и тот же кабинет."
-      action-label="Профиль и подключения"
+      :title="dashboardAccountIssue.title"
+      :message="dashboardAccountIssue.message"
+      action-label="Проверить подключения"
       :action-to="{ name: 'dashboard.profile' }"
     />
     <RouterView v-else v-slot="{ Component }">
