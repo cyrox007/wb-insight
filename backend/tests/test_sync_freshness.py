@@ -278,7 +278,7 @@ async def test_dashboard_keeps_saved_metrics_visible_during_background_sync(monk
     assert result["initial_sync"] is False
     assert result["stats"]["revenue"]["value"] == 125000.0
     assert result["stats"]["profit"]["value"] == 31000.0
-    assert "последние успешно сохранённые значения" in result["message"]
+    assert "Показаны уже сохранённые значения" in result["message"]
 
 
 @pytest.mark.asyncio
