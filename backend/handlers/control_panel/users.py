@@ -450,7 +450,10 @@ async def permanently_delete_user(
             message='Перед необратимым удалением сначала деактивируйте аккаунт',
         )
 
-    body = await request.json()
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
     if not isinstance(body, dict):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
