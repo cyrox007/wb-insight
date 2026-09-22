@@ -40,6 +40,7 @@ from services.dashboard.semantic_metrics import (
     previous_period,
 )
 from services.dashboard.unit_economy_scope import get_dashboard_unit_economy_scoped
+from services.marketplace_access_service import get_wb_sync_frequency_hours
 from services.user_sync_state_service import build_sync_status, get_user_sync_states
 from utils.responce_helps import response_error, response_success
 
@@ -342,10 +343,15 @@ async def dashboard(
         )
 
     active_sync = await has_active_sync_jobs(db_session, user_id, scope)
+    freshness_interval_hours = await get_wb_sync_frequency_hours(
+        db_session,
+        user_id,
+    )
     sync_status = build_sync_status(
         scoped_states,
         scope.token_ids,
         is_syncing=active_sync,
+        freshness_interval_hours=freshness_interval_hours,
     )
 
     if not has_any_success and sync_errors and not active_sync:
@@ -418,12 +424,17 @@ async def dashboard_sync_status(
     states = await get_user_sync_states(session=db_session, user_id=user_id)
     scoped_states = [state for state in states if scope.contains(state.token_id)]
     active_sync = await has_active_sync_jobs(db_session, user_id, scope)
+    freshness_interval_hours = await get_wb_sync_frequency_hours(
+        db_session,
+        user_id,
+    )
 
     return response_success(
         sync_status=build_sync_status(
             scoped_states,
             scope.token_ids,
             is_syncing=active_sync,
+            freshness_interval_hours=freshness_interval_hours,
         ),
         selected_token_id=(
             str(scope.selected_token_id) if scope.selected_token_id else None
