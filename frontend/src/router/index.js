@@ -71,6 +71,33 @@ const router = createRouter({
 })
 
 
+const STALE_ASSET_RELOAD_KEY = 'wb-stale-asset-reload'
+
+const isStaleAssetError = (error) => {
+	const message = String(error?.message || error || '')
+	return /Failed to fetch dynamically imported module|Unable to preload CSS|Importing a module script failed|error loading dynamically imported module/i.test(message)
+}
+
+router.onError((error, to) => {
+	if (!import.meta.env.PROD || !isStaleAssetError(error) || typeof window === 'undefined') return
+
+	const target = to?.fullPath || window.location.pathname + window.location.search + window.location.hash
+	if (sessionStorage.getItem(STALE_ASSET_RELOAD_KEY) === target) {
+		console.error('Route asset reload already attempted; leaving the original error visible.', error)
+		return
+	}
+
+	sessionStorage.setItem(STALE_ASSET_RELOAD_KEY, target)
+	window.location.reload()
+})
+
+router.afterEach(() => {
+	if (typeof sessionStorage !== 'undefined') {
+		sessionStorage.removeItem(STALE_ASSET_RELOAD_KEY)
+	}
+})
+
+
 router.beforeEach((to, from, next) => {
 	if (to.meta.title) document.title = to.meta.title
 	const authStore = useAuthStore(pinia)
