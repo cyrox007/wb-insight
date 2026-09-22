@@ -515,12 +515,33 @@ async def refresh_campaign_counters(session: AsyncSession, campaign_id) -> None:
 async def send_password_reset_email(email: str, token: str) -> None:
     """Compatibility helper for legacy callers/tests; request flow uses the queue."""
     reset_url = _password_reset_url(token)
+    text = (
+        "Здравствуйте.\n\n"
+        "Для установки нового пароля откройте ссылку:\n\n"
+        f"{reset_url}\n\n"
+        f"Ссылка действует {config.PASSWORD_RESET_TOKEN_TTL_MINUTES} минут.\n"
+        "Если вы не запрашивали восстановление, просто проигнорируйте письмо."
+    )
+    html = render_mail_document(
+        "<h2>Восстановление доступа</h2>"
+        "<p>Здравствуйте.</p>"
+        "<p>Мы получили запрос на установку нового пароля для вашего аккаунта WB Insight.</p>"
+        '<p><a data-mail-button="1" href="' + escape(reset_url, quote=True) + '">'
+        "Установить новый пароль</a></p>"
+        "<p>Ссылка действует "
+        + escape(str(config.PASSWORD_RESET_TOKEN_TTL_MINUTES))
+        + " минут.</p>"
+        "<p>Если вы не запрашивали восстановление, просто проигнорируйте письмо.</p>"
+    )
     await _transport_send(
         None,
         email,
         "Восстановление доступа к WB Insight",
-        "Для установки нового пароля откройте ссылку:\n\n"
-        f"{reset_url}\n\n"
-        f"Ссылка действует {config.PASSWORD_RESET_TOKEN_TTL_MINUTES} минут. "
-        "Если вы не запрашивали восстановление, проигнорируйте письмо.",
+        text,
+        html_body=html,
+        preview_title="Ссылка для установки нового пароля в WB Insight",
+        headers={
+            "X-WB-Message-Type": "transactional",
+            "X-WB-Template": "password_reset",
+        },
     )
