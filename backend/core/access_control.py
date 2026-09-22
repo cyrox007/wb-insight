@@ -10,7 +10,8 @@ class Permission(str, Enum):
     CONTROL_PANEL_ACCESS = "control_panel:access"
     SYSTEM_MANAGE = "system:manage"
     USERS_READ = "users:read"
-    USERS_WRITE = "users:write"\n    USERS_DELETE = "users:delete"
+    USERS_WRITE = "users:write"
+    USERS_DELETE = "users:delete"
     ROLES_READ = "roles:read"
     ROLES_WRITE = "roles:write"
     TARIFFS_READ = "tariffs:read"
@@ -30,7 +31,8 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
         {
             Permission.CONTROL_PANEL_ACCESS,
             Permission.USERS_READ,
-            Permission.USERS_WRITE,\n            Permission.USERS_DELETE,
+            Permission.USERS_WRITE,
+            Permission.USERS_DELETE,
             Permission.ROLES_READ,
             Permission.TARIFFS_READ,
             Permission.TARIFFS_WRITE,
