@@ -10,7 +10,7 @@ _CUSTOM_HEADER_RE = re.compile(r"^X-[A-Za-z0-9][A-Za-z0-9-]{0,62}$", re.IGNORECA
 
 
 def _safe_provider_error_code(response: httpx.Response) -> str | None:
-    """Extract only RuSender's machine-readable code, never its description/body."""
+    """Извлекает только машинный код RuSender без описания и тела ответа."""
     try:
         payload = response.json()
     except (ValueError, TypeError):
@@ -28,7 +28,7 @@ def _safe_provider_error_code(response: httpx.Response) -> str | None:
 
 
 class RuSenderAPIError(RuntimeError):
-    """Safe provider error with retry semantics for the mail worker."""
+    """Безопасная ошибка провайдера с признаком допустимости повторной попытки."""
 
     def __init__(
         self,
@@ -99,8 +99,9 @@ class RuSenderMailProvider:
         else:
             mail_payload["text"] = body
 
-        # RuSender documents custom mail.headers for X-* headers. Do not forward
-        # arbitrary RFC headers from the SMTP path because that can cause a 400.
+        # RuSender поддерживает пользовательские mail.headers для заголовков X-*.
+        # Произвольные RFC-заголовки из SMTP-контура не передаём: шлюз может
+        # отклонить такой запрос с кодом 400.
         safe_headers = {}
         for raw_name, raw_value in (headers or {}).items():
             name = str(raw_name or "").strip()
@@ -137,10 +138,10 @@ class RuSenderMailProvider:
             raise RuSenderAPIError("rusender_network_error", retryable=True) from exc
 
         if 200 <= response.status_code < 300:
-            # Once the provider returned 2xx the request is accepted. Retrying
-            # merely because a non-standard success body omitted uuid can create
-            # duplicate transactional mail. Capture uuid when available, but do
-            # not turn an accepted delivery into a retryable failure.
+            # После ответа 2xx провайдер уже принял запрос. Повторная отправка
+            # только из-за отсутствующего uuid в нестандартном успешном ответе
+            # может создать дубликат письма. Сохраняем uuid, когда он есть, но
+            # не превращаем принятую доставку в повторяемую ошибку.
             provider_id = None
             try:
                 data = response.json()
@@ -152,12 +153,13 @@ class RuSenderMailProvider:
             return MailDeliveryReceipt(provider_message_id=provider_id)
 
         error_code = f"rusender_http_{response.status_code}"
-        # RuSender publishes a machine-readable error code in the response body.
-        # Keep only that bounded code for diagnostics; never persist/return the
-        # provider description or raw body because it may contain request context.
+        # RuSender возвращает машинный код ошибки в теле ответа. Для диагностики
+        # сохраняем только ограниченный код; описание провайдера и сырое тело
+        # ответа не сохраняем и не возвращаем, так как там может быть контекст запроса.
         provider_error_code = _safe_provider_error_code(response)
-        # 429 and 5xx are transient. Authentication, sender/domain and recipient
-        # policy failures require configuration/user intervention and must not spin.
+        # Ошибки 429 и 5xx считаются временными. Ошибки авторизации, отправителя,
+        # домена и политики получателя требуют настройки или действий пользователя
+        # и не должны запускать бесконечные повторные попытки.
         retryable = response.status_code == 429 or response.status_code >= 500
         raise RuSenderAPIError(
             error_code,
