@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import AuthService from '@/API/AuthService'
-import { clearClientSession, setAccessToken } from '@/API'
+import { clearClientSession, establishClientSession, isStaleSessionRefreshError } from '@/API'
 import { purgeLegacyPersistentAuth } from '@/security/session'
 
 export const useAuthStore = defineStore('auth', {
@@ -22,7 +22,7 @@ export const useAuthStore = defineStore('auth', {
 				this.clearSession()
 				return false
 			}
-			setAccessToken(accessToken)
+			establishClientSession(accessToken)
 			this.isAuthenticated = true
 			this.user = user
 			return true
@@ -34,7 +34,10 @@ export const useAuthStore = defineStore('auth', {
 			try {
 				const response = await AuthService.refresh()
 				return this.applySession(response.data)
-			} catch {
+			} catch (error) {
+				if (isStaleSessionRefreshError(error)) {
+					return this.isAuthenticated
+				}
 				this.clearSession()
 				return false
 			} finally {
@@ -42,8 +45,8 @@ export const useAuthStore = defineStore('auth', {
 			}
 		},
 		login(payload) {
-			// Compatibility with the profile screen: an object without an access
-			// token is a UI identity update, never a new authenticated session.
+			// Совместимость с экраном профиля: объект без токена доступа означает
+			// обновление данных пользователя, а не создание новой сессии.
 			if (payload && !payload.access_token && !payload.user) {
 				return this.updateUser(payload)
 			}
