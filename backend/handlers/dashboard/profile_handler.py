@@ -327,11 +327,5 @@ async def delete_user_token(
         response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(code="TOKEN_NOT_FOUND", message="Токен не найден")
 
-    if not await delete_token(db_session, token):
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return response_error(
-            code="INTERNAL_SERVER_ERROR",
-            message="Ошибка при удалении токена",
-        )
-
+    await delete_token(db_session, token)
     return response_success(message="Токен удалён")
