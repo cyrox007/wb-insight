@@ -17,7 +17,7 @@ class Marketplace(PyEnum):
 
 
 class TokenTypeWB(PyEnum):
-    """Documented Wildberries JWT account types."""
+    """Документированные типы кабинетов JWT Wildberries."""
 
     BASE = "base"
     TEST = "test"
@@ -27,11 +27,11 @@ class TokenTypeWB(PyEnum):
 
 class APIToken(Database.Base):
     """
-    Encrypted marketplace account credential.
+    Зашифрованные реквизиты кабинета маркетплейса.
 
-    `encrypted_token` stores the marketplace secret (WB JWT, Ozon Api-Key,
-    etc.). `external_account_id` stores the non-secret account identifier when
-    an API requires a credential pair, e.g. Ozon Client-Id + Api-Key.
+    `encrypted_token` хранит секрет маркетплейса, например JWT Wildberries
+    или API-ключ Ozon. `external_account_id` хранит несекретный идентификатор
+    кабинета, когда API требует пару реквизитов, например Client-Id и Api-Key Ozon.
     """
 
     __tablename__ = "api_tokens"
@@ -47,34 +47,34 @@ class APIToken(Database.Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        comment="Owner of the marketplace account credential",
+        comment="Владелец реквизитов кабинета маркетплейса",
     )
 
     marketplace: Mapped[Marketplace] = mapped_column(
         Enum(Marketplace, name="marketplace_enum"),
         nullable=False,
         index=True,
-        comment="Marketplace provider",
+        comment="Провайдер маркетплейса",
     )
 
     token_type: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         index=True,
-        comment="Marketplace-specific credential/auth type",
+        comment="Тип реквизитов или авторизации конкретного маркетплейса",
     )
 
     external_account_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         index=True,
-        comment="Marketplace-side seller/account identifier; never a secret",
+        comment="Идентификатор продавца или кабинета на стороне маркетплейса; не является секретом",
     )
 
     encrypted_token: Mapped[str] = mapped_column(
         Text,
         nullable=False,
-        comment="Encrypted marketplace secret",
+        comment="Зашифрованный секрет маркетплейса",
     )
 
     issued_at: Mapped[datetime] = mapped_column(
@@ -83,9 +83,9 @@ class APIToken(Database.Base):
         nullable=False,
     )
 
-    # Some providers (WB JWT) publish an expiry. Other credentials (for
-    # example an Ozon API key) remain valid until revoked and therefore have
-    # no trustworthy expiry timestamp.
+    # Некоторые провайдеры, например JWT Wildberries, публикуют срок действия.
+    # Другие реквизиты, например API-ключ Ozon, действуют до отзыва и поэтому
+    # не имеют достоверной даты окончания.
     expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
