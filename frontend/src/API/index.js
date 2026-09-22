@@ -6,9 +6,9 @@ import {
     setAccessToken,
 } from '@/security/session';
 
-// В production systemd/nginx публикует backend под /api. Локальная разработка
-// через Vite использует прямой порт backend, при этом VITE_API_BASE_URL можно
-// явно переопределить для Docker и нестандартных развёртываний.
+// В рабочем окружении systemd/nginx публикует серверную часть под /api.
+// Локальная разработка через Vite использует прямой порт серверной части,
+// при этом VITE_API_BASE_URL можно явно переопределить для Docker и нестандартных развёртываний.
 const defaultApiBaseURL = import.meta.env.PROD ? '/api' : 'http://localhost:9000';
 
 const resolveApiBaseURL = () => {
@@ -20,13 +20,13 @@ const resolveApiBaseURL = () => {
             const configuredURL = new URL(configuredBaseURL, window.location.href);
             if (configuredURL.origin !== window.location.origin) {
                 console.warn(
-                    'В production отклонён VITE_API_BASE_URL с другим origin; используется same-origin /api.',
+                    'В рабочем окружении отклонён VITE_API_BASE_URL с другим источником; используется /api текущего сайта.',
                 );
                 return '/api';
             }
         } catch {
             console.warn(
-                'В production отклонён некорректный VITE_API_BASE_URL; используется same-origin /api.',
+                'В рабочем окружении отклонён некорректный VITE_API_BASE_URL; используется /api текущего сайта.',
             );
             return '/api';
         }
