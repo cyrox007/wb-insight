@@ -6,7 +6,7 @@ from typing import Any
 
 
 class WBTokenValidationError(ValueError):
-    """User-safe validation error for Wildberries credential metadata."""
+    """Безопасная для пользователя ошибка проверки метаданных токена Wildberries."""
 
     def __init__(
         self,
@@ -38,9 +38,10 @@ _TOKEN_TYPES = {
     4: "service",
 }
 
-# Current WB Insight read-only product surface. These bit positions are defined
-# by WB in the JWT `s` permissions mask. Keep this list aligned with actual
-# sync handlers before adding another WB API category to the product.
+# Текущий набор API Wildberries используется WB Insight только для чтения.
+# Позиции битов определены Wildberries в маске разрешений JWT `s`. Перед
+# добавлением новой категории API этот список нужно синхронизировать
+# с фактическими обработчиками загрузки.
 WB_ANALYTICS_REQUIRED_PERMISSIONS: tuple[tuple[int, str], ...] = (
     (1, "Контент"),
     (2, "Аналитика"),
@@ -88,10 +89,11 @@ def decode_wb_token(
     now: datetime | None = None,
 ) -> WBTokenMetadata:
     """
-    Decode documented WB JWT metadata without treating it as proof of validity.
+    Декодирует документированные метаданные JWT Wildberries без признания токена действующим.
 
-    The decoded claims are used for local policy checks. A live `/ping` request
-    must still verify that the token has not been revoked and is accepted by WB.
+    Полученные поля используются только для локальной проверки политики.
+    Отдельный запрос `/ping` должен подтвердить, что токен не отозван и
+    принимается Wildberries.
     """
 
     token = raw_token.strip()
@@ -168,7 +170,7 @@ def decode_wb_token(
 
 
 def validate_analytics_permissions(metadata: WBTokenMetadata) -> None:
-    """Require the least-privilege categories used by the current product."""
+    """Проверяет минимально необходимые категории доступа текущего продукта."""
 
     mask = metadata.permissions_mask
     if mask is None:
@@ -208,7 +210,7 @@ def validate_cloud_service_token(
     service_id: str | None,
     service_secret_configured: bool = False,
 ) -> None:
-    """Enforce current WB partner-service token and service-secret policy."""
+    """Проверяет политику токена партнёрского сервиса и сервисного секрета Wildberries."""
 
     if metadata.token_type == "personal":
         raise WBTokenValidationError(
@@ -224,7 +226,7 @@ def validate_cloud_service_token(
             "WB_TEST_TOKEN_NOT_SUPPORTED",
             (
                 "Тестовый токен Wildberries предназначен для тестового контура "
-                "и не поддерживается production-интеграцией."
+                "и не поддерживается рабочей интеграцией."
             ),
         )
 
