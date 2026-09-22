@@ -861,6 +861,53 @@ def run_logout_smoke(client: SmokeClient) -> None:
     print("[ok] logout clears refresh session")
 
 
+def _is_beta_version(value: str | None) -> bool:
+    raw = str(value or "").strip()
+    prefix, separator, iteration = raw.partition("-beta.")
+    if not separator or not iteration.isdigit() or int(iteration) <= 0:
+        return False
+    parts = prefix.split(".")
+    return len(parts) == 3 and all(part.isdigit() for part in parts)
+
+
+def _validate_beta_gate_args(args: argparse.Namespace) -> None:
+    """Fail before network activity when mandatory P40 beta inputs are missing."""
+    if args.public_only:
+        raise SmokeFailure("beta gate cannot run in public-only mode")
+    if args.skip_disposable_registration:
+        raise SmokeFailure("beta gate requires disposable registration lifecycle")
+    if not args.evidence_output:
+        raise SmokeFailure("beta gate requires --evidence-output/SMOKE_EVIDENCE_OUTPUT")
+    if not _is_beta_version(args.expected_version):
+        raise SmokeFailure("beta gate requires an expected VERSION with -beta.N suffix")
+    origin = _safe_base_origin(str(args.base_url or ""))
+    if urlparse(origin).scheme != "https":
+        raise SmokeFailure("beta gate requires a public HTTPS origin")
+    if not args.email or not args.password:
+        raise SmokeFailure("beta gate requires SMOKE_EMAIL and SMOKE_PASSWORD")
+    if not args.require_email_verification:
+        raise SmokeFailure("beta gate requires real email verification")
+    if not args.require_password_reset:
+        raise SmokeFailure("beta gate requires real password reset")
+    if not args.mail_gateway_smoke:
+        raise SmokeFailure("beta gate requires authenticated mail gateway preflight")
+    if args.expected_mail_provider != "rusender":
+        raise SmokeFailure("P40 beta gate requires SMOKE_EXPECTED_MAIL_PROVIDER=rusender")
+    if not args.audit_smoke:
+        raise SmokeFailure("beta gate requires durable audit correlation smoke")
+    if not str(args.wb_token or "").strip():
+        raise SmokeFailure("beta gate requires a real SMOKE_WB_TOKEN")
+
+    disposable = _disposable_email(
+        args.disposable_email_template,
+        UUID("12345678-1234-5678-1234-567812345678"),
+    )
+    _require_real_disposable_mail(
+        disposable,
+        mail_token_command=args.mail_token_command,
+    )
+
+
 def _self_test() -> None:
     suffix = UUID("12345678-1234-5678-1234-567812345678")
     assert _disposable_email("smoke+{uuid}@example.com", suffix) == (
@@ -999,6 +1046,43 @@ def _self_test() -> None:
     )
     assert fake_login_client.access_token == "access-token"
     assert fake_login["user"]["id"] == "user-id"
+
+    beta_args = argparse.Namespace(
+        base_url="https://staging.example.com",
+        email="staff@example.com",
+        password="secret",
+        expected_version="0.9.0-beta.1",
+        public_only=False,
+        skip_disposable_registration=False,
+        disposable_email_template="release-smoke+{uuid}@qa.example.com",
+        mail_token_command="python3 ops/imap_mail_token_hook.py",
+        require_email_verification=True,
+        require_password_reset=True,
+        mail_gateway_smoke=True,
+        expected_mail_provider="rusender",
+        audit_smoke=True,
+        wb_token="secret-wb-token",
+        evidence_output=Path("/tmp/release-smoke.json"),
+    )
+    _validate_beta_gate_args(beta_args)
+
+    invalid_beta = argparse.Namespace(**vars(beta_args))
+    invalid_beta.expected_mail_provider = "smtp"
+    try:
+        _validate_beta_gate_args(invalid_beta)
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("beta gate unexpectedly accepted SMTP")
+
+    invalid_beta = argparse.Namespace(**vars(beta_args))
+    invalid_beta.wb_token = None
+    try:
+        _validate_beta_gate_args(invalid_beta)
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("beta gate unexpectedly accepted missing WB credential")
     print("[ok] release smoke self-test")
 
 
@@ -1027,6 +1111,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--public-only", action="store_true")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument(
+        "--beta-gate",
+        action="store_true",
+        default=_env_flag("SMOKE_BETA_GATE"),
+        help="Fail closed unless all mandatory P40 beta smoke inputs are enabled",
+    )
     parser.add_argument(
         "--skip-disposable-registration",
         action="store_true",
@@ -1125,6 +1215,9 @@ def main() -> int:
                 "structured smoke evidence requires --environment/ACCEPTANCE_ENVIRONMENT"
             )
         args.environment = environment
+
+    if args.beta_gate:
+        _validate_beta_gate_args(args)
 
     checks: dict[str, bool] = {
         "public_health_legal": False,

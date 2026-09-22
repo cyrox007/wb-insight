@@ -37,6 +37,19 @@ python3 ops/release_smoke.py --base-url https://staging.example.com --public-onl
 
 `--skip-disposable-registration` / `SMOKE_SKIP_DISPOSABLE_REGISTRATION=true` разрешён только для диагностики. Такой прогон не закрывает beta gate.
 
+Для фактического P40 используется fail-closed режим `--beta-gate` (или `SMOKE_BETA_GATE=true`). Он проверяет обязательные inputs **до первого сетевого запроса** и не позволяет случайно собрать неполный beta smoke. Режим требует:
+
+- HTTPS production-like origin и `VERSION=*-beta.N`;
+- structured `--evidence-output`;
+- disposable registration без skip;
+- real email verification + password reset;
+- mail-gateway preflight с exact provider `rusender`;
+- staff/admin credentials, provider-neutral inbox hook и доставляемый `{uuid}` address;
+- durable audit smoke;
+- реальный `SMOKE_WB_TOKEN`.
+
+Обычный smoke остаётся гибким для диагностики; `--beta-gate` — канонический release-вариант.
+
 ## 3. P40: реальная email verification и password recovery через RuSender
 
 После P38/P39/P42/P43 beta smoke обязан доказать реальную доставку писем. Нельзя закрывать beta с `EMAIL_VERIFICATION_ENABLED=false` или адресом `@smoke.invalid`. Текущий production-like transactional transport — RuSender HTTPS API, поэтому SMTP-порты хостинга не участвуют в этом acceptance.
@@ -72,6 +85,7 @@ Helper открывает mailbox в read-only режиме, проверяет 
 Перед обязательным real-mail flow включается admin preflight почтового шлюза:
 
 ```bash
+export SMOKE_BETA_GATE=true
 export SMOKE_MAIL_GATEWAY=true
 export SMOKE_EXPECTED_MAIL_PROVIDER=rusender
 ```

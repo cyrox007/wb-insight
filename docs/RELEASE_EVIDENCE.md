@@ -140,12 +140,17 @@ python3 ops/systemd_acceptance.py \
   --require-rollback-proof \
   --output /secure/evidence/deployment.json
 
-# SMOKE_EMAIL/SMOKE_PASSWORD и реальный SMOKE_WB_TOKEN задаются через
-# environment/secret manager. Для beta core_smoke обязан доказать wb_credential=true.
+# SMOKE_EMAIL/SMOKE_PASSWORD, реальный SMOKE_WB_TOKEN,
+# SMOKE_DISPOSABLE_EMAIL_TEMPLATE и SMOKE_MAIL_TOKEN_COMMAND задаются через
+# environment/secret manager. --beta-gate проверит их до первого HTTP-запроса.
+# Для beta core_smoke обязан доказать wb_credential=true.
 python3 ops/release_smoke.py \
+  --beta-gate \
   --base-url https://staging.example.com \
   --require-email-verification \
   --require-password-reset \
+  --mail-gateway-smoke \
+  --expected-mail-provider rusender \
   --audit-smoke \
   --evidence-output /secure/evidence/release-smoke.json
 
