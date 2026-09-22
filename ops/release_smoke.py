@@ -457,6 +457,11 @@ def run_disposable_registration_smoke(
             if reset.get("status") != "success":
                 raise SmokeFailure("password reset confirmation did not succeed")
 
+            # From this point cleanup must use the rotated credential even if a
+            # subsequent session-revocation assertion fails.
+            password = new_password
+            client.access_token = None
+
             if stale_access_token:
                 stale_client = SmokeClient(base_url)
                 stale_client.access_token = stale_access_token
@@ -470,11 +475,9 @@ def run_disposable_registration_smoke(
                 if error_type != "session_revoked":
                     raise SmokeFailure("password reset did not revoke the previously issued access token")
 
-            client.access_token = None
             restored_user_id = _login_disposable(client, email, new_password)
             if restored_user_id != user_id:
                 raise SmokeFailure("password reset login restored the wrong identity")
-            password = new_password
             print(
                 "[ok] password reset delivered through real mail, throttle held and old session was revoked"
             )
@@ -574,6 +577,22 @@ def _login_smoke_client(client: SmokeClient, email: str, password: str) -> dict:
     return login
 
 
+def _validate_password_reset_throttle_payload(payload: dict) -> None:
+    if payload.get("status") != "success":
+        raise SmokeFailure("password reset throttle diagnostics returned an invalid envelope")
+    try:
+        message_count = int(payload.get("password_reset_messages"))
+        resend_seconds = int(payload.get("resend_seconds"))
+    except (TypeError, ValueError) as exc:
+        raise SmokeFailure("password reset throttle diagnostics returned invalid counters") from exc
+    if message_count != 1:
+        raise SmokeFailure(
+            f"password reset throttle expected one durable mail row, got {message_count}"
+        )
+    if resend_seconds <= 0:
+        raise SmokeFailure("password reset resend throttle is not configured")
+
+
 def run_password_reset_throttle_smoke(
     base_url: str,
     *,
@@ -591,19 +610,7 @@ def run_password_reset_throttle_smoke(
             f"/control-panel/mail/diagnostics/password-reset/{user_id}",
             auth=True,
         )
-        if payload.get("status") != "success":
-            raise SmokeFailure("password reset throttle diagnostics returned an invalid envelope")
-        try:
-            message_count = int(payload.get("password_reset_messages"))
-            resend_seconds = int(payload.get("resend_seconds"))
-        except (TypeError, ValueError) as exc:
-            raise SmokeFailure("password reset throttle diagnostics returned invalid counters") from exc
-        if message_count != 1:
-            raise SmokeFailure(
-                f"password reset throttle expected one durable mail row, got {message_count}"
-            )
-        if resend_seconds <= 0:
-            raise SmokeFailure("password reset resend throttle is not configured")
+        _validate_password_reset_throttle_payload(payload)
         print("[ok] password reset resend throttle and idempotent queue materialization")
     except SmokeFailure as exc:
         probe_error = exc
@@ -950,6 +957,26 @@ def _self_test() -> None:
         "email_verification_ready": True,
         "password_reset_ready": True,
     }
+
+    _validate_password_reset_throttle_payload(
+        {
+            "status": "success",
+            "password_reset_messages": 1,
+            "resend_seconds": 60,
+        }
+    )
+    try:
+        _validate_password_reset_throttle_payload(
+            {
+                "status": "success",
+                "password_reset_messages": 2,
+                "resend_seconds": 60,
+            }
+        )
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("duplicate password reset queue rows unexpectedly passed throttle proof")
 
     class _FakeLoginClient:
         access_token = None
