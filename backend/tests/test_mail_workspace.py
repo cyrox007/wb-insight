@@ -458,6 +458,56 @@ async def test_rusender_provider_uses_bearer_key_id_and_idempotency(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_rusender_provider_drops_unsafe_custom_headers(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"uuid": "safe-header-test"}
+
+    class FakeClient:
+        def __init__(self, *, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, _url, *, headers, json):
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("integrations.mail.rusender.httpx.AsyncClient", FakeClient)
+    provider = RuSenderMailProvider(
+        SimpleNamespace(
+            RUSENDER_API_BASE_URL="https://api.rusender.ru",
+            RUSENDER_KEY_ID="15074",
+            RUSENDER_API_TOKEN="secret-token",
+            RUSENDER_TIMEOUT_SECONDS=10,
+        )
+    )
+
+    await provider.send(
+        sender="no-reply@mail.jsinteractive.ru",
+        recipient="seller@example.org",
+        subject="Test",
+        body="Text",
+        headers={
+            "X-WB-Trace": "ok",
+            "X-Bad": "ok\r\nBcc: attacker@example.org",
+            "List-Unsubscribe": "<https://not-supported.example>",
+            "X Weird": "bad",
+        },
+    )
+
+    assert captured["json"]["mail"]["headers"] == {"X-WB-Trace": "ok"}
+
+
+@pytest.mark.asyncio
 async def test_rusender_provider_accepts_201_created_with_uuid(monkeypatch):
     class FakeResponse:
         status_code = 201
