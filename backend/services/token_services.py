@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.logger import setup_logger
 from integrations.wildberries.token_metadata import (
     WBTokenValidationError,
     decode_wb_token,
@@ -15,6 +16,9 @@ from integrations.wildberries.token_validation import validate_wb_token_live
 from models.tokens_model import APIToken, Marketplace
 from settings import config
 from utils.token_crypto import encrypt_token
+
+
+logger = setup_logger(__name__)
 
 
 async def get_user_token_count(session: AsyncSession, user_id: UUID) -> int:
@@ -96,5 +100,6 @@ async def delete_token(session: AsyncSession, token: APIToken) -> bool:
         await session.delete(token)
         await session.flush()
         return True
-    except Exception:
+    except Exception as exc:
+        logger.error("Ошибка при удалении подключения маркетплейса: %s", exc)
         return False
