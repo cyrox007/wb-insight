@@ -1,8 +1,8 @@
 import $api from "..";
 
 export default class CP_Users {
-    static async getUserList() {
-        return await $api.get('/control-panel/users/')
+    static async getUserList(params = {}) {
+        return await $api.get('/control-panel/users/', { params })
     }
 
     static async getUser(userId) {
