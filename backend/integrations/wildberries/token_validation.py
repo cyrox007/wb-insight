@@ -16,7 +16,7 @@ async def validate_wb_token_live(
     service_secret: str | None = None,
     http_client: httpx.AsyncClient | None = None,
 ) -> None:
-    """Verify with WB that a partner-service credential is active and accepted."""
+    """Проверяет через Wildberries, что токен партнёрского сервиса активен и принимается API."""
 
     secret = (service_secret or "").strip()
     if metadata.token_type in {"base", "service"} and not secret:
