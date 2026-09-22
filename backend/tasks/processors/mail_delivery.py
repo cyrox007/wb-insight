@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from celery_app import celery_app
 from core.database_celery import get_session
+from integrations.mail.rusender import RuSenderAPIError
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage
 from services.mail_campaign_service import due_scheduled_campaign_ids, launch_campaign
 from services.mail_service import (
@@ -15,6 +16,14 @@ from services.mail_service import (
     refresh_campaign_counters,
 )
 from services.mail_transport_service import get_mail_transport_runtime
+
+
+def _delivery_failure(exc: Exception) -> tuple[str, bool]:
+    if isinstance(exc, PermanentMailDeliveryError):
+        return exc.code, True
+    if isinstance(exc, RuSenderAPIError):
+        return exc.safe_code, False
+    return type(exc).__name__.lower(), False
 
 
 async def _campaign_id(message_id):
@@ -111,8 +120,7 @@ async def _process_due_mail() -> dict[str, int]:
             await session.close()
             session = await get_session()
             try:
-                terminal = isinstance(exc, PermanentMailDeliveryError)
-                error_code = exc.code if terminal else type(exc).__name__.lower()
+                error_code, terminal = _delivery_failure(exc)
                 await mark_message_failure(
                     session,
                     message_id,

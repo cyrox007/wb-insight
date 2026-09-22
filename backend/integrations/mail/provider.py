@@ -21,6 +21,8 @@ class MailProvider(Protocol):
         body: str,
         html_body: str | None = None,
         sender_name: str | None = None,
+        recipient_name: str | None = None,
+        preview_title: str | None = None,
         reply_to: str | None = None,
         headers: dict[str, str] | None = None,
         idempotency_key: str | None = None,

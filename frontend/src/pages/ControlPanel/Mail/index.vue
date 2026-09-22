@@ -832,17 +832,23 @@ onMounted(async () => {
 				<div class="deliverability-grid">
 					<div :class="{ ok: meta.gateway?.deliverability?.tls }"><strong>{{ meta.gateway?.provider === 'rusender' ? 'HTTPS / TLS' : 'STARTTLS' }}</strong><span>{{ meta.gateway?.deliverability?.tls ? 'Защищено' : 'Требует настройки' }}</span></div>
 					<div :class="{ ok: meta.gateway?.deliverability?.sender_identity }"><strong>From identity</strong><span>{{ meta.gateway?.deliverability?.sender_identity ? 'Настроен' : 'Требует настройки' }}</span></div>
-					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : (meta.gateway?.provider === 'rusender' ? 'Не используется транзакционным API' : 'Нужны MAIL_UNSUBSCRIBE_BASE_URL + HMAC key') }}</span></div>
+					<div class="ok"><strong>Text + HTML</strong><span>Транзакционные письма multipart-ready</span></div>
+					<div class="ok"><strong>Preview / preheader</strong><span>{{ meta.gateway?.provider === 'rusender' ? 'Передаётся через previewTitle' : 'Встраивается в HTML' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : (meta.gateway?.provider === 'rusender' ? 'Не нужен транзакционным письмам' : 'Нужны MAIL_UNSUBSCRIBE_BASE_URL + HMAC key') }}</span></div>
 					<div :class="{ ok: meta.gateway?.deliverability?.reply_to_configured }"><strong>Reply-To</strong><span>{{ meta.gateway?.deliverability?.reply_to_configured ? 'Настроен' : (meta.gateway?.provider === 'rusender' ? 'Не заявлен в текущем API-контракте' : 'Рекомендуется') }}</span></div>
-					<div class="external"><strong>SPF</strong><span>Проверить DNS</span></div>
-					<div class="external"><strong>DKIM</strong><span>{{ meta.gateway?.provider === 'rusender' ? 'Контролируется доменом/RuSender' : 'Включить у SMTP-провайдера' }}</span></div>
-					<div class="external"><strong>DMARC</strong><span>Проверить DNS</span></div>
+					<div class="external"><strong>SPF</strong><span>Проверить PASS в полученном письме</span></div>
+					<div class="external"><strong>DKIM</strong><span>Проверить PASS и домен подписи</span></div>
+					<div class="external"><strong>DMARC</strong><span>Проверить PASS / alignment</span></div>
 					<div class="external"><strong>PTR / rDNS</strong><span>{{ meta.gateway?.provider === 'rusender' ? 'На стороне RuSender' : 'Проверить у провайдера IP' }}</span></div>
 				</div>
 				<div class="cp-info-callout">
-					<strong>{{ meta.gateway?.provider === 'rusender' ? 'RuSender API используется для транзакционной почты.' : 'Для маркетинговых писем приложение добавляет служебные заголовки автоматически.' }}</strong>
-					<span v-if="meta.gateway?.provider === 'rusender'">Подтверждение email, восстановление пароля и системные уведомления отправляются по HTTPS. Для каждого запроса приложение передаёт idempotencyKey и сохраняет UUID RuSender как provider_message_id.</span>
+					<strong>{{ meta.gateway?.provider === 'rusender' ? 'Приложение передаёт все поддерживаемые транзакционные metadata RuSender.' : 'Для маркетинговых писем приложение добавляет служебные RFC-заголовки автоматически.' }}</strong>
+					<span v-if="meta.gateway?.provider === 'rusender'">Передаются From name/email, To name/email, subject, text + HTML, previewTitle, idempotencyKey и безопасные X-WB-* headers. Date, Message-ID, Return-Path, MIME transport headers и DKIM-Signature формирует сам почтовый провайдер; подделывать их в API-запросе нельзя. UUID сохраняется как provider_message_id, когда RuSender возвращает его.</span>
 					<span v-else>Date, Message-ID, Reply-To, List-ID, List-Unsubscribe, List-Unsubscribe-Post и Precedence: bulk. Транзакционные письма подтверждения и recovery не помечаются как bulk. Безопасная подпись отписки задаётся на сервере через MAIL_UNSUBSCRIBE_HMAC_KEY.</span>
+				</div>
+				<div class="cp-info-callout">
+					<strong>Попадание в спам нельзя диагностировать только по настройкам приложения.</strong>
+					<span>Для фактической проверки откройте исходник доставленного письма у получателя и убедитесь, что SPF, DKIM и DMARC имеют PASS, а From выровнен с доменом SPF или DKIM. Если аутентификация проходит, следующий фактор — репутация домена/IP и история жалоб/тестовых отправок.</span>
 				</div>
 			</section>
 

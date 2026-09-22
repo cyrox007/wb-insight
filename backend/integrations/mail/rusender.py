@@ -6,6 +6,7 @@ from integrations.mail.provider import MailDeliveryReceipt
 
 
 _PROVIDER_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+_CUSTOM_HEADER_RE = re.compile(r"^X-[A-Za-z0-9][A-Za-z0-9-]{0,62}$", re.IGNORECASE)
 
 
 def _safe_provider_error_code(response: httpx.Response) -> str | None:
@@ -67,6 +68,8 @@ class RuSenderMailProvider:
         body: str,
         html_body: str | None = None,
         sender_name: str | None = None,
+        recipient_name: str | None = None,
+        preview_title: str | None = None,
         reply_to: str | None = None,
         headers: dict[str, str] | None = None,
         idempotency_key: str | None = None,
@@ -84,6 +87,10 @@ class RuSenderMailProvider:
         }
         if sender_name:
             mail_payload["from"]["name"] = sender_name
+        if recipient_name:
+            mail_payload["to"]["name"] = str(recipient_name)[:255]
+        if preview_title:
+            mail_payload["previewTitle"] = str(preview_title)[:255]
 
         if html_body:
             mail_payload["html"] = html_body
@@ -94,11 +101,18 @@ class RuSenderMailProvider:
 
         # RuSender documents custom mail.headers for X-* headers. Do not forward
         # arbitrary RFC headers from the SMTP path because that can cause a 400.
-        safe_headers = {
-            str(name): str(value)
-            for name, value in (headers or {}).items()
-            if str(name).lower().startswith("x-")
-        }
+        safe_headers = {}
+        for raw_name, raw_value in (headers or {}).items():
+            name = str(raw_name or "").strip()
+            value = str(raw_value or "").strip()
+            if (
+                not _CUSTOM_HEADER_RE.fullmatch(name)
+                or not value
+                or "\r" in value
+                or "\n" in value
+            ):
+                continue
+            safe_headers[name] = value[:998]
         if safe_headers:
             mail_payload["headers"] = safe_headers
 
@@ -123,24 +137,18 @@ class RuSenderMailProvider:
             raise RuSenderAPIError("rusender_network_error", retryable=True) from exc
 
         if 200 <= response.status_code < 300:
+            # Once the provider returned 2xx the request is accepted. Retrying
+            # merely because a non-standard success body omitted uuid can create
+            # duplicate transactional mail. Capture uuid when available, but do
+            # not turn an accepted delivery into a retryable failure.
+            provider_id = None
             try:
                 data = response.json()
-            except (ValueError, TypeError) as exc:
-                raise RuSenderAPIError(
-                    "rusender_invalid_success_response",
-                    retryable=True,
-                ) from exc
-            if not isinstance(data, dict):
-                raise RuSenderAPIError(
-                    "rusender_invalid_success_response",
-                    retryable=True,
-                )
-            provider_id = str(data.get("uuid") or "").strip()
-            if not provider_id:
-                raise RuSenderAPIError(
-                    "rusender_invalid_success_response",
-                    retryable=True,
-                )
+            except (ValueError, TypeError):
+                data = None
+            if isinstance(data, dict):
+                value = str(data.get("uuid") or "").strip()
+                provider_id = value or None
             return MailDeliveryReceipt(provider_message_id=provider_id)
 
         error_code = f"rusender_http_{response.status_code}"
