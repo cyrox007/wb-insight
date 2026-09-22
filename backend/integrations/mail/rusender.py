@@ -6,6 +6,7 @@ from integrations.mail.provider import MailDeliveryReceipt
 
 
 _PROVIDER_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+_CUSTOM_HEADER_RE = re.compile(r"^X-[A-Za-z0-9][A-Za-z0-9-]{0,62}$", re.IGNORECASE)
 
 
 def _safe_provider_error_code(response: httpx.Response) -> str | None:
@@ -100,11 +101,18 @@ class RuSenderMailProvider:
 
         # RuSender documents custom mail.headers for X-* headers. Do not forward
         # arbitrary RFC headers from the SMTP path because that can cause a 400.
-        safe_headers = {
-            str(name): str(value)
-            for name, value in (headers or {}).items()
-            if str(name).lower().startswith("x-")
-        }
+        safe_headers = {}
+        for raw_name, raw_value in (headers or {}).items():
+            name = str(raw_name or "").strip()
+            value = str(raw_value or "").strip()
+            if (
+                not _CUSTOM_HEADER_RE.fullmatch(name)
+                or not value
+                or "\r" in value
+                or "\n" in value
+            ):
+                continue
+            safe_headers[name] = value[:998]
         if safe_headers:
             mail_payload["headers"] = safe_headers
 
