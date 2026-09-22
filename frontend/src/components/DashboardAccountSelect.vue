@@ -82,6 +82,7 @@ const syncStatus = ref(null)
 const syncStatusLoading = ref(false)
 const syncStatusError = ref('')
 let syncStatusTimer = null
+let syncStatusRequestVersion = 0
 
 const {
     accounts,
@@ -154,8 +155,9 @@ const syncDetails = computed(() => {
 })
 
 const loadSyncStatus = async () => {
-    if (!accounts.value.length || syncStatusLoading.value) return
+    if (!accounts.value.length) return
 
+    const requestVersion = ++syncStatusRequestVersion
     syncStatusLoading.value = true
     syncStatusError.value = ''
     try {
@@ -163,6 +165,8 @@ const loadSyncStatus = async () => {
             ? { token_id: selectedTokenId.value }
             : {}
         const response = await DashboardService.get_sync_status(params)
+        if (requestVersion !== syncStatusRequestVersion) return
+
         const result = response.data || {}
         if (result.status === 'error') {
             syncStatus.value = null
@@ -172,11 +176,14 @@ const loadSyncStatus = async () => {
         }
         syncStatus.value = result.sync_status || null
     } catch (error) {
+        if (requestVersion !== syncStatusRequestVersion) return
         syncStatusError.value =
             error.response?.data?.error?.message ||
             'Не удалось проверить свежесть данных'
     } finally {
-        syncStatusLoading.value = false
+        if (requestVersion === syncStatusRequestVersion) {
+            syncStatusLoading.value = false
+        }
     }
 }
 
