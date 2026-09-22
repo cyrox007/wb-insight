@@ -40,7 +40,7 @@ from services.dashboard.semantic_metrics import (
     previous_period,
 )
 from services.dashboard.unit_economy_scope import get_dashboard_unit_economy_scoped
-from services.user_sync_state_service import get_user_sync_states
+from services.user_sync_state_service import build_sync_status, get_user_sync_states
 from utils.responce_helps import response_error, response_success
 
 
@@ -163,8 +163,8 @@ async def _calculate_stats(
         else 0.0
     )
 
-    # Monthly planning uses the actual Moscow calendar month, independently of
-    # the arbitrary dashboard comparison period selected above.
+    # Месячный план считается по фактическому московскому календарному месяцу
+    # независимо от произвольного периода сравнения, выбранного в дашборде.
     today = today or _moscow_today()
     month_start = normalize_month(today)
     month_sales = await get_sales_report_stats(
@@ -341,23 +341,38 @@ async def dashboard(
             code="NO_VALID_TOKENS",
         )
 
-    if not has_any_success and sync_errors:
+    active_sync = await has_active_sync_jobs(db_session, user_id, scope)
+    sync_status = build_sync_status(
+        scoped_states,
+        scope.token_ids,
+        is_syncing=active_sync,
+    )
+
+    if not has_any_success and sync_errors and not active_sync:
         return response_error(
             message=f"Ошибка синхронизации: {sync_errors[0]}",
             code="SYNC_ERROR",
         )
-    if not has_any_success:
+    if not has_any_success and not active_sync:
         return response_error(
             message="Данные отсутствуют → синхронизация не запускалась",
             code="NOT_SYNCED",
         )
-    if await has_active_sync_jobs(db_session, user_id, scope):
+    if active_sync:
         return response_success(
             is_synced=False,
             is_syncing=True,
-            message="Идёт синхронизация данных",
+            message=(
+                "Выполняется первичная синхронизация данных"
+                if not has_any_success
+                else "Обновляем данные Wildberries"
+            ),
             stats={},
+            sync_status=sync_status,
             partial=True,
+            selected_token_id=(
+                str(scope.selected_token_id) if scope.selected_token_id else None
+            ),
         )
 
     stats_data = await _calculate_stats(
@@ -372,6 +387,7 @@ async def dashboard(
         warehouseData=[],
         sizeChart=[],
         categoryData=[],
+        sync_status=sync_status,
         partial=True,
         selected_token_id=(
             str(scope.selected_token_id) if scope.selected_token_id else None

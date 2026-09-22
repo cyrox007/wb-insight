@@ -19,6 +19,7 @@ from services.marketplace_access_service import (
     get_wb_account_quota,
 )
 from services.subscription_service import get_user_subscription
+from services.sync_onboarding_service import bootstrap_token_sync
 from services.token_services import (
     delete_token,
     get_token_by_id,
@@ -115,7 +116,7 @@ async def update_profile(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    """Update seller-controlled analytics settings used by dashboard formulas."""
+    """Обновляет настройки продавца, используемые в формулах аналитики."""
     user_id = _current_user_id(request)
     current_user = await get_user_by_uuid(db_session, user_id)
     if current_user is None:
@@ -219,7 +220,7 @@ async def add_token(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    """Legacy WB connection endpoint kept for backward compatibility."""
+    """Сохраняет совместимость со старым маршрутом подключения Wildberries."""
     user_id = _current_user_id(request)
     quota = await get_wb_account_quota(db_session, user_id)
     if not quota["allowed"]:
@@ -258,13 +259,6 @@ async def add_token(
         response.status_code = exc.status_code
         return response_error(code=exc.code, message=str(exc))
 
-    if token is None:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(
-            code="TOKEN_CREATE_ERROR",
-            message="Не удалось сохранить токен",
-        )
-
     await record_consents(
         db_session,
         user_id=user_id,
@@ -275,8 +269,19 @@ async def add_token(
         context_reference=str(token.id),
     )
 
+    sync_states_created, sync_jobs_created = await bootstrap_token_sync(
+        session=db_session,
+        user_id=user_id,
+        token_id=token.id,
+    )
+
     return response_success(
-        token=_public_token(token, dashboard_available=True)
+        token=_public_token(token, dashboard_available=True),
+        message="Кабинет Wildberries подключён. Первичная синхронизация поставлена в очередь.",
+        sync={
+            "states_created": sync_states_created,
+            "jobs_created": sync_jobs_created,
+        },
     )
 
 

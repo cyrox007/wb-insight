@@ -5,6 +5,17 @@
         <p class="eyebrow">Wildberries · аналитика кабинета</p>
         <h1>Обзор бизнеса</h1>
         <p class="page-subtitle">Главные показатели, динамика и точки, которые требуют внимания.</p>
+        <div
+          v-if="syncStatus && !isSyncing"
+          class="sync-freshness"
+          :class="`sync-freshness--${syncFreshnessTone}`"
+          role="status"
+          :aria-label="syncFreshnessAriaLabel"
+        >
+          <span class="sync-freshness__dot" aria-hidden="true"></span>
+          <strong>{{ syncFreshnessHeadline }}</strong>
+          <span>{{ syncFreshnessCaption }}</span>
+        </div>
       </div>
 
       <form class="period-filter" @submit.prevent="applyPeriod">
@@ -37,8 +48,8 @@
     />
 
     <div v-else-if="isSyncing" class="status-banner" role="status">
-      <strong>Данные синхронизируются с Wildberries.</strong>
-      <span>Показатели появятся автоматически после завершения синхронизации.</span>
+      <strong>{{ syncMessage || 'Данные синхронизируются с Wildberries.' }}</strong>
+      <span>{{ syncProgressText }}</span>
     </div>
 
     <div v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="kpi-grid" aria-label="Ключевые показатели">
@@ -193,6 +204,8 @@ const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
 const isChartsLoading = ref(false)
 const isSyncing = ref(false)
+const syncStatus = ref(null)
+const syncMessage = ref('')
 const errorMessage = ref('')
 
 const formatDateInput = (date) => {
@@ -210,6 +223,66 @@ const startDate = ref(formatDateInput(initialStart))
 const endDate = ref(formatDateInput(today))
 
 const periodIsValid = computed(() => Boolean(startDate.value && endDate.value && startDate.value <= endDate.value))
+
+const formatSyncTime = (value) => {
+  if (!value) return ''
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed)
+}
+
+const syncAttentionCount = computed(() => {
+  if (!syncStatus.value) return 0
+  return Number(syncStatus.value.stale_entities || 0) +
+    Number(syncStatus.value.error_entities || 0) +
+    Number(syncStatus.value.waiting_entities || 0)
+})
+
+const syncFreshnessTone = computed(() => {
+  if (!syncStatus.value) return 'neutral'
+  if (syncStatus.value.complete) return 'ready'
+  if (Number(syncStatus.value.error_entities || 0) > 0) return 'error'
+  return 'warning'
+})
+
+const syncFreshnessHeadline = computed(() => {
+  if (!syncStatus.value) return ''
+  if (syncStatus.value.complete) return 'Данные актуальны'
+  return `Актуальность данных: ${syncStatus.value.ready_entities || 0}/${syncStatus.value.total_entities || 0}`
+})
+
+const syncFreshnessCaption = computed(() => {
+  if (!syncStatus.value) return ''
+  const oldest = formatSyncTime(syncStatus.value.oldest_success_at)
+  if (syncStatus.value.complete) {
+    return oldest ? `Все источники обновлены не раньше ${oldest}` : 'Все источники синхронизированы'
+  }
+
+  const parts = []
+  if (syncStatus.value.stale_entities) parts.push(`устарели: ${syncStatus.value.stale_entities}`)
+  if (syncStatus.value.error_entities) parts.push(`ошибки: ${syncStatus.value.error_entities}`)
+  if (syncStatus.value.waiting_entities) parts.push(`ожидают: ${syncStatus.value.waiting_entities}`)
+  const latest = formatSyncTime(syncStatus.value.latest_success_at)
+  const detail = parts.length ? parts.join(' · ') : `требуют внимания: ${syncAttentionCount.value}`
+  return latest ? `${detail} · последнее успешное обновление ${latest}` : detail
+})
+
+const syncFreshnessAriaLabel = computed(() =>
+  [syncFreshnessHeadline.value, syncFreshnessCaption.value].filter(Boolean).join('. ')
+)
+
+const syncProgressText = computed(() => {
+  if (!syncStatus.value) return 'Показатели появятся автоматически после завершения синхронизации.'
+  const ready = Number(syncStatus.value.ready_entities || 0)
+  const total = Number(syncStatus.value.total_entities || 0)
+  if (!total) return 'Показатели появятся автоматически после завершения синхронизации.'
+  return `Готово источников: ${ready} из ${total}. Показатели обновятся автоматически.`
+})
 
 const primaryKpis = computed(() => [
   {
@@ -321,6 +394,7 @@ async function loadDashboard() {
   isLoading.value = true
   errorMessage.value = ''
   isSyncing.value = false
+  syncMessage.value = ''
   try {
     const response = await DashboardService.get_dashboard_data({
       start_date: startDate.value,
@@ -330,11 +404,14 @@ async function loadDashboard() {
 
     if (result?.status === 'error') {
       stats.value = {}
+      syncStatus.value = null
       errorMessage.value = extractError(result)
       return
     }
 
     stats.value = result.stats || {}
+    syncStatus.value = result.sync_status || null
+    syncMessage.value = result.message || ''
     isSyncing.value = result.is_synced === false || result.is_syncing === true
 
     if (isSyncing.value) {
@@ -398,6 +475,47 @@ onMounted(loadDashboard)
   margin-top: 8px;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.sync-freshness {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 10px;
+  padding: 6px 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sync-freshness strong {
+  color: var(--text-color);
+  font-weight: 700;
+}
+
+.sync-freshness__dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--text-subtle);
+}
+
+.sync-freshness--ready .sync-freshness__dot {
+  background: #22a06b;
+}
+
+.sync-freshness--warning .sync-freshness__dot {
+  background: #d49a2b;
+}
+
+.sync-freshness--error .sync-freshness__dot {
+  background: var(--danger-color);
 }
 
 .period-filter {
@@ -671,6 +789,12 @@ onMounted(loadDashboard)
 
   .period-filter {
     width: 100%;
+  }
+
+  .sync-freshness {
+    width: 100%;
+    border-radius: 10px;
+    flex-wrap: wrap;
   }
 
   .period-field {
