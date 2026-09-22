@@ -85,6 +85,18 @@ Updater:
 11. проверяет systemd state и `/health/ready`;
 12. сохраняет предыдущий venv как `venv.previous.<timestamp>` для диагностики.
 
+## Публичный nginx: HTTPS и frontend cache
+
+Для systemd-инсталляции внешний nginx является частью browser security/runtime contract. Публичный hostname должен:
+
+- перенаправлять весь HTTP-трафик на HTTPS до загрузки SPA;
+- проксировать API same-origin под `/api`;
+- отдавать `index.html` с `no-store/no-cache`;
+- кешировать hashed `/assets/*` как immutable;
+- возвращать настоящий `404` для отсутствующего asset вместо fallback на `index.html`.
+
+Если браузер показывает `Не защищено`, а console содержит CORS для `https://.../api/auth/refresh` или MIME `text/html` для `/assets/*.css|js`, сначала исправьте nginx/TLS boundary: это приводит к ложному logout на cold start и stale-chunk blank screen.
+
 ## Pre-promotion acceptance из `dev`
 
 По dev-first flow production-like candidate допускается проверять **до** promotion в `main`. Acceptance host должен находиться на exact `origin/dev` head, а updater запускается с тем же target branch:
