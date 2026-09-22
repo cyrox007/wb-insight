@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -59,6 +60,13 @@ class MailTransportRuntime:
                 and self.RUSENDER_API_TOKEN
             )
         return False
+
+
+def _secret_fingerprint(value: str | None) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    return "sha256:" + sha256(raw.encode("utf-8")).hexdigest()[:12]
 
 
 def _secret_context(provider: str) -> str:
@@ -272,6 +280,11 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
             else runtime.SMTP_TIMEOUT_SECONDS
         ),
         "credentials_configured": runtime.credentials_configured,
+        "credential_fingerprint": (
+            _secret_fingerprint(runtime.RUSENDER_API_TOKEN)
+            if runtime.MAIL_PROVIDER == "rusender"
+            else None
+        ),
         "username_hint": username_hint,
         "updated_at": runtime.updated_at,
         "config_source": lifecycle_config.MAIL_CONFIG_SOURCE,
