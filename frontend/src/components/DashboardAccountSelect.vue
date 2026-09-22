@@ -149,9 +149,13 @@ const syncDetails = computed(() => {
         error: 'ошибка',
         waiting: 'ожидает синхронизации',
     }
-    return syncStatus.value.entities
+    const interval = Number(syncStatus.value.freshness_interval_hours || 0)
+    const lines = syncStatus.value.entities
         .map((item) => `${item.label}: ${labels[item.status] || item.status}`)
-        .join('\n')
+    if (interval) {
+        lines.unshift(`Интервал обновления по тарифу: ${interval} ч`)
+    }
+    return lines.join('\n')
 })
 
 const loadSyncStatus = async () => {
