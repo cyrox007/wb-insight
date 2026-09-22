@@ -37,6 +37,26 @@ async def get_wb_account_limit(
     return max(0, int(tariff_limit.limit_value)) if tariff_limit else 0
 
 
+async def get_wb_sync_frequency_hours(
+    session: AsyncSession,
+    user_id: UUID,
+) -> int | None:
+    """Возвращает тарифный интервал синхронизации Wildberries в часах."""
+    subscription = await get_active_subscription(session, user_id)
+    if subscription is None:
+        return None
+
+    tariff_limit = await get_limit(
+        session=session,
+        tariff_id=subscription.tariff_id,
+        limit_type="sync_frequency_hours",
+    )
+    if tariff_limit is None:
+        return None
+
+    return max(1, int(tariff_limit.limit_value))
+
+
 async def get_allowed_wb_tokens(
     session: AsyncSession,
     user_id: UUID,
