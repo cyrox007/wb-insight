@@ -27,8 +27,8 @@
 - P59 strict RuSender evidence binding закрыт PR #137, merge `be242c71f5d52c1bd84af4b6f7b8a4d0a3af76a7`.
 - P60 password-reset throttle + old-session revocation proof закрыт PR #138, merge `569547acaa3d12ed808bc906703ec2869f39c532`.
 - P61 fail-closed beta smoke mode закрыт PR #139, merge `8f5f001bb4f8321e31cc50f96627e84025e39eb2`.
-- P70 onboarding sync + legacy cleanup закрыт PR #149, merge `e90960e98be2519b15e2889706400eef05b57a5f`.
-- P71 sync freshness visibility закрыт PR #150, merge `323c60d6ebfb09c41e8dea8020ac43177204bdde`.
+- P70 первичная синхронизация и очистка устаревшего кода закрыты PR #149, merge `e90960e98be2519b15e2889706400eef05b57a5f`.
+- P71 отображение свежести синхронизации закрыто PR #150, merge `323c60d6ebfb09c41e8dea8020ac43177204bdde`.
 - P72 непрерывная аналитика при фоновой синхронизации закрыта PR #151, merge `2ba177c920618ddb272246982d7a6553e6c16df7`.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
@@ -41,7 +41,7 @@
 - account-scoped durable WB sync;
 - безопасная сводка свежести синхронизации по сущностям и выбранным кабинетам; первичная синхронизация отображается как выполняющаяся, а не как `NOT_SYNCED`;
 - повторная синхронизация не скрывает последние успешно сохранённые показатели; общий статус свежести доступен во всех разделах аналитики продавца через лёгкий маршрут только для чтения;
-- профиль и пустое состояние аналитики различают безопасные причины недоступности WB-подключения: отозвано, истёк срок, отключено или превышен лимит тарифа; add/delete немедленно обновляют общий список кабинетов;
+- профиль и пустое состояние аналитики различают безопасные причины недоступности WB-подключения: отозвано, истёк срок, отключено или превышен лимит тарифа; добавление и удаление немедленно обновляют общий список кабинетов;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
