@@ -67,6 +67,8 @@ class RuSenderMailProvider:
         body: str,
         html_body: str | None = None,
         sender_name: str | None = None,
+        recipient_name: str | None = None,
+        preview_title: str | None = None,
         reply_to: str | None = None,
         headers: dict[str, str] | None = None,
         idempotency_key: str | None = None,
@@ -84,6 +86,10 @@ class RuSenderMailProvider:
         }
         if sender_name:
             mail_payload["from"]["name"] = sender_name
+        if recipient_name:
+            mail_payload["to"]["name"] = str(recipient_name)[:255]
+        if preview_title:
+            mail_payload["previewTitle"] = str(preview_title)[:255]
 
         if html_body:
             mail_payload["html"] = html_body
@@ -123,24 +129,18 @@ class RuSenderMailProvider:
             raise RuSenderAPIError("rusender_network_error", retryable=True) from exc
 
         if 200 <= response.status_code < 300:
+            # Once the provider returned 2xx the request is accepted. Retrying
+            # merely because a non-standard success body omitted uuid can create
+            # duplicate transactional mail. Capture uuid when available, but do
+            # not turn an accepted delivery into a retryable failure.
+            provider_id = None
             try:
                 data = response.json()
-            except (ValueError, TypeError) as exc:
-                raise RuSenderAPIError(
-                    "rusender_invalid_success_response",
-                    retryable=True,
-                ) from exc
-            if not isinstance(data, dict):
-                raise RuSenderAPIError(
-                    "rusender_invalid_success_response",
-                    retryable=True,
-                )
-            provider_id = str(data.get("uuid") or "").strip()
-            if not provider_id:
-                raise RuSenderAPIError(
-                    "rusender_invalid_success_response",
-                    retryable=True,
-                )
+            except (ValueError, TypeError):
+                data = None
+            if isinstance(data, dict):
+                value = str(data.get("uuid") or "").strip()
+                provider_id = value or None
             return MailDeliveryReceipt(provider_message_id=provider_id)
 
         error_code = f"rusender_http_{response.status_code}"
