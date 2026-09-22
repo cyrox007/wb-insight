@@ -261,7 +261,11 @@ const syncFreshnessCaption = computed(() => {
   if (!syncStatus.value) return ''
   const oldest = formatSyncTime(syncStatus.value.oldest_success_at)
   const interval = Number(syncStatus.value.freshness_interval_hours || 0)
-  const intervalText = interval ? `интервал тарифа: ${interval} ч` : ''
+  const intervalText = interval
+    ? `интервал тарифа: ${interval} ч`
+    : syncStatus.value.freshness_policy_available === false
+      ? 'интервал тарифа не настроен'
+      : ''
 
   if (syncStatus.value.complete) {
     const freshness = oldest ? `все источники обновлены не раньше ${oldest}` : 'все источники синхронизированы'
