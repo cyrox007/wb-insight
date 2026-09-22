@@ -124,6 +124,7 @@ def _user_list_conditions(
 
 @router.get('/')
 async def get_users(
+    response: Response,
     search: str | None = Query(default=None, max_length=100),
     active: bool | None = Query(default=None),
     verified: bool | None = Query(default=None),
@@ -135,7 +136,11 @@ async def get_users(
 ) -> dict:
     normalized_role = str(role or "").strip().lower() or None
     if normalized_role and normalized_role not in {item.value for item in UserRole}:
-        raise ValueError("Неизвестная роль пользователя")
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="USER_FILTER_INVALID",
+            message="Неизвестная роль пользователя",
+        )
 
     conditions = _user_list_conditions(
         search=search,
