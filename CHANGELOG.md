@@ -31,6 +31,8 @@
 - добавлен fail-closed `--beta-gate`: перед первым HTTP-запросом он требует HTTPS, beta VERSION, structured evidence, RuSender verification/recovery, audit, real WB token и полный disposable mail flow;
 - dev-first release flow закреплён: рабочие ветки идут в `dev`, а `main` принимает только release/release-candidate promotion;
 - self-hosted CI переведён на consolidated validation и защищён от повторного накопления PostgreSQL anonymous volumes/CI images;
+- подключение нового кабинета Wildberries больше не ждёт 10-минутного фонового поиска: состояния и первичные задачи синхронизации создаются сразу в транзакции подключения; ошибки сохранения кабинета больше не скрываются, а устаревший `backend/services/sync.py` удалён;
+- фоновые WB-задачи получили однозначные названия по назначению: поиск недостающих состояний, постановка просроченных задач и обработчик очереди;
 - frontend package metadata и lockfile синхронизированы с каноническим `VERSION`.
 
 До фактического release обязательны consolidated exact-head CI, production-like deploy/rollback, real RuSender verification/recovery lifecycle, WB seller/data-accuracy, staff/client UX, secrets и backup/restore evidence, затем complete beta manifest.

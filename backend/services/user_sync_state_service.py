@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, exists, or_, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -12,16 +13,60 @@ from models.user_sync_state_model import UserSyncState
 from models.users_model import User
 
 
+SYNC_ENTITIES = (
+    "stocks",
+    "realization",
+    "finance_summary",
+    "products",
+    "prices",
+    "orders",
+    "sales",
+    "advertising",
+    "sales_funnel",
+    "paid_storage",
+)
+
+
+async def ensure_token_sync_states(
+    session: AsyncSession,
+    user_id: UUID,
+    token_id: UUID,
+) -> int:
+    """Создаёт недостающие состояния синхронизации для одного WB-кабинета."""
+    rows = [
+        {
+            "user_id": user_id,
+            "token_id": token_id,
+            "entity": entity,
+        }
+        for entity in SYNC_ENTITIES
+    ]
+    if not rows:
+        return 0
+
+    stmt = (
+        insert(UserSyncState)
+        .values(rows)
+        .on_conflict_do_nothing(
+            index_elements=["user_id", "token_id", "entity"],
+        )
+        .returning(UserSyncState.id)
+    )
+    result = await session.execute(stmt)
+    return len(result.scalars().all())
+
+
 async def get_states_batch(
     session: AsyncSession,
     last_created_at: datetime | None,
     last_id: UUID | None,
     limit: int,
 ) -> list[UserSyncState]:
-    """Return account-scoped states in stable keyset order.
+    """Возвращает состояния кабинетов в стабильном порядке пагинации.
 
-    The cursor is local to one scheduler run; no process-global scheduling
-    state is required, so restarts and multiple workers do not lose rows.
+    Курсор существует только внутри одного прохода планировщика. Глобальное
+    состояние процесса не используется, поэтому рестарты и несколько обработчиков
+    не приводят к потере строк.
     """
     now = datetime.now(timezone.utc)
     stmt = (

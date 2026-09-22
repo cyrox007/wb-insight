@@ -12,6 +12,7 @@ from services.legal_service import (
     validate_consent_payload,
 )
 from services.marketplace_access_service import get_wb_account_quota
+from services.sync_onboarding_service import bootstrap_token_sync
 from services.token_services import insert_token
 from utils.responce_helps import response_error, response_success
 
@@ -68,13 +69,6 @@ async def create_token(
             message=str(exc),
         )
 
-    if not token:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(
-            code="TOKEN_CREATE_ERROR",
-            message="Не удалось сохранить токен",
-        )
-
     await record_consents(
         db_session,
         user_id=user_id,
@@ -85,8 +79,14 @@ async def create_token(
         context_reference=str(token.id),
     )
 
+    sync_states_created, sync_jobs_created = await bootstrap_token_sync(
+        session=db_session,
+        user_id=user_id,
+        token_id=token.id,
+    )
+
     return response_success(
-        message="Токен добавлен",
+        message="Кабинет Wildberries подключён. Первичная синхронизация поставлена в очередь.",
         data={
             "id": str(token.id),
             "label": token.label,
@@ -95,5 +95,7 @@ async def create_token(
             "external_account_id": token.external_account_id,
             "issued_at": token.issued_at,
             "expires_at": token.expires_at,
+            "sync_states_created": sync_states_created,
+            "sync_jobs_created": sync_jobs_created,
         },
     )

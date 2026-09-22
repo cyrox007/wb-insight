@@ -10,22 +10,11 @@ from models.tokens_model import APIToken
 from models.user_sync_state_model import UserSyncState
 from models.users_model import User
 from services.marketplace_access_service import get_allowed_wb_tokens
+from services.user_sync_state_service import SYNC_ENTITIES
 
 
 logger = setup_logger(__name__, "create_state_scheduler.log")
-
-ALL_ENTITIES = [
-    "stocks",
-    "realization",
-    "finance_summary",
-    "products",
-    "prices",
-    "orders",
-    "sales",
-    "advertising",
-    "sales_funnel",
-    "paid_storage",
-]
+ALL_ENTITIES = SYNC_ENTITIES
 
 
 async def ensure_states_exist() -> None:
@@ -43,7 +32,7 @@ async def ensure_states_exist() -> None:
         for user_id in user_ids:
             tokens = await get_allowed_wb_tokens(session, user_id)
             for token in tokens:
-                for entity in ALL_ENTITIES:
+                for entity in SYNC_ENTITIES:
                     rows.append(
                         {
                             "user_id": user_id,
@@ -63,7 +52,9 @@ async def ensure_states_exist() -> None:
         await session.commit()
     except Exception:
         await session.rollback()
-        logger.exception("Failed to ensure account-scoped sync states")
+        logger.exception(
+            "Не удалось создать недостающие состояния синхронизации кабинетов"
+        )
         raise
     finally:
         await session.close()
