@@ -25,7 +25,7 @@ async def _load_account_state(user_id: UUID) -> tuple[bool, int] | None:
 
 
 async def auth_middle(request: Request):
-    """Проверяет Bearer access-токен и версию активной сессии аккаунта."""
+    """Проверяет Bearer-токен доступа и версию активной сессии аккаунта."""
     authorization = request.headers.get("authorization", "")
     scheme, separator, token_value = authorization.partition(" ")
 
