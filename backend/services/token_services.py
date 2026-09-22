@@ -5,7 +5,6 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.logger import setup_logger
 from integrations.wildberries.token_metadata import (
     WBTokenValidationError,
     decode_wb_token,
@@ -18,11 +17,8 @@ from settings import config
 from utils.token_crypto import encrypt_token
 
 
-logger = setup_logger(__name__)
-
-
 async def get_user_token_count(session: AsyncSession, user_id: UUID) -> int:
-    """Получаем количество токенов, добавленных пользователем."""
+    """Возвращает количество подключений маркетплейсов пользователя."""
     result = await session.execute(
         select(APIToken).where(APIToken.user_id == user_id)
     )
@@ -35,9 +31,8 @@ async def insert_token(
     raw_token: str,
     marketplace_code: str = "wb",
     label: str = "Токен для аналитики",
-) -> Optional[APIToken]:
-    """Validate a WB credential and store the encrypted marketplace secret."""
-
+) -> APIToken:
+    """Проверяет WB credential и сохраняет зашифрованный секрет кабинета."""
     normalized_marketplace = marketplace_code.strip().lower()
     if normalized_marketplace not in {"wb", "wildberries"}:
         raise WBTokenValidationError(
@@ -68,21 +63,16 @@ async def insert_token(
         issued_at=datetime.now(timezone.utc),
         expires_at=metadata.expires_at,
     )
-
-    try:
-        session.add(token)
-        await session.flush()
-        return token
-    except Exception as exc:
-        logger.error("Ошибка при добавлении токена: %s", exc)
-        return None
+    session.add(token)
+    await session.flush()
+    return token
 
 
 async def get_tokens_by_user_id(
     session: AsyncSession,
     user_id: UUID,
 ) -> Sequence[APIToken]:
-    """Получаем токены пользователя."""
+    """Возвращает подключения маркетплейсов пользователя."""
     result = await session.execute(
         select(APIToken).where(APIToken.user_id == user_id)
     )
@@ -93,7 +83,7 @@ async def get_token_by_id(
     session: AsyncSession,
     token_id: UUID,
 ) -> Optional[APIToken]:
-    """Получаем токен по id."""
+    """Возвращает подключение маркетплейса по идентификатору."""
     result = await session.execute(
         select(APIToken).where(APIToken.id == token_id)
     )
@@ -101,11 +91,10 @@ async def get_token_by_id(
 
 
 async def delete_token(session: AsyncSession, token: APIToken) -> bool:
-    """Удаляем токен."""
+    """Удаляет подключение маркетплейса."""
     try:
         await session.delete(token)
         await session.flush()
         return True
-    except Exception as exc:
-        logger.error("Ошибка при удалении токена: %s", exc)
+    except Exception:
         return False
