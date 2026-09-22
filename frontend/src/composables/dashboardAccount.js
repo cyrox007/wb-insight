@@ -13,6 +13,7 @@ const accountsLoading = ref(false)
 const accountsError = ref('')
 let loaded = false
 let loadingPromise = null
+let stateVersion = 0
 
 export function useDashboardAccount() {
     const setSelectedTokenId = (value) => {
@@ -26,29 +27,60 @@ export function useDashboardAccount() {
         }
     }
 
+    const resetAccounts = () => {
+        stateVersion += 1
+        loaded = false
+        loadingPromise = null
+        accounts.value = []
+        allWbAccounts.value = []
+        accountsLoaded.value = false
+        accountsLoading.value = false
+        accountsError.value = ''
+        setSelectedTokenId('')
+        dashboardVersion.value += 1
+    }
+
     const refreshDashboard = () => {
         dashboardVersion.value += 1
     }
 
     const loadAccounts = async ({ force = false } = {}) => {
         if (loaded && !force) return accounts.value
-        if (loadingPromise) return loadingPromise
+        if (loadingPromise && !force) return loadingPromise
 
+        if (loadingPromise && force) {
+            stateVersion += 1
+            loadingPromise = null
+        }
+
+        const requestVersion = stateVersion
         accountsLoading.value = true
         accountsError.value = ''
 
-        loadingPromise = ProfileServices.getProfile()
+        let request = null
+        request = ProfileServices.getProfile()
             .then((response) => {
+                if (requestVersion !== stateVersion) return accounts.value
+
                 const payload = response?.data || {}
                 const tokens = payload.tokens || payload.data?.tokens || []
                 allWbAccounts.value = tokens.filter(
                     (token) => token.marketplace === 'wildberries'
                 )
-                accounts.value = allWbAccounts.value.filter(
-                    (token) =>
-                        token.is_valid &&
-                        token.dashboard_available !== false
-                )
+                accounts.value = allWbAccounts.value.filter((token) => {
+                    const status = token.connection_status || (
+                        token.is_revoked
+                            ? 'revoked'
+                            : token.expires_at && new Date(token.expires_at) < new Date()
+                                ? 'expired'
+                                : token.is_active === false || token.is_valid === false
+                                    ? 'inactive'
+                                    : token.dashboard_available === false
+                                        ? 'outside_tariff'
+                                        : 'active'
+                    )
+                    return status === 'active'
+                })
 
                 if (
                     selectedTokenId.value &&
@@ -62,6 +94,8 @@ export function useDashboardAccount() {
                 return accounts.value
             })
             .catch((error) => {
+                if (requestVersion !== stateVersion) return accounts.value
+
                 console.error('Не удалось загрузить список кабинетов Wildberries:', error)
                 accounts.value = []
                 allWbAccounts.value = []
@@ -72,11 +106,16 @@ export function useDashboardAccount() {
                 return accounts.value
             })
             .finally(() => {
-                accountsLoading.value = false
-                loadingPromise = null
+                if (requestVersion === stateVersion) {
+                    accountsLoading.value = false
+                }
+                if (loadingPromise === request) {
+                    loadingPromise = null
+                }
             })
 
-        return loadingPromise
+        loadingPromise = request
+        return request
     }
 
     const withAccount = (params = {}) => {
@@ -94,6 +133,7 @@ export function useDashboardAccount() {
         selectedTokenId,
         dashboardVersion,
         loadAccounts,
+        resetAccounts,
         setSelectedTokenId,
         refreshDashboard,
         withAccount,
