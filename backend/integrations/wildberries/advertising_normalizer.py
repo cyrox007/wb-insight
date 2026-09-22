@@ -50,7 +50,7 @@ def flatten_fullstats_v3(
     user_id: UUID,
     token_id: UUID,
 ) -> list[dict[str, Any]]:
-    """Flatten WB v3 campaign -> day -> app -> nms into DB fact rows."""
+    """Преобразует статистику кампаний WB v3 в строки фактов по дням и товарам."""
     rows: list[dict[str, Any]] = []
     created_at = datetime.now(timezone.utc)
 
