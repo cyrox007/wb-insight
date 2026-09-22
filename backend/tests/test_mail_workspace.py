@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -828,15 +829,12 @@ def test_mail_admin_flags_preserve_real_boolean_values():
 
 
 def test_admin_config_sources_do_not_coerce_raw_json_flags_with_bool():
-    payment_source = provider_service_path = (
-        __import__("pathlib").Path(__file__).resolve().parents[1]
-        / "services"
-        / "payment_provider_service.py"
+    services_dir = Path(__file__).resolve().parents[1] / "services"
+    payment_source = (
+        services_dir / "payment_provider_service.py"
     ).read_text(encoding="utf-8")
     mail_source = (
-        __import__("pathlib").Path(__file__).resolve().parents[1]
-        / "services"
-        / "mail_transport_service.py"
+        services_dir / "mail_transport_service.py"
     ).read_text(encoding="utf-8")
 
     forbidden = (
