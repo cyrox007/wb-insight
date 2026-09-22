@@ -67,6 +67,16 @@ Production значения включают:
 - точный HTTPS origin в `ALLOWED_ORIGINS`;
 - реальные HTTPS Sber return/fail endpoints при включённом acquiring.
 
+Внешний edge/reverse proxy обязан делать безусловный HTTP → HTTPS redirect для публичного hostname. Одновременная доступность приложения по `http://` и `https://` ломает browser-origin contract: refresh cookie/API CORS и `localStorage` (включая тему) становятся разными контекстами. Frontend дополнительно имеет production fallback-redirect на HTTPS, но он не заменяет edge redirect.
+
+Cache policy для SPA:
+
+- `/index.html` — `Cache-Control: no-store, no-cache, must-revalidate`;
+- hashed `/assets/*` — long-lived `immutable`;
+- отсутствующий `/assets/*` обязан возвращать настоящий `404`, а не SPA `index.html`.
+
+Это предотвращает cold-start после deploy, когда старый HTML ссылается на уже удалённый hashed CSS/JS. Router дополнительно делает максимум один автоматический reload при Vite stale-chunk/preload error.
+
 ## Gateway routing
 
 Frontend/nginx обслуживает SPA и проксирует backend routes same-origin. Release-integrity CI поднимает реальный container и проверяет как минимум `/auth`, `/dashboard`, `/billing`, `/legal`, `/control-panel` и `/health`.
