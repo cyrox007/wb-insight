@@ -14,6 +14,7 @@ from services.user_sync_state_service import SYNC_ENTITIES
 
 
 logger = setup_logger(__name__, "create_state_scheduler.log")
+ALL_ENTITIES = SYNC_ENTITIES
 
 
 async def ensure_states_exist() -> None:
