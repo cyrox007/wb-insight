@@ -97,9 +97,11 @@ Beta disposable flow доказывает:
 6. demo активируется после ownership proof;
 7. exact legal consent evidence сохранён;
 8. password reset проходит через тот же реальный RuSender transport;
-9. повторные recovery-запросы не создают неконтролируемый поток писем, а idempotency/throttle сохраняют anti-enumeration contract;
-10. новый пароль работает, старые sessions отозваны;
+9. два немедленных recovery-запроса возвращают одинаковый anti-enumeration response, а staff-only PII-free diagnostic подтверждает, что для нового disposable user материализована ровно одна durable `password_reset` mail row;
+10. после reset ранее выданный access JWT получает `session_revoked`, а новый пароль восстанавливает ту же identity;
 11. refresh lifecycle и soft-deactivation остаются корректными.
+
+Throttle proof использует только UUID disposable user и агрегат `password_reset_messages + resend_seconds` из `GET /control-panel/mail/diagnostics/password-reset/{user_id}`. Endpoint требует `mail:read` и не возвращает email, message/provider IDs, subject/body или token. Поэтому release evidence фиксирует только boolean checks `password_reset_throttle=true` и `password_reset_session_revoked=true`, без PII.
 
 Для локального smoke контракта без сети:
 
