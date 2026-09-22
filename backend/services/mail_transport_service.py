@@ -76,6 +76,15 @@ def _secret_context(provider: str) -> str:
     return f"mail-provider:{normalized}"
 
 
+def _optional_bool(values: dict[str, Any], field: str) -> bool | None:
+    if field not in values:
+        return None
+    value = values[field]
+    if not isinstance(value, bool):
+        raise ValueError(f"Поле {field} должно быть логическим значением")
+    return value
+
+
 def _read_secrets(row: MailProviderConfig | None) -> dict[str, Any]:
     if row is None or not row.encrypted_secrets:
         return {}
@@ -350,6 +359,10 @@ async def upsert_mail_transport(
     if provider not in _SUPPORTED_PROVIDERS:
         raise ValueError("Поддерживаются только SMTP и RuSender API")
 
+    enabled_value = _optional_bool(values, "enabled")
+    clear_credentials = _optional_bool(values, "clear_credentials")
+    starttls_value = _optional_bool(values, "starttls")
+
     row = await get_mail_provider_config(session)
     existing: dict[str, Any] = {}
     if row is None:
@@ -371,8 +384,8 @@ async def upsert_mail_transport(
 
     if provider == "rusender":
         row.enabled = False
-    elif "enabled" in values:
-        row.enabled = bool(values["enabled"])
+    elif enabled_value is not None:
+        row.enabled = enabled_value
 
     if "from_email" in values:
         from_email = str(values.get("from_email") or "").strip().lower()
@@ -398,7 +411,7 @@ async def upsert_mail_transport(
             raise ValueError("Timeout должен быть от 1 до 120 секунд")
         row.timeout_seconds = timeout
 
-    if bool(values.get("clear_credentials")):
+    if clear_credentials is True:
         existing = {}
 
     if provider == "smtp":
@@ -409,10 +422,10 @@ async def upsert_mail_transport(
             if port <= 0 or port > 65535:
                 raise ValueError("SMTP port должен быть от 1 до 65535")
             row.port = port
-        if "starttls" in values:
-            row.starttls = bool(values["starttls"])
+        if starttls_value is not None:
+            row.starttls = starttls_value
 
-        if not bool(values.get("clear_credentials")):
+        if clear_credentials is not True:
             if "username" in values:
                 username = str(values.get("username") or "").strip()
                 if username:
@@ -442,11 +455,11 @@ async def upsert_mail_transport(
         else:
             existing.pop("key_id", None)
 
-        if not bool(values.get("clear_credentials")) and "api_token" in values:
+        if clear_credentials is not True and "api_token" in values:
             api_token = str(values.get("api_token") or "").strip()
             if api_token:
                 existing["api_token"] = api_token
-        if bool(values.get("clear_credentials")):
+        if clear_credentials is True:
             existing.pop("api_token", None)
 
     row.encrypted_secrets = (

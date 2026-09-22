@@ -38,6 +38,9 @@
 - P78 русский системный контракт интеграции Wildberries закрыт PR #158, merge `30559538d4a6368da979c92150709cfa46ed2b4c`.
 - P79 русский контракт SQLAlchemy/PostgreSQL-комментариев `api_tokens` закрыт PR #159, merge `e3fb8ea6dbe435a61b7fddbb92583c32bf067d56`.
 - P80 полный exact-head CI на каждом push в `dev/main` закрыт PR #160, merge `71aa437198f872a4285a4ee7539b771b097acd42`; все шесть обязательных workflow зелёные на этом SHA.
+- P81 защита refresh/session от гонок закрыта PR #161, merge `6ef7c37652112c646633f95b4c686bcfff1730ca`.
+- P82 тарифно-зависимая свежесть данных закрыта PR #162, merge `d6a6a93fc031930d64fc64afa085b73e27719c0e`.
+- P83 транзакционная граница тарифного CRUD закрыта PR #163, merge `66dfd7dfc046fb6e48ad1762877f8fcf1805ae5b`; все шесть обязательных workflow зелёные на этом SHA.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -60,6 +63,7 @@
 - post-candidate auth hardening использует единый refresh single-flight и поколение клиентской сессии: поздний refresh старой сессии отбрасывается и не может восстановить или очистить более новую login-сессию;
 - post-candidate freshness hardening использует тарифный `sync_frequency_hours`: зелёный статус выдаётся только данным, обновлённым в пределах текущего тарифного интервала; просроченный historical success остаётся доступным, но помечается как stale;
 - post-candidate tariff hardening использует request-scoped transaction boundary: тарифные сервисы не скрывают ошибки БД, handlers не делают ручной commit/rollback и не раскрывают детали исключений в API;
+- P85 post-candidate admin-config hardening принимает boolean-флаги платёжных и почтовых настроек только как JSON `true/false`; строковые и числовые суррогаты отклоняются до применения конфигурации;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
