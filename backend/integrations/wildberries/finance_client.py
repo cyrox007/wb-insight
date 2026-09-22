@@ -6,7 +6,7 @@ from settings import config
 
 
 class WBFinanceClient(WBClient):
-    """Current Documents & Accounting API methods used by reconciliation."""
+    """Актуальные методы финансового API Wildberries для сверки расчётов."""
 
     @staticmethod
     def _endpoint_interval(endpoint: str) -> float:
