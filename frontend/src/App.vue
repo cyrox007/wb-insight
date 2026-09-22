@@ -23,6 +23,7 @@ const {
   selectedTokenId,
   dashboardVersion,
   loadAccounts,
+  resetDashboardAccountState,
 } = useDashboardAccount()
 const { isDark, toggleTheme } = useTheme()
 
@@ -63,16 +64,6 @@ const dashboardNeedsAccount = computed(
     !accountsLoading.value &&
     !accountsError.value &&
     accounts.value.length === 0
-)
-
-const dashboardAccountStateVisible = computed(
-  () =>
-    showAccountFilter.value &&
-    (
-      (accountsLoading.value && !accountsLoaded.value) ||
-      Boolean(accountsError.value) ||
-      dashboardNeedsAccount.value
-    )
 )
 
 const dashboardAccountIssue = computed(() => {
@@ -127,6 +118,22 @@ const dashboardAccountIssue = computed(() => {
     message: 'Проверьте подключение Wildberries и ограничения текущего тарифа в профиле.',
   }
 })
+
+watch(
+  () => user.value?.id || null,
+  (currentUserId, previousUserId) => {
+    if (
+      currentUserId &&
+      previousUserId &&
+      currentUserId !== previousUserId
+    ) {
+      resetDashboardAccountState()
+      if (showAccountFilter.value) {
+        loadAccounts({ force: true })
+      }
+    }
+  }
+)
 
 watch(
   () => [isAuthenticated.value, showAccountFilter.value],
@@ -189,6 +196,7 @@ const logout = async () => {
     localStorage.removeItem('user')
     localStorage.removeItem('redirectPath')
     localStorage.removeItem('wb-dashboard-token-id')
+    resetDashboardAccountState()
     authStore.logout()
     await router.push('/')
   }
