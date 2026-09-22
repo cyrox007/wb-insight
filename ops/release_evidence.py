@@ -83,6 +83,7 @@ CORE_SMOKE_REQUIRED_CHECKS = {
     "authenticated_profile",
     "authenticated_refresh_restore",
     "dashboard_contract",
+    "mail_gateway_ready",
     "audit_correlation",
     "logout_session_revoke",
 }

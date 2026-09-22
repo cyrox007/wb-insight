@@ -59,7 +59,7 @@ Manifest не копирует содержимое artifacts и не предн
 - опубликованный frontend bundle текущей сборки;
 - SHA-256 отдельного rollback-drill proof.
 
-`core_smoke` и `account_lifecycle` создаются одним полным прогоном `ops/release_smoke.py --evidence-output ...`. Строгая проверка требует HTTPS origin и подтверждённые flags disposable registration, реального email verification, demo activation, legal evidence, refresh/deactivation, authenticated flow, P37 audit correlation и logout. Для `account_lifecycle` дополнительно обязателен реальный password reset через почтовый provider.
+`core_smoke` и `account_lifecycle` создаются одним полным прогоном `ops/release_smoke.py --evidence-output ...`. Строгая проверка требует HTTPS origin и подтверждённые flags disposable registration, реального email verification, demo activation, legal evidence, refresh/deactivation, authenticated flow, **authenticated mail-gateway readiness preflight**, P37 audit correlation и logout. Для `account_lifecycle` дополнительно обязателен реальный password reset через почтовый provider. Поэтому beta core smoke запускается с `SMOKE_MAIL_GATEWAY=true`; один только успешно доставленный disposable mail flow не заменяет отдельное доказательство, что Control Panel видит тот же effective transport как ready.
 
 Один и тот же sanitized `release-smoke.json` допустимо привязать как `core_smoke` и `account_lifecycle`: manifest всё равно фиксирует его SHA-256 отдельно для каждого kind.
 

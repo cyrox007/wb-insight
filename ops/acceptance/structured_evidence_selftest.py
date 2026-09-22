@@ -195,6 +195,34 @@ def main() -> int:
         else:
             raise AssertionError("missing lifecycle check unexpectedly passed")
 
+        broken_core = {
+            "schema_version": 1,
+            "kind": "release_smoke",
+            "status": "pass",
+            "version": VERSION,
+            "commit": COMMIT,
+            "environment": ENVIRONMENT,
+            "base_origin": "https://staging.example.com",
+            "checks": {
+                name: True
+                for name in CORE_SMOKE_REQUIRED_CHECKS | ACCOUNT_LIFECYCLE_REQUIRED_CHECKS
+            },
+        }
+        broken_core["checks"]["mail_gateway_ready"] = False
+        _write(smoke, broken_core)
+        try:
+            validate_release_smoke_evidence(
+                smoke,
+                version=VERSION,
+                commit=COMMIT,
+                environment=ENVIRONMENT,
+                artifact_kind="core_smoke",
+            )
+        except ValueError as exc:
+            assert "mail_gateway_ready" in str(exc)
+        else:
+            raise AssertionError("core smoke without mail gateway preflight unexpectedly passed")
+
         # Restore the passing smoke and prove exact release provenance is enforced.
         passing_smoke = {
             "schema_version": 1,
