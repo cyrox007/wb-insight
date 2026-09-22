@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 
@@ -45,8 +46,14 @@ def _token_connection_status(
     """Возвращает безопасную причину доступности подключения Wildberries."""
     if token.is_revoked:
         return "revoked"
-    if token.is_expired:
-        return "expired"
+
+    expires_at = getattr(token, "expires_at", None)
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires_at:
+            return "expired"
+
     if not token.is_active:
         return "inactive"
     if dashboard_available is False:
