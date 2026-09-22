@@ -25,7 +25,7 @@ async def _load_account_state(user_id: UUID) -> tuple[bool, int] | None:
 
 
 async def auth_middle(request: Request):
-    """Validate a Bearer access token and its durable account session version."""
+    """Проверяет Bearer access-токен и версию активной сессии аккаунта."""
     authorization = request.headers.get("authorization", "")
     scheme, separator, token_value = authorization.partition(" ")
 
@@ -50,8 +50,8 @@ async def auth_middle(request: Request):
 
     session_version = user_data.get("sv")
     if session_version is None and not config.IS_PRODUCTION:
-        # Compatibility for development tests/old local tokens. Production
-        # always requires durable session version binding.
+        # Совместимость только для тестов разработки и старых локальных токенов.
+        # В рабочем окружении привязка к версии сессии обязательна.
         request.state.user = user_data
         return
 
