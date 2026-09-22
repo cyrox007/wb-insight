@@ -398,5 +398,5 @@ def test_mail_provider_registry_is_provider_neutral():
 
     assert registry.get("FAKE") is provider
     assert registry.codes == ("fake",)
-    with pytest.raises(RuntimeError, match="mail_provider_not_registered"):
+    with pytest.raises(RuntimeError, match="Почтовый провайдер не зарегистрирован"):
         registry.get("missing")
