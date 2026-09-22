@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
 import CP_Audit from '@/API/ControlPanel/CP_Audit'
@@ -13,6 +13,7 @@ const isLoading = ref(false)
 const loadError = ref('')
 const selected = ref(null)
 const detailLoadingId = ref(null)
+const detailDialog = ref(null)
 
 const filters = reactive({
 	action: '',
@@ -97,6 +98,7 @@ function nextPage() {
 }
 
 function closeEvent() {
+	if (detailDialog.value?.open) detailDialog.value.close()
 	selected.value = null
 }
 
@@ -105,6 +107,10 @@ async function openEvent(event) {
 	// visible feedback; refresh from the canonical detail endpoint in-place.
 	selected.value = event
 	detailLoadingId.value = event.id
+	await nextTick()
+	if (detailDialog.value && !detailDialog.value.open) {
+		detailDialog.value.showModal()
+	}
 	try {
 		const { data } = await CP_Audit.getEvent(event.id)
 		if (data?.status !== 'success' || !data?.event) throw new Error('Некорректный ответ API')
@@ -122,24 +128,23 @@ async function openEvent(event) {
 	}
 }
 
-function handleEscape(event) {
-	if (event.key === 'Escape' && selected.value) closeEvent()
+function handleDialogCancel(event) {
+	event.preventDefault()
+	closeEvent()
 }
 
-watch(selected, (value) => {
-	if (typeof document === 'undefined') return
-	document.documentElement.classList.toggle('audit-detail-open', Boolean(value))
-})
+function handleDialogClose() {
+	selected.value = null
+	detailLoadingId.value = null
+}
 
 onMounted(() => {
 	if (route.query.actor_id) filters.actor_id = String(route.query.actor_id)
-	window.addEventListener('keydown', handleEscape)
 	loadEvents()
 })
 
 onBeforeUnmount(() => {
-	window.removeEventListener('keydown', handleEscape)
-	document.documentElement.classList.remove('audit-detail-open')
+	if (detailDialog.value?.open) detailDialog.value.close()
 })
 </script>
 
@@ -219,7 +224,16 @@ onBeforeUnmount(() => {
 							<td><span class="cp-chip" :class="resultClass(event.result)">{{ resultLabel(event.result) }}</span></td>
 							<td>{{ event.source }}</td>
 							<td><code class="cp-code audit-request-id">{{ event.request_id || '—' }}</code></td>
-							<td><BaseButton variant="ghost" size="small" text="Детали" :loading="detailLoadingId === event.id" @click="openEvent(event)" /></td>
+							<td>
+								<BaseButton
+									variant="ghost"
+									size="small"
+									text="Детали"
+									:loading="detailLoadingId === event.id"
+									:aria-expanded="selected?.id === event.id && detailDialog?.open ? 'true' : 'false'"
+									@click="openEvent(event)"
+								/>
+							</td>
 						</tr>
 					</tbody>
 				</table>
@@ -234,57 +248,50 @@ onBeforeUnmount(() => {
 			</div>
 		</div>
 
-		<Teleport to="body">
-			<Transition name="audit-drawer">
-				<div
-					v-if="selected"
-					class="audit-detail-overlay"
-					role="presentation"
-					@click.self="closeEvent"
-				>
-					<aside
-						class="audit-detail-drawer"
-						role="dialog"
-						aria-modal="true"
-						aria-labelledby="audit-detail-title"
-					>
-						<div class="audit-detail__head">
-							<div>
-								<p class="cp-eyebrow">Событие аудита</p>
-								<h3 id="audit-detail-title" class="audit-detail__title">{{ selected.action }}</h3>
-								<p v-if="detailLoadingId === selected.id" class="audit-detail__loading">Обновляем детали…</p>
-								<p v-else-if="selected.detail_load_error" class="audit-detail__error">{{ selected.detail_load_error }}</p>
-							</div>
-							<BaseButton variant="ghost" size="small" text="Закрыть" @click="closeEvent" />
-						</div>
-
-						<div class="audit-detail__scroll">
-							<div class="audit-detail__grid">
-								<div><span>Время</span><strong>{{ formatDate(selected.created_at) }}</strong></div>
-								<div><span>Пользователь</span><strong>{{ selected.actor_email || selected.actor_user_id || 'Система / неизвестно' }}</strong></div>
-								<div><span>Роли</span><strong>{{ selected.actor_roles?.join(', ') || '—' }}</strong></div>
-								<div><span>Результат</span><strong>{{ resultLabel(selected.result) }}</strong></div>
-								<div><span>HTTP</span><strong>{{ selected.method || '—' }} {{ selected.path || '' }}</strong></div>
-								<div><span>Request ID</span><strong>{{ selected.request_id || '—' }}</strong></div>
-								<div><span>Объект</span><strong>{{ selected.target_type || '—' }} {{ selected.target_id || '' }}</strong></div>
-								<div><span>Ошибка</span><strong>{{ selected.error_code || '—' }}</strong></div>
-							</div>
-
-							<div class="audit-evidence">
-								<span>Client evidence</span>
-								<code>IP: {{ selected.client_ip_hash || '—' }}</code>
-								<code>UA: {{ selected.user_agent_hash || '—' }}</code>
-							</div>
-
-							<div>
-								<span class="cp-muted">Безопасные metadata</span>
-								<pre class="audit-json">{{ JSON.stringify(selected.metadata || {}, null, 2) }}</pre>
-							</div>
-						</div>
-					</aside>
+		<dialog
+			ref="detailDialog"
+			class="audit-detail-dialog"
+			aria-labelledby="audit-detail-title"
+			@cancel="handleDialogCancel"
+			@close="handleDialogClose"
+			@click="($event) => { if ($event.target === detailDialog) closeEvent() }"
+		>
+			<aside v-if="selected" class="audit-detail-drawer">
+				<div class="audit-detail__head">
+					<div>
+						<p class="cp-eyebrow">Событие аудита</p>
+						<h3 id="audit-detail-title" class="audit-detail__title">{{ selected.action }}</h3>
+						<p v-if="detailLoadingId === selected.id" class="audit-detail__loading">Обновляем детали…</p>
+						<p v-else-if="selected.detail_load_error" class="audit-detail__error">{{ selected.detail_load_error }}</p>
+					</div>
+					<BaseButton variant="ghost" size="small" text="Закрыть" @click="closeEvent" />
 				</div>
-			</Transition>
-		</Teleport>
+
+				<div class="audit-detail__scroll">
+					<div class="audit-detail__grid">
+						<div><span>Время</span><strong>{{ formatDate(selected.created_at) }}</strong></div>
+						<div><span>Пользователь</span><strong>{{ selected.actor_email || selected.actor_user_id || 'Система / неизвестно' }}</strong></div>
+						<div><span>Роли</span><strong>{{ selected.actor_roles?.join(', ') || '—' }}</strong></div>
+						<div><span>Результат</span><strong>{{ resultLabel(selected.result) }}</strong></div>
+						<div><span>HTTP</span><strong>{{ selected.method || '—' }} {{ selected.path || '' }}</strong></div>
+						<div><span>Request ID</span><strong>{{ selected.request_id || '—' }}</strong></div>
+						<div><span>Объект</span><strong>{{ selected.target_type || '—' }} {{ selected.target_id || '' }}</strong></div>
+						<div><span>Ошибка</span><strong>{{ selected.error_code || '—' }}</strong></div>
+					</div>
+
+					<div class="audit-evidence">
+						<span>Client evidence</span>
+						<code>IP: {{ selected.client_ip_hash || '—' }}</code>
+						<code>UA: {{ selected.user_agent_hash || '—' }}</code>
+					</div>
+
+					<div>
+						<span class="cp-muted">Безопасные metadata</span>
+						<pre class="audit-json">{{ JSON.stringify(selected.metadata || {}, null, 2) }}</pre>
+					</div>
+				</div>
+			</aside>
+		</dialog>
 	</section>
 </template>
 
@@ -313,24 +320,33 @@ onBeforeUnmount(() => {
 	display: inline-block;
 	overflow-wrap: anywhere;
 }
-:global(html.audit-detail-open),
-:global(html.audit-detail-open body) {
+.audit-detail-dialog {
+	width: min(620px, calc(100vw - 24px));
+	max-width: none;
+	height: 100dvh;
+	max-height: 100dvh;
+	margin: 0 0 0 auto;
+	padding: 0;
 	overflow: hidden;
+	border: 0;
+	border-left: 1px solid var(--border-color);
+	background: transparent;
+	color: var(--text-color);
+	box-shadow: -20px 0 60px rgba(0, 0, 0, 0.18);
 }
 
-.audit-detail-overlay {
-	position: fixed;
-	z-index: 1200;
-	inset: 0;
-	display: flex;
-	justify-content: flex-end;
+.audit-detail-dialog::backdrop {
 	background: color-mix(in srgb, var(--overlay-bg) 82%, transparent);
 	backdrop-filter: blur(3px);
 }
 
+.audit-detail-dialog[open] {
+	animation: audit-dialog-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .audit-detail-drawer {
-	width: min(620px, calc(100vw - 24px));
-	height: 100dvh;
+	width: 100%;
+	height: 100%;
 	display: flex;
 	flex-direction: column;
 	border-left: 1px solid var(--border-color);
@@ -371,25 +387,9 @@ onBeforeUnmount(() => {
 	padding: 20px;
 }
 
-.audit-drawer-enter-active,
-.audit-drawer-leave-active {
-	transition: background 180ms ease;
-}
-
-.audit-drawer-enter-active .audit-detail-drawer,
-.audit-drawer-leave-active .audit-detail-drawer {
-	transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
-}
-
-.audit-drawer-enter-from,
-.audit-drawer-leave-to {
-	background: transparent;
-}
-
-.audit-drawer-enter-from .audit-detail-drawer,
-.audit-drawer-leave-to .audit-detail-drawer {
-	opacity: 0;
-	transform: translateX(24px);
+@keyframes audit-dialog-in {
+	from { opacity: 0; transform: translateX(24px); }
+	to { opacity: 1; transform: translateX(0); }
 }
 
 .audit-detail__grid {
@@ -423,30 +423,29 @@ onBeforeUnmount(() => {
 @media (max-width: 720px) {
 	.audit-pagination { align-items: flex-start; flex-direction: column; }
 
-	.audit-detail-overlay {
-		align-items: flex-end;
-	}
-
-	.audit-detail-drawer {
+	.audit-detail-dialog {
 		width: 100%;
 		height: min(88dvh, 760px);
+		max-height: min(88dvh, 760px);
+		margin: auto 0 0;
 		border-top: 1px solid var(--border-color);
 		border-left: 0;
 		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 	}
 
-	.audit-drawer-enter-from .audit-detail-drawer,
-	.audit-drawer-leave-to .audit-detail-drawer {
-		transform: translateY(20px);
+	.audit-detail-dialog[open] {
+		animation-name: audit-dialog-in-mobile;
+	}
+
+	@keyframes audit-dialog-in-mobile {
+		from { opacity: 0; transform: translateY(20px); }
+		to { opacity: 1; transform: translateY(0); }
 	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.audit-drawer-enter-active,
-	.audit-drawer-leave-active,
-	.audit-drawer-enter-active .audit-detail-drawer,
-	.audit-drawer-leave-active .audit-detail-drawer {
-		transition: none;
+	.audit-detail-dialog[open] {
+		animation: none;
 	}
 }
 </style>
