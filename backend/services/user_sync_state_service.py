@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -25,6 +26,106 @@ SYNC_ENTITIES = (
     "sales_funnel",
     "paid_storage",
 )
+
+SYNC_ENTITY_LABELS = {
+    "stocks": "Остатки",
+    "realization": "Финансовая детализация",
+    "finance_summary": "Финансовые отчёты",
+    "products": "Товары",
+    "prices": "Цены",
+    "orders": "Заказы",
+    "sales": "Продажи",
+    "advertising": "Реклама",
+    "sales_funnel": "Воронка",
+    "paid_storage": "Платное хранение",
+}
+
+
+def build_sync_status(
+    states: list[UserSyncState],
+    token_ids: tuple[UUID, ...],
+    *,
+    is_syncing: bool = False,
+) -> dict:
+    """Формирует безопасную сводку свежести данных по выбранным кабинетам."""
+    expected_accounts = len(token_ids)
+    token_id_set = set(token_ids)
+    grouped: dict[str, list[UserSyncState]] = defaultdict(list)
+
+    for state in states:
+        if state.token_id in token_id_set and state.entity in SYNC_ENTITIES:
+            grouped[state.entity].append(state)
+
+    entities = []
+    all_success_times: list[datetime] = []
+
+    for entity in SYNC_ENTITIES:
+        entity_states = grouped.get(entity, [])
+        success_times = [
+            state.last_success_at
+            for state in entity_states
+            if state.last_success_at is not None
+        ]
+        error_count = sum(1 for state in entity_states if state.last_error)
+        successful_accounts = len(success_times)
+
+        if (
+            expected_accounts > 0
+            and len(entity_states) >= expected_accounts
+            and successful_accounts >= expected_accounts
+            and error_count == 0
+        ):
+            status = "ready"
+        elif successful_accounts > 0:
+            status = "stale"
+        elif error_count > 0:
+            status = "error"
+        else:
+            status = "waiting"
+
+        oldest_success_at = min(success_times) if success_times else None
+        latest_success_at = max(success_times) if success_times else None
+        if oldest_success_at is not None:
+            all_success_times.append(oldest_success_at)
+
+        entities.append(
+            {
+                "entity": entity,
+                "label": SYNC_ENTITY_LABELS[entity],
+                "status": status,
+                "expected_accounts": expected_accounts,
+                "successful_accounts": successful_accounts,
+                "error_accounts": error_count,
+                "oldest_success_at": oldest_success_at,
+                "latest_success_at": latest_success_at,
+            }
+        )
+
+    ready_entities = sum(1 for item in entities if item["status"] == "ready")
+    stale_entities = sum(1 for item in entities if item["status"] == "stale")
+    error_entities = sum(1 for item in entities if item["status"] == "error")
+    waiting_entities = sum(1 for item in entities if item["status"] == "waiting")
+
+    return {
+        "is_syncing": is_syncing,
+        "expected_accounts": expected_accounts,
+        "total_entities": len(SYNC_ENTITIES),
+        "ready_entities": ready_entities,
+        "stale_entities": stale_entities,
+        "error_entities": error_entities,
+        "waiting_entities": waiting_entities,
+        "complete": ready_entities == len(SYNC_ENTITIES),
+        "oldest_success_at": min(all_success_times) if all_success_times else None,
+        "latest_success_at": max(
+            (
+                item["latest_success_at"]
+                for item in entities
+                if item["latest_success_at"] is not None
+            ),
+            default=None,
+        ),
+        "entities": entities,
+    }
 
 
 async def ensure_token_sync_states(
