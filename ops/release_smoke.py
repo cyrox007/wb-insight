@@ -796,6 +796,28 @@ def _self_test() -> None:
         pass
     else:
         raise AssertionError("not-ready mail gateway unexpectedly passed preflight")
+
+    class _FakeLoginClient:
+        access_token = None
+
+        def request(self, method, path, *, body=None, **_kwargs):
+            assert method == "POST"
+            assert path == "/auth/login"
+            assert body == {"email": "staff@example.com", "password": "secret"}
+            return {
+                "status": "success",
+                "access_token": "access-token",
+                "user": {"id": "user-id"},
+            }
+
+    fake_login_client = _FakeLoginClient()
+    fake_login = _login_smoke_client(
+        fake_login_client,  # type: ignore[arg-type]
+        "staff@example.com",
+        "secret",
+    )
+    assert fake_login_client.access_token == "access-token"
+    assert fake_login["user"]["id"] == "user-id"
     print("[ok] release smoke self-test")
 
 
