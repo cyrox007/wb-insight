@@ -260,14 +260,19 @@ const syncFreshnessHeadline = computed(() => {
 const syncFreshnessCaption = computed(() => {
   if (!syncStatus.value) return ''
   const oldest = formatSyncTime(syncStatus.value.oldest_success_at)
+  const interval = Number(syncStatus.value.freshness_interval_hours || 0)
+  const intervalText = interval ? `интервал тарифа: ${interval} ч` : ''
+
   if (syncStatus.value.complete) {
-    return oldest ? `Все источники обновлены не раньше ${oldest}` : 'Все источники синхронизированы'
+    const freshness = oldest ? `все источники обновлены не раньше ${oldest}` : 'все источники синхронизированы'
+    return intervalText ? `${freshness} · ${intervalText}` : freshness
   }
 
   const parts = []
   if (syncStatus.value.stale_entities) parts.push(`устарели: ${syncStatus.value.stale_entities}`)
   if (syncStatus.value.error_entities) parts.push(`ошибки: ${syncStatus.value.error_entities}`)
   if (syncStatus.value.waiting_entities) parts.push(`ожидают: ${syncStatus.value.waiting_entities}`)
+  if (intervalText) parts.push(intervalText)
   const latest = formatSyncTime(syncStatus.value.latest_success_at)
   const detail = parts.length ? parts.join(' · ') : `требуют внимания: ${syncAttentionCount.value}`
   return latest ? `${detail} · последнее успешное обновление ${latest}` : detail
