@@ -369,9 +369,11 @@ def test_smtp_provider_emits_sender_identity_and_bulk_headers(monkeypatch):
         sender_name="WB Insight",
         reply_to="support@example.net",
         recipient="seller@example.org",
+        recipient_name="Иван",
         subject="Новости",
         body="Текст",
         html_body="<p>Текст</p>",
+        preview_title="Новости WB Insight",
         headers={
             "List-Unsubscribe": "<https://app.example.net/unsubscribe/token>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -382,12 +384,16 @@ def test_smtp_provider_emits_sender_identity_and_bulk_headers(monkeypatch):
 
     message = sent["message"]
     assert message["From"] == "WB Insight <news@example.net>"
+    assert message["To"] == "Иван <seller@example.org>"
     assert message["Reply-To"] == "support@example.net"
     assert message["Date"]
     assert message["Message-ID"].endswith("@example.net>")
     assert message["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
     assert message["Precedence"] == "bulk"
     assert message.is_multipart()
+    html_part = message.get_body(preferencelist=("html",))
+    assert html_part is not None
+    assert "Новости WB Insight" in html_part.get_content()
 
 
 @pytest.mark.asyncio
