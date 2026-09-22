@@ -60,6 +60,7 @@
 - post-candidate auth hardening использует единый refresh single-flight и поколение клиентской сессии: поздний refresh старой сессии отбрасывается и не может восстановить или очистить более новую login-сессию;
 - post-candidate freshness hardening использует тарифный `sync_frequency_hours`: зелёный статус выдаётся только данным, обновлённым в пределах текущего тарифного интервала; просроченный historical success остаётся доступным, но помечается как stale;
 - post-candidate tariff hardening использует request-scoped transaction boundary: тарифные сервисы не скрывают ошибки БД, handlers не делают ручной commit/rollback и не раскрывают детали исключений в API;
+- post-candidate user lifecycle hardening (P84 / issue #164): отдельное `users:delete` только для admin/super_admin, permanent delete только после деактивации и ручного подтверждения email; self-delete запрещён, lifecycle evidence сохраняется, user-service не скрывает ошибки БД;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
