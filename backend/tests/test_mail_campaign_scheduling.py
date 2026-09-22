@@ -5,9 +5,11 @@ from uuid import uuid4
 import pytest
 
 from celery_app import celery_app
+from integrations.mail.rusender import RuSenderAPIError
 from models.mail_delivery import CampaignStatus, MailMessage, MailStatus
 from services import mail_campaign_service as campaigns
 from services import mail_service
+from tasks.processors import mail_delivery
 
 
 class _Rows:
@@ -139,6 +141,28 @@ async def test_transactional_scan_excludes_campaign_rows_when_marketing_is_disab
     assert "mail_messages.kind" in sql
     params = session.statement.compile().params
     assert "transactional" in params.values()
+
+
+def test_mail_worker_preserves_safe_rusender_retry_code():
+    error = RuSenderAPIError(
+        "rusender_http_429",
+        retryable=True,
+        provider_error_code="rate_limit",
+    )
+
+    code, terminal = mail_delivery._delivery_failure(error)
+
+    assert code == "rusender_http_429:rate_limit"
+    assert terminal is False
+
+
+def test_mail_worker_keeps_permanent_error_terminal():
+    error = mail_service.PermanentMailDeliveryError("rusender_http_404")
+
+    code, terminal = mail_delivery._delivery_failure(error)
+
+    assert code == "rusender_http_404"
+    assert terminal is True
 
 
 def test_celery_beat_registers_campaign_scheduler():
