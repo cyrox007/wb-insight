@@ -35,6 +35,7 @@
 - P75 транзакционная граница удаления WB-подключения закрыта PR #155, merge `c01aca53bc976d7cc2fc5c72c311fe5b2b77133e`.
 - P76 русский системный контракт runtime-ядра закрыт PR #156, merge `beb653830cdba48dbb988ad81ae5da60a512c457`.
 - P77 русский системный контракт общей интеграционной границы закрыт PR #157, merge `3238cbed127b1e179cd0cffc86eb1cdd229c6bd5`.
+- P78 русский системный контракт интеграции Wildberries закрыт PR #158, merge `30559538d4a6368da979c92150709cfa46ed2b4c`.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact `dev` commit.
@@ -52,6 +53,7 @@
 - системные сообщения и документационные строки ядра БД, авторизации, доступа к WB-кабинетам и семантических метрик приведены к русскому системному контракту;
 - общая интеграционная граница, почтовые адаптеры и клиент Сбера используют русские комментарии, описания и человекочитаемые ошибки без изменения машинных кодов внешних провайдеров;
 - Wildberries runtime integration — HTTP client, распределённый лимитер, метаданные/онлайн-проверка токена, маршруты и нормализаторы — приведена к русскому системному контракту;
+- SQLAlchemy metadata и PostgreSQL-комментарии `api_tokens` синхронизированы на русском языке отдельной Alembic-миграцией;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
