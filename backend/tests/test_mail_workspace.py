@@ -93,6 +93,56 @@ async def test_mail_transport_payload_never_returns_password(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_rusender_payload_exposes_only_token_fingerprint(monkeypatch):
+    runtime = transport.MailTransportRuntime(
+        MAIL_PROVIDER="rusender",
+        MAIL_DELIVERY_ENABLED=False,
+        SMTP_HOST="",
+        SMTP_PORT=443,
+        SMTP_USERNAME=None,
+        SMTP_PASSWORD=None,
+        SMTP_FROM_EMAIL="no-reply@mail.jsinteractive.ru",
+        SMTP_FROM_NAME="WB Insight",
+        SMTP_REPLY_TO_EMAIL=None,
+        SMTP_STARTTLS=True,
+        SMTP_TIMEOUT_SECONDS=10,
+        RUSENDER_API_BASE_URL="https://api.rusender.ru",
+        RUSENDER_KEY_ID="15074",
+        RUSENDER_API_TOKEN="rs_ck_v1_secret-token",
+        RUSENDER_TIMEOUT_SECONDS=10,
+        source="database",
+        updated_at=None,
+    )
+
+    async def fake_runtime(_session):
+        return runtime
+
+    monkeypatch.setattr(transport, "get_mail_transport_runtime", fake_runtime)
+    monkeypatch.setattr(transport.lifecycle_config, "MAIL_CONFIG_SOURCE", "auto")
+
+    payload = await transport.mail_transport_payload(object())
+
+    assert payload["credential_fingerprint"].startswith("sha256:")
+    assert len(payload["credential_fingerprint"]) == len("sha256:") + 12
+    assert payload["credential_fingerprint"] == transport._secret_fingerprint(
+        "rs_ck_v1_secret-token"
+    )
+    assert "rs_ck_v1_secret-token" not in str(payload)
+    assert "api_token" not in payload
+
+
+def test_secret_fingerprint_is_stable_and_non_reversible_hint():
+    first = transport._secret_fingerprint("rs_ck_v1_same")
+    second = transport._secret_fingerprint("rs_ck_v1_same")
+    different = transport._secret_fingerprint("rs_ck_v1_other")
+
+    assert first == second
+    assert first != different
+    assert first.startswith("sha256:")
+    assert "rs_ck_v1_same" not in first
+
+
+@pytest.mark.asyncio
 async def test_auto_mail_source_rejects_invalid_environment_fallback_at_runtime(monkeypatch):
     async def no_database_transport(_session):
         return None
