@@ -8,7 +8,7 @@ class MailDeliveryReceipt:
 
 
 class MailProvider(Protocol):
-    """Transport adapter contract used by the durable mail domain service."""
+    """Контракт транспортного адаптера для устойчивого сервиса почтовой доставки."""
 
     code: str
 
@@ -37,7 +37,7 @@ class MailProviderRegistry:
     def register(self, provider: MailProvider) -> None:
         code = str(provider.code).strip().lower()
         if not code:
-            raise ValueError("mail_provider_code_required")
+            raise ValueError("Код почтового провайдера обязателен")
         self._providers[code] = provider
 
     def get(self, code: str) -> MailProvider:
@@ -45,7 +45,7 @@ class MailProviderRegistry:
         try:
             return self._providers[normalized]
         except KeyError as exc:
-            raise RuntimeError(f"mail_provider_not_registered:{normalized or 'empty'}") from exc
+            raise RuntimeError(f"Почтовый провайдер не зарегистрирован: {normalized or 'пустое значение'}") from exc
 
     @property
     def codes(self) -> tuple[str, ...]:
