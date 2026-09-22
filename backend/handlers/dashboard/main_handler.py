@@ -358,15 +358,12 @@ async def dashboard(
             message="Данные отсутствуют → синхронизация не запускалась",
             code="NOT_SYNCED",
         )
-    if active_sync:
+    if active_sync and not has_any_success:
         return response_success(
             is_synced=False,
             is_syncing=True,
-            message=(
-                "Выполняется первичная синхронизация данных"
-                if not has_any_success
-                else "Обновляем данные Wildberries"
-            ),
+            initial_sync=True,
+            message="Выполняется первичная синхронизация данных",
             stats={},
             sync_status=sync_status,
             partial=True,
@@ -380,6 +377,13 @@ async def dashboard(
     )
     return response_success(
         is_synced=True,
+        is_syncing=active_sync,
+        initial_sync=False,
+        message=(
+            "Обновляем данные Wildberries. Показаны уже сохранённые значения."
+            if active_sync
+            else ""
+        ),
         stats=stats_data["stats"],
         chartData=[],
         baseStats=stats_data["base_stats"],
@@ -389,6 +393,38 @@ async def dashboard(
         categoryData=[],
         sync_status=sync_status,
         partial=True,
+        selected_token_id=(
+            str(scope.selected_token_id) if scope.selected_token_id else None
+        ),
+    )
+
+
+@router.get("/sync-status", dependencies=[Depends(auth_middle)])
+async def dashboard_sync_status(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+    token_id: Optional[UUID] = None,
+):
+    user_id = UUID(str(request.state.user["sub"]))
+    scope, scope_error = await _resolve_scope_or_error(db_session, user_id, token_id)
+    if scope_error is not None:
+        return scope_error
+    if not scope.token_ids:
+        return response_error(
+            message="Нет действительных кабинетов Wildberries, доступных на текущем тарифе.",
+            code="NO_VALID_TOKENS",
+        )
+
+    states = await get_user_sync_states(session=db_session, user_id=user_id)
+    scoped_states = [state for state in states if scope.contains(state.token_id)]
+    active_sync = await has_active_sync_jobs(db_session, user_id, scope)
+
+    return response_success(
+        sync_status=build_sync_status(
+            scoped_states,
+            scope.token_ids,
+            is_syncing=active_sync,
+        ),
         selected_token_id=(
             str(scope.selected_token_id) if scope.selected_token_id else None
         ),

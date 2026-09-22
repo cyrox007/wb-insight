@@ -47,12 +47,12 @@
       @retry="loadDashboard"
     />
 
-    <div v-else-if="isSyncing" class="status-banner" role="status">
+    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce) && isSyncing" class="status-banner" role="status">
       <strong>{{ syncMessage || 'Данные синхронизируются с Wildberries.' }}</strong>
       <span>{{ syncProgressText }}</span>
     </div>
 
-    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="kpi-grid" aria-label="Ключевые показатели">
+    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="kpi-grid" aria-label="Ключевые показатели">
       <article v-for="item in primaryKpis" :key="item.key" class="kpi-card">
         <div class="kpi-card__topline">
           <span>{{ item.label }}</span>
@@ -65,7 +65,7 @@
       </article>
     </div>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="section-card plan-card">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="section-card plan-card">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Текущий месяц</p>
@@ -106,7 +106,7 @@
       </div>
     </section>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="analytics-grid">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="analytics-grid">
       <article class="section-card chart-card">
         <div class="section-heading">
           <div>
@@ -144,7 +144,7 @@
       </article>
     </section>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="context-grid">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="context-grid">
       <article class="section-card compact-card">
         <div class="section-heading">
           <div>
@@ -166,7 +166,7 @@
       </article>
     </section>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isSyncing" class="abc-section">
+    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="abc-section">
       <div class="section-heading section-heading--outside">
         <div>
           <p class="eyebrow">Товары</p>
@@ -204,6 +204,7 @@ const isLoading = ref(false)
 const hasLoadedOnce = ref(false)
 const isChartsLoading = ref(false)
 const isSyncing = ref(false)
+const isInitialSync = ref(false)
 const syncStatus = ref(null)
 const syncMessage = ref('')
 const errorMessage = ref('')
@@ -277,6 +278,9 @@ const syncFreshnessAriaLabel = computed(() =>
 )
 
 const syncProgressText = computed(() => {
+  if (!isInitialSync.value) {
+    return 'Показаны последние успешно сохранённые данные. Обновление идёт в фоне.'
+  }
   if (!syncStatus.value) return 'Показатели появятся автоматически после завершения синхронизации.'
   const ready = Number(syncStatus.value.ready_entities || 0)
   const total = Number(syncStatus.value.total_entities || 0)
@@ -394,6 +398,7 @@ async function loadDashboard() {
   isLoading.value = true
   errorMessage.value = ''
   isSyncing.value = false
+  isInitialSync.value = false
   syncMessage.value = ''
   try {
     const response = await DashboardService.get_dashboard_data({
@@ -405,6 +410,7 @@ async function loadDashboard() {
     if (result?.status === 'error') {
       stats.value = {}
       syncStatus.value = null
+      isInitialSync.value = false
       errorMessage.value = extractError(result)
       return
     }
@@ -412,9 +418,10 @@ async function loadDashboard() {
     stats.value = result.stats || {}
     syncStatus.value = result.sync_status || null
     syncMessage.value = result.message || ''
-    isSyncing.value = result.is_synced === false || result.is_syncing === true
+    isSyncing.value = result.is_syncing === true || result.is_synced === false
+    isInitialSync.value = result.initial_sync === true
 
-    if (isSyncing.value) {
+    if (isInitialSync.value) {
       chartData.value = []
       warehouseData.value = []
       categoryData.value = []

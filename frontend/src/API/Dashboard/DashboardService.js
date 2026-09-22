@@ -9,6 +9,10 @@ export default class DashboardService {
         return await $api.get("/dashboard/charts", { params });
     }
 
+    static async get_sync_status(params = {}) {
+        return await $api.get("/dashboard/sync-status", { params });
+    }
+
     static async set_monthly_plan(revenueTarget) {
         return await $api.put("/dashboard/plan", {
             revenue_target: revenueTarget,
