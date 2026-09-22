@@ -380,7 +380,7 @@ async def dashboard(
         is_syncing=active_sync,
         initial_sync=False,
         message=(
-            "Обновляем данные Wildberries. Показаны последние успешно сохранённые значения."
+            "Обновляем данные Wildberries. Показаны уже сохранённые значения."
             if active_sync
             else ""
         ),
