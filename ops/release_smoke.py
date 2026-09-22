@@ -159,7 +159,13 @@ def _public_api_base(value: str) -> str:
     return f"{_safe_base_origin(value)}/api"
 
 
-def _write_evidence(path: Path, *, args: argparse.Namespace, checks: dict[str, bool]) -> None:
+def _write_evidence(
+    path: Path,
+    *,
+    args: argparse.Namespace,
+    checks: dict[str, bool],
+    mail_gateway: dict | None = None,
+) -> None:
     report = {
         "schema_version": 1,
         "kind": "release_smoke",
@@ -171,6 +177,8 @@ def _write_evidence(path: Path, *, args: argparse.Namespace, checks: dict[str, b
         "base_origin": _safe_base_origin(args.base_url),
         "checks": checks,
     }
+    if mail_gateway is not None:
+        report["mail_gateway"] = mail_gateway
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -588,7 +596,7 @@ def run_mail_gateway_readiness_smoke(
     expected_provider: str | None,
     require_email_verification: bool,
     require_password_reset: bool,
-) -> None:
+) -> dict:
     """Fail early on admin-visible mail misconfiguration before real-mail smoke."""
     payload = client.request(
         "GET",
@@ -601,8 +609,23 @@ def run_mail_gateway_readiness_smoke(
         require_email_verification=require_email_verification,
         require_password_reset=require_password_reset,
     )
-    provider = str((payload.get("gateway") or {}).get("provider") or "unknown")
+    gateway = payload.get("gateway") or {}
+    provider = str(gateway.get("provider") or "unknown").strip().lower()
+    system_mail = gateway.get("system_mail") or {}
+    evidence = {
+        "provider": provider,
+        "expected_provider": expected_provider,
+        "source": str(gateway.get("source") or "unknown"),
+        "config_source": str(gateway.get("config_source") or "unknown"),
+        "email_verification_ready": bool(
+            (system_mail.get("email_verification") or {}).get("ready")
+        ),
+        "password_reset_ready": bool(
+            (system_mail.get("password_reset") or {}).get("ready")
+        ),
+    }
     print(f"[ok] mail gateway readiness: provider={provider}")
+    return evidence
 
 
 def run_mail_gateway_authenticated_preflight(
@@ -613,13 +636,14 @@ def run_mail_gateway_authenticated_preflight(
     expected_provider: str | None,
     require_email_verification: bool,
     require_password_reset: bool,
-) -> None:
+) -> dict:
     """Authenticate a staff account, validate mail readiness, and revoke that session."""
     client = SmokeClient(base_url)
     preflight_error: SmokeFailure | None = None
+    evidence: dict | None = None
     try:
         _login_smoke_client(client, email, password)
-        run_mail_gateway_readiness_smoke(
+        evidence = run_mail_gateway_readiness_smoke(
             client,
             expected_provider=expected_provider,
             require_email_verification=require_email_verification,
@@ -640,6 +664,9 @@ def run_mail_gateway_authenticated_preflight(
 
     if preflight_error is not None:
         raise preflight_error
+    if evidence is None:
+        raise SmokeFailure("mail gateway preflight completed without evidence")
+    return evidence
 
 
 def run_audit_correlation_smoke(client: SmokeClient) -> None:
@@ -961,20 +988,26 @@ def main() -> int:
         "logout_session_revoke": False,
     }
 
+    mail_gateway_evidence: dict | None = None
     client = SmokeClient(args.base_url)
     run_public_smoke(client, args.expected_version)
     checks["public_health_legal"] = True
 
     if args.public_only:
         if args.evidence_output:
-            _write_evidence(args.evidence_output, args=args, checks=checks)
+            _write_evidence(
+                args.evidence_output,
+                args=args,
+                checks=checks,
+                mail_gateway=mail_gateway_evidence,
+            )
         return 0
 
     if not args.email or not args.password:
         raise SmokeFailure("SMOKE_EMAIL and SMOKE_PASSWORD are required for authenticated smoke")
 
     if args.mail_gateway_smoke:
-        run_mail_gateway_authenticated_preflight(
+        mail_gateway_evidence = run_mail_gateway_authenticated_preflight(
             args.base_url,
             email=args.email,
             password=args.password,
@@ -1033,7 +1066,12 @@ def main() -> int:
         raise authenticated_error
 
     if args.evidence_output:
-        _write_evidence(args.evidence_output, args=args, checks=checks)
+        _write_evidence(
+            args.evidence_output,
+            args=args,
+            checks=checks,
+            mail_gateway=mail_gateway_evidence,
+        )
         print(f"[ok] structured release smoke evidence: {args.evidence_output}")
     return 0
 
