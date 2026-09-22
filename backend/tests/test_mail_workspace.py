@@ -448,6 +448,90 @@ async def test_rusender_provider_uses_bearer_key_id_and_idempotency(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_rusender_provider_accepts_201_created_with_uuid(monkeypatch):
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"uuid": "0199-created-uuid"}
+
+    class FakeClient:
+        def __init__(self, *, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr("integrations.mail.rusender.httpx.AsyncClient", FakeClient)
+    provider = RuSenderMailProvider(
+        SimpleNamespace(
+            RUSENDER_API_BASE_URL="https://api.rusender.ru",
+            RUSENDER_KEY_ID="15074",
+            RUSENDER_API_TOKEN="secret-token",
+            RUSENDER_TIMEOUT_SECONDS=10,
+        )
+    )
+
+    receipt = await provider.send(
+        sender="no-reply@mail.jsinteractive.ru",
+        recipient="seller@example.org",
+        subject="Test",
+        body="Text",
+    )
+
+    assert receipt.provider_message_id == "0199-created-uuid"
+
+
+@pytest.mark.asyncio
+async def test_rusender_provider_rejects_2xx_without_uuid(monkeypatch):
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"status": "created"}
+
+    class FakeClient:
+        def __init__(self, *, timeout):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr("integrations.mail.rusender.httpx.AsyncClient", FakeClient)
+    provider = RuSenderMailProvider(
+        SimpleNamespace(
+            RUSENDER_API_BASE_URL="https://api.rusender.ru",
+            RUSENDER_KEY_ID="15074",
+            RUSENDER_API_TOKEN="secret-token",
+            RUSENDER_TIMEOUT_SECONDS=10,
+        )
+    )
+
+    with pytest.raises(RuSenderAPIError) as exc_info:
+        await provider.send(
+            sender="no-reply@mail.jsinteractive.ru",
+            recipient="seller@example.org",
+            subject="Test",
+            body="Text",
+        )
+
+    assert exc_info.value.code == "rusender_invalid_success_response"
+    assert exc_info.value.retryable is True
+
+
+@pytest.mark.asyncio
 async def test_rusender_provider_classifies_retryable_statuses(monkeypatch):
     class FakeResponse:
         status_code = 429

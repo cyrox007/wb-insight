@@ -122,11 +122,25 @@ class RuSenderMailProvider:
         except httpx.HTTPError as exc:
             raise RuSenderAPIError("rusender_network_error", retryable=True) from exc
 
-        if response.status_code == 200:
-            data = response.json()
+        if 200 <= response.status_code < 300:
+            try:
+                data = response.json()
+            except (ValueError, TypeError) as exc:
+                raise RuSenderAPIError(
+                    "rusender_invalid_success_response",
+                    retryable=True,
+                ) from exc
+            if not isinstance(data, dict):
+                raise RuSenderAPIError(
+                    "rusender_invalid_success_response",
+                    retryable=True,
+                )
             provider_id = str(data.get("uuid") or "").strip()
             if not provider_id:
-                raise RuSenderAPIError("rusender_invalid_success_response", retryable=True)
+                raise RuSenderAPIError(
+                    "rusender_invalid_success_response",
+                    retryable=True,
+                )
             return MailDeliveryReceipt(provider_message_id=provider_id)
 
         error_code = f"rusender_http_{response.status_code}"
