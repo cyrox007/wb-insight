@@ -91,6 +91,8 @@ CORE_SMOKE_REQUIRED_CHECKS = {
 ACCOUNT_LIFECYCLE_REQUIRED_CHECKS = {
     "email_verification",
     "password_reset",
+    "password_reset_throttle",
+    "password_reset_session_revoked",
     "deactivation",
     "inactive_login_rejected",
     "authenticated_refresh_restore",
