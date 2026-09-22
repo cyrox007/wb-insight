@@ -41,13 +41,20 @@ def test_sync_status_reports_complete_single_account():
         for index, entity in enumerate(SYNC_ENTITIES)
     ]
 
-    result = build_sync_status(states, (token_id,))
+    result = build_sync_status(
+        states,
+        (token_id,),
+        freshness_interval_hours=1,
+        now=now + timedelta(minutes=len(SYNC_ENTITIES)),
+    )
 
     assert result["complete"] is True
     assert result["ready_entities"] == len(SYNC_ENTITIES)
     assert result["stale_entities"] == 0
     assert result["error_entities"] == 0
     assert result["waiting_entities"] == 0
+    assert result["freshness_policy_available"] is True
+    assert result["freshness_interval_hours"] == 1
     assert result["oldest_success_at"] == now
     assert result["latest_success_at"] == now + timedelta(
         minutes=len(SYNC_ENTITIES) - 1
@@ -93,6 +100,8 @@ def test_sync_status_fails_safe_for_multi_account_partial_freshness():
         states,
         (first_token, second_token),
         is_syncing=True,
+        freshness_interval_hours=1,
+        now=now,
     )
 
     entity_map = {item["entity"]: item for item in result["entities"]}
@@ -103,6 +112,36 @@ def test_sync_status_fails_safe_for_multi_account_partial_freshness():
     assert entity_map["advertising"]["status"] == "stale"
     assert entity_map["advertising"]["successful_accounts"] == 1
     assert "last_error" not in entity_map["orders"]
+
+
+def test_sync_status_marks_historical_success_as_stale_after_tariff_interval():
+    token_id = uuid4()
+    now = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
+    states = [
+        _state(
+            token_id,
+            entity,
+            last_success_at=now - timedelta(hours=3),
+            last_sync_at=now - timedelta(hours=3),
+        )
+        for entity in SYNC_ENTITIES
+    ]
+
+    result = build_sync_status(
+        states,
+        (token_id,),
+        freshness_interval_hours=2,
+        now=now,
+    )
+
+    assert result["complete"] is False
+    assert result["ready_entities"] == 0
+    assert result["stale_entities"] == len(SYNC_ENTITIES)
+    assert result["freshness_cutoff"] == now - timedelta(hours=2)
+    assert all(
+        item["fresh_accounts"] == 0 and item["stale_accounts"] == 1
+        for item in result["entities"]
+    )
 
 
 class FakeRequest:
@@ -138,9 +177,13 @@ async def test_dashboard_reports_primary_sync_instead_of_not_synced(monkeypatch)
     async def fake_active_jobs(_session, _user_id, _scope):
         return True
 
+    async def fake_frequency(_session, _user_id):
+        return 1
+
     monkeypatch.setattr(main_handler, "_resolve_scope_or_error", fake_scope)
     monkeypatch.setattr(main_handler, "get_user_sync_states", fake_states)
     monkeypatch.setattr(main_handler, "has_active_sync_jobs", fake_active_jobs)
+    monkeypatch.setattr(main_handler, "get_wb_sync_frequency_hours", fake_frequency)
 
     result = await main_handler.dashboard(
         FakeRequest(user_id),
@@ -252,6 +295,9 @@ async def test_dashboard_keeps_saved_metrics_visible_during_background_sync(monk
     async def fake_active_jobs(_session, _user_id, _scope):
         return True
 
+    async def fake_frequency(_session, _user_id):
+        return 24
+
     async def fake_stats(*_args, **_kwargs):
         return {
             "stats": {
@@ -264,6 +310,7 @@ async def test_dashboard_keeps_saved_metrics_visible_during_background_sync(monk
     monkeypatch.setattr(main_handler, "_resolve_scope_or_error", fake_scope)
     monkeypatch.setattr(main_handler, "get_user_sync_states", fake_states)
     monkeypatch.setattr(main_handler, "has_active_sync_jobs", fake_active_jobs)
+    monkeypatch.setattr(main_handler, "get_wb_sync_frequency_hours", fake_frequency)
     monkeypatch.setattr(main_handler, "_calculate_stats", fake_stats)
 
     result = await main_handler.dashboard(
@@ -309,9 +356,13 @@ async def test_sync_status_endpoint_returns_lightweight_scoped_summary(monkeypat
     async def fake_active_jobs(_session, _user_id, _scope):
         return False
 
+    async def fake_frequency(_session, _user_id):
+        return 24
+
     monkeypatch.setattr(main_handler, "_resolve_scope_or_error", fake_scope)
     monkeypatch.setattr(main_handler, "get_user_sync_states", fake_states)
     monkeypatch.setattr(main_handler, "has_active_sync_jobs", fake_active_jobs)
+    monkeypatch.setattr(main_handler, "get_wb_sync_frequency_hours", fake_frequency)
 
     result = await main_handler.dashboard_sync_status(
         FakeRequest(user_id),

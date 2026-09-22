@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import and_, exists, or_, select
@@ -41,16 +41,36 @@ SYNC_ENTITY_LABELS = {
 }
 
 
+def _utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def build_sync_status(
     states: list[UserSyncState],
     token_ids: tuple[UUID, ...],
     *,
     is_syncing: bool = False,
+    freshness_interval_hours: int | None = None,
+    now: datetime | None = None,
 ) -> dict:
-    """Формирует безопасную сводку свежести данных по выбранным кабинетам."""
+    """Формирует безопасную тарифно-зависимую сводку свежести данных."""
     expected_accounts = len(token_ids)
     token_id_set = set(token_ids)
     grouped: dict[str, list[UserSyncState]] = defaultdict(list)
+
+    interval_hours = (
+        max(1, int(freshness_interval_hours))
+        if freshness_interval_hours is not None
+        else None
+    )
+    current_time = _utc_datetime(now or datetime.now(timezone.utc))
+    freshness_cutoff = (
+        current_time - timedelta(hours=interval_hours)
+        if interval_hours is not None
+        else None
+    )
 
     for state in states:
         if state.token_id in token_id_set and state.entity in SYNC_ENTITIES:
@@ -62,17 +82,25 @@ def build_sync_status(
     for entity in SYNC_ENTITIES:
         entity_states = grouped.get(entity, [])
         success_times = [
-            state.last_success_at
+            _utc_datetime(state.last_success_at)
             for state in entity_states
             if state.last_success_at is not None
         ]
+        fresh_success_times = [
+            value
+            for value in success_times
+            if freshness_cutoff is not None and value >= freshness_cutoff
+        ]
         error_count = sum(1 for state in entity_states if state.last_error)
         successful_accounts = len(success_times)
+        fresh_accounts = len(fresh_success_times)
+        stale_accounts = max(0, successful_accounts - fresh_accounts)
 
         if (
-            expected_accounts > 0
+            freshness_cutoff is not None
+            and expected_accounts > 0
             and len(entity_states) >= expected_accounts
-            and successful_accounts >= expected_accounts
+            and fresh_accounts >= expected_accounts
             and error_count == 0
         ):
             status = "ready"
@@ -95,6 +123,8 @@ def build_sync_status(
                 "status": status,
                 "expected_accounts": expected_accounts,
                 "successful_accounts": successful_accounts,
+                "fresh_accounts": fresh_accounts,
+                "stale_accounts": stale_accounts,
                 "error_accounts": error_count,
                 "oldest_success_at": oldest_success_at,
                 "latest_success_at": latest_success_at,
@@ -115,6 +145,9 @@ def build_sync_status(
         "error_entities": error_entities,
         "waiting_entities": waiting_entities,
         "complete": ready_entities == len(SYNC_ENTITIES),
+        "freshness_policy_available": freshness_cutoff is not None,
+        "freshness_interval_hours": interval_hours,
+        "freshness_cutoff": freshness_cutoff,
         "oldest_success_at": min(all_success_times) if all_success_times else None,
         "latest_success_at": max(
             (

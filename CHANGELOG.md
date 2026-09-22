@@ -11,7 +11,10 @@
 - P81: все refresh-пути используют один запрос; logout и новая login-сессия инвалидируют незавершённый refresh/restore предыдущего поколения;
 - поздний ответ старой сессии больше не может восстановить access JWT или очистить более новую сессию;
 - публичные auth-маршруты, включая login/logout/password reset/email verification, исключены из автоматического refresh-retry после `401`;
-- frontend CI закрепляет generation-guard, single-flight и stale-session контракт.
+- frontend CI закрепляет generation-guard, single-flight и stale-session контракт;
+- P82: статус свежести теперь учитывает тарифный `sync_frequency_hours`; исторический success старше интервала помечается как `stale`, а не как «актуально»;
+- API возвращает тарифный freshness interval/cutoff и счётчики свежих/устаревших кабинетов по каждой сущности;
+- Overview и общий статус кабинета показывают интервал тарифа, по которому определяется актуальность.
 
 ## [0.9.0-beta.1] — candidate, обновлено 2026-09-22
 
