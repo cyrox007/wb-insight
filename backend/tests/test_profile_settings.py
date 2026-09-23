@@ -233,6 +233,7 @@ def test_profile_router_exposes_settings_update():
     assert ("/dashboard/profile/", "GET") in routes
     assert ("/dashboard/profile/", "PUT") in routes
     assert ("/dashboard/profile/email-change/request", "POST") in routes
+    assert ("/dashboard/profile/email-change/cancel", "POST") in routes
 
 
 
@@ -257,6 +258,11 @@ async def test_email_change_request_queues_verification_without_plain_email_in_k
         queued.update(kwargs)
         return SimpleNamespace(id=uuid4())
 
+    revoked = []
+
+    async def fake_revoke(_session, requested_user_id):
+        revoked.append(requested_user_id)
+
     async def fake_lifecycle(_session, **kwargs):
         lifecycle.update(kwargs)
 
@@ -264,6 +270,7 @@ async def test_email_change_request_queues_verification_without_plain_email_in_k
     monkeypatch.setattr(profile_handler, "get_user_by_email", fake_get_by_email)
     monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(profile_handler, "queue_transactional_email", fake_queue)
+    monkeypatch.setattr(profile_handler, "revoke_email_verification_tokens", fake_revoke)
     monkeypatch.setattr(profile_handler, "record_lifecycle_event", fake_lifecycle)
     monkeypatch.setattr(
         profile_handler.lifecycle_config,
@@ -290,6 +297,7 @@ async def test_email_change_request_queues_verification_without_plain_email_in_k
     assert queued["recipient_email"] == "new@example.com"
     assert queued["template_code"] == "email_verification"
     assert "new@example.com" not in queued["idempotency_key"]
+    assert revoked == [user_id]
     assert lifecycle["event_type"] == "email_change_requested"
     assert lifecycle["event_data"] == {"verification_required": True}
     assert "email" not in lifecycle["event_data"]
@@ -420,6 +428,9 @@ async def test_email_change_repeat_is_throttled_without_duplicate_mail_or_event(
     async def fail_queue(*_args, **_kwargs):
         raise AssertionError("Повторный запрос не должен создавать второе письмо")
 
+    async def fail_revoke(*_args, **_kwargs):
+        raise AssertionError("Повторный запрос того же pending email не должен отзывать токены")
+
     async def fail_lifecycle(*_args, **_kwargs):
         raise AssertionError("Повторный запрос не должен создавать второе lifecycle-событие")
 
@@ -427,6 +438,7 @@ async def test_email_change_repeat_is_throttled_without_duplicate_mail_or_event(
     monkeypatch.setattr(profile_handler, "get_user_by_email", fake_get_by_email)
     monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(profile_handler, "queue_transactional_email", fail_queue)
+    monkeypatch.setattr(profile_handler, "revoke_email_verification_tokens", fail_revoke)
     monkeypatch.setattr(profile_handler, "record_lifecycle_event", fail_lifecycle)
     monkeypatch.setattr(
         profile_handler.lifecycle_config,
@@ -450,3 +462,66 @@ async def test_email_change_repeat_is_throttled_without_duplicate_mail_or_event(
     assert result["pending_email"] == "new@example.com"
     assert result["queued"] is False
     assert "уже было отправлено недавно" in result["message"]
+
+
+
+@pytest.mark.asyncio
+async def test_cancel_email_change_revokes_tokens_and_clears_pending(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    user.pending_email = "new@example.com"
+    revoked = []
+    lifecycle = {}
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    async def fake_revoke(_session, requested_user_id):
+        revoked.append(requested_user_id)
+
+    async def fake_lifecycle(_session, **kwargs):
+        lifecycle.update(kwargs)
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "revoke_email_verification_tokens", fake_revoke)
+    monkeypatch.setattr(profile_handler, "record_lifecycle_event", fake_lifecycle)
+
+    response = Response()
+    result = await profile_handler.cancel_email_change(
+        make_request(user_id, {}),
+        response,
+        object(),
+    )
+
+    assert result["status"] == "success"
+    assert result["pending_email"] is None
+    assert user.pending_email is None
+    assert revoked == [user_id]
+    assert lifecycle["event_type"] == "email_change_cancelled"
+    assert lifecycle["event_data"] == {"verification_required": False}
+
+
+@pytest.mark.asyncio
+async def test_cancel_email_change_is_idempotent_without_pending(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    async def fail_revoke(*_args, **_kwargs):
+        raise AssertionError("Без pending email токены отзывать не нужно")
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "revoke_email_verification_tokens", fail_revoke)
+
+    response = Response()
+    result = await profile_handler.cancel_email_change(
+        make_request(user_id, {}),
+        response,
+        object(),
+    )
+
+    assert result["status"] == "success"
+    assert result["pending_email"] is None
+    assert "Ожидающей смены email нет" in result["message"]
