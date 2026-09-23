@@ -9,6 +9,10 @@ export default class ProfileServices {
         return await $api.put('/dashboard/profile/', data);
     }
 
+    static async requestEmailChange(email) {
+        return await $api.post('/dashboard/profile/email-change/request', { email });
+    }
+
     static async checkTokenPermission(user_id, tariff_id) {
         return await $api.get(`/dashboard/profile/check-token-permission/${user_id}`, {
             params: {
