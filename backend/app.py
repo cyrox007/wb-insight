@@ -39,7 +39,6 @@ from handlers.dashboard.unit_economy_handler import router as D_unit_economy_rou
 from handlers.health_handler import router as health_router
 from handlers.legal_handler import router as legal_router
 from handlers.session_handler import router as session_router
-from handlers.users_handler import routers as user_router
 from settings import config
 from utils.responce_helps import response_error
 
@@ -71,7 +70,6 @@ def _register_routers(app: FastAPI) -> None:
     routers = [
         health_router,
         legal_router,
-        user_router,
         auth_router,
         account_auth_router,
         email_verification_router,
