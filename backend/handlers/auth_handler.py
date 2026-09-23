@@ -32,7 +32,7 @@ from utils.jwt import create_access_token, create_refresh_token
 from utils.responce_helps import response_error, response_success
 
 
-router = APIRouter(prefix="/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["Аутентификация"])
 logger = setup_logger(__name__)
 
 
@@ -100,6 +100,30 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
             status.HTTP_400_BAD_REQUEST,
             "REGISTRATION_DATA_INVALID",
             "Поле registrationData должно быть объектом",
+        )
+
+    allowed_fields = {
+        "entity_type",
+        "full_name",
+        "email",
+        "phone",
+        "password",
+        "inn",
+        "kpp",
+        "legal_address",
+        "timezone",
+        "newsletter_subscription",
+        "agree_terms",
+        "agree_privacy",
+        "agree_data_processing",
+        "legal_consents",
+    }
+    unsupported_fields = sorted(set(reg_data) - allowed_fields)
+    if unsupported_fields:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "REGISTRATION_FIELDS_UNSUPPORTED",
+            "Запрос регистрации содержит неподдерживаемые поля",
         )
 
     entity_type = str(reg_data.get("entity_type") or "").strip().lower()
@@ -247,16 +271,20 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
         }
     )
 
+    persisted_fields = {
+        "entity_type",
+        "full_name",
+        "email",
+        "phone",
+        "password",
+        "inn",
+        "kpp",
+        "legal_address",
+        "timezone",
+    }
     user_data = {
-        key: value
-        for key, value in normalized.items()
-        if key not in {
-            "legal_consents",
-            "agree_terms",
-            "agree_privacy",
-            "agree_data_processing",
-            "newsletter_subscription",
-        }
+        key: normalized.get(key)
+        for key in persisted_fields
     }
     legal_context = (
         "registration_legal"
