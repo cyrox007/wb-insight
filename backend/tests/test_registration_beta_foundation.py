@@ -5,12 +5,15 @@ from uuid import uuid4
 
 import pytest
 from fastapi import Response
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 import handlers.auth_handler as auth_handler
 from handlers.legal_handler import current_user_consents
 from models.subscription_model import SubscriptionStatus
+from schemas.auth import LoginRequest
 from services.subscription_service import create_demo_subscription
+from utils.hashed_password import hash_password
 
 
 class RegistrationRequestStub:
@@ -249,6 +252,8 @@ def test_registration_payload_is_canonicalized_before_savepoint():
         ({"kpp": {}}, "KPP_INVALID"),
         ({"timezone": []}, "TIMEZONE_INVALID"),
         ({"timezone": "x" * 51}, "TIMEZONE_INVALID"),
+        ({"bank_account": "40702810900000000000"}, "REGISTRATION_FIELDS_UNSUPPORTED"),
+        ({"bik": "044525225"}, "REGISTRATION_FIELDS_UNSUPPORTED"),
     ],
 )
 def test_registration_payload_rejects_invalid_fields(overrides, error_code):
@@ -480,3 +485,15 @@ async def test_registration_fails_closed_when_verification_transport_is_unavaila
     assert response.status_code == 503
     assert payload["error"]["code"] == "EMAIL_VERIFICATION_DELIVERY_UNAVAILABLE"
     assert insert_called is False
+
+
+
+def test_auth_validation_messages_are_russian():
+    with pytest.raises(ValueError, match="Пароль не может быть пустым"):
+        hash_password("")
+
+    with pytest.raises(ValidationError) as exc_info:
+        LoginRequest(email="not-an-email", password="secret")
+
+    assert "Некорректный формат email" in str(exc_info.value)
+    assert "Invalid email format" not in str(exc_info.value)
