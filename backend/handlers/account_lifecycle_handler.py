@@ -77,9 +77,9 @@ async def request_password_reset(
         )
     )
     if verified_for_recovery:
-        # Не раскрываем существование аккаунта и одновременно не позволяем
+        # Не раскрываем существование учётной записи и одновременно не позволяем
         # публичному маршруту превращаться в усилитель почтового спама.
-        # Ответ одинаков для отсутствующего, неподходящего и throttled-аккаунта.
+        # Ответ одинаков для отсутствующей, неподходящей и ограниченной учётной записи.
         cutoff = datetime.now(timezone.utc) - timedelta(
             seconds=lifecycle_config.PASSWORD_RESET_RESEND_SECONDS
         )
@@ -97,9 +97,9 @@ async def request_password_reset(
                 datetime.now(timezone.utc).timestamp()
                 // lifecycle_config.PASSWORD_RESET_RESEND_SECONDS
             )
-            # Worker создаёт одноразовый reset-токен только непосредственно перед
-            # отправкой провайдеру. Сырой секрет не хранится в durable mail queue
-            # и не попадает в audit trail.
+            # Обработчик очереди создаёт одноразовый токен восстановления только
+            # непосредственно перед отправкой провайдеру. Сырой секрет не хранится
+            # в долговременной очереди писем и не попадает в журнал аудита.
             await queue_transactional_email(
                 db_session,
                 user=user,
