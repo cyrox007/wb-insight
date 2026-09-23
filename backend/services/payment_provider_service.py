@@ -111,11 +111,11 @@ def _normalize_currency_code(value: Any) -> str:
 
 def _normalize_sber_gateway_url(value: Any, mode: str) -> str:
     raw = str(value or "").strip()
-    parsed = urlparse(raw)
     try:
+        parsed = urlparse(raw)
         port = parsed.port
     except ValueError as exc:
-        raise ValueError("URL платёжного шлюза Сбера содержит некорректный порт") from exc
+        raise ValueError("URL платёжного шлюза Сбера имеет некорректный формат") from exc
 
     hostname = (parsed.hostname or "").rstrip(".").lower()
     path = parsed.path.rstrip("/")
@@ -154,11 +154,11 @@ def _normalize_redirect_url(value: Any, field: str) -> str | None:
     if not raw:
         return None
 
-    parsed = urlparse(raw)
     try:
+        parsed = urlparse(raw)
         parsed.port
     except ValueError as exc:
-        raise ValueError(f"Поле {field} содержит некорректный порт") from exc
+        raise ValueError(f"Поле {field} содержит некорректный URL") from exc
 
     if (
         parsed.scheme.lower() not in {"http", "https"}
