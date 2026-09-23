@@ -66,6 +66,9 @@ const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
 const registrationPath = path.join(root, 'components/CustomModals/AuthModals/RegistrationModal.vue')
 const sellerProfilePath = path.join(root, 'pages/Dashboard/Profile/index.vue')
 const accountLifecyclePath = path.join(root, 'API/AccountLifecycleService.js')
+const sellerOnboardingPath = path.join(root, 'components/SellerOnboarding.vue')
+const addTokenModalPath = path.join(root, 'components/CustomModals/ProfileModals/AddTokenModal.vue')
+const dashboardMainPath = path.join(root, 'pages/Dashboard/Main/index.vue')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
 const apiSource = fs.readFileSync(apiPath, 'utf8')
@@ -77,6 +80,9 @@ const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
 const registrationSource = fs.readFileSync(registrationPath, 'utf8')
 const sellerProfileSource = fs.readFileSync(sellerProfilePath, 'utf8')
 const accountLifecycleSource = fs.readFileSync(accountLifecyclePath, 'utf8')
+const sellerOnboardingSource = fs.readFileSync(sellerOnboardingPath, 'utf8')
+const addTokenModalSource = fs.readFileSync(addTokenModalPath, 'utf8')
+const dashboardMainSource = fs.readFileSync(dashboardMainPath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -339,6 +345,42 @@ const accountSecurityEmailChangeChecks = [
 ]
 
 for (const check of accountSecurityEmailChangeChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const sellerOnboardingChecks = [
+  {
+    ok:
+      dashboardMainSource.includes('<SellerOnboarding') &&
+      dashboardMainSource.includes("DashboardService.get_sync_status()") &&
+      dashboardMainSource.includes("code === 'NO_VALID_TOKENS'"),
+    message: 'Главный дашборд должен показывать onboarding, обновлять прогресс синхронизации и отдельно обрабатывать отсутствие кабинета.',
+  },
+  {
+    ok:
+      sellerOnboardingSource.includes("query: { tab: 'connections' }") &&
+      sellerOnboardingSource.includes("query: { tab: 'costs' }") &&
+      sellerOnboardingSource.includes('Скрыть подсказки'),
+    message: 'Onboarding должен вести сразу к подключению WB и себестоимости и позволять скрыть подсказки после получения данных.',
+  },
+  {
+    ok:
+      sellerProfileSource.includes('route.query.tab') &&
+      sellerProfileSource.includes('await selectTab(requestedTab)'),
+    message: 'Профиль должен открывать нужную вкладку по глубокой ссылке из onboarding.',
+  },
+  {
+    ok:
+      addTokenModalSource.includes('Проверить и подключить') &&
+      addTokenModalSource.includes('WB_TOKEN_PERMISSIONS_MISSING') &&
+      addTokenModalSource.includes('WB_TOKEN_MUST_BE_READ_ONLY') &&
+      addTokenModalSource.includes('Контент') &&
+      addTokenModalSource.includes('Финансы'),
+    message: 'Подключение Wildberries должно содержать пошаговую инструкцию и человекочитаемую диагностику прав токена.',
+  },
+]
+
+for (const check of sellerOnboardingChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
