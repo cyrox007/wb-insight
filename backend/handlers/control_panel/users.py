@@ -20,6 +20,7 @@ from services.account_lifecycle_service import (
 )
 from services.email_verification_service import admin_change_email_identity, admin_verify_email
 from services.user_service import (
+    delete_user,
     get_user_by_email,
     get_user_by_phone,
     get_user_by_uuid,
@@ -29,7 +30,7 @@ from utils.responce_helps import response_error, response_success
 
 router = APIRouter(
     prefix='/control-panel/users',
-    tags=['Control Panel'],
+    tags=['Пользователи'],
     dependencies=[Depends(require_permission(Permission.USERS_READ))],
 )
 
@@ -65,7 +66,7 @@ def _user_to_dict(user) -> dict:
 
 
 def _can_manage_sensitive_target(request: Request, target_user) -> bool:
-    """Only a super-admin may perform access mutations on another super-admin."""
+    """Разрешает изменения super_admin только другому super_admin."""
     target_roles = {str(role.role) for role in target_user.roles if role.role}
     if UserRole.SUPER_ADMIN.value not in target_roles:
         return True
@@ -180,7 +181,7 @@ async def get_user(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
 
     return response_success(target_user=_user_to_dict(target_user))
 
@@ -211,7 +212,7 @@ async def edit_user(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -220,7 +221,7 @@ async def edit_user(
     if not update_data:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
-            message='No valid fields to update',
+            message='Нет допустимых полей для изменения',
             code="NO_VALID_FIELDS",
         )
 
@@ -347,7 +348,7 @@ async def verify_user_email(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code='USER_NOT_FOUND')
+        return response_error(message='Пользователь не найден', code='USER_NOT_FOUND')
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -375,11 +376,11 @@ async def remove_user(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Soft-deactivate an account; destructive purge is never an admin default."""
+    """Мягко деактивирует аккаунт без необратимого удаления данных."""
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -400,7 +401,7 @@ async def remove_user(
     if not changed:
         response.status_code = status.HTTP_409_CONFLICT
         return response_error(
-            message='Account is already inactive',
+            message='Аккаунт уже неактивен',
             code="ACCOUNT_ALREADY_INACTIVE",
         )
 
@@ -414,6 +415,101 @@ async def remove_user(
     )
 
 
+@router.delete(
+    '/{user_uuid}/purge',
+    dependencies=[Depends(require_permission(Permission.USERS_DELETE))],
+)
+async def permanently_delete_user(
+    user_uuid: UUID,
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Необратимо удаляет ранее деактивированный аккаунт пользователя."""
+    target_user = await get_user_by_uuid(db_session, user_uuid)
+    if not target_user:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            message='Пользователь не найден',
+            code='USER_NOT_FOUND',
+        )
+    if not _can_manage_sensitive_target(request, target_user):
+        return _reject_sensitive_target(response)
+
+    actor_user_id = UUID(str(request.state.user_id))
+    if actor_user_id == target_user.id:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code='SELF_DELETE_FORBIDDEN',
+            message='Нельзя необратимо удалить собственный аккаунт из панели управления',
+        )
+    if target_user.is_active:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code='USER_MUST_BE_INACTIVE',
+            message='Перед необратимым удалением сначала деактивируйте аккаунт',
+        )
+
+    try:
+        body = await request.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='USER_DELETE_CONFIRMATION_REQUIRED',
+            message='Для удаления требуется подтверждение email пользователя',
+        )
+
+    confirm_email = str(body.get('confirm_email') or '').strip().lower()
+    target_email = str(target_user.email or '').strip().lower()
+    if not confirm_email or confirm_email != target_email:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='USER_DELETE_CONFIRMATION_MISMATCH',
+            message='Подтверждение не совпадает с email удаляемого пользователя',
+        )
+
+    reason = str(body.get('reason') or '').strip()
+    if len(reason) > 1000:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='VALIDATION_ERROR',
+            message='Причина удаления должна быть не длиннее 1000 символов',
+        )
+
+    target_roles = sorted(
+        str(role.role)
+        for role in target_user.roles
+        if role.role
+    )
+    await record_lifecycle_event(
+        db_session,
+        user_id=target_user.id,
+        actor_user_id=actor_user_id,
+        event_type='account_permanently_deleted',
+        reason=reason or None,
+        event_data={
+            'source': 'control_panel',
+            'deleted_user_id': str(target_user.id),
+            'roles': target_roles,
+            'was_staff': bool(target_user.is_staff),
+        },
+    )
+    deleted = await delete_user(db_session, target_user)
+    if not deleted:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            code='USER_NOT_FOUND',
+            message='Пользователь уже удалён',
+        )
+
+    return response_success(
+        deleted=True,
+        user_id=str(user_uuid),
+    )
+
+
 @router.post('/{user_uuid}/reactivate', dependencies=[Depends(require_permission(Permission.USERS_WRITE))])
 async def reactivate_user(
     user_uuid: UUID,
@@ -424,7 +520,7 @@ async def reactivate_user(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -451,7 +547,7 @@ async def revoke_sessions(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
@@ -474,7 +570,7 @@ async def get_lifecycle_events(
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
     events = await list_lifecycle_events(db_session, user_id=user_uuid)
     return response_success(
         events=[
@@ -499,16 +595,16 @@ async def add_support_lifecycle_event(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Record a bounded support action without direct production DB edits.
+    """Фиксирует ограниченное support-действие без прямого редактирования БД.
 
-    This endpoint deliberately does not perform a provider refund or alter a
-    payment. It creates durable evidence around a support/provider action whose
-    actual monetary execution remains subject to the approved payment policy.
+    Маршрут не выполняет возврат средств и не изменяет платёж. Он сохраняет
+    долговечное подтверждение действия поддержки или провайдера, а денежная
+    операция остаётся в рамках утверждённого платёжного процесса.
     """
     target_user = await get_user_by_uuid(db_session, user_uuid)
     if not target_user:
         response.status_code = status.HTTP_404_NOT_FOUND
-        return response_error(message='User not found', code="USER_NOT_FOUND")
+        return response_error(message='Пользователь не найден', code="USER_NOT_FOUND")
 
     body = await request.json()
     event_type = str(body.get('event_type') or '').strip()
