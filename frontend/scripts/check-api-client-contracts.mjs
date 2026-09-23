@@ -224,7 +224,7 @@ const paymentProviderUiChecks = [
   },
   {
     ok:
-      paymentsSource.includes('произвольные hosts для merchant credentials запрещены') &&
+      paymentsSource.includes('произвольные узлы для реквизитов мерчанта запрещены') &&
       paymentsSource.includes('maxlength="3"') &&
       paymentsSource.includes('pattern="\\d{3}"'),
     message: 'Форма Sber должна объяснять host policy и ограничивать код валюты тремя цифрами.',
