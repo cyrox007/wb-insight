@@ -267,6 +267,7 @@ async def test_email_change_request_queues_verification_without_plain_email_in_k
         lifecycle.update(kwargs)
 
     monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid_for_update", fake_get_user)
     monkeypatch.setattr(profile_handler, "get_user_by_email", fake_get_by_email)
     monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(profile_handler, "queue_transactional_email", fake_queue)
@@ -319,6 +320,7 @@ async def test_email_change_request_rejects_existing_email(monkeypatch):
         return SimpleNamespace(ready=True)
 
     monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid_for_update", fake_get_user)
     monkeypatch.setattr(profile_handler, "get_user_by_email", fake_get_by_email)
     monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(
@@ -351,6 +353,7 @@ async def test_email_change_request_requires_ready_verification_mail(monkeypatch
         return SimpleNamespace(ready=False)
 
     monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid_for_update", fake_get_user)
     monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(
         profile_handler.lifecycle_config,
@@ -382,6 +385,7 @@ async def test_email_change_request_rejects_same_or_invalid_email(monkeypatch):
         return SimpleNamespace(ready=True)
 
     monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid_for_update", fake_get_user)
     monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(
         profile_handler.lifecycle_config,
@@ -435,6 +439,7 @@ async def test_email_change_repeat_is_throttled_without_duplicate_mail_or_event(
         raise AssertionError("Повторный запрос не должен создавать второе lifecycle-событие")
 
     monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid_for_update", fake_get_user)
     monkeypatch.setattr(profile_handler, "get_user_by_email", fake_get_by_email)
     monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
     monkeypatch.setattr(profile_handler, "queue_transactional_email", fail_queue)
@@ -483,6 +488,7 @@ async def test_cancel_email_change_revokes_tokens_and_clears_pending(monkeypatch
         lifecycle.update(kwargs)
 
     monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid_for_update", fake_get_user)
     monkeypatch.setattr(profile_handler, "revoke_email_verification_tokens", fake_revoke)
     monkeypatch.setattr(profile_handler, "record_lifecycle_event", fake_lifecycle)
 
@@ -513,6 +519,7 @@ async def test_cancel_email_change_is_idempotent_without_pending(monkeypatch):
         raise AssertionError("Без pending email токены отзывать не нужно")
 
     monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid_for_update", fake_get_user)
     monkeypatch.setattr(profile_handler, "revoke_email_verification_tokens", fail_revoke)
 
     response = Response()
