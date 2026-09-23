@@ -66,7 +66,11 @@
 - P95: admin edit пользователя использует тот же canonical identity-контракт, что регистрация: email lowercase/format, телефон `+7XXXXXXXXXX`, ИНН/КПП/юр. адрес и entity-specific правила;
 - изменение ИНН проверяет текущего владельца до записи, а конкурентный unique-conflict внутри savepoint возвращает стабильный `409 USER_IDENTITY_CONFLICT` вместо случайного `500`;
 - `is_staff` принимает только реальный JSON boolean, malformed admin payload получает `400`;
-- общие email/phone/INN normalizer вынесены в `services/user_identity.py`, чтобы registration и Control Panel не расходились повторно.
+- общие email/phone/INN normalizer вынесены в `services/user_identity.py`, чтобы registration и Control Panel не расходились повторно;
+- P96: self-service профиль продавца использует тот же legal identity-контракт, что регистрация и Control Panel;
+- профиль возвращает и сохраняет ИНН, КПП и юридический адрес; переход в `legal_entity` без обязательного ИНН/юр. адреса отклоняется до записи;
+- malformed profile JSON получает предсказуемый `400 PROFILE_PAYLOAD_INVALID`, staff-профиль не может менять seller identity через этот endpoint;
+- UI профиля показывает юридические реквизиты по типу продавца и валидирует их до отправки, backend остаётся источником истины.
 
 ## [0.9.0-beta.1] — candidate, обновлено 2026-09-22
 
