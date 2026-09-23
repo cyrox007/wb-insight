@@ -189,17 +189,6 @@
 								</div>
 							</div>
 
-							<div class="form-group">
-								<label class="form-label">Расчётный счёт (опционально)</label>
-								<input type="text" class="form-input" v-model="formData.bank_account"
-									placeholder="20 цифр" @input="formatBankAccount">
-							</div>
-
-							<div class="form-group">
-								<label class="form-label">БИК банка (опционально)</label>
-								<input type="text" class="form-input" v-model="formData.bik" placeholder="9 цифр"
-									@input="formatBik">
-							</div>
 						</div>
 					</template>
 
@@ -388,8 +377,6 @@ const formData = ref({
 	inn: '',
 	kpp: '',
 	legal_address: '',
-	bank_account: '',
-	bik: '',
 	timezone: 'Europe/Moscow',
 	newsletter_subscription: true,
 
@@ -760,17 +747,6 @@ const formatKpp = (event) => {
 	formData.value.kpp = value
 }
 
-const formatBankAccount = (event) => {
-	let value = event.target.value.replace(/\D/g, '')
-	if (value.length > 20) value = value.substring(0, 20)
-	formData.value.bank_account = value
-}
-
-const formatBik = (event) => {
-	let value = event.target.value.replace(/\D/g, '')
-	if (value.length > 9) value = value.substring(0, 9)
-	formData.value.bik = value
-}
 
 // Регистрация
 const performRegistration = async () => {
@@ -784,9 +760,7 @@ const performRegistration = async () => {
 			...formData.value,
 			phone: '+7' + formData.value.phone.replace(/\D/g, ''),
 			inn: formData.value.inn.replace(/\D/g, ''),
-			kpp: formData.value.kpp.replace(/\D/g, ''),
-			bank_account: formData.value.bank_account.replace(/\D/g, ''),
-			bik: formData.value.bik.replace(/\D/g, '')
+			kpp: formData.value.kpp.replace(/\D/g, '')
 		}
 
 		// Удаляем подтверждение пароля из отправляемых данных
