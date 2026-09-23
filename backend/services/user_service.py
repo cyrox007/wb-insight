@@ -129,6 +129,19 @@ async def get_user_role_association_by_code(
     return result.scalar_one_or_none()
 
 
+async def count_user_role_associations_by_code(
+    session: AsyncSession,
+    role_code: str,
+) -> int:
+    """Возвращает количество назначений указанной системной роли."""
+    result = await session.execute(
+        select(func.count(UserRoleAssociation.id)).where(
+            UserRoleAssociation.role == role_code
+        )
+    )
+    return int(result.scalar_one() or 0)
+
+
 async def create_user_role_association(
     session: AsyncSession,
     user_id: str,
