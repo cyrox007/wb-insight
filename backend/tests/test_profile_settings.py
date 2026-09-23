@@ -17,6 +17,17 @@ class FakeSession:
         self.flush_count += 1
 
 
+class FakeEmailChangeSession:
+    def __init__(self, recent_message_id=None):
+        self.recent_message_id = recent_message_id
+
+    async def execute(self, _query):
+        recent_message_id = self.recent_message_id
+        return SimpleNamespace(
+            scalar_one_or_none=lambda: recent_message_id,
+        )
+
+
 def make_request(user_id, payload):
     body = json.dumps(payload).encode("utf-8")
     sent = False
@@ -269,11 +280,12 @@ async def test_email_change_request_queues_verification_without_plain_email_in_k
     result = await profile_handler.request_email_change(
         make_request(user_id, {"email": "  NEW@Example.COM  "}),
         response,
-        object(),
+        FakeEmailChangeSession(),
     )
 
     assert result["status"] == "success"
     assert result["pending_email"] == "new@example.com"
+    assert result["queued"] is True
     assert user.pending_email == "new@example.com"
     assert queued["recipient_email"] == "new@example.com"
     assert queued["template_code"] == "email_verification"
@@ -386,3 +398,55 @@ async def test_email_change_request_rejects_same_or_invalid_email(monkeypatch):
     )
     assert response.status_code == 400
     assert invalid["error"]["code"] == "EMAIL_INVALID"
+
+
+
+@pytest.mark.asyncio
+async def test_email_change_repeat_is_throttled_without_duplicate_mail_or_event(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    user.pending_email = "new@example.com"
+    recent_message_id = uuid4()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    async def fake_get_by_email(_session, _email):
+        return None
+
+    async def fake_runtime(_session):
+        return SimpleNamespace(ready=True)
+
+    async def fail_queue(*_args, **_kwargs):
+        raise AssertionError("Повторный запрос не должен создавать второе письмо")
+
+    async def fail_lifecycle(*_args, **_kwargs):
+        raise AssertionError("Повторный запрос не должен создавать второе lifecycle-событие")
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+    monkeypatch.setattr(profile_handler, "get_user_by_email", fake_get_by_email)
+    monkeypatch.setattr(profile_handler, "get_mail_transport_runtime", fake_runtime)
+    monkeypatch.setattr(profile_handler, "queue_transactional_email", fail_queue)
+    monkeypatch.setattr(profile_handler, "record_lifecycle_event", fail_lifecycle)
+    monkeypatch.setattr(
+        profile_handler.lifecycle_config,
+        "EMAIL_VERIFICATION_ENABLED",
+        True,
+    )
+    monkeypatch.setattr(
+        profile_handler.lifecycle_config,
+        "EMAIL_VERIFICATION_RESEND_SECONDS",
+        60,
+    )
+
+    response = Response()
+    result = await profile_handler.request_email_change(
+        make_request(user_id, {"email": "new@example.com"}),
+        response,
+        FakeEmailChangeSession(recent_message_id),
+    )
+
+    assert result["status"] == "success"
+    assert result["pending_email"] == "new@example.com"
+    assert result["queued"] is False
+    assert "уже было отправлено недавно" in result["message"]
