@@ -156,7 +156,7 @@ def test_user_model_has_unique_normalized_inn_index():
     assert "trim" in str(index.expressions[0]).lower()
     where = str(index.dialect_options["postgresql"]["where"]).lower()
     assert "inn is not null" in where
-    assert "trim(inn)" in where
+    assert "trim(both from inn)" in where
 
 
 def test_inn_identity_migration_fails_closed_on_duplicates():
