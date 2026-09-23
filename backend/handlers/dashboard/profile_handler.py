@@ -1,20 +1,28 @@
-from datetime import datetime, timezone
+import hashlib
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.access_control import permissions_for_roles
 from core.dependencies import get_db_session
+from core.lifecycle_config import lifecycle_config
 from core.middleware import auth_middle
 from integrations.wildberries.token_metadata import WBTokenValidationError
+from models.mail_delivery import MailMessage
 from models.users_model import EntityType
 from services.legal_service import (
     LegalConsentError,
     record_consents,
     validate_consent_payload,
 )
+from services.account_lifecycle_service import record_lifecycle_event
+from services.email_verification_service import revoke_email_verification_tokens
+from services.mail_service import queue_transactional_email
+from services.mail_transport_service import get_mail_transport_runtime
 from services.marketplace_access_service import (
     get_allowed_wb_tokens,
     get_wb_account_quota,
@@ -27,7 +35,12 @@ from services.token_services import (
     get_tokens_by_user_id,
     insert_token,
 )
-from services.user_service import get_user_by_uuid
+from services.user_identity import normalize_email
+from services.user_service import (
+    get_user_by_email,
+    get_user_by_uuid,
+    get_user_by_uuid_for_update,
+)
 from utils.responce_helps import response_error, response_success
 
 
@@ -92,6 +105,7 @@ def _public_user(user) -> dict:
         "id": str(user.id),
         "full_name": user.full_name,
         "email": user.email,
+        "pending_email": getattr(user, "pending_email", None),
         "phone": user.phone,
         "entity_type": user.entity_type,
         "tax_rate": float(user.tax_rate or 0),
@@ -228,6 +242,177 @@ async def update_profile(
     return response_success(
         user=_public_user(current_user),
         message="Настройки продавца сохранены",
+    )
+
+
+@router.post(
+    "/email-change/request",
+    dependencies=[Depends(auth_middle)],
+)
+async def request_email_change(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Запрашивает подтверждаемую смену email текущего пользователя."""
+    request.state.audit_action = "profile.email_change.request"
+
+    if not lifecycle_config.EMAIL_VERIFICATION_ENABLED:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return response_error(
+            code="EMAIL_CHANGE_NOT_CONFIGURED",
+            message="Смена email временно недоступна",
+        )
+
+    runtime = await get_mail_transport_runtime(db_session)
+    if not runtime.ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return response_error(
+            code="EMAIL_CHANGE_DELIVERY_UNAVAILABLE",
+            message="Отправка письма подтверждения временно недоступна",
+        )
+
+    user_id = _current_user_id(request)
+    current_user = await get_user_by_uuid_for_update(db_session, user_id)
+    if current_user is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response_error(code="UNAUTHORIZED", message="Неавторизован")
+
+    try:
+        payload = await request.json()
+    except (TypeError, ValueError):
+        payload = None
+
+    if not isinstance(payload, dict):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="EMAIL_CHANGE_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект с новым email",
+        )
+
+    unsupported_fields = sorted(set(payload) - {"email"})
+    if unsupported_fields:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="EMAIL_CHANGE_FIELDS_UNSUPPORTED",
+            message="Запрос смены email содержит неподдерживаемые поля",
+        )
+
+    target_email = normalize_email(payload.get("email"))
+    if target_email is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="EMAIL_INVALID",
+            message="Укажите корректный email",
+        )
+
+    current_email = normalize_email(current_user.email)
+    if target_email == current_email:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="EMAIL_UNCHANGED",
+            message="Новый email совпадает с текущим",
+        )
+
+    existing_user = await get_user_by_email(db_session, target_email)
+    if existing_user is not None and existing_user.id != current_user.id:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="EMAIL_ALREADY_EXISTS",
+            message="Этот email уже используется другим аккаунтом",
+        )
+
+    previous_pending = normalize_email(getattr(current_user, "pending_email", None))
+    if previous_pending != target_email:
+        await revoke_email_verification_tokens(db_session, current_user.id)
+    current_user.pending_email = target_email
+
+    resend_seconds = max(
+        1,
+        int(lifecycle_config.EMAIL_VERIFICATION_RESEND_SECONDS),
+    )
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=resend_seconds)
+    recent = await db_session.execute(
+        select(MailMessage.id)
+        .where(
+            MailMessage.user_id == current_user.id,
+            MailMessage.template_code == "email_verification",
+            MailMessage.recipient_email == target_email,
+            MailMessage.created_at >= cutoff,
+        )
+        .limit(1)
+    )
+    recent_message_id = recent.scalar_one_or_none()
+
+    queued = previous_pending != target_email or recent_message_id is None
+    if queued:
+        target_digest = hashlib.sha256(target_email.encode("utf-8")).hexdigest()[:16]
+        bucket = int(now.timestamp() // resend_seconds)
+        await queue_transactional_email(
+            db_session,
+            user=current_user,
+            template_code="email_verification",
+            recipient_email=target_email,
+            idempotency_key=f"email-change:{current_user.id}:{target_digest}:{bucket}",
+        )
+
+    if previous_pending != target_email:
+        await record_lifecycle_event(
+            db_session,
+            user_id=current_user.id,
+            event_type="email_change_requested",
+            event_data={"verification_required": True},
+        )
+
+    return response_success(
+        pending_email=target_email,
+        queued=queued,
+        message=(
+            "Письмо подтверждения поставлено в очередь. "
+            "Текущий email будет действовать до подтверждения нового адреса."
+            if queued
+            else "Письмо подтверждения уже было отправлено недавно."
+        ),
+    )
+
+
+@router.post(
+    "/email-change/cancel",
+    dependencies=[Depends(auth_middle)],
+)
+async def cancel_email_change(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Отменяет ожидающую подтверждения смену email."""
+    request.state.audit_action = "profile.email_change.cancel"
+    user_id = _current_user_id(request)
+    current_user = await get_user_by_uuid_for_update(db_session, user_id)
+    if current_user is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
+        return response_error(code="UNAUTHORIZED", message="Неавторизован")
+
+    pending_email = normalize_email(getattr(current_user, "pending_email", None))
+    if not pending_email:
+        return response_success(
+            pending_email=None,
+            message="Ожидающей смены email нет.",
+        )
+
+    await revoke_email_verification_tokens(db_session, current_user.id)
+    current_user.pending_email = None
+    await record_lifecycle_event(
+        db_session,
+        user_id=current_user.id,
+        event_type="email_change_cancelled",
+        event_data={"verification_required": False},
+    )
+
+    return response_success(
+        pending_email=None,
+        message="Смена email отменена.",
     )
 
 

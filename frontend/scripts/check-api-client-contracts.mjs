@@ -6,6 +6,7 @@ const clients = {
   CP_Mail: path.join(root, 'API/ControlPanel/CP_Mail.js'),
   CP_Users: path.join(root, 'API/ControlPanel/CP_Users.js'),
   CP_Roles: path.join(root, 'API/ControlPanel/CP_Roles.js'),
+  ProfileServices: path.join(root, 'API/Dashboard/ProfileServices.js'),
 }
 
 function walk(dir) {
@@ -293,6 +294,31 @@ const sellerProfileIdentityChecks = [
 ]
 
 for (const check of sellerProfileIdentityChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const emailChangeChecks = [
+  {
+    ok:
+      sellerProfileSource.includes('ProfileServices.requestEmailChange(email)') &&
+      sellerProfileSource.includes('user.pending_email'),
+    message: 'Профиль должен использовать подтверждаемую смену email и показывать pending-адрес.',
+  },
+  {
+    ok:
+      sellerProfileSource.includes('ProfileServices.cancelEmailChange()') &&
+      sellerProfileSource.includes('Отменить смену'),
+    message: 'Профиль должен позволять безопасно отменить ожидающую смену email.',
+  },
+  {
+    ok:
+      sellerProfileSource.includes('Email меняется после подтверждения нового адреса. Телефон — через администратора.') &&
+      !sellerProfileSource.includes('Email и телефон меняются через отдельное подтверждение.'),
+    message: 'Профиль не должен обещать несуществующее self-service подтверждение телефона.',
+  },
+]
+
+for (const check of emailChangeChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
