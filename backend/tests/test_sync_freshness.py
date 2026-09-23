@@ -332,7 +332,7 @@ async def test_dashboard_keeps_saved_metrics_visible_during_background_sync(monk
 async def test_sync_status_endpoint_returns_lightweight_scoped_summary(monkeypatch):
     user_id = uuid4()
     token_id = uuid4()
-    now = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     scope = DashboardAccountScope(
         token_ids=(token_id,),
         selected_token_id=token_id,
