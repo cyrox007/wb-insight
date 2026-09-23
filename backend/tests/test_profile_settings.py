@@ -74,7 +74,6 @@ async def test_profile_update_changes_formula_inputs(monkeypatch):
             user_id,
             {
                 "full_name": "New Seller",
-                "entity_type": "self_employed",
                 "tax_rate": 0.06,
                 "timezone": "Europe/Berlin",
             },
@@ -85,11 +84,84 @@ async def test_profile_update_changes_formula_inputs(monkeypatch):
 
     assert result["status"] == "success"
     assert user.full_name == "New Seller"
-    assert user.entity_type == "self_employed"
+    assert user.entity_type == "individual"
     assert user.tax_rate == pytest.approx(0.06)
     assert user.timezone == "Europe/Berlin"
     assert result["user"]["tax_rate"] == pytest.approx(0.06)
     assert session.flush_count == 1
+
+
+
+
+
+@pytest.mark.asyncio
+async def test_profile_update_allows_same_entity_type_for_old_clients(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(user_id, {"entity_type": "individual"}),
+        response,
+        session,
+    )
+
+    assert result["status"] == "success"
+    assert user.entity_type == "individual"
+    assert session.flush_count == 1
+
+
+@pytest.mark.asyncio
+async def test_profile_update_rejects_entity_type_change(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(user_id, {"entity_type": "legal_entity"}),
+        response,
+        session,
+    )
+
+    assert response.status_code == 409
+    assert result["error"]["code"] == "ENTITY_TYPE_CHANGE_REQUIRES_ADMIN"
+    assert user.entity_type == "individual"
+    assert session.flush_count == 0
+
+
+@pytest.mark.asyncio
+async def test_profile_update_rejects_unsupported_fields(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(user_id, {"inn": "7707083893"}),
+        response,
+        session,
+    )
+
+    assert response.status_code == 400
+    assert result["error"]["code"] == "PROFILE_FIELDS_UNSUPPORTED"
+    assert session.flush_count == 0
 
 
 @pytest.mark.asyncio
