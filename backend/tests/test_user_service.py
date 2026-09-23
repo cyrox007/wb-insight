@@ -9,6 +9,7 @@ from services.user_service import (
     delete_user,
     get_role_associations_for_update,
     get_user_by_email,
+    get_user_by_inn,
     insert_user,
     update_user,
 )
@@ -72,6 +73,24 @@ async def test_insert_user_normalizes_email_to_lowercase():
 
 
 @pytest.mark.asyncio
+async def test_insert_user_normalizes_inn_whitespace():
+    session = FakeSession()
+    user = await insert_user(
+        session,
+        {
+            "email": "inn@example.com",
+            "phone": "+10000000010",
+            "full_name": "Пользователь",
+            "password": "a-secure-test-password",
+            "entity_type": "legal_entity",
+            "inn": " 7707083893 ",
+        },
+    )
+
+    assert user.inn == "7707083893"
+
+
+@pytest.mark.asyncio
 async def test_get_user_by_email_uses_case_insensitive_lookup():
     captured = {}
 
@@ -102,6 +121,56 @@ def test_user_model_has_case_insensitive_unique_email_index():
 
     assert index.unique is True
     assert "lower" in str(index.expressions[0]).lower()
+
+
+@pytest.mark.asyncio
+async def test_get_user_by_inn_uses_trimmed_lookup():
+    captured = {}
+
+    class Result:
+        def scalar_one_or_none(self):
+            return None
+
+    class Session:
+        async def execute(self, statement):
+            captured["statement"] = statement
+            captured["params"] = statement.compile().params
+            return Result()
+
+    result = await get_user_by_inn(Session(), " 7707083893 ")
+
+    assert result is None
+    sql = str(captured["statement"]).lower()
+    assert "trim(users.inn)" in sql
+    assert "7707083893" in set(captured["params"].values())
+
+
+def test_user_model_has_unique_normalized_inn_index():
+    index = next(
+        item
+        for item in User.__table__.indexes
+        if item.name == "uq_users_inn_normalized"
+    )
+
+    assert index.unique is True
+    assert "trim" in str(index.expressions[0]).lower()
+    where = str(index.dialect_options["postgresql"]["where"]).lower()
+    assert "inn is not null" in where
+    assert "trim(both from inn)" in where
+
+
+def test_inn_identity_migration_fails_closed_on_duplicates():
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "a6d4f8c2e951_unique_normalized_user_inn.py"
+    ).read_text(encoding="utf-8")
+
+    assert "GROUP BY trim(inn)" in migration
+    assert "HAVING count(*) > 1" in migration
+    assert "Разрешите дубликаты вручную" in migration
+    assert '"uq_users_inn_normalized"' in migration
 
 
 def test_email_identity_migration_fails_closed_on_case_duplicates():
