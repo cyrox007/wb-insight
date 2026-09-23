@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from services.cost_price_service import (
     get_product_list_with_costs,
     upsert_cost_prices,
 )
+from utils.request_payload import request_json_object
 from utils.responce_helps import response_error, response_success
 
 
@@ -147,11 +148,28 @@ async def upload_cost_prices(
 @router.post("/batch", dependencies=[Depends(auth_middle)])
 async def batch_update_cost_prices(
     request: Request,
+    response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    payload: dict = await request.json()
-    items = list(payload.get("items") or [])
+    payload = await request_json_object(request)
+    if payload is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="REQUEST_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект себестоимости",
+        )
+
+    raw_items = payload.get("items")
+    if raw_items is not None and not isinstance(raw_items, list):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="INVALID_DATA",
+            message="Поле items должно быть списком",
+        )
+
+    items = raw_items or []
     if not items:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message="Список товаров пуст", code="EMPTY_LIST")
 
     try:
@@ -161,6 +179,7 @@ async def batch_update_cost_prices(
             items=items,
         )
     except (TypeError, ValueError) as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message=str(exc), code="INVALID_DATA")
 
     return response_success(
