@@ -1,5 +1,8 @@
 from dataclasses import dataclass
+from math import isfinite
+import re
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -35,6 +38,13 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     },
 }
 SBER_TEST_API_BASE_URL = "https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1"
+SBER_GATEWAY_PATH = "/ecomm/gw/partner/api/v1"
+SBER_SANDBOX_HOSTS = frozenset(
+    {
+        "ecomift.sberbank.ru",
+        "ecomtest.sberbank.ru",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -82,6 +92,104 @@ def _optional_bool(values: dict[str, Any], field: str) -> bool | None:
     return value
 
 
+def _normalize_timeout(value: Any) -> float:
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Таймаут платёжного провайдера должен быть числом") from exc
+    if not isfinite(timeout) or timeout <= 0 or timeout > 120:
+        raise ValueError("Таймаут платёжного провайдера должен быть от 0 до 120 секунд")
+    return timeout
+
+
+def _normalize_currency_code(value: Any) -> str:
+    currency = str(value or "").strip()
+    if re.fullmatch(r"\d{3}", currency) is None:
+        raise ValueError("Код валюты должен состоять из трёх цифр")
+    return currency
+
+
+def _normalize_sber_gateway_url(value: Any, mode: str) -> str:
+    raw = str(value or "").strip()
+    parsed = urlparse(raw)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("URL платёжного шлюза Сбера содержит некорректный порт") from exc
+
+    hostname = (parsed.hostname or "").rstrip(".").lower()
+    path = parsed.path.rstrip("/")
+    if (
+        parsed.scheme.lower() != "https"
+        or not hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or port not in {None, 443}
+        or path != SBER_GATEWAY_PATH
+    ):
+        raise ValueError(
+            "URL платёжного шлюза Сбера должен быть HTTPS без credentials/query/fragment "
+            "и использовать маршрут /ecomm/gw/partner/api/v1"
+        )
+
+    if mode == "test":
+        if hostname not in SBER_SANDBOX_HOSTS:
+            raise ValueError("Test-режим Сбера должен использовать sandbox-шлюз Сбера")
+    elif (
+        hostname in SBER_SANDBOX_HOSTS
+        or not (hostname == "sberbank.ru" or hostname.endswith(".sberbank.ru"))
+    ):
+        raise ValueError(
+            "Live-режим Сбера должен использовать промышленный шлюз в домене sberbank.ru"
+        )
+
+    netloc = hostname if port is None else f"{hostname}:{port}"
+    return urlunparse(("https", netloc, SBER_GATEWAY_PATH, "", "", ""))
+
+
+def _normalize_redirect_url(value: Any, field: str) -> str | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+
+    parsed = urlparse(raw)
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError(f"Поле {field} содержит некорректный порт") from exc
+
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+    ):
+        raise ValueError(
+            f"Поле {field} должно быть абсолютным HTTP(S) URL без credentials и fragment"
+        )
+    if config.IS_PRODUCTION and parsed.scheme.lower() != "https":
+        raise ValueError(f"В production поле {field} должно использовать HTTPS")
+    return raw
+
+
+def _sber_runtime_urls_safe(
+    api_base_url: str | None,
+    return_url: str | None,
+    fail_url: str | None,
+    mode: str,
+) -> bool:
+    try:
+        _normalize_sber_gateway_url(api_base_url, mode)
+        _normalize_redirect_url(return_url, "return_url")
+        _normalize_redirect_url(fail_url, "fail_url")
+    except ValueError:
+        return False
+    return bool(return_url and fail_url)
+
+
 def _mask_identifier(value: str | None) -> str | None:
     if not value:
         return None
@@ -117,8 +225,8 @@ def _effective_runtime(row: PaymentProviderConfig | None, provider: str, mode: s
     secrets = _read_secrets(row)
 
     if provider == "sber":
-        # The legacy ENV settings remain a backwards-compatible live fallback.
-        # Test configuration is isolated and never inherits live credentials.
+        # Устаревшая ENV-конфигурация остаётся совместимым fallback для live.
+        # Test-конфигурация изолирована и никогда не наследует live credentials.
         env = _sber_environment_values() if mode == "live" else {
             "api_base_url": SBER_TEST_API_BASE_URL,
             "return_url": None,
@@ -138,7 +246,22 @@ def _effective_runtime(row: PaymentProviderConfig | None, provider: str, mode: s
         enabled = bool(row.enabled) if row else bool(config.SBER_ACQUIRING_ENABLED and mode == "live")
         is_default = bool(row.is_default) if row else bool(config.SBER_ACQUIRING_ENABLED and mode == "live")
         source = "database" if row else ("environment" if config.SBER_ACQUIRING_ENABLED and mode == "live" else "unconfigured")
-        ready = bool(adapter_available and api_base_url and return_url and fail_url and username and password)
+        gateway_safe = _sber_runtime_urls_safe(
+            api_base_url,
+            return_url,
+            fail_url,
+            mode,
+        )
+        currency_safe = re.fullmatch(r"\d{3}", str(currency_code or "")) is not None
+        timeout_safe = isfinite(timeout_seconds) and 0 < timeout_seconds <= 120
+        ready = bool(
+            adapter_available
+            and gateway_safe
+            and currency_safe
+            and timeout_safe
+            and username
+            and password
+        )
         return PaymentProviderRuntime(
             provider=provider,
             mode=mode,
@@ -302,69 +425,110 @@ async def upsert_provider_config(
     if mode == "test" and not catalog.get("supports_test", False):
         raise ValueError("Этот провайдер не поддерживает test-режим")
 
-    row = await get_provider_config(session, provider, mode)
-    if row is None:
-        row = PaymentProviderConfig(provider=provider, mode=mode)
-        session.add(row)
-        await session.flush()
+    enabled_value = _optional_bool(values, "enabled")
+    default_value = _optional_bool(values, "is_default")
+    clear_secrets = _optional_bool(values, "clear_secrets")
 
-    for field in ("api_base_url", "return_url", "fail_url", "currency_code"):
-        if field in values:
-            raw = values.get(field)
-            setattr(row, field, str(raw).strip() if raw not in (None, "") else None)
-    if "timeout_seconds" in values:
-        timeout = float(values["timeout_seconds"])
-        if timeout <= 0 or timeout > 120:
-            raise ValueError("timeout_seconds должен быть от 0 до 120 секунд")
-        row.timeout_seconds = timeout
+    normalized_fields: dict[str, Any] = {}
+    if "api_base_url" in values:
+        raw_api_url = values.get("api_base_url")
+        if provider == "sber" and raw_api_url not in (None, ""):
+            normalized_fields["api_base_url"] = _normalize_sber_gateway_url(
+                raw_api_url,
+                mode,
+            )
+        else:
+            normalized_fields["api_base_url"] = (
+                str(raw_api_url).strip() if raw_api_url not in (None, "") else None
+            )
+
+    for field in ("return_url", "fail_url"):
+        if field not in values:
+            continue
+        raw_url = values.get(field)
+        normalized_fields[field] = (
+            _normalize_redirect_url(raw_url, field)
+            if provider == "sber"
+            else (str(raw_url).strip() if raw_url not in (None, "") else None)
+        )
+
+    if "currency_code" in values:
+        normalized_fields["currency_code"] = (
+            _normalize_currency_code(values["currency_code"])
+            if provider == "sber"
+            else str(values["currency_code"] or "").strip()
+        )
+
+    timeout_value = (
+        _normalize_timeout(values["timeout_seconds"])
+        if "timeout_seconds" in values
+        else None
+    )
+    options_value = None
     if "options" in values:
         if values["options"] is not None and not isinstance(values["options"], dict):
             raise ValueError("options должен быть объектом")
-        row.options = values["options"] or {}
+        options_value = values["options"] or {}
 
-    clear_secrets = _optional_bool(values, "clear_secrets")
-    existing_secrets = _read_secrets(row)
-    if clear_secrets is True:
-        existing_secrets = {}
-    secrets = dict(existing_secrets)
-    for field in ("username", "password"):
-        if field in values and values[field] not in (None, ""):
-            secrets[field] = str(values[field]).strip()
-    row.encrypted_secrets = (
-        encrypt_secret_payload(secrets, context=_secret_context(provider, mode))
-        if secrets
-        else None
-    )
+    async with session.begin_nested():
+        row = await get_provider_config(session, provider, mode)
+        if row is None:
+            row = PaymentProviderConfig(provider=provider, mode=mode)
+            session.add(row)
 
-    enabled_value = _optional_bool(values, "enabled")
-    default_value = _optional_bool(values, "is_default")
-    requested_enabled = row.enabled if enabled_value is None else enabled_value
-    requested_default = row.is_default if default_value is None else default_value
-    if provider == "fake" and mode != "test" and requested_enabled:
-        raise ValueError("Fake-провайдер разрешён только в test-режиме")
-    if provider == "fake" and config.IS_PRODUCTION and requested_enabled:
-        raise ValueError("Fake-провайдер нельзя включать в production")
-    if config.IS_PRODUCTION and mode != "live" and requested_default:
-        raise ValueError("В production провайдер по умолчанию должен работать в live-режиме")
-    if requested_enabled and not catalog.get("adapter_available", False):
-        raise ValueError("Адаптер этого провайдера ещё не подключён")
+        for field, value in normalized_fields.items():
+            setattr(row, field, value)
+        if timeout_value is not None:
+            row.timeout_seconds = timeout_value
+        if "options" in values:
+            row.options = options_value
 
-    row.enabled = requested_enabled
-    row.is_default = requested_default
-    row.updated_by = actor_id
-    await session.flush()
-
-    runtime = _effective_runtime(row, provider, mode)
-    if row.enabled and not runtime.ready:
-        raise ValueError("Провайдер нельзя включить: конфигурация не готова")
-    if row.is_default and not row.enabled:
-        raise ValueError("Провайдер по умолчанию должен быть включён")
-
-    if row.is_default:
-        await session.execute(
-            update(PaymentProviderConfig)
-            .where(PaymentProviderConfig.id != row.id)
-            .values(is_default=False)
+        existing_secrets = _read_secrets(row)
+        if clear_secrets is True:
+            existing_secrets = {}
+        secrets = dict(existing_secrets)
+        for field in ("username", "password"):
+            if field in values and values[field] not in (None, ""):
+                secrets[field] = str(values[field]).strip()
+        row.encrypted_secrets = (
+            encrypt_secret_payload(
+                secrets,
+                context=_secret_context(provider, mode),
+            )
+            if secrets
+            else None
         )
-    await session.flush()
+
+        requested_enabled = row.enabled if enabled_value is None else enabled_value
+        requested_default = row.is_default if default_value is None else default_value
+        if provider == "fake" and mode != "test" and requested_enabled:
+            raise ValueError("Fake-провайдер разрешён только в test-режиме")
+        if provider == "fake" and config.IS_PRODUCTION and requested_enabled:
+            raise ValueError("Fake-провайдер нельзя включать в production")
+        if config.IS_PRODUCTION and mode != "live" and requested_default:
+            raise ValueError(
+                "В production провайдер по умолчанию должен работать в live-режиме"
+            )
+        if requested_enabled and not catalog.get("adapter_available", False):
+            raise ValueError("Адаптер этого провайдера ещё не подключён")
+
+        row.enabled = requested_enabled
+        row.is_default = requested_default
+        row.updated_by = actor_id
+        await session.flush()
+
+        runtime = _effective_runtime(row, provider, mode)
+        if row.enabled and not runtime.ready:
+            raise ValueError("Провайдер нельзя включить: конфигурация не готова")
+        if row.is_default and not row.enabled:
+            raise ValueError("Провайдер по умолчанию должен быть включён")
+
+        if row.is_default:
+            await session.execute(
+                update(PaymentProviderConfig)
+                .where(PaymentProviderConfig.id != row.id)
+                .values(is_default=False)
+            )
+        await session.flush()
+
     return row
