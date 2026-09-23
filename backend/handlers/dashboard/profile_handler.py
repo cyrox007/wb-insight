@@ -36,7 +36,11 @@ from services.token_services import (
     insert_token,
 )
 from services.user_identity import normalize_email
-from services.user_service import get_user_by_email, get_user_by_uuid
+from services.user_service import (
+    get_user_by_email,
+    get_user_by_uuid,
+    get_user_by_uuid_for_update,
+)
 from utils.responce_helps import response_error, response_success
 
 
@@ -269,7 +273,7 @@ async def request_email_change(
         )
 
     user_id = _current_user_id(request)
-    current_user = await get_user_by_uuid(db_session, user_id)
+    current_user = await get_user_by_uuid_for_update(db_session, user_id)
     if current_user is None:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return response_error(code="UNAUTHORIZED", message="Неавторизован")
@@ -385,7 +389,7 @@ async def cancel_email_change(
     """Отменяет ожидающую подтверждения смену email."""
     request.state.audit_action = "profile.email_change.cancel"
     user_id = _current_user_id(request)
-    current_user = await get_user_by_uuid(db_session, user_id)
+    current_user = await get_user_by_uuid_for_update(db_session, user_id)
     if current_user is None:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return response_error(code="UNAUTHORIZED", message="Неавторизован")
