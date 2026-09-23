@@ -37,6 +37,7 @@ from services.subscription_service import (
     deactivate_active_subscriptions,
     get_subscription_by_payment_id,
 )
+from utils.request_payload import request_json_object
 from utils.responce_helps import response_error, response_success
 
 
@@ -152,7 +153,14 @@ async def create_payment_handler(
             message="Платёжный провайдер пока не подключён",
         )
 
-    body = await request.json()
+    body = await request_json_object(request)
+    if body is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="REQUEST_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект платёжного запроса",
+        )
+
     try:
         legal_documents = validate_consent_payload(
             body.get("legal_consents"),
@@ -478,7 +486,14 @@ async def pay_now(
             message="Fake-оплата отключена",
         )
 
-    body = await request.json()
+    body = await request_json_object(request)
+    if body is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="REQUEST_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект платёжного запроса",
+        )
+
     payment_id_raw = body.get("payment_id")
     try:
         payment_id = UUID(str(payment_id_raw))
