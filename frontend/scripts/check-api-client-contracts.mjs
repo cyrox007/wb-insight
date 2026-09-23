@@ -188,6 +188,30 @@ for (const check of permanentUserDeleteChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
+const roleManagementUiChecks = [
+  {
+    ok:
+      editUserSource.includes('const canRemoveRole = (roleCode) =>') &&
+      editUserSource.includes("isSelf.value && roleCode === 'super_admin'"),
+    message: 'UI должен блокировать снятие собственной роли super_admin.',
+  },
+  {
+    ok:
+      editUserSource.includes('v-if="canRemoveRole(roleItem.role)"') &&
+      editUserSource.includes('!canRemoveRole(roleCode)') &&
+      editUserSource.includes('!canRemoveRole(roleConfirm.value.role)'),
+    message: 'Кнопка и обработчики удаления роли должны использовать единый guard canRemoveRole.',
+  },
+  {
+    ok: editUserSource.includes('Собственную роль суперадминистратора удалить нельзя.'),
+    message: 'Карточка пользователя должна объяснять запрет self-demotion super_admin.',
+  },
+]
+
+for (const check of roleManagementUiChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
 if (errors.length) {
   console.error('Проверка контрактов клиентского приложения завершилась ошибкой:\n')
   console.error(errors.join('\n\n'))
