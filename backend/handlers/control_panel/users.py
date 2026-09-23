@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy import func, inspect, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -19,9 +20,15 @@ from services.account_lifecycle_service import (
     revoke_user_sessions,
 )
 from services.email_verification_service import admin_change_email_identity, admin_verify_email
+from services.user_identity import (
+    normalize_email,
+    normalize_phone,
+    validate_legal_identity,
+)
 from services.user_service import (
     delete_user,
     get_user_by_email,
+    get_user_by_inn,
     get_user_by_phone,
     get_user_by_uuid,
 )
@@ -216,7 +223,17 @@ async def edit_user(
     if not _can_manage_sensitive_target(request, target_user):
         return _reject_sensitive_target(response)
 
-    input_data = await request.json()
+    try:
+        input_data = await request.json()
+    except (TypeError, ValueError):
+        input_data = None
+    if not isinstance(input_data, dict):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='USER_UPDATE_PAYLOAD_INVALID',
+            message='Ожидается JSON-объект с изменениями пользователя',
+        )
+
     update_data = {k: v for k, v in input_data.items() if k in allowed_fields}
     if not update_data:
         response.status_code = status.HTTP_400_BAD_REQUEST
@@ -224,39 +241,82 @@ async def edit_user(
             message='Нет допустимых полей для изменения',
             code="NO_VALID_FIELDS",
         )
+    changed_fields = set(update_data)
 
-    full_name = str(update_data.get('full_name', target_user.full_name) or '').strip()
-    if not full_name or len(full_name) > 255:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(code='VALIDATION_ERROR', message='Укажите корректное имя или название')
-    update_data['full_name'] = full_name
+    if 'full_name' in update_data:
+        full_name = str(update_data.get('full_name') or '').strip()
+        if not full_name or len(full_name) > 255:
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return response_error(
+                code='VALIDATION_ERROR',
+                message='Укажите корректное имя или название',
+            )
+        update_data['full_name'] = full_name
 
-    entity_type = str(update_data.get('entity_type', target_user.entity_type) or '').strip()
-    if entity_type not in {item.value for item in EntityType}:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(code='VALIDATION_ERROR', message='Неизвестный тип аккаунта')
-    update_data['entity_type'] = entity_type
+    target_entity_type = str(
+        update_data.get('entity_type', target_user.entity_type) or ''
+    ).strip().lower()
+    identity_fields = {'entity_type', 'inn', 'kpp', 'legal_address'}
+    if changed_fields & identity_fields:
+        try:
+            identity = validate_legal_identity(
+                entity_type=target_entity_type,
+                inn_value=update_data.get('inn', target_user.inn),
+                kpp_value=update_data.get('kpp', target_user.kpp),
+                legal_address_value=update_data.get(
+                    'legal_address',
+                    target_user.legal_address,
+                ),
+            )
+        except ValueError as exc:
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return response_error(
+                code='LEGAL_IDENTITY_INVALID',
+                message=str(exc),
+            )
+
+        update_data.update(identity)
+        if identity['inn']:
+            owner = await get_user_by_inn(db_session, identity['inn'])
+            if owner is not None and owner.id != target_user.id:
+                response.status_code = status.HTTP_409_CONFLICT
+                return response_error(
+                    code='INN_ALREADY_EXISTS',
+                    message='Этот ИНН уже используется',
+                )
 
     if 'email' in update_data:
-        email = str(update_data.get('email') or '').strip().lower()
-        if not email or '@' not in email or len(email) > 254:
+        email = normalize_email(update_data.get('email'))
+        if email is None:
             response.status_code = status.HTTP_400_BAD_REQUEST
-            return response_error(code='VALIDATION_ERROR', message='Укажите корректный email')
+            return response_error(
+                code='EMAIL_INVALID',
+                message='Укажите корректный email',
+            )
         owner = await get_user_by_email(db_session, email)
         if owner is not None and owner.id != target_user.id:
             response.status_code = status.HTTP_409_CONFLICT
-            return response_error(code='EMAIL_ALREADY_EXISTS', message='Этот email уже используется')
+            return response_error(
+                code='EMAIL_ALREADY_EXISTS',
+                message='Этот email уже используется',
+            )
         update_data['email'] = email
 
     if 'phone' in update_data:
-        phone = str(update_data.get('phone') or '').strip()
-        if not phone or len(phone) > 20:
+        phone = normalize_phone(update_data.get('phone'))
+        if phone is None:
             response.status_code = status.HTTP_400_BAD_REQUEST
-            return response_error(code='VALIDATION_ERROR', message='Укажите корректный телефон')
+            return response_error(
+                code='PHONE_INVALID',
+                message='Укажите корректный номер телефона',
+            )
         owner = await get_user_by_phone(db_session, phone)
         if owner is not None and owner.id != target_user.id:
             response.status_code = status.HTTP_409_CONFLICT
-            return response_error(code='PHONE_ALREADY_EXISTS', message='Этот телефон уже используется')
+            return response_error(
+                code='PHONE_ALREADY_EXISTS',
+                message='Этот телефон уже используется',
+            )
         update_data['phone'] = phone
 
     if 'tax_rate' in update_data:
@@ -266,8 +326,18 @@ async def edit_user(
             tax_rate = -1
         if tax_rate < 0 or tax_rate > 1:
             response.status_code = status.HTTP_400_BAD_REQUEST
-            return response_error(code='VALIDATION_ERROR', message='Налоговая ставка должна быть от 0 до 100%')
+            return response_error(
+                code='VALIDATION_ERROR',
+                message='Налоговая ставка должна быть от 0 до 100%',
+            )
         update_data['tax_rate'] = tax_rate
+
+    if 'is_staff' in update_data and not isinstance(update_data['is_staff'], bool):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code='STAFF_FLAG_INVALID',
+            message='Поле is_staff должно быть логическим значением',
+        )
 
     for field, limit in {
         'timezone': 50,
@@ -279,19 +349,11 @@ async def edit_user(
             value = str(update_data.get(field) or '').strip()
             if len(value) > limit:
                 response.status_code = status.HTTP_400_BAD_REQUEST
-                return response_error(code='VALIDATION_ERROR', message=f'Поле {field} слишком длинное')
+                return response_error(
+                    code='VALIDATION_ERROR',
+                    message=f'Поле {field} слишком длинное',
+                )
             update_data[field] = value or None
-
-    for field, limit in {'inn': 12, 'kpp': 9}.items():
-        if field in update_data:
-            value = str(update_data.get(field) or '').strip()
-            if len(value) > limit:
-                response.status_code = status.HTTP_400_BAD_REQUEST
-                return response_error(code='VALIDATION_ERROR', message=f'Поле {field} слишком длинное')
-            update_data[field] = value or None
-
-    if 'legal_address' in update_data:
-        update_data['legal_address'] = str(update_data.get('legal_address') or '').strip() or None
 
     actor_user_id = UUID(str(request.state.user_id))
     email_changed = (
@@ -303,37 +365,49 @@ async def edit_user(
         and update_data['phone'] != str(target_user.phone or '').strip()
     )
 
-    if email_changed:
-        await admin_change_email_identity(
-            db_session,
-            target_user,
-            new_email=update_data.pop('email'),
-            actor_user_id=actor_user_id,
+    try:
+        async with db_session.begin_nested():
+            if email_changed:
+                await admin_change_email_identity(
+                    db_session,
+                    target_user,
+                    new_email=update_data.pop('email'),
+                    actor_user_id=actor_user_id,
+                )
+            else:
+                update_data.pop('email', None)
+
+            for key, value in update_data.items():
+                setattr(target_user, key, value)
+
+            if phone_changed:
+                target_user.session_version += 1
+                await record_lifecycle_event(
+                    db_session,
+                    user_id=target_user.id,
+                    actor_user_id=actor_user_id,
+                    event_type='phone_changed_by_admin',
+                    event_data={'source': 'control_panel'},
+                )
+
+            await record_lifecycle_event(
+                db_session,
+                user_id=target_user.id,
+                actor_user_id=actor_user_id,
+                event_type='profile_updated_by_admin',
+                event_data={'fields': sorted(changed_fields)},
+            )
+            await db_session.flush()
+    except IntegrityError:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code='USER_IDENTITY_CONFLICT',
+            message=(
+                'Email, телефон, ИНН или другой уникальный идентификатор '
+                'уже используется'
+            ),
         )
-    else:
-        update_data.pop('email', None)
 
-    for key, value in update_data.items():
-        setattr(target_user, key, value)
-
-    if phone_changed:
-        target_user.session_version += 1
-        await record_lifecycle_event(
-            db_session,
-            user_id=target_user.id,
-            actor_user_id=actor_user_id,
-            event_type='phone_changed_by_admin',
-            event_data={'source': 'control_panel'},
-        )
-
-    await record_lifecycle_event(
-        db_session,
-        user_id=target_user.id,
-        actor_user_id=actor_user_id,
-        event_type='profile_updated_by_admin',
-        event_data={'fields': sorted(update_data.keys() | ({'email'} if email_changed else set()))},
-    )
-    await db_session.flush()
     await db_session.refresh(target_user)
     return response_success(user=_user_to_dict(target_user))
 

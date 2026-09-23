@@ -19,6 +19,11 @@ from services.mail_transport_service import get_mail_transport_runtime
 from services.session_identity import session_user_payload
 from services.subscription_service import create_demo_subscription
 from services.tariff_service import get_tariff_by_code
+from services.user_identity import (
+    normalize_email as _normalize_email_preflight,
+    normalize_inn as _normalize_inn_preflight,
+    normalize_phone as _normalize_phone_preflight,
+)
 from services.user_service import (
     create_user_role_association,
     get_user_by_email,
@@ -52,38 +57,6 @@ async def _request_json_object(request: Request) -> dict | None:
     except (TypeError, ValueError):
         return None
     return payload if isinstance(payload, dict) else None
-
-
-def _normalize_email_preflight(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    email = value.strip()
-    if not email or len(email) > 254 or " " in email or email.count("@") != 1:
-        return None
-    local_part, domain = email.split("@", 1)
-    if not local_part or "." not in domain or domain.startswith(".") or domain.endswith("."):
-        return None
-    return email.lower()
-
-
-def _normalize_phone_preflight(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    digits = "".join(char for char in value if char.isdigit())
-    if len(digits) == 11 and digits[0] in {"7", "8"}:
-        digits = digits[1:]
-    if len(digits) != 10:
-        return None
-    return f"+7{digits}"
-
-
-def _normalize_inn_preflight(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    inn = value.strip()
-    if not inn.isdigit() or len(inn) not in {10, 12}:
-        return None
-    return inn
 
 
 def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]:

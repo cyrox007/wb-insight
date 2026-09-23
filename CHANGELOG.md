@@ -59,7 +59,11 @@
 - email/телефон канонизируются до savepoint, тип пользователя/ФИО/пароль/ИНН/КПП/юр. адрес/timezone/newsletter-флаг проверяются до записи в БД;
 - неподдерживаемые поля direct API отклоняются, поэтому старые `bank_account`/`bik` больше нельзя молча отправить и потерять;
 - oversized значения и пароль вне bcrypt UTF-8 лимита получают предсказуемый `400`;
-- затронутые auth/password validation messages приведены к русскому системному контракту; login email теперь нормализуется через trim/lowercase до проверки формата, regression-тесты отделяют input-validation от атомарности регистрации.
+- затронутые auth/password validation messages приведены к русскому системному контракту; login email теперь нормализуется через trim/lowercase до проверки формата, regression-тесты отделяют input-validation от атомарности регистрации;
+- P95: admin edit пользователя использует тот же canonical identity-контракт, что регистрация: email lowercase/format, телефон `+7XXXXXXXXXX`, ИНН/КПП/юр. адрес и entity-specific правила;
+- изменение ИНН проверяет текущего владельца до записи, а конкурентный unique-conflict внутри savepoint возвращает стабильный `409 USER_IDENTITY_CONFLICT` вместо случайного `500`;
+- `is_staff` принимает только реальный JSON boolean, malformed admin payload получает `400`;
+- общие email/phone/INN normalizer вынесены в `services/user_identity.py`, чтобы registration и Control Panel не расходились повторно.
 
 ## [0.9.0-beta.1] — candidate, обновлено 2026-09-22
 
