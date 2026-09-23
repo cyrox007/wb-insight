@@ -91,9 +91,9 @@ class User(Database.Base):
         Index("uq_users_email_lower", func.lower(email), unique=True),
         Index(
             "uq_users_inn_normalized",
-            func.trim(inn),
+            text("TRIM(BOTH FROM inn)"),
             unique=True,
-            postgresql_where=text("inn IS NOT NULL AND trim(inn) <> ''"),
+            postgresql_where=text("inn IS NOT NULL AND TRIM(BOTH FROM inn) <> ''"),
         ),
         Index('idx_users_phone_email_unique', 'phone', 'email', unique=True),
         Index('idx_users_active_entity', 'is_active', 'entity_type'),
