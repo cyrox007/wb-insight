@@ -7,6 +7,7 @@ const clients = {
   CP_Users: path.join(root, 'API/ControlPanel/CP_Users.js'),
   CP_Roles: path.join(root, 'API/ControlPanel/CP_Roles.js'),
   ProfileServices: path.join(root, 'API/Dashboard/ProfileServices.js'),
+  AccountLifecycleService: path.join(root, 'API/AccountLifecycleService.js'),
 }
 
 function walk(dir) {
@@ -64,6 +65,7 @@ const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
 const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
 const registrationPath = path.join(root, 'components/CustomModals/AuthModals/RegistrationModal.vue')
 const sellerProfilePath = path.join(root, 'pages/Dashboard/Profile/index.vue')
+const accountLifecyclePath = path.join(root, 'API/AccountLifecycleService.js')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
 const apiSource = fs.readFileSync(apiPath, 'utf8')
@@ -74,6 +76,7 @@ const editUserSource = fs.readFileSync(editUserPath, 'utf8')
 const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
 const registrationSource = fs.readFileSync(registrationPath, 'utf8')
 const sellerProfileSource = fs.readFileSync(sellerProfilePath, 'utf8')
+const accountLifecycleSource = fs.readFileSync(accountLifecyclePath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -319,6 +322,23 @@ const emailChangeChecks = [
 ]
 
 for (const check of emailChangeChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const accountSecurityEmailChangeChecks = [
+  {
+    ok:
+      accountLifecycleSource.includes("'/dashboard/profile/email-change/request'") &&
+      accountLifecycleSource.includes("'/dashboard/profile/email-change/cancel'"),
+    message: 'Страница безопасности аккаунта должна использовать канонический P97 flow смены email.',
+  },
+  {
+    ok: !accountLifecycleSource.includes('/account/email/change-request'),
+    message: 'Клиентский API не должен возвращаться к устаревшему параллельному маршруту смены email.',
+  },
+]
+
+for (const check of accountSecurityEmailChangeChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
