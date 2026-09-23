@@ -33,9 +33,24 @@
       </form>
     </header>
 
+    <SellerOnboarding
+      :sync-status="syncStatus"
+      :is-syncing="isSyncing"
+      @refresh="loadDashboard"
+    />
+
     <DashboardState
       v-if="isLoading && !hasLoadedOnce"
       kind="loading"
+    />
+
+    <DashboardState
+      v-else-if="accountMissing"
+      kind="account"
+      title="Подключите кабинет Wildberries"
+      message="После подключения WB Insight сам проверит доступы и запустит первичную загрузку данных."
+      action-label="Открыть подключение"
+      :action-to="{ path: '/dashboard/profile', query: { tab: 'connections' } }"
     />
 
     <DashboardState
@@ -47,12 +62,12 @@
       @retry="loadDashboard"
     />
 
-    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce) && isSyncing" class="status-banner" role="status">
+    <div v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && isSyncing" class="status-banner" role="status">
       <strong>{{ syncMessage || 'Данные синхронизируются с Wildberries.' }}</strong>
       <span>{{ syncProgressText }}</span>
     </div>
 
-    <div v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="kpi-grid" aria-label="Ключевые показатели">
+    <div v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && !isInitialSync" class="kpi-grid" aria-label="Ключевые показатели">
       <article v-for="item in primaryKpis" :key="item.key" class="kpi-card">
         <div class="kpi-card__topline">
           <span>{{ item.label }}</span>
@@ -65,7 +80,7 @@
       </article>
     </div>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="section-card plan-card">
+    <section v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && !isInitialSync" class="section-card plan-card">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Текущий месяц</p>
@@ -106,7 +121,7 @@
       </div>
     </section>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="analytics-grid">
+    <section v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && !isInitialSync" class="analytics-grid">
       <article class="section-card chart-card">
         <div class="section-heading">
           <div>
@@ -144,7 +159,7 @@
       </article>
     </section>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="context-grid">
+    <section v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && !isInitialSync" class="context-grid">
       <article class="section-card compact-card">
         <div class="section-heading">
           <div>
@@ -166,7 +181,7 @@
       </article>
     </section>
 
-    <section v-if="!errorMessage && (!isLoading || hasLoadedOnce) && !isInitialSync" class="abc-section">
+    <section v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && !isInitialSync" class="abc-section">
       <div class="section-heading section-heading--outside">
         <div>
           <p class="eyebrow">Товары</p>
@@ -184,7 +199,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import DashboardService from '@/API/Dashboard/DashboardService.js'
 import { notify } from '@/composables/notification'
 import BaseCarts from '@/components/Diagrams/BaseCarts.vue'
@@ -192,6 +207,7 @@ import WarehouseChart from '@/components/Diagrams/WarehouseChart.vue'
 import AbcAnalysis from '@/components/Widgets/AbcAnalysis.vue'
 import DonutChart from '@/components/Diagrams/DonutChart.vue'
 import DashboardState from '@/components/DashboardState.vue'
+import SellerOnboarding from '@/components/SellerOnboarding.vue'
 import { formatFiniteNumber } from '@/utils/safeNumber'
 
 const stats = ref({})
@@ -208,6 +224,8 @@ const isInitialSync = ref(false)
 const syncStatus = ref(null)
 const syncMessage = ref('')
 const errorMessage = ref('')
+const accountMissing = ref(false)
+let syncPollTimer = null
 
 const formatDateInput = (date) => {
   const year = date.getFullYear()
@@ -404,8 +422,10 @@ async function loadDashboard() {
     return
   }
 
+  clearSyncPoll()
   isLoading.value = true
   errorMessage.value = ''
+  accountMissing.value = false
   isSyncing.value = false
   isInitialSync.value = false
   syncMessage.value = ''
@@ -420,6 +440,12 @@ async function loadDashboard() {
       stats.value = {}
       syncStatus.value = null
       isInitialSync.value = false
+      const code = result?.error?.code || ''
+      if (code === 'NO_VALID_TOKENS' || code === 'TOKEN_INVALID') {
+        accountMissing.value = true
+        errorMessage.value = ''
+        return
+      }
       errorMessage.value = extractError(result)
       return
     }
@@ -446,7 +472,48 @@ async function loadDashboard() {
   } finally {
     isLoading.value = false
     hasLoadedOnce.value = true
+    if (isSyncing.value) scheduleSyncPoll()
   }
+}
+
+function clearSyncPoll() {
+  if (syncPollTimer) {
+    clearTimeout(syncPollTimer)
+    syncPollTimer = null
+  }
+}
+
+function scheduleSyncPoll() {
+  if (!isSyncing.value || syncPollTimer) return
+
+  syncPollTimer = window.setTimeout(async () => {
+    syncPollTimer = null
+    try {
+      const response = await DashboardService.get_sync_status()
+      const result = response.data || {}
+      if (result.status === 'error') {
+        if (isSyncing.value) scheduleSyncPoll()
+        return
+      }
+
+      syncStatus.value = result.sync_status || null
+      const nextSyncing = syncStatus.value?.is_syncing === true
+      const availableSources =
+        Number(syncStatus.value?.ready_entities || 0) +
+        Number(syncStatus.value?.stale_entities || 0)
+
+      isSyncing.value = nextSyncing
+
+      if (isInitialSync.value && (availableSources > 0 || !nextSyncing)) {
+        await loadDashboard()
+        return
+      }
+
+      if (nextSyncing) scheduleSyncPoll()
+    } catch {
+      if (isSyncing.value) scheduleSyncPoll()
+    }
+  }, 6000)
 }
 
 async function applyPeriod() {
@@ -454,6 +521,7 @@ async function applyPeriod() {
 }
 
 onMounted(loadDashboard)
+onUnmounted(clearSyncPoll)
 </script>
 
 <style scoped>
