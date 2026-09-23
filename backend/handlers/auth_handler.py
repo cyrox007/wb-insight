@@ -60,7 +60,7 @@ async def _request_json_object(request: Request) -> dict | None:
 
 
 def _is_registration_identity_conflict(exc: IntegrityError) -> bool:
-    """Определяет только известные конфликты уникальности регистрационной identity."""
+    """Определяет только известные конфликты уникальности регистрационных идентификаторов."""
     known_constraints = (
         "ix_users_email",
         "users_email_key",
