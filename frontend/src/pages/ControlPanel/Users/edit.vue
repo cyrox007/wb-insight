@@ -54,6 +54,11 @@ const canPermanentlyDelete = computed(() =>
 	targetUser.value &&
 	targetUser.value.is_active === false
 )
+const canRemoveRole = (roleCode) => {
+	if (!canManageRoles.value || roleCode === 'user') return false
+	if (isSelf.value && roleCode === 'super_admin') return false
+	return true
+}
 const emailVerified = computed(() => Boolean(targetUser.value?.email_verified_at))
 
 onMounted(loadUser)
@@ -79,7 +84,7 @@ async function loadUser() {
 }
 
 function askRemoveRole(roleCode) {
-	if (roleActionLoading.value || !canManageRoles.value) return
+	if (roleActionLoading.value || !canRemoveRole(roleCode)) return
 	roleConfirm.value = { isOpen: true, role: roleCode }
 }
 
@@ -89,7 +94,12 @@ function closeRoleConfirm() {
 }
 
 async function removeRoleConfirmed() {
-	if (roleActionLoading.value || !targetUser.value || !roleConfirm.value.role || !canManageRoles.value) return
+	if (
+		roleActionLoading.value ||
+		!targetUser.value ||
+		!roleConfirm.value.role ||
+		!canRemoveRole(roleConfirm.value.role)
+	) return
 	roleActionLoading.value = true
 	loadError.value = ''
 	try {
@@ -331,7 +341,7 @@ async function runAccountAction(kind) {
 								</p>
 							</div>
 							<button
-								v-if="canManageRoles && roleItem.role !== 'user'"
+								v-if="canRemoveRole(roleItem.role)"
 								class="cp-icon-button cp-icon-button--danger"
 								title="Удалить роль"
 								:aria-label="`Удалить роль ${roleItem.role}`"
@@ -341,6 +351,12 @@ async function runAccountAction(kind) {
 						</div>
 					</div>
 					<div v-else class="cp-state">Роли не назначены.</div>
+					<p
+						v-if="canManageRoles && isSelf && targetIsSuperAdmin"
+						class="cp-muted"
+					>
+						Собственную роль суперадминистратора удалить нельзя.
+					</p>
 				</section>
 			</article>
 
