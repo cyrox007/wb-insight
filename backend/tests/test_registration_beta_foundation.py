@@ -95,7 +95,11 @@ async def test_registration_uses_savepoint_for_integrity_conflict(monkeypatch):
     monkeypatch.setattr(auth_handler, "validate_consent_payload", lambda *_args, **_kwargs: ())
 
     async def fail_insert(*_args, **_kwargs):
-        raise IntegrityError("insert user", {}, RuntimeError("duplicate"))
+        raise IntegrityError(
+            "insert user",
+            {},
+            RuntimeError('duplicate key violates constraint "uq_users_email_lower"'),
+        )
 
     monkeypatch.setattr(auth_handler, "insert_user", fail_insert)
 
@@ -104,6 +108,63 @@ async def test_registration_uses_savepoint_for_integrity_conflict(monkeypatch):
     assert response.status_code == 409
     assert payload["status"] == "error"
     assert payload["error"]["code"] == "REGISTRATION_CONFLICT"
+    assert session.rollback_count == 0
+    assert session.savepoint_enter_count == 1
+    assert session.savepoint_rollback_count == 1
+
+
+@pytest.mark.parametrize(
+    "constraint_name",
+    [
+        "ix_users_email",
+        "users_email_key",
+        "uq_users_email_lower",
+        "ix_users_phone",
+        "users_phone_key",
+        "idx_users_phone_email_unique",
+        "uq_users_inn_normalized",
+    ],
+)
+def test_registration_conflict_classifier_accepts_only_identity_constraints(constraint_name):
+    error = IntegrityError(
+        "insert user",
+        {},
+        RuntimeError(f'duplicate key violates constraint "{constraint_name}"'),
+    )
+
+    assert auth_handler._is_registration_identity_conflict(error) is True
+
+
+def test_registration_conflict_classifier_rejects_unrelated_constraint():
+    error = IntegrityError(
+        "insert consent",
+        {},
+        RuntimeError('duplicate key violates constraint "uq_legal_consent_version"'),
+    )
+
+    assert auth_handler._is_registration_identity_conflict(error) is False
+
+
+@pytest.mark.asyncio
+async def test_registration_does_not_mask_unrelated_integrity_error(monkeypatch):
+    session = TransactionSessionStub()
+    request = RegistrationRequestStub(_valid_registration_payload())
+    response = Response()
+
+    monkeypatch.setattr(auth_handler, "validate_consent_payload", lambda *_args, **_kwargs: ())
+
+    async def fail_insert(*_args, **_kwargs):
+        raise IntegrityError(
+            "insert user",
+            {},
+            RuntimeError('violates foreign key constraint "users_demo_tariff_fkey"'),
+        )
+
+    monkeypatch.setattr(auth_handler, "insert_user", fail_insert)
+
+    with pytest.raises(IntegrityError):
+        await auth_handler.registration(request, response, session)
+
     assert session.rollback_count == 0
     assert session.savepoint_enter_count == 1
     assert session.savepoint_rollback_count == 1
