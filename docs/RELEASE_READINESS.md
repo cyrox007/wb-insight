@@ -49,7 +49,8 @@
 - P89 атомарная регистрация через savepoint закрыта PR #171, merge `65ceb35e2b8a30c2d4c80ab00e7ab96b8e105345`; все шесть exact-head workflow зелёные.
 - P90 строгая availability-проверка регистрации закрыта PR #172, merge `ec1a1e24512eade61ce41597f6f93df53b305cb3`; все шесть exact-head workflow зелёные.
 - P91 case-insensitive email identity закрыт PR #173, merge `33363e5c1eb0f5e8d2cba55726af162fe2b68a52`; все шесть exact-head workflow зелёные.
-- P92 cleanup несохраняемых банковских реквизитов регистрации подготовлен поверх текущего `dev`: UI больше не собирает расчётный счёт/БИК без backend-хранилища.
+- P92 cleanup несохраняемых банковских реквизитов регистрации закрыт PR #174, merge `0fced2ef5499ede654793af827c2186a2f491cc1`; все шесть exact-head workflow зелёные.
+- P93 DB-enforced уникальность ИНН подготовлена поверх текущего `dev`: optional пустые значения канонизируются в NULL, реальные дубли fail-closed блокируют миграцию.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -81,6 +82,7 @@
 - P90 post-candidate auth preflight hardening валидирует availability payload, нормализует телефон к `+7XXXXXXXXXX` и не позволяет frontend продолжать регистрацию после недоступной проверки email/телефона/ИНН;
 - P91 post-candidate email identity hardening использует lowercase для новых email, `lower(users.email)` для lookup и уникальный функциональный индекс; миграция не изменяет исторические значения и fail-closed останавливается на case-дубликатах;
 - P92 post-candidate registration UX/privacy cleanup прекращает сбор расчётного счёта и БИК до появления реального backend-контракта хранения, исключая молчаливую потерю введённых данных;
+- P93 post-candidate identity integrity переносит уникальность ИНН на уровень PostgreSQL: optional пустые значения становятся `NULL`, а миграция останавливается на реальных дубликатах до создания unique index;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
