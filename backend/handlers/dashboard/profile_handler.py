@@ -20,6 +20,7 @@ from services.legal_service import (
     validate_consent_payload,
 )
 from services.account_lifecycle_service import record_lifecycle_event
+from services.email_verification_service import revoke_email_verification_tokens
 from services.mail_service import queue_transactional_email
 from services.mail_transport_service import get_mail_transport_runtime
 from services.marketplace_access_service import (
@@ -318,6 +319,8 @@ async def request_email_change(
         )
 
     previous_pending = normalize_email(getattr(current_user, "pending_email", None))
+    if previous_pending != target_email:
+        await revoke_email_verification_tokens(db_session, current_user.id)
     current_user.pending_email = target_email
 
     resend_seconds = max(
@@ -367,6 +370,43 @@ async def request_email_change(
             if queued
             else "Письмо подтверждения уже было отправлено недавно."
         ),
+    )
+
+
+@router.post(
+    "/email-change/cancel",
+    dependencies=[Depends(auth_middle)],
+)
+async def cancel_email_change(
+    request: Request,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Отменяет ожидающую подтверждения смену email."""
+    request.state.audit_action = "profile.email_change.cancel"
+    user_id = _current_user_id(request)
+    current_user = await get_user_by_uuid(db_session, user_id)
+    if current_user is None:
+        return response_error(code="UNAUTHORIZED", message="Неавторизован")
+
+    pending_email = normalize_email(getattr(current_user, "pending_email", None))
+    if not pending_email:
+        return response_success(
+            pending_email=None,
+            message="Ожидающей смены email нет.",
+        )
+
+    await revoke_email_verification_tokens(db_session, current_user.id)
+    current_user.pending_email = None
+    await record_lifecycle_event(
+        db_session,
+        user_id=current_user.id,
+        event_type="email_change_cancelled",
+        event_data={"verification_required": False},
+    )
+
+    return response_success(
+        pending_email=None,
+        message="Смена email отменена.",
     )
 
 
