@@ -31,6 +31,9 @@ const tokens = ref([])
 const profileForm = reactive({
   full_name: '',
   entity_type: 'individual',
+  inn: '',
+  kpp: '',
+  legal_address: '',
   tax_percent: 0,
   timezone: 'Europe/Moscow',
 })
@@ -182,6 +185,9 @@ function tokenLabel(tokenId) {
 function syncProfileForm() {
   profileForm.full_name = user.value.full_name || ''
   profileForm.entity_type = user.value.entity_type || 'individual'
+  profileForm.inn = user.value.inn || ''
+  profileForm.kpp = user.value.kpp || ''
+  profileForm.legal_address = user.value.legal_address || ''
   profileForm.tax_percent = Math.round(Number(user.value.tax_rate || 0) * 10000) / 100
   profileForm.timezone = user.value.timezone || 'Europe/Moscow'
 }
@@ -238,6 +244,31 @@ async function saveProfile() {
     return
   }
 
+  if (!isStaff.value) {
+    const inn = profileForm.inn.trim()
+    const kpp = profileForm.kpp.trim()
+    const legalAddress = profileForm.legal_address.trim()
+
+    if (profileForm.entity_type === 'legal_entity') {
+      if (!/^\d{10}$/.test(inn)) {
+        notify.error('ИНН юридического лица должен содержать 10 цифр')
+        return
+      }
+      if (!legalAddress) {
+        notify.error('Укажите юридический адрес')
+        return
+      }
+    } else if (inn && !/^\d{12}$/.test(inn)) {
+      notify.error('ИНН физического лица или ИП должен содержать 12 цифр')
+      return
+    }
+
+    if (kpp && !/^\d{9}$/.test(kpp)) {
+      notify.error('КПП должен содержать 9 цифр')
+      return
+    }
+  }
+
   isSavingProfile.value = true
   try {
     const payload = {
@@ -246,6 +277,9 @@ async function saveProfile() {
     }
     if (!isStaff.value) {
       payload.entity_type = profileForm.entity_type
+      payload.inn = profileForm.inn.trim()
+      payload.kpp = profileForm.kpp.trim()
+      payload.legal_address = profileForm.legal_address.trim()
       payload.tax_rate = taxPercent / 100
     }
 
@@ -608,6 +642,27 @@ onMounted(async () => {
             <select v-model="profileForm.entity_type">
               <option v-for="item in entityTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
             </select>
+          </label>
+
+          <label v-if="!isStaff" class="field">
+            <span>ИНН</span>
+            <input
+              v-model="profileForm.inn"
+              inputmode="numeric"
+              :maxlength="profileForm.entity_type === 'legal_entity' ? 10 : 12"
+              :placeholder="profileForm.entity_type === 'legal_entity' ? '10 цифр' : '12 цифр, если есть'"
+            />
+            <small>{{ profileForm.entity_type === 'legal_entity' ? 'Обязателен для юридического лица.' : 'Необязательно для физлица или самозанятого.' }}</small>
+          </label>
+
+          <label v-if="!isStaff && profileForm.entity_type === 'legal_entity'" class="field">
+            <span>КПП</span>
+            <input v-model="profileForm.kpp" inputmode="numeric" maxlength="9" placeholder="9 цифр, если есть" />
+          </label>
+
+          <label v-if="!isStaff && profileForm.entity_type === 'legal_entity'" class="field field--wide">
+            <span>Юридический адрес</span>
+            <input v-model="profileForm.legal_address" maxlength="500" placeholder="Укажите юридический адрес" />
           </label>
 
           <label v-if="!isStaff" class="field">
