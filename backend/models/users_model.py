@@ -88,6 +88,7 @@ class User(Database.Base):
     sync_states: Mapped[List["UserSyncState"]] = relationship("UserSyncState", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
+        Index("uq_users_email_lower", func.lower(email), unique=True),
         Index('idx_users_phone_email_unique', 'phone', 'email', unique=True),
         Index('idx_users_active_entity', 'is_active', 'entity_type'),
         Index('idx_users_legal_info', 'entity_type', 'inn', 'kpp'),
