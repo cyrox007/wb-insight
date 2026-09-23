@@ -5,12 +5,15 @@ from uuid import uuid4
 
 import pytest
 from fastapi import Response
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 
 import handlers.auth_handler as auth_handler
 from handlers.legal_handler import current_user_consents
 from models.subscription_model import SubscriptionStatus
+from schemas.auth import LoginRequest
 from services.subscription_service import create_demo_subscription
+from utils.hashed_password import hash_password
 
 
 class RegistrationRequestStub:
@@ -24,6 +27,23 @@ class RegistrationRequestStub:
 
     async def json(self):
         return self._payload
+
+
+def _valid_registration_payload(**overrides):
+    registration_data = {
+        "entity_type": "individual",
+        "full_name": "Тестовый пользователь",
+        "email": "user@example.com",
+        "phone": "+79991234567",
+        "password": "Secure123!",
+        "inn": "",
+        "kpp": "",
+        "legal_address": "",
+        "newsletter_subscription": True,
+        "legal_consents": [],
+    }
+    registration_data.update(overrides)
+    return {"registrationData": registration_data}
 
 
 class NestedTransactionStub:
@@ -68,7 +88,7 @@ class TransactionSessionStub:
 async def test_registration_uses_savepoint_for_integrity_conflict(monkeypatch):
     session = TransactionSessionStub()
     request = RegistrationRequestStub(
-        {"registrationData": {"entity_type": "individual", "legal_consents": []}}
+        _valid_registration_payload()
     )
     response = Response()
 
@@ -93,7 +113,7 @@ async def test_registration_uses_savepoint_for_integrity_conflict(monkeypatch):
 async def test_registration_rolls_back_savepoint_when_default_role_cannot_be_created(monkeypatch):
     session = TransactionSessionStub()
     request = RegistrationRequestStub(
-        {"registrationData": {"entity_type": "individual", "legal_consents": []}}
+        _valid_registration_payload()
     )
     response = Response()
     user = SimpleNamespace(id=uuid4())
@@ -123,7 +143,7 @@ async def test_registration_rolls_back_savepoint_when_default_role_cannot_be_cre
 async def test_registration_rolls_back_savepoint_when_demo_tariff_is_missing(monkeypatch):
     session = TransactionSessionStub()
     request = RegistrationRequestStub(
-        {"registrationData": {"entity_type": "individual", "legal_consents": []}}
+        _valid_registration_payload()
     )
     response = Response()
     user = SimpleNamespace(id=uuid4(), email="seller@example.com")
@@ -170,6 +190,111 @@ def test_registration_handler_does_not_use_manual_request_rollback():
 class InvalidJsonRequestStub:
     async def json(self):
         raise ValueError("некорректный JSON")
+
+
+@pytest.mark.asyncio
+async def test_registration_rejects_malformed_or_non_object_payload_before_transaction():
+    for request in (
+        InvalidJsonRequestStub(),
+        RegistrationRequestStub([]),
+        RegistrationRequestStub({}),
+        RegistrationRequestStub({"registrationData": []}),
+    ):
+        session = TransactionSessionStub()
+        response = Response()
+
+        payload = await auth_handler.registration(request, response, session)
+
+        assert response.status_code == 400
+        assert payload["status"] == "error"
+        assert payload["error"]["code"] in {
+            "REGISTRATION_PAYLOAD_INVALID",
+            "REGISTRATION_DATA_INVALID",
+        }
+        assert session.savepoint_enter_count == 0
+
+
+def test_registration_payload_is_canonicalized_before_savepoint():
+    reg_data, user_data, legal_context = auth_handler._validated_registration_data(
+        _valid_registration_payload(
+            email="  User.Name@Example.COM  ",
+            phone="8 (999) 123-45-67",
+            full_name="  Иван Иванов  ",
+            inn="123456789012",
+            newsletter_subscription=False,
+        )
+    )
+
+    assert reg_data["email"] == "user.name@example.com"
+    assert reg_data["phone"] == "+79991234567"
+    assert reg_data["full_name"] == "Иван Иванов"
+    assert reg_data["newsletter_subscription"] is False
+    assert user_data["email"] == "user.name@example.com"
+    assert user_data["phone"] == "+79991234567"
+    assert user_data["timezone"] == "Europe/Moscow"
+    assert legal_context == "registration"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error_code"),
+    [
+        ({"entity_type": "unknown"}, "ENTITY_TYPE_INVALID"),
+        ({"full_name": "   "}, "FULL_NAME_REQUIRED"),
+        ({"full_name": "И" * 256}, "FULL_NAME_INVALID"),
+        ({"email": "not-an-email"}, "EMAIL_INVALID"),
+        ({"phone": "123"}, "PHONE_INVALID"),
+        ({"password": "short"}, "PASSWORD_INVALID"),
+        ({"password": "Я" * 40}, "PASSWORD_TOO_LONG"),
+        ({"newsletter_subscription": "false"}, "NEWSLETTER_FLAG_INVALID"),
+        ({"inn": "1234567890"}, "INN_INVALID"),
+        ({"inn": []}, "INN_INVALID"),
+        ({"kpp": "123"}, "KPP_INVALID"),
+        ({"kpp": {}}, "KPP_INVALID"),
+        ({"timezone": []}, "TIMEZONE_INVALID"),
+        ({"timezone": "x" * 51}, "TIMEZONE_INVALID"),
+        ({"bank_account": "40702810900000000000"}, "REGISTRATION_FIELDS_UNSUPPORTED"),
+        ({"bik": "044525225"}, "REGISTRATION_FIELDS_UNSUPPORTED"),
+    ],
+)
+def test_registration_payload_rejects_invalid_fields(overrides, error_code):
+    with pytest.raises(auth_handler.RegistrationAbort) as exc_info:
+        auth_handler._validated_registration_data(
+            _valid_registration_payload(**overrides)
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.code == error_code
+
+
+@pytest.mark.parametrize(
+    ("overrides", "error_code"),
+    [
+        (
+            {
+                "entity_type": "legal_entity",
+                "inn": "",
+                "legal_address": "Москва",
+            },
+            "INN_REQUIRED",
+        ),
+        (
+            {
+                "entity_type": "legal_entity",
+                "inn": "7707083893",
+                "legal_address": "   ",
+            },
+            "LEGAL_ADDRESS_REQUIRED",
+        ),
+    ],
+)
+def test_legal_entity_registration_requires_legal_identity(overrides, error_code):
+    with pytest.raises(auth_handler.RegistrationAbort) as exc_info:
+        auth_handler._validated_registration_data(
+            _valid_registration_payload(**overrides)
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.code == error_code
 
 
 @pytest.mark.asyncio
@@ -338,7 +463,7 @@ async def test_own_consent_endpoint_does_not_expose_evidence_hmacs():
 async def test_registration_fails_closed_when_verification_transport_is_unavailable(monkeypatch):
     session = TransactionSessionStub()
     request = RegistrationRequestStub(
-        {"registrationData": {"entity_type": "individual", "legal_consents": []}}
+        _valid_registration_payload()
     )
     response = Response()
     insert_called = False
@@ -360,3 +485,24 @@ async def test_registration_fails_closed_when_verification_transport_is_unavaila
     assert response.status_code == 503
     assert payload["error"]["code"] == "EMAIL_VERIFICATION_DELIVERY_UNAVAILABLE"
     assert insert_called is False
+
+
+
+def test_auth_validation_messages_are_russian():
+    with pytest.raises(ValueError, match="Пароль не может быть пустым"):
+        hash_password("")
+
+    with pytest.raises(ValidationError) as exc_info:
+        LoginRequest(email="not-an-email", password="secret")
+
+    assert "Некорректный формат email" in str(exc_info.value)
+    assert "Invalid email format" not in str(exc_info.value)
+
+
+def test_login_email_is_normalized_before_format_validation():
+    payload = LoginRequest(
+        email="  User.Name@Example.COM  ",
+        password="secret",
+    )
+
+    assert payload.email == "user.name@example.com"

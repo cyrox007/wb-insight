@@ -6,7 +6,7 @@ logger = setup_logger(__name__)
 
 def hash_password(password: str) -> str:
     if not password:
-        raise ValueError("Password cannot be empty")
+        raise ValueError("Пароль не может быть пустым")
 
     salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
