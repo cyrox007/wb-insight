@@ -129,17 +129,18 @@ async def get_user_role_association_by_code(
     return result.scalar_one_or_none()
 
 
-async def count_user_role_associations_by_code(
+async def get_role_associations_for_update(
     session: AsyncSession,
     role_code: str,
-) -> int:
-    """Возвращает количество назначений указанной системной роли."""
+) -> list[UserRoleAssociation]:
+    """Блокирует назначения роли до завершения текущей транзакции."""
     result = await session.execute(
-        select(func.count(UserRoleAssociation.id)).where(
-            UserRoleAssociation.role == role_code
-        )
+        select(UserRoleAssociation)
+        .where(UserRoleAssociation.role == role_code)
+        .order_by(UserRoleAssociation.id.asc())
+        .with_for_update()
     )
-    return int(result.scalar_one() or 0)
+    return list(result.scalars().all())
 
 
 async def create_user_role_association(
