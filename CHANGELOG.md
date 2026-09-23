@@ -66,7 +66,11 @@
 - P95: admin edit пользователя использует тот же canonical identity-контракт, что регистрация: email lowercase/format, телефон `+7XXXXXXXXXX`, ИНН/КПП/юр. адрес и entity-specific правила;
 - изменение ИНН проверяет текущего владельца до записи, а конкурентный unique-conflict внутри savepoint возвращает стабильный `409 USER_IDENTITY_CONFLICT` вместо случайного `500`;
 - `is_staff` принимает только реальный JSON boolean, malformed admin payload получает `400`;
-- общие email/phone/INN normalizer вынесены в `services/user_identity.py`, чтобы registration и Control Panel не расходились повторно.
+- общие email/phone/INN normalizer вынесены в `services/user_identity.py`, чтобы registration и Control Panel не расходились повторно;
+- P96: тип продавца в self-service профиле стал read-only, потому что изменение legal identity требует согласованной проверки ИНН/КПП/юридического адреса;
+- backend отклоняет попытку сменить `entity_type` через профиль с `409 ENTITY_TYPE_CHANGE_REQUIRES_ADMIN`, но принимает прежнее значение для совместимости со старыми клиентами;
+- malformed и неподдерживаемые поля self-service профиля получают стабильный `400`; frontend больше не отправляет и не редактирует `entity_type`;
+- frontend contract test закрепляет read-only отображение типа продавца и пояснение административной проверки.
 
 ## [0.9.0-beta.1] — candidate, обновлено 2026-09-22
 

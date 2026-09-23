@@ -144,14 +144,52 @@ async def update_profile(
     response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    """Обновляет настройки продавца, используемые в формулах аналитики."""
+    """Обновляет безопасные self-service настройки продавца."""
     user_id = _current_user_id(request)
     current_user = await get_user_by_uuid(db_session, user_id)
     if current_user is None:
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return response_error(code="UNAUTHORIZED", message="Неавторизован")
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except (TypeError, ValueError):
+        payload = None
+
+    if not isinstance(payload, dict):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="PROFILE_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект настроек профиля",
+        )
+
+    allowed_fields = {"full_name", "tax_rate", "timezone", "entity_type"}
+    unsupported_fields = sorted(set(payload) - allowed_fields)
+    if unsupported_fields:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="PROFILE_FIELDS_UNSUPPORTED",
+            message="Запрос профиля содержит неподдерживаемые поля",
+        )
+
+    if "entity_type" in payload:
+        requested_entity_type = str(payload.get("entity_type") or "").strip().lower()
+        allowed_entity_types = {item.value for item in EntityType}
+        if requested_entity_type not in allowed_entity_types:
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return response_error(
+                code="ENTITY_TYPE_INVALID",
+                message="Некорректный тип продавца",
+            )
+        if requested_entity_type != current_user.entity_type:
+            response.status_code = status.HTTP_409_CONFLICT
+            return response_error(
+                code="ENTITY_TYPE_CHANGE_REQUIRES_ADMIN",
+                message=(
+                    "Тип продавца меняется только через административную проверку "
+                    "юридических реквизитов"
+                ),
+            )
 
     full_name = str(payload.get("full_name", current_user.full_name) or "").strip()
     if not full_name or len(full_name) > 255:
@@ -159,15 +197,6 @@ async def update_profile(
         return response_error(
             code="VALIDATION_ERROR",
             message="Укажите имя или название компании",
-        )
-
-    entity_type = str(payload.get("entity_type", current_user.entity_type) or "").strip()
-    allowed_entity_types = {item.value for item in EntityType}
-    if entity_type not in allowed_entity_types:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(
-            code="VALIDATION_ERROR",
-            message="Некорректный тип продавца",
         )
 
     try:
@@ -192,7 +221,6 @@ async def update_profile(
         )
 
     current_user.full_name = full_name
-    current_user.entity_type = entity_type
     current_user.tax_rate = tax_rate
     current_user.timezone = timezone_name
     await db_session.flush()

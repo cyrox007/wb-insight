@@ -62,6 +62,7 @@ const cpUsersPath = path.join(root, 'API/ControlPanel/CP_Users.js')
 const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
 const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
 const registrationPath = path.join(root, 'components/CustomModals/AuthModals/RegistrationModal.vue')
+const sellerProfilePath = path.join(root, 'pages/Dashboard/Profile/index.vue')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
 const apiSource = fs.readFileSync(apiPath, 'utf8')
@@ -71,6 +72,7 @@ const cpUsersSource = fs.readFileSync(cpUsersPath, 'utf8')
 const editUserSource = fs.readFileSync(editUserPath, 'utf8')
 const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
 const registrationSource = fs.readFileSync(registrationPath, 'utf8')
+const sellerProfileSource = fs.readFileSync(sellerProfilePath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -272,6 +274,25 @@ const registrationPersistenceChecks = [
 ]
 
 for (const check of registrationPersistenceChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const sellerProfileIdentityChecks = [
+  {
+    ok:
+      !sellerProfileSource.includes('payload.entity_type') &&
+      !sellerProfileSource.includes('v-model="profileForm.entity_type"'),
+    message: 'Self-service профиль не должен отправлять или редактировать тип продавца.',
+  },
+  {
+    ok:
+      sellerProfileSource.includes('Изменение типа продавца требует административной проверки юридических реквизитов.') &&
+      sellerProfileSource.includes('{{ entityTypeLabel }}'),
+    message: 'Тип продавца должен отображаться read-only с объяснением административной проверки.',
+  },
+]
+
+for (const check of sellerProfileIdentityChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
