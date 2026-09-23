@@ -19,6 +19,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Добавляет уникальность нормализованного ИНН с защитой исторических данных."""
+    op.alter_column(
+        "users",
+        "session_version",
+        existing_type=sa.Integer(),
+        existing_nullable=False,
+        existing_server_default=sa.text("1"),
+        existing_comment="Версия security session; increment отзывает ранее выданные JWT",
+        comment="Версия сессии безопасности; увеличение отзывает ранее выданные JWT",
+    )
     op.execute(
         sa.text(
             """
@@ -45,12 +54,23 @@ def upgrade() -> None:
     op.create_index(
         "uq_users_inn_normalized",
         "users",
-        [sa.text("trim(inn)")],
+        [sa.text("TRIM(BOTH FROM inn)")],
         unique=True,
-        postgresql_where=sa.text("inn IS NOT NULL AND trim(inn) <> ''"),
+        postgresql_where=sa.text(
+            "inn IS NOT NULL AND TRIM(BOTH FROM inn) <> ''"
+        ),
     )
 
 
 def downgrade() -> None:
-    """Удаляет уникальный индекс нормализованного ИНН."""
+    """Удаляет уникальный индекс и новый комментарий сессии."""
     op.drop_index("uq_users_inn_normalized", table_name="users")
+    op.alter_column(
+        "users",
+        "session_version",
+        existing_type=sa.Integer(),
+        existing_nullable=False,
+        existing_server_default=sa.text("1"),
+        existing_comment="Версия сессии безопасности; увеличение отзывает ранее выданные JWT",
+        comment=None,
+    )
