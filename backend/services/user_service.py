@@ -25,6 +25,7 @@ async def insert_user(session: AsyncSession, user_data: dict):
             return None
 
     normalized_email = str(user_data["email"]).strip().lower()
+    normalized_inn = str(user_data.get("inn") or "").strip() or None
 
     new_user = User(
         id=uuid4(),
@@ -33,7 +34,7 @@ async def insert_user(session: AsyncSession, user_data: dict):
         full_name=user_data['full_name'],
         hashed_password=hash_password(user_data['password']),
         entity_type=user_data.get('entity_type', 'individual'),
-        inn=user_data.get('inn'),
+        inn=normalized_inn,
         kpp=user_data.get('kpp'),
         legal_address=user_data.get('legal_address'),
         timezone=user_data.get('timezone') or 'Europe/Moscow',
@@ -74,7 +75,11 @@ async def get_user_by_phone(session: AsyncSession, phone: str) -> Optional[User]
 
 
 async def get_user_by_inn(session: AsyncSession, inn: str) -> Optional[User]:
-    result = await session.execute(select(User).where(User.inn == inn))
+    normalized_inn = str(inn or "").strip()
+    if not normalized_inn:
+        return None
+
+    result = await session.execute(select(User).where(User.inn == normalized_inn))
     return result.scalar_one_or_none()
 
 
