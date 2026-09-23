@@ -43,6 +43,7 @@
 - P83 транзакционная граница тарифного CRUD закрыта PR #163, merge `66dfd7dfc046fb6e48ad1762877f8fcf1805ae5b`; все шесть обязательных workflow зелёные на этом SHA.
 - P85 строгая проверка boolean-флагов административных настроек закрыта PR #166, merge `727f2e3d890b463e8117f8fc967615e15540370d`; все шесть обязательных workflow зелёные на этом SHA.
 - P84 безопасное permanent delete пользователей закрыто PR #167, merge `c454763617ed1e298251d4e82ac91d0835ac1e6a`; удаление доступно только `admin/super_admin`, self-delete и удаление активного аккаунта запрещены, все шесть exact-head workflow зелёные.
+- P86 hardening управления системными ролями закрыт PR #168, merge `53962c0ad0cebd4ab7948c90b1b85a983c2a244b`; все шесть exact-head workflow зелёные.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -68,6 +69,7 @@
 - P85 post-candidate admin-config hardening принимает boolean-флаги платёжных и почтовых настроек только как JSON `true/false`; строковые и числовые суррогаты отклоняются до применения конфигурации;
 - P84 post-candidate user administration hardening добавляет необратимое удаление только для административных ролей: отдельный backend permission, обязательная предварительная деактивация, запрет self-delete, подтверждение email и сохраняемое lifecycle evidence;
 - P86 post-candidate role-management hardening валидирует payload/UUID/системную роль, использует предсказуемые 4xx-ответы и защищает собственную/последнюю роль `super_admin` транзакционной блокировкой `FOR UPDATE`;
+- P87 post-candidate role UX hardening скрывает невозможное self-demotion действие `super_admin` и использует тот же guard в кнопке и обработчиках UI;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
