@@ -61,6 +61,7 @@ const authStorePath = path.join(root, 'stores/auth.js')
 const cpUsersPath = path.join(root, 'API/ControlPanel/CP_Users.js')
 const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
 const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
+const registrationPath = path.join(root, 'components/CustomModals/AuthModals/RegistrationModal.vue')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
 const apiSource = fs.readFileSync(apiPath, 'utf8')
@@ -69,6 +70,7 @@ const authStoreSource = fs.readFileSync(authStorePath, 'utf8')
 const cpUsersSource = fs.readFileSync(cpUsersPath, 'utf8')
 const editUserSource = fs.readFileSync(editUserPath, 'utf8')
 const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
+const registrationSource = fs.readFileSync(registrationPath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -232,6 +234,29 @@ const paymentProviderUiChecks = [
 ]
 
 for (const check of paymentProviderUiChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const registrationPreflightChecks = [
+  {
+    ok:
+      registrationSource.includes('Не удалось проверить email. Повторите попытку.') &&
+      registrationSource.includes('Не удалось проверить ИНН. Повторите попытку.'),
+    message: 'Email и ИНН availability-проверки должны закрывать шаг регистрации при сетевой ошибке.',
+  },
+  {
+    ok:
+      registrationSource.includes('Не удалось проверить номер телефона. Повторите попытку.') &&
+      registrationSource.includes('value = value.slice(0, 10)'),
+    message: 'Телефон должен fail-closed проверяться и ограничиваться десятью локальными цифрами.',
+  },
+  {
+    ok: !registrationSource.includes('console.log(value)'),
+    message: 'Форма регистрации не должна выводить номер телефона в browser console.',
+  },
+]
+
+for (const check of registrationPreflightChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
