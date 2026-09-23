@@ -338,7 +338,7 @@ async def request_email_change(
     )
     recent_message_id = recent.scalar_one_or_none()
 
-    queued = recent_message_id is None
+    queued = previous_pending != target_email or recent_message_id is None
     if queued:
         target_digest = hashlib.sha256(target_email.encode("utf-8")).hexdigest()[:16]
         bucket = int(now.timestamp() // resend_seconds)
