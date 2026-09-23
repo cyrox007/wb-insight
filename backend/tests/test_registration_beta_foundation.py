@@ -228,6 +228,7 @@ def test_registration_payload_is_canonicalized_before_savepoint():
     assert reg_data["newsletter_subscription"] is False
     assert user_data["email"] == "user.name@example.com"
     assert user_data["phone"] == "+79991234567"
+    assert user_data["timezone"] == "Europe/Moscow"
     assert legal_context == "registration"
 
 
@@ -236,12 +237,18 @@ def test_registration_payload_is_canonicalized_before_savepoint():
     [
         ({"entity_type": "unknown"}, "ENTITY_TYPE_INVALID"),
         ({"full_name": "   "}, "FULL_NAME_REQUIRED"),
+        ({"full_name": "И" * 256}, "FULL_NAME_INVALID"),
         ({"email": "not-an-email"}, "EMAIL_INVALID"),
         ({"phone": "123"}, "PHONE_INVALID"),
         ({"password": "short"}, "PASSWORD_INVALID"),
+        ({"password": "Я" * 40}, "PASSWORD_TOO_LONG"),
         ({"newsletter_subscription": "false"}, "NEWSLETTER_FLAG_INVALID"),
         ({"inn": "1234567890"}, "INN_INVALID"),
+        ({"inn": []}, "INN_INVALID"),
         ({"kpp": "123"}, "KPP_INVALID"),
+        ({"kpp": {}}, "KPP_INVALID"),
+        ({"timezone": []}, "TIMEZONE_INVALID"),
+        ({"timezone": "x" * 51}, "TIMEZONE_INVALID"),
     ],
 )
 def test_registration_payload_rejects_invalid_fields(overrides, error_code):
