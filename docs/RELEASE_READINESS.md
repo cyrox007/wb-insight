@@ -87,6 +87,7 @@
 - P93 post-candidate registration input hardening валидирует структуру JSON и все сохраняемые поля на backend, канонизирует email/телефон, блокирует unsupported поля и malformed/oversized значения до транзакции и bcrypt; login email нормализуется до format-check;
 - P95 post-candidate admin identity hardening выравнивает Control Panel с регистрацией: общий normalizer для email/phone/ИНН, entity-specific legal identity validation, strict boolean staff flag и стабильный 409 на конкурентный unique-conflict;
 - P94 post-candidate INN identity hardening закрепляет уникальность непустого нормализованного ИНН на уровне PostgreSQL, использует trim-safe lookup и fail-closed миграцию на существующих дублях;
+- P96 post-candidate seller-profile identity hardening использует общий `validate_legal_identity`: self-service смена типа продавца больше не может создать юридическое лицо без обязательных реквизитов, профиль возвращает/сохраняет ИНН/КПП/юр. адрес и отклоняет malformed JSON как 400;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
