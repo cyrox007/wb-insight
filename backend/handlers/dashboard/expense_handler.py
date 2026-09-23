@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_db_session
@@ -16,6 +16,7 @@ from services.manual_expense_service import (
     list_manual_expenses,
     parse_expense_amount,
 )
+from utils.request_payload import request_json_object
 from utils.responce_helps import response_error, response_success
 
 
@@ -95,9 +96,17 @@ async def get_expenses(
 @router.post("/", dependencies=[Depends(auth_middle)])
 async def create_expense(
     request: Request,
+    response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    payload = await request.json()
+    payload = await request_json_object(request)
+    if payload is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="REQUEST_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект расхода",
+        )
+
     user_id = UUID(str(request.state.user["sub"]))
     try:
         token_id = UUID(str(payload.get("token_id")))
@@ -114,6 +123,7 @@ async def create_expense(
         if nm_id is not None and nm_id <= 0:
             raise ValueError("Некорректный артикул WB")
     except (TypeError, ValueError) as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message=str(exc), code="INVALID_EXPENSE")
 
     expense = ManualExpense(
@@ -135,12 +145,21 @@ async def create_expense(
 async def update_expense(
     expense_id: UUID,
     request: Request,
+    response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    payload = await request.json()
+    payload = await request_json_object(request)
+    if payload is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="REQUEST_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект расхода",
+        )
+
     user_id = UUID(str(request.state.user["sub"]))
     expense = await get_manual_expense(db_session, user_id, expense_id)
     if expense is None:
+        response.status_code = status.HTTP_404_NOT_FOUND
         return response_error(message="Расход не найден", code="NOT_FOUND")
 
     try:
@@ -170,6 +189,7 @@ async def update_expense(
                 else None
             )
     except (TypeError, ValueError) as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message=str(exc), code="INVALID_EXPENSE")
 
     await db_session.flush()
