@@ -48,6 +48,10 @@ def make_user(user_id):
         email="seller@example.com",
         phone="+79990000000",
         entity_type="individual",
+        inn=None,
+        kpp=None,
+        legal_address=None,
+        is_staff=False,
         tax_rate=0.2,
         timezone="Europe/Moscow",
         is_active=True,
@@ -125,3 +129,135 @@ def test_profile_router_exposes_settings_update():
     }
     assert ("/dashboard/profile/", "GET") in routes
     assert ("/dashboard/profile/", "PUT") in routes
+
+
+
+@pytest.mark.asyncio
+async def test_profile_update_rejects_legal_entity_without_required_identity(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(
+            user_id,
+            {
+                "entity_type": "legal_entity",
+                "inn": "",
+                "kpp": "",
+                "legal_address": "",
+            },
+        ),
+        response,
+        session,
+    )
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "VALIDATION_ERROR"
+    assert result["error"]["message"] == "ИНН обязателен для юридического лица"
+    assert response.status_code == 400
+    assert user.entity_type == "individual"
+    assert session.flush_count == 0
+
+
+@pytest.mark.asyncio
+async def test_profile_update_saves_canonical_legal_identity(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(
+            user_id,
+            {
+                "entity_type": "legal_entity",
+                "inn": " 7707083893 ",
+                "kpp": "773601001",
+                "legal_address": "  Москва, ул. Тестовая, 1  ",
+            },
+        ),
+        response,
+        session,
+    )
+
+    assert result["status"] == "success"
+    assert user.entity_type == "legal_entity"
+    assert user.inn == "7707083893"
+    assert user.kpp == "773601001"
+    assert user.legal_address == "Москва, ул. Тестовая, 1"
+    assert result["user"]["inn"] == "7707083893"
+    assert result["user"]["kpp"] == "773601001"
+    assert result["user"]["legal_address"] == "Москва, ул. Тестовая, 1"
+    assert session.flush_count == 1
+
+
+@pytest.mark.asyncio
+async def test_profile_update_rejects_non_object_json(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(user_id, ["not", "an", "object"]),
+        response,
+        session,
+    )
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "PROFILE_PAYLOAD_INVALID"
+    assert response.status_code == 400
+    assert session.flush_count == 0
+
+
+@pytest.mark.asyncio
+async def test_staff_profile_does_not_accept_seller_identity_changes(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    user.is_staff = True
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(
+            user_id,
+            {
+                "full_name": "Staff User",
+                "entity_type": "legal_entity",
+                "inn": "7707083893",
+                "kpp": "773601001",
+                "legal_address": "Москва",
+            },
+        ),
+        response,
+        session,
+    )
+
+    assert result["status"] == "success"
+    assert user.full_name == "Staff User"
+    assert user.entity_type == "individual"
+    assert user.inn is None
+    assert user.kpp is None
+    assert user.legal_address is None
