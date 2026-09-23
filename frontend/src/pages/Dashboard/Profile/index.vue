@@ -30,7 +30,6 @@ const tokens = ref([])
 
 const profileForm = reactive({
   full_name: '',
-  entity_type: 'individual',
   tax_percent: 0,
   timezone: 'Europe/Moscow',
 })
@@ -77,11 +76,17 @@ const tabs = computed(() => (
     : sellerTabs
 ))
 
-const entityTypes = [
-  { value: 'individual', label: 'Физическое лицо' },
-  { value: 'self_employed', label: 'Самозанятый' },
-  { value: 'legal_entity', label: 'Юридическое лицо' },
-]
+const ENTITY_TYPE_LABELS = {
+  individual: 'Физическое лицо',
+  self_employed: 'Самозанятый',
+  legal_entity: 'Юридическое лицо',
+}
+
+const entityTypeLabel = computed(() => (
+  ENTITY_TYPE_LABELS[user.value.entity_type] ||
+  user.value.entity_type ||
+  'Не указан'
+))
 
 const timezoneOptions = [
   'Europe/Moscow',
@@ -181,7 +186,6 @@ function tokenLabel(tokenId) {
 
 function syncProfileForm() {
   profileForm.full_name = user.value.full_name || ''
-  profileForm.entity_type = user.value.entity_type || 'individual'
   profileForm.tax_percent = Math.round(Number(user.value.tax_rate || 0) * 10000) / 100
   profileForm.timezone = user.value.timezone || 'Europe/Moscow'
 }
@@ -245,7 +249,6 @@ async function saveProfile() {
       timezone: profileForm.timezone,
     }
     if (!isStaff.value) {
-      payload.entity_type = profileForm.entity_type
       payload.tax_rate = taxPercent / 100
     }
 
@@ -603,12 +606,11 @@ onMounted(async () => {
             <input v-model="profileForm.full_name" maxlength="255" autocomplete="name" />
           </label>
 
-          <label v-if="!isStaff" class="field">
+          <div v-if="!isStaff" class="profile-readonly">
             <span>Тип продавца</span>
-            <select v-model="profileForm.entity_type">
-              <option v-for="item in entityTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
-            </select>
-          </label>
+            <strong>{{ entityTypeLabel }}</strong>
+            <small>Изменение типа продавца требует административной проверки юридических реквизитов.</small>
+          </div>
 
           <label v-if="!isStaff" class="field">
             <span>Налоговая ставка, %</span>
@@ -878,6 +880,7 @@ onMounted(async () => {
 .profile-readonly { min-height: 58px; padding: 10px; display: flex; flex-direction: column; gap: 5px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--light-bg); }
 .profile-readonly span { color: var(--text-subtle); font-size: 10px; }
 .profile-readonly strong { font-size: 12px; font-weight: 600; }
+.profile-readonly small { color: var(--text-subtle); font-size: 10px; line-height: 1.35; }
 .form-actions, .secondary-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .primary-button, .secondary-button, .row-actions button, .danger-link { min-height: 36px; padding: 7px 11px; border-radius: 8px; font-weight: 650; cursor: pointer; }
 .primary-button { border: 1px solid var(--secondary-color); background: var(--secondary-color); color: #fff; }
