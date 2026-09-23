@@ -643,7 +643,8 @@ const validateEmail = async () => {
 		}
 
 	} catch (error) {
-		delete errors.value.email
+		errors.value.email = 'Не удалось проверить email. Повторите попытку.'
+		console.error('Ошибка проверки email:', error)
 	}
 }
 
@@ -676,8 +677,8 @@ const validatePhone = async () => {
 		delete errors.value.phone
 
 	} catch (error) {
-		errors.value.phone = 'Ошибка проверки номера телефона'
-		console.error(error)
+		errors.value.phone = 'Не удалось проверить номер телефона. Повторите попытку.'
+		console.error('Ошибка проверки номера телефона:', error)
 	}
 }
 
@@ -722,7 +723,8 @@ const validateInn = async () => {
 				: "Этот ИНН уже зарегистрирован";
 		}
 	} catch (error) {
-		delete errors.value.inn
+		errors.value.inn = 'Не удалось проверить ИНН. Повторите попытку.'
+		console.error('Ошибка проверки ИНН:', error)
 	}
 }
 
@@ -739,10 +741,8 @@ const validateKpp = () => {
 const formatPhone = (event) => {
 	let value = event.target.value.replace(/\D/g, '');
 	if (value.length >= 10) {
-		//value = value.slice(0, 10);
-		console.log(value);
-
-		value = `${value.slice(0, 3)} ${value.slice(3, 6)} ${value.slice(6, 8)} ${value.slice(8, 10)}`;
+		value = value.slice(0, 10)
+		value = `${value.slice(0, 3)} ${value.slice(3, 6)} ${value.slice(6, 8)} ${value.slice(8, 10)}`
 	}
 	formData.value.phone = value;
 };
@@ -817,13 +817,8 @@ const performRegistration = async () => {
 		}
 
 	} catch (error) {
-		console.error('Registration error:', error)
-
-		// Обработка ошибок сервера
-
-		//alert(error.response?.data?.message || 'Ошибка регистрации')
+		console.error('Ошибка регистрации:', error)
 		notify.error(error)
-
 
 		// Возвращаемся к шагу с ошибками
 		currentStep.value = 1
