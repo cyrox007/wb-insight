@@ -1,9 +1,10 @@
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.access_control import permissions_for_roles
@@ -11,6 +12,7 @@ from core.dependencies import get_db_session
 from core.lifecycle_config import lifecycle_config
 from core.middleware import auth_middle
 from integrations.wildberries.token_metadata import WBTokenValidationError
+from models.mail_delivery import MailMessage
 from models.users_model import EntityType
 from services.legal_service import (
     LegalConsentError,
@@ -315,32 +317,55 @@ async def request_email_change(
             message="Этот email уже используется другим аккаунтом",
         )
 
+    previous_pending = normalize_email(getattr(current_user, "pending_email", None))
     current_user.pending_email = target_email
-    target_digest = hashlib.sha256(target_email.encode("utf-8")).hexdigest()[:16]
+
     resend_seconds = max(
         1,
         int(lifecycle_config.EMAIL_VERIFICATION_RESEND_SECONDS),
     )
-    bucket = int(datetime.now(timezone.utc).timestamp() // resend_seconds)
-    await queue_transactional_email(
-        db_session,
-        user=current_user,
-        template_code="email_verification",
-        recipient_email=target_email,
-        idempotency_key=f"email-change:{current_user.id}:{target_digest}:{bucket}",
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=resend_seconds)
+    recent = await db_session.execute(
+        select(MailMessage.id)
+        .where(
+            MailMessage.user_id == current_user.id,
+            MailMessage.template_code == "email_verification",
+            MailMessage.recipient_email == target_email,
+            MailMessage.created_at >= cutoff,
+        )
+        .limit(1)
     )
-    await record_lifecycle_event(
-        db_session,
-        user_id=current_user.id,
-        event_type="email_change_requested",
-        event_data={"verification_required": True},
-    )
+    recent_message_id = recent.scalar_one_or_none()
+
+    queued = recent_message_id is None
+    if queued:
+        target_digest = hashlib.sha256(target_email.encode("utf-8")).hexdigest()[:16]
+        bucket = int(now.timestamp() // resend_seconds)
+        await queue_transactional_email(
+            db_session,
+            user=current_user,
+            template_code="email_verification",
+            recipient_email=target_email,
+            idempotency_key=f"email-change:{current_user.id}:{target_digest}:{bucket}",
+        )
+
+    if previous_pending != target_email:
+        await record_lifecycle_event(
+            db_session,
+            user_id=current_user.id,
+            event_type="email_change_requested",
+            event_data={"verification_required": True},
+        )
 
     return response_success(
         pending_email=target_email,
+        queued=queued,
         message=(
             "Письмо подтверждения поставлено в очередь. "
             "Текущий email будет действовать до подтверждения нового адреса."
+            if queued
+            else "Письмо подтверждения уже было отправлено недавно."
         ),
     )
 
