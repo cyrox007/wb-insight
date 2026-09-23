@@ -27,6 +27,7 @@ from services.token_services import (
     get_tokens_by_user_id,
     insert_token,
 )
+from services.user_identity import validate_legal_identity
 from services.user_service import get_user_by_uuid
 from utils.responce_helps import response_error, response_success
 
@@ -94,6 +95,9 @@ def _public_user(user) -> dict:
         "email": user.email,
         "phone": user.phone,
         "entity_type": user.entity_type,
+        "inn": getattr(user, "inn", None),
+        "kpp": getattr(user, "kpp", None),
+        "legal_address": getattr(user, "legal_address", None),
         "tax_rate": float(user.tax_rate or 0),
         "timezone": user.timezone,
         "is_active": user.is_active,
@@ -151,7 +155,17 @@ async def update_profile(
         response.status_code = status.HTTP_401_UNAUTHORIZED
         return response_error(code="UNAUTHORIZED", message="Неавторизован")
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except ValueError:
+        payload = None
+
+    if not isinstance(payload, dict):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="PROFILE_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект настроек профиля",
+        )
 
     full_name = str(payload.get("full_name", current_user.full_name) or "").strip()
     if not full_name or len(full_name) > 255:
@@ -161,14 +175,33 @@ async def update_profile(
             message="Укажите имя или название компании",
         )
 
-    entity_type = str(payload.get("entity_type", current_user.entity_type) or "").strip()
-    allowed_entity_types = {item.value for item in EntityType}
-    if entity_type not in allowed_entity_types:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(
-            code="VALIDATION_ERROR",
-            message="Некорректный тип продавца",
-        )
+    is_staff = bool(getattr(current_user, "is_staff", False))
+    entity_type = str(current_user.entity_type or "").strip()
+    legal_identity = {
+        "entity_type": entity_type,
+        "inn": getattr(current_user, "inn", None),
+        "kpp": getattr(current_user, "kpp", None),
+        "legal_address": getattr(current_user, "legal_address", None),
+    }
+
+    if not is_staff:
+        try:
+            legal_identity = validate_legal_identity(
+                entity_type=payload.get("entity_type", current_user.entity_type),
+                inn_value=payload.get("inn", getattr(current_user, "inn", None)),
+                kpp_value=payload.get("kpp", getattr(current_user, "kpp", None)),
+                legal_address_value=payload.get(
+                    "legal_address",
+                    getattr(current_user, "legal_address", None),
+                ),
+            )
+        except ValueError as exc:
+            response.status_code = status.HTTP_400_BAD_REQUEST
+            return response_error(
+                code="VALIDATION_ERROR",
+                message=str(exc),
+            )
+        entity_type = legal_identity["entity_type"]
 
     try:
         tax_rate = float(payload.get("tax_rate", current_user.tax_rate or 0))
@@ -193,6 +226,10 @@ async def update_profile(
 
     current_user.full_name = full_name
     current_user.entity_type = entity_type
+    if not is_staff:
+        current_user.inn = legal_identity["inn"]
+        current_user.kpp = legal_identity["kpp"]
+        current_user.legal_address = legal_identity["legal_address"]
     current_user.tax_rate = tax_rate
     current_user.timezone = timezone_name
     await db_session.flush()
