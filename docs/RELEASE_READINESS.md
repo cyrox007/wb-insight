@@ -82,7 +82,7 @@
 - P90 post-candidate auth preflight hardening валидирует availability payload, нормализует телефон к `+7XXXXXXXXXX` и не позволяет frontend продолжать регистрацию после недоступной проверки email/телефона/ИНН;
 - P91 post-candidate email identity hardening использует lowercase для новых email, `lower(users.email)` для lookup и уникальный функциональный индекс; миграция не изменяет исторические значения и fail-closed останавливается на case-дубликатах;
 - P92 post-candidate registration UX/privacy cleanup прекращает сбор расчётного счёта и БИК до появления реального backend-контракта хранения, исключая молчаливую потерю введённых данных;
-- P93 post-candidate registration input hardening валидирует структуру JSON и все сохраняемые поля на backend, канонизирует email/телефон, блокирует unsupported поля и malformed/oversized значения до транзакции и bcrypt;
+- P93 post-candidate registration input hardening валидирует структуру JSON и все сохраняемые поля на backend, канонизирует email/телефон, блокирует unsupported поля и malformed/oversized значения до транзакции и bcrypt; login email нормализуется до format-check;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
