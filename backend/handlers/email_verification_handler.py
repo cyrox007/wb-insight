@@ -26,6 +26,21 @@ def _generic_resend_response() -> dict:
     )
 
 
+def _is_email_identity_conflict(exc: IntegrityError) -> bool:
+    """Определяет конфликт уникальности именно email identity пользователя."""
+    known_constraints = {"users_email_key", "uq_users_email_lower"}
+    original = getattr(exc, "orig", None)
+    candidates = [
+        getattr(original, "constraint_name", None),
+        getattr(getattr(original, "__cause__", None), "constraint_name", None),
+    ]
+    if any(value in known_constraints for value in candidates):
+        return True
+
+    error_text = str(original or "").lower()
+    return any(constraint in error_text for constraint in known_constraints)
+
+
 @router.post("/confirm")
 async def confirm_email(
     request: Request,
@@ -71,7 +86,15 @@ async def confirm_email(
     try:
         async with db_session.begin_nested():
             user = await verify_email(db_session, raw_token)
-    except (EmailVerificationTargetConflict, IntegrityError):
+    except EmailVerificationTargetConflict:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="EMAIL_ALREADY_EXISTS",
+            message="Этот email уже используется другим аккаунтом",
+        )
+    except IntegrityError as exc:
+        if not _is_email_identity_conflict(exc):
+            raise
         response.status_code = status.HTTP_409_CONFLICT
         return response_error(
             code="EMAIL_ALREADY_EXISTS",
