@@ -59,6 +59,39 @@ async def _request_json_object(request: Request) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _is_registration_identity_conflict(exc: IntegrityError) -> bool:
+    """Определяет только известные конфликты уникальности регистрационной identity."""
+    known_constraints = (
+        "ix_users_email",
+        "users_email_key",
+        "uq_users_email_lower",
+        "ix_users_phone",
+        "users_phone_key",
+        "idx_users_phone_email_unique",
+        "uq_users_inn_normalized",
+    )
+    original = getattr(exc, "orig", None)
+    sources = (
+        original,
+        getattr(original, "__cause__", None),
+    )
+
+    for source in sources:
+        if source is None:
+            continue
+        constraint_name = getattr(source, "constraint_name", None)
+        if constraint_name in known_constraints:
+            return True
+
+        diagnostic = getattr(source, "diag", None)
+        diagnostic_name = getattr(diagnostic, "constraint_name", None)
+        if diagnostic_name in known_constraints:
+            return True
+
+    error_text = str(original or "").lower()
+    return any(constraint in error_text for constraint in known_constraints)
+
+
 def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]:
     if not isinstance(payload, dict):
         raise RegistrationAbort(
@@ -482,11 +515,13 @@ async def registration(
                 legal_documents=legal_documents,
                 legal_context=legal_context,
             )
-    except IntegrityError:
+    except IntegrityError as exc:
+        if not _is_registration_identity_conflict(exc):
+            raise
         response.status_code = status.HTTP_409_CONFLICT
         return response_error(
             code="REGISTRATION_CONFLICT",
-            message="Email, телефон или другие уникальные данные уже используются",
+            message="Email, телефон или ИНН уже используются другим аккаунтом",
         )
     except RegistrationAbort as exc:
         response.status_code = exc.status_code
