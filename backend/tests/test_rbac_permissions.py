@@ -44,6 +44,7 @@ def test_role_permission_matrix_is_explicit():
     assert set(super_permissions) == set(Permission)
     assert Permission.CONTROL_PANEL_ACCESS in admin_permissions
     assert Permission.USERS_WRITE in admin_permissions
+    assert Permission.USERS_DELETE in admin_permissions
     assert Permission.TARIFFS_WRITE in admin_permissions
     assert Permission.ROLES_WRITE not in admin_permissions
     assert Permission.PAYMENTS_WRITE not in admin_permissions
@@ -60,6 +61,7 @@ def test_role_permission_matrix_is_explicit():
         Permission.AUDIT_READ,
     } <= set(manager_permissions)
     assert Permission.USERS_WRITE not in manager_permissions
+    assert Permission.USERS_DELETE not in manager_permissions
     assert Permission.TARIFFS_WRITE not in manager_permissions
     assert Permission.PAYMENTS_WRITE not in manager_permissions
     assert Permission.MAIL_WRITE not in manager_permissions
@@ -150,6 +152,18 @@ def test_control_panel_routes_enforce_granular_permissions():
     assert _route_permissions(users_router, "/control-panel/users/{user_uuid}", "PUT") == {
         "users:read",
         "users:write",
+    }
+    assert _route_permissions(users_router, "/control-panel/users/{user_uuid}", "DELETE") == {
+        "users:read",
+        "users:write",
+    }
+    assert _route_permissions(
+        users_router,
+        "/control-panel/users/{user_uuid}/purge",
+        "DELETE",
+    ) == {
+        "users:read",
+        "users:delete",
     }
 
     assert _route_permissions(

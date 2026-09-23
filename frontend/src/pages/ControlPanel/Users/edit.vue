@@ -22,6 +22,7 @@ const accountActionLoading = ref('')
 const showEditModal = ref(false)
 const showAssignRoleModal = ref(false)
 const roleConfirm = ref({ isOpen: false, role: '' })
+const deleteConfirm = ref({ isOpen: false, email: '', reason: '', error: '' })
 
 const ENTITY_LABELS = {
 	individual: 'Физическое лицо',
@@ -46,6 +47,12 @@ const targetIsSuperAdmin = computed(() => targetUser.value?.roles?.some((item) =
 const isSelf = computed(() => String(authStore.user?.id || '') === String(targetUser.value?.id || ''))
 const canManageTarget = computed(() =>
 	canManageUsers.value && (!targetIsSuperAdmin.value || actorIsSuperAdmin.value)
+)
+const canPermanentlyDelete = computed(() =>
+	canManageTarget.value &&
+	!isSelf.value &&
+	targetUser.value &&
+	targetUser.value.is_active === false
 )
 const emailVerified = computed(() => Boolean(targetUser.value?.email_verified_at))
 
@@ -95,6 +102,55 @@ async function removeRoleConfirmed() {
 		loadError.value = error.response?.data?.error?.message || error.message || 'Не удалось удалить роль. Повторите действие.'
 	} finally {
 		roleActionLoading.value = false
+	}
+}
+
+function openPermanentDelete() {
+	if (!canPermanentlyDelete.value || accountActionLoading.value) return
+	deleteConfirm.value = {
+		isOpen: true,
+		email: '',
+		reason: '',
+		error: '',
+	}
+}
+
+function closePermanentDelete() {
+	if (accountActionLoading.value === 'purge') return
+	deleteConfirm.value = { isOpen: false, email: '', reason: '', error: '' }
+}
+
+async function permanentlyDeleteConfirmed() {
+	if (!targetUser.value || !canPermanentlyDelete.value || accountActionLoading.value) return
+
+	const expectedEmail = String(targetUser.value.email || '').trim().toLowerCase()
+	const confirmation = String(deleteConfirm.value.email || '').trim().toLowerCase()
+	if (!confirmation || confirmation !== expectedEmail) {
+		deleteConfirm.value.error = 'Введите email пользователя точно так, как он указан в карточке.'
+		return
+	}
+
+	accountActionLoading.value = 'purge'
+	deleteConfirm.value.error = ''
+	try {
+		const response = await CP_Users.permanentlyDeleteUser(
+			targetUser.value.id,
+			confirmation,
+			String(deleteConfirm.value.reason || '').trim(),
+		)
+		if (response.data?.status !== 'success' || response.data?.deleted !== true) {
+			throw new Error(response.data?.error?.message || 'Пользователь не удалён')
+		}
+		deleteConfirm.value = { isOpen: false, email: '', reason: '', error: '' }
+		await router.push({ name: 'control-panel.users' })
+	} catch (error) {
+		console.error('Ошибка необратимого удаления пользователя:', error)
+		deleteConfirm.value.error =
+			error.response?.data?.error?.message ||
+			error.message ||
+			'Не удалось удалить пользователя. Повторите действие.'
+	} finally {
+		accountActionLoading.value = ''
 	}
 }
 
@@ -221,6 +277,15 @@ async function runAccountAction(kind) {
 							@click="runAccountAction('deactivate')"
 						/>
 						<BaseButton
+							v-if="canPermanentlyDelete"
+							variant="danger"
+							text="Удалить навсегда"
+							loading-text="Удаляем…"
+							:loading="accountActionLoading === 'purge'"
+							:disabled="Boolean(accountActionLoading)"
+							@click="openPermanentDelete"
+						/>
+						<BaseButton
 							v-if="!isSelf"
 							variant="outline"
 							text="Отозвать сессии"
@@ -284,6 +349,67 @@ async function runAccountAction(kind) {
 		</template>
 
 		<Modal
+			v-if="deleteConfirm.isOpen"
+			:is-open="true"
+			aria-label="Подтверждение необратимого удаления пользователя"
+			:close-on-overlay-click="accountActionLoading !== 'purge'"
+			:close-on-escape="accountActionLoading !== 'purge'"
+			@close="closePermanentDelete"
+		>
+			<template #header>
+				<h3 class="cp-modal-title">Удалить пользователя навсегда</h3>
+			</template>
+			<template #body>
+				<div class="cp-modal-stack">
+					<p class="cp-modal-copy">
+						Аккаунт и связанные пользовательские данные будут удалены необратимо.
+						Для подтверждения введите email <strong>{{ targetUser?.email }}</strong>.
+					</p>
+					<label class="cp-field-label">
+						<span>Email для подтверждения</span>
+						<input
+							v-model="deleteConfirm.email"
+							type="email"
+							autocomplete="off"
+							:placeholder="targetUser?.email || ''"
+							:disabled="accountActionLoading === 'purge'"
+						/>
+					</label>
+					<label class="cp-field-label">
+						<span>Причина удаления <small class="cp-muted">необязательно</small></span>
+						<textarea
+							v-model="deleteConfirm.reason"
+							rows="3"
+							maxlength="1000"
+							placeholder="Кратко укажите причину"
+							:disabled="accountActionLoading === 'purge'"
+						/>
+					</label>
+					<p v-if="deleteConfirm.error" class="cp-form-error" role="alert">
+						{{ deleteConfirm.error }}
+					</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="cp-modal-footer">
+					<BaseButton
+						variant="outline"
+						text="Отмена"
+						:disabled="accountActionLoading === 'purge'"
+						@click="closePermanentDelete"
+					/>
+					<BaseButton
+						variant="danger"
+						text="Удалить навсегда"
+						loading-text="Удаляем…"
+						:loading="accountActionLoading === 'purge'"
+						@click="permanentlyDeleteConfirmed"
+					/>
+				</div>
+			</template>
+		</Modal>
+
+		<Modal
 			v-if="roleConfirm.isOpen"
 			:is-open="true"
 			aria-label="Подтверждение удаления роли"
@@ -313,5 +439,17 @@ async function runAccountAction(kind) {
 .cp-state--compact {
 	min-height: auto;
 	margin-bottom: 14px;
+}
+
+.cp-modal-stack {
+	display: grid;
+	gap: 14px;
+}
+
+.cp-form-error {
+	margin: 0;
+	color: var(--danger-color);
+	font-size: 12px;
+	line-height: 1.5;
 }
 </style>

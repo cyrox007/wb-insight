@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -41,15 +41,10 @@ async def insert_user(session: AsyncSession, user_data: dict):
     )
 
     session.add(new_user)
-    try:
-        await session.flush()
-        await session.refresh(new_user)
-    except Exception:
-        # Persistence errors must propagate to the request transaction owner.
-        # Swallowing a flush error leaves AsyncSession in a failed transaction
-        # and makes get_db_session attempt to commit an invalid registration.
-        logger.exception("Ошибка при создании пользователя")
-        raise
+    # Ошибки сохранения должны дойти до владельца request-транзакции.
+    # Скрывать ошибку flush нельзя: сессия после неё остаётся аварийной.
+    await session.flush()
+    await session.refresh(new_user)
 
     logger.info(f"Пользователь создан: {new_user.id}")
     return new_user
@@ -97,26 +92,20 @@ async def update_user(
     session: AsyncSession,
     user: User,
     user_data: dict,
-) -> Optional[User]:
-    try:
-        for key, value in user_data.items():
-            setattr(user, key, value)
-        await session.flush()
-        await session.refresh(user)
-        return user
-    except Exception as exc:
-        logger.error(f"Error updating user: {exc}")
-        return None
+) -> User:
+    for key, value in user_data.items():
+        setattr(user, key, value)
+    await session.flush()
+    await session.refresh(user)
+    return user
 
 
 async def delete_user(session: AsyncSession, user: User) -> bool:
-    try:
-        await session.delete(user)
-        await session.flush()
-        return True
-    except Exception as exc:
-        logger.error(f"Error deleting user: {exc}")
-        return False
+    """Необратимо удаляет пользователя, оставляя каскады базе данных."""
+    result = await session.execute(
+        delete(User).where(User.id == user.id).returning(User.id)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def get_user_role_association(session: AsyncSession, user_id: str):
@@ -146,31 +135,23 @@ async def create_user_role_association(
     role_code: str = 'user',
     assigned_by: str = '',
 ) -> bool:
-    try:
-        user_role_association = UserRoleAssociation(
-            user_id=user_id,
-            role=role_code,
-            assigned_by=assigned_by if assigned_by else None,
-        )
-        session.add(user_role_association)
-        await session.flush()
-        return True
-    except Exception as exc:
-        logger.error(f"Error creating user role association: {exc}")
-        return False
+    user_role_association = UserRoleAssociation(
+        user_id=user_id,
+        role=role_code,
+        assigned_by=assigned_by if assigned_by else None,
+    )
+    session.add(user_role_association)
+    await session.flush()
+    return True
 
 
 async def delete_role_association(
     session: AsyncSession,
     target_role: UserRoleAssociation,
 ) -> bool:
-    try:
-        await session.delete(target_role)
-        await session.flush()
-        return True
-    except Exception as exc:
-        logger.error(f"Error deleting user role association: {exc}")
-        return False
+    await session.delete(target_role)
+    await session.flush()
+    return True
 
 
 async def get_user_tax_rate(session: AsyncSession, user_id: UUID) -> float:
