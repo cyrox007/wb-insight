@@ -60,6 +60,7 @@ const authServicePath = path.join(root, 'API/AuthService.js')
 const authStorePath = path.join(root, 'stores/auth.js')
 const cpUsersPath = path.join(root, 'API/ControlPanel/CP_Users.js')
 const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
+const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
 const apiSource = fs.readFileSync(apiPath, 'utf8')
@@ -67,6 +68,7 @@ const authServiceSource = fs.readFileSync(authServicePath, 'utf8')
 const authStoreSource = fs.readFileSync(authStorePath, 'utf8')
 const cpUsersSource = fs.readFileSync(cpUsersPath, 'utf8')
 const editUserSource = fs.readFileSync(editUserPath, 'utf8')
+const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -209,6 +211,27 @@ const roleManagementUiChecks = [
 ]
 
 for (const check of roleManagementUiChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const paymentProviderUiChecks = [
+  {
+    ok:
+      paymentsSource.includes('const sberGatewayHint = computed') &&
+      paymentsSource.includes('https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1') &&
+      paymentsSource.includes('https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1'),
+    message: 'Control Panel должен явно показывать допустимые Sber gateway для test/live.',
+  },
+  {
+    ok:
+      paymentsSource.includes('произвольные hosts для merchant credentials запрещены') &&
+      paymentsSource.includes('maxlength="3"') &&
+      paymentsSource.includes('pattern="\\d{3}"'),
+    message: 'Форма Sber должна объяснять host policy и ограничивать код валюты тремя цифрами.',
+  },
+]
+
+for (const check of paymentProviderUiChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
