@@ -71,7 +71,7 @@
 - P84 post-candidate user administration hardening добавляет необратимое удаление только для административных ролей: отдельный backend permission, обязательная предварительная деактивация, запрет self-delete, подтверждение email и сохраняемое lifecycle evidence;
 - P86 post-candidate role-management hardening валидирует payload/UUID/системную роль, использует предсказуемые 4xx-ответы и защищает собственную/последнюю роль `super_admin` транзакционной блокировкой `FOR UPDATE`;
 - P87 post-candidate role UX hardening скрывает невозможное self-demotion действие `super_admin` и использует тот же guard в кнопке и обработчиках UI;
-- P88 post-candidate acquiring hardening ограничивает Sber gateway доверенными HTTPS-hosts/mode, fail-closed отключает legacy unsafe config и изолирует административное сохранение provider config savepoint-транзакцией;
+- P88 усиливает эквайринг после фиксации кандидата: шлюз Сбера ограничен доверенными HTTPS-узлами и режимом, старые небезопасные настройки получают `ready=false`, а административное сохранение конфигурации изолировано точкой сохранения транзакции;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
