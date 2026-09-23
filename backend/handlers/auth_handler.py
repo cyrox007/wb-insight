@@ -45,6 +45,46 @@ class RegistrationAbort(Exception):
         self.message = message
 
 
+async def _request_json_object(request: Request) -> dict | None:
+    try:
+        payload = await request.json()
+    except (TypeError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _normalize_email_preflight(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    email = value.strip()
+    if not email or len(email) > 254 or " " in email or email.count("@") != 1:
+        return None
+    local_part, domain = email.split("@", 1)
+    if not local_part or "." not in domain or domain.startswith(".") or domain.endswith("."):
+        return None
+    return email
+
+
+def _normalize_phone_preflight(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    digits = "".join(char for char in value if char.isdigit())
+    if len(digits) == 11 and digits[0] in {"7", "8"}:
+        digits = digits[1:]
+    if len(digits) != 10:
+        return None
+    return f"+7{digits}"
+
+
+def _normalize_inn_preflight(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    inn = value.strip()
+    if not inn.isdigit() or len(inn) not in {10, 12}:
+        return None
+    return inn
+
+
 async def _materialize_registration(
     request: Request,
     db_session: AsyncSession,
@@ -147,32 +187,74 @@ async def login(login_data: LoginRequest, response: Response, db_session: AsyncS
 
 
 @router.post("/check-email")
-async def check_email(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)) -> dict:
-    data = await request.json()
-    if "email" not in data:
+async def check_email(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    data = await _request_json_object(request)
+    email = _normalize_email_preflight(data.get("email") if data else None)
+    if email is None:
         response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(code="INVALID_REQUEST", message="Неверный запрос")
-    user = await get_user_by_email(db_session, data["email"])
+        return response_error(
+            code="EMAIL_INVALID",
+            message="Укажите корректный email",
+        )
+
+    user = await get_user_by_email(db_session, email)
     if user:
-        return response_error(code="EMAIL_ALREADY_EXISTS", message="Пользователь с таким Email уже зарегистрирован")
+        return response_error(
+            code="EMAIL_ALREADY_EXISTS",
+            message="Пользователь с таким email уже зарегистрирован",
+        )
     return response_success(message="Email свободен")
 
 
 @router.post("/check-phone")
-async def check_phone(request: Request, db_session: AsyncSession = Depends(get_db_session)) -> dict:
-    data = await request.json()
-    user = await get_user_by_phone(db_session, data["phone"])
+async def check_phone(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    data = await _request_json_object(request)
+    phone = _normalize_phone_preflight(data.get("phone") if data else None)
+    if phone is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="PHONE_INVALID",
+            message="Укажите корректный номер телефона",
+        )
+
+    user = await get_user_by_phone(db_session, phone)
     if user:
-        return response_error(code="PHONE_ALREADY_EXISTS", message="Пользователь с таким номером телефона уже зарегистрирован")
+        return response_error(
+            code="PHONE_ALREADY_EXISTS",
+            message="Пользователь с таким номером телефона уже зарегистрирован",
+        )
     return response_success(message="Номер телефона свободен")
 
 
 @router.post("/check-inn")
-async def check_inn(request: Request, db_session: AsyncSession = Depends(get_db_session)) -> dict:
-    data = await request.json()
-    user = await get_user_by_inn(db_session, data["inn"])
+async def check_inn(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    data = await _request_json_object(request)
+    inn = _normalize_inn_preflight(data.get("inn") if data else None)
+    if inn is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="INN_INVALID",
+            message="ИНН должен содержать 10 или 12 цифр",
+        )
+
+    user = await get_user_by_inn(db_session, inn)
     if user:
-        return response_error(code="INN_ALREADY_EXISTS", message="Пользователь с таким ИНН уже зарегистрирован")
+        return response_error(
+            code="INN_ALREADY_EXISTS",
+            message="Пользователь с таким ИНН уже зарегистрирован",
+        )
     return response_success(message="ИНН свободен")
 
 
