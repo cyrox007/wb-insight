@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Optional, TYPE_CHECKING
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import UUID as PG_UUID, Boolean, DateTime, Float, String, Text, Index, Integer, ForeignKey
+from sqlalchemy import UUID as PG_UUID, Boolean, DateTime, Float, String, Text, Index, Integer, ForeignKey, text
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -45,7 +45,7 @@ class UserRoleAssociation(Database.Base):
     def __init__(self, **kwargs):
         role = kwargs.get('role')
         if role and role not in [r.value for r in UserRole]:
-            raise ValueError(f"Invalid role: {role}. Valid roles are: {[r.value for r in UserRole]}")
+            raise ValueError(f"Некорректная роль: {role}. Допустимые роли: {[r.value for r in UserRole]}")
         super().__init__(**kwargs)
 
     __table_args__ = (
@@ -73,7 +73,7 @@ class User(Database.Base):
     email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="Момент подтверждения владения текущим email")
     pending_email: Mapped[Optional[str]] = mapped_column(String(254), nullable=True, comment="Новый email, ожидающий подтверждения")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, comment="Активен ли аккаунт")
-    session_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False, comment="Версия security session; increment отзывает ранее выданные JWT")
+    session_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False, comment="Версия сессии безопасности; увеличение отзывает ранее выданные JWT")
     deactivated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     deactivation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     retention_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -89,6 +89,12 @@ class User(Database.Base):
 
     __table_args__ = (
         Index("uq_users_email_lower", func.lower(email), unique=True),
+        Index(
+            "uq_users_inn_normalized",
+            func.trim(inn),
+            unique=True,
+            postgresql_where=text("inn IS NOT NULL AND trim(inn) <> ''"),
+        ),
         Index('idx_users_phone_email_unique', 'phone', 'email', unique=True),
         Index('idx_users_active_entity', 'is_active', 'entity_type'),
         Index('idx_users_legal_info', 'entity_type', 'inn', 'kpp'),
