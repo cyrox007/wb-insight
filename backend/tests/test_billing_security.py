@@ -89,3 +89,138 @@ def test_payment_admin_flags_preserve_real_boolean_values():
     assert provider_service._optional_bool({"enabled": False}, "enabled") is False
     assert provider_service._optional_bool({"enabled": True}, "enabled") is True
     assert provider_service._optional_bool({}, "enabled") is None
+
+
+
+@pytest.mark.parametrize(
+    ("mode", "url"),
+    [
+        ("test", "https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1"),
+        ("test", "https://ecomtest.sberbank.ru/ecomm/gw/partner/api/v1/"),
+        ("live", "https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1"),
+    ],
+)
+def test_sber_managed_gateway_accepts_only_expected_sber_routes(mode, url):
+    normalized = provider_service._normalize_sber_gateway_url(url, mode)
+
+    assert normalized.startswith("https://")
+    assert normalized.endswith("/ecomm/gw/partner/api/v1")
+
+
+@pytest.mark.parametrize(
+    ("mode", "url"),
+    [
+        ("live", "https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1"),
+        ("test", "https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1"),
+        ("live", "https://attacker.example/ecomm/gw/partner/api/v1"),
+        ("live", "http://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1"),
+        ("live", "https://user:pass@ecommerce.sberbank.ru/ecomm/gw/partner/api/v1"),
+        ("live", "https://ecommerce.sberbank.ru/other/api/v1"),
+        ("live", "https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1?redirect=x"),
+    ],
+)
+def test_sber_managed_gateway_rejects_unsafe_or_wrong_mode_urls(mode, url):
+    with pytest.raises(ValueError):
+        provider_service._normalize_sber_gateway_url(url, mode)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), 0, -1, 121])
+def test_payment_provider_timeout_rejects_non_finite_and_out_of_range_values(value):
+    with pytest.raises(ValueError, match="Таймаут"):
+        provider_service._normalize_timeout(value)
+
+
+def test_sber_runtime_marks_legacy_unsafe_gateway_not_ready(monkeypatch):
+    row = SimpleNamespace(
+        api_base_url="https://attacker.example/ecomm/gw/partner/api/v1",
+        return_url="https://app.example.test/billing/success",
+        fail_url="https://app.example.test/billing/fail",
+        currency_code="643",
+        timeout_seconds=10,
+        enabled=True,
+        is_default=True,
+        options={},
+    )
+    monkeypatch.setattr(
+        provider_service,
+        "_read_secrets",
+        lambda _row: {"username": "merchant", "password": "secret"},
+    )
+
+    runtime = provider_service._effective_runtime(row, "sber", "live")
+
+    assert runtime.ready is False
+    assert runtime.api_base_url == row.api_base_url
+
+
+@pytest.mark.asyncio
+async def test_provider_config_validation_failure_occurs_inside_savepoint(monkeypatch):
+    row = SimpleNamespace(
+        id="provider-id",
+        provider="sber",
+        mode="live",
+        api_base_url="https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1",
+        return_url=None,
+        fail_url=None,
+        currency_code="643",
+        timeout_seconds=10,
+        enabled=False,
+        is_default=False,
+        options={},
+        encrypted_secrets=None,
+        updated_by=None,
+    )
+
+    class NestedTransaction:
+        def __init__(self):
+            self.exception_type = None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, _exc, _tb):
+            self.exception_type = exc_type
+            return False
+
+    class Session:
+        def __init__(self):
+            self.nested = NestedTransaction()
+            self.flush_count = 0
+
+        def begin_nested(self):
+            return self.nested
+
+        async def flush(self):
+            self.flush_count += 1
+
+        async def execute(self, _statement):
+            raise AssertionError("Обновление default-провайдера не ожидалось")
+
+    session = Session()
+
+    async def existing_config(_session, _provider, _mode):
+        return row
+
+    monkeypatch.setattr(provider_service, "get_provider_config", existing_config)
+    monkeypatch.setattr(
+        provider_service,
+        "_read_secrets",
+        lambda _row: {"username": "merchant", "password": "secret"},
+    )
+    monkeypatch.setattr(
+        provider_service,
+        "encrypt_secret_payload",
+        lambda *_args, **_kwargs: "encrypted",
+    )
+
+    with pytest.raises(ValueError, match="конфигурация не готова"):
+        await provider_service.upsert_provider_config(
+            session,
+            provider="sber",
+            mode="live",
+            actor_id=SimpleNamespace(),
+            values={"enabled": True},
+        )
+
+    assert session.nested.exception_type is ValueError
+    assert session.flush_count == 1

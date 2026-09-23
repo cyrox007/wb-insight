@@ -21,7 +21,7 @@ from utils.responce_helps import response_error, response_success
 
 router = APIRouter(
     prefix="/control-panel/payments",
-    tags=["Control Panel - Payments"],
+    tags=["Платежи"],
     dependencies=[Depends(require_permission(Permission.PAYMENTS_READ))],
 )
 _SENSITIVE_FRAGMENTS = ("password", "secret", "token", "credential", "authorization")
@@ -131,17 +131,17 @@ async def payment_journal(
             query = query.where(Payment.provider == PaymentProvider(provider))
         except ValueError:
             response.status_code = status.HTTP_400_BAD_REQUEST
-            return response_error(code="VALIDATION_ERROR", message="Неизвестный provider")
+            return response_error(code="VALIDATION_ERROR", message="Неизвестный платёжный провайдер")
     if payment_status:
         try:
             query = query.where(Payment.status == PaymentStatus(payment_status))
         except ValueError:
             response.status_code = status.HTTP_400_BAD_REQUEST
-            return response_error(code="VALIDATION_ERROR", message="Неизвестный status")
+            return response_error(code="VALIDATION_ERROR", message="Неизвестный статус платежа")
     if mode:
         if mode not in {"test", "live"}:
             response.status_code = status.HTTP_400_BAD_REQUEST
-            return response_error(code="VALIDATION_ERROR", message="mode должен быть test или live")
+            return response_error(code="VALIDATION_ERROR", message="Режим должен быть test или live")
         query = query.where(Payment.mode == mode)
     if email:
         query = query.where(User.email.ilike(f"%{email.strip()}%"))

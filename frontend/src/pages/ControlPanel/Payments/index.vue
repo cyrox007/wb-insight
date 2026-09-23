@@ -39,6 +39,12 @@ const configuredCount = computed(() => providers.value.filter((item) => item.ena
 const editingProvider = computed(
 	() => providers.value.find((provider) => providerKey(provider) === editingKey.value) || null
 )
+const sberGatewayHint = computed(() => {
+	if (editingProvider.value?.provider !== 'sber') return ''
+	return editingProvider.value.mode === 'test'
+		? 'Test: https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1'
+		: 'Live: https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1'
+})
 
 async function loadProviders() {
 	isLoading.value = true
@@ -254,12 +260,22 @@ onMounted(loadProviders)
 							<label><input v-model="form.is_default" type="checkbox"> Провайдер по умолчанию</label>
 						</div>
 
-						<label class="provider-field">API URL<input v-model.trim="form.api_base_url" type="url" placeholder="https://…"></label>
+						<label class="provider-field">
+							API URL
+							<input
+								v-model.trim="form.api_base_url"
+								type="url"
+								:placeholder="editingProvider?.provider === 'sber' ? (editingProvider.mode === 'test' ? 'https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1' : 'https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1') : 'https://…'"
+							>
+							<small v-if="sberGatewayHint" class="cp-muted">
+								{{ sberGatewayHint }} · произвольные узлы для реквизитов мерчанта запрещены.
+							</small>
+						</label>
 						<label class="provider-field">Return URL<input v-model.trim="form.return_url" type="url" placeholder="https://…"></label>
 						<label class="provider-field">Fail URL<input v-model.trim="form.fail_url" type="url" placeholder="https://…"></label>
 
 						<div class="provider-form__row">
-							<label class="provider-field">Код валюты<input v-model.trim="form.currency_code" type="text"></label>
+							<label class="provider-field">Код валюты<input v-model.trim="form.currency_code" type="text" inputmode="numeric" maxlength="3" pattern="\d{3}"></label>
 							<label class="provider-field">Timeout, сек.<input v-model="form.timeout_seconds" type="number" min="1" max="120"></label>
 						</div>
 

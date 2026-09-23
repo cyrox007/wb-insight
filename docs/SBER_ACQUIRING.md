@@ -1,4 +1,4 @@
-# Sber internet acquiring — WB Insight
+# Интернет-эквайринг Сбера — WB Insight
 
 Актуально для WB Insight Web v1 на 15 сентября 2026 года.
 
@@ -31,7 +31,7 @@ Frontend генерирует один `Idempotency-Key` на одну попы�
 
 Подписка содержит уникальный `payment_id`. Даже если callback и пользовательский `/confirm` приходят одновременно, payment блокируется `SELECT ... FOR UPDATE`, а одна и та же оплата не может создать две подписки.
 
-## Payment events
+## События платежей
 
 `payment_events` хранит append-only технический журнал:
 
@@ -42,7 +42,7 @@ Frontend генерирует один `Idempotency-Key` на одну попы�
 
 В журнал намеренно не записываются merchant username/password, полный callback body, PAN/email и другие неизвестные поля провайдера.
 
-## Environment
+## Переменные окружения
 
 ```bash
 SBER_ACQUIRING_ENABLED=true
@@ -59,7 +59,24 @@ Sandbox URL — только для development/staging. При `APP_ENV=product
 
 Production merchant credentials должны поступать из secret manager/deployment environment и никогда не попадать в git, frontend environment или лог.
 
-## Callback
+## Управляемая конфигурация из Control Panel
+
+Настройки Сбера из Панели управления проходят обязательную безопасную проверку до того, как могут стать рабочей конфигурацией оплаты.
+
+- `api_base_url` обязан использовать HTTPS без встроенных реквизитов, параметров запроса и фрагмента;
+- базовый путь шлюза должен быть ровно `/ecomm/gw/partner/api/v1`;
+- режим `test` допускает только `ecomift.sberbank.ru` и `ecomtest.sberbank.ru`;
+- режим `live` запрещает тестовые узлы и допускает только шлюз в домене `sberbank.ru`;
+- уже сохранённый небезопасный адрес шлюза остаётся видимым администратору, но конфигурация получает `ready=false` и не используется для создания платежей или проверки статуса;
+- в production `return_url` и `fail_url` должны использовать HTTPS;
+- код валюты должен состоять ровно из трёх цифр;
+- таймаут должен быть конечным числом больше 0 и не больше 120 секунд.
+
+Изменение конфигурации провайдера выполняется внутри вложенной транзакции с точкой сохранения. Если финальная проверка готовности отклоняет конфигурацию, изменения откатываются до того, как обработчик вернёт `400`; частично записанная конфигурация не сохраняется.
+
+Панель управления показывает рекомендуемые адреса шлюза для `test/live`. Сервер остаётся источником истины и повторно проверяет все значения независимо от браузера.
+
+## Callback Сбера
 
 Backend endpoint:
 
@@ -69,7 +86,7 @@ Backend endpoint:
 
 В личном кабинете интернет-эквайринга callback URL должен указывать на публичный HTTPS backend endpoint.
 
-## P40 sandbox merchant acceptance
+## P40-проверка sandbox merchant
 
 Для production-like beta acceptance используется отдельный secret-safe probe `ops/sber_sandbox_acceptance.py`. Он не создаёт локальную подписку и не принимает card data: через тот же backend adapter создаётся один **неоплаченный** sandbox order, затем выполняется `getOrderStatusExtended.do`.
 
@@ -92,7 +109,7 @@ Runner привязывает evidence к exact `VERSION`, Git commit, environme
 
 Этот probe — дополнительное P40 evidence, когда test merchant credentials реально доступны. Он не заменяет production acquiring smoke перед RC/stable и не разрешает включать live acquiring без HTTPS/domain и production merchant onboarding.
 
-## Перед production release
+## Перед production-релизом
 
 Кодовая интеграция не заменяет merchant onboarding. До включения `SBER_ACQUIRING_ENABLED=true` в production необходимо:
 
