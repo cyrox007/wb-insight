@@ -9,6 +9,7 @@
 - [`INSTALLATION.md`](INSTALLATION.md) — локальная установка, запуск и production baseline.
 - [`CONFIGURATION.md`](CONFIGURATION.md) — переменные окружения и секреты.
 - [`USER_GUIDE.md`](USER_GUIDE.md) — путь пользователя от регистрации до аналитики и оплаты.
+- [`ONBOARDING.md`](ONBOARDING.md) — минимальный путь от регистрации до первых полезных данных и диагностика подключения WB.
 - [`FEATURES.md`](FEATURES.md) — функции продукта и назначение каждого раздела.
 - [`DATA_AND_METRICS.md`](DATA_AND_METRICS.md) — источники данных, смысл ключевых показателей и правила сверки.
 - [`DATA_ACCURACY_ACCEPTANCE.md`](DATA_ACCURACY_ACCEPTANCE.md) — обязательная сверка аналитики перед beta.

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { isStaffUser, ROLE_LABELS } from '@/security/roles'
 import { notify } from '@/composables/notification'
@@ -10,6 +11,7 @@ import SelectTariffModal from '@/components/CustomModals/ProfileModals/SelectTar
 import AddTokenModal from '@/components/CustomModals/ProfileModals/AddTokenModal.vue'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const { loadAccounts: refreshDashboardAccounts } = useDashboardAccount()
 const isStaff = computed(() => isStaffUser(authStore.getUser))
 const staffRoleLabels = computed(() =>
@@ -631,7 +633,13 @@ onMounted(async () => {
     resetExpenseForm()
   }
   await loadProfile()
-  if (!isStaff.value) resetExpenseForm()
+  if (!isStaff.value) {
+    resetExpenseForm()
+    const requestedTab = String(route.query.tab || '')
+    if (sellerTabs.some(tab => tab.key === requestedTab)) {
+      await selectTab(requestedTab)
+    }
+  }
 })
 </script>
 
