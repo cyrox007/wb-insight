@@ -15,7 +15,7 @@ from services.subscription_service import create_demo_subscription
 
 
 class EmailVerificationTargetConflict(RuntimeError):
-    """Raised when a verified target email already belongs to another account."""
+    """Ошибка конфликта, когда подтверждаемый email уже принадлежит другому аккаунту."""
 
 
 def token_hash(raw_token: str) -> str:
@@ -63,7 +63,7 @@ async def issue_email_verification_token(
     *,
     email: str | None = None,
 ) -> str:
-    """Create a one-time token bound to the exact address being verified."""
+    """Создаёт одноразовый токен, привязанный к конкретному подтверждаемому адресу."""
     target = _verification_target(user, email)
     now = datetime.now(timezone.utc)
     await session.execute(
@@ -95,11 +95,11 @@ async def issue_email_verification_token(
 
 
 async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
-    """Verify registration email or atomically apply a pending email change.
+    """Подтверждает email регистрации или атомарно применяет ожидающую смену адреса.
 
-    Replaying the same successfully-used token is idempotent while that verified
-    address is still the account's current identity. Revoked, expired or stale
-    target tokens remain invalid.
+    Повтор уже успешно использованного токена идемпотентен, пока подтверждённый
+    адрес остаётся текущей identity аккаунта. Отозванные, истёкшие и устаревшие
+    токены остаются недействительными.
     """
     now = datetime.now(timezone.utc)
     result = await session.execute(
@@ -128,7 +128,7 @@ async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
         return None
 
     if target == current and user.email_verified_at is None:
-        # Initial registration: grant demo access only after ownership is proven.
+        # Первичная регистрация: demo-доступ выдаётся только после подтверждения владения адресом.
         user.email_verified_at = now
         subscription_result = await session.execute(
             select(Subscription.id).where(Subscription.user_id == user.id).limit(1)
@@ -142,9 +142,9 @@ async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
             event_data={"purpose": "registration"},
         )
     elif pending and target == pending:
-        # Protect the final write with both an explicit lookup and the existing
-        # users.email UNIQUE constraint. The handler maps a racing IntegrityError
-        # to a stable conflict response instead of leaking a 500.
+        # Финальную запись защищают и явный lookup, и существующий UNIQUE users.email.
+        # Конкурентный IntegrityError преобразуется handler'ом в стабильный конфликт,
+        # а не раскрывается как необработанный 500.
         conflicting = await session.execute(
             select(User.id)
             .where(User.id != user.id, func.lower(User.email) == target)
@@ -159,8 +159,8 @@ async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
         user.email_verified_at = now
         user.session_version += 1
 
-        # A reset link delivered to the previous address must never survive an
-        # email identity change. Session-version rotation invalidates JWTs too.
+        # Ссылка восстановления, отправленная на прежний адрес, не должна переживать
+        # смену email identity. Ротация session_version также отзывает старые JWT.
         await session.execute(
             update(PasswordResetToken)
             .where(
@@ -176,8 +176,8 @@ async def verify_email(session: AsyncSession, raw_token: str) -> User | None:
             event_data={"verified": True},
         )
     else:
-        # The address changed again after this token was issued, or the token
-        # targets an already-verified current address. Treat it as stale.
+        # После выпуска токена адрес снова изменился либо токен указывает на уже
+        # подтверждённый текущий адрес. Такой токен считается устаревшим.
         return None
 
     token.used_at = now
@@ -203,12 +203,12 @@ async def admin_verify_email(
     actor_user_id,
     reason: str | None = None,
 ) -> bool:
-    """Mark the current account email as verified from the control panel.
+    """Помечает текущий email аккаунта подтверждённым из панели управления.
 
-    This is intentionally an audited administrative escape hatch for support
-    cases where normal mail delivery is unavailable. It verifies only the
-    current email identity, cancels stale pending-email capabilities, and grants
-    the same demo entitlement as the normal registration verification flow.
+    Это журналируемый административный механизм для случаев, когда обычная
+    доставка почты недоступна. Он подтверждает только текущую email identity,
+    отменяет устаревшие pending-email возможности и выдаёт тот же demo-доступ,
+    что и штатное подтверждение регистрации.
     """
     if user.email_verified_at is not None:
         return False
@@ -253,12 +253,12 @@ async def admin_change_email_identity(
     new_email: str,
     actor_user_id,
 ) -> None:
-    """Apply an admin email correction without silently preserving verification.
+    """Применяет административную коррекцию email без скрытого сохранения verification.
 
-    The new address becomes the current login identity but returns to the
-    unverified state. Existing sessions and recovery/verification capabilities
-    are revoked so the administrator may either use the normal verification
-    flow or explicitly perform the audited manual verification action.
+    Новый адрес становится текущей login identity, но возвращается в
+    неподтверждённое состояние. Существующие сессии и возможности
+    восстановления/подтверждения отзываются, после чего администратор может
+    использовать штатный flow подтверждения или явное журналируемое ручное действие.
     """
     normalized = _normalized_email(new_email)
     if not normalized or "@" not in normalized or len(normalized) > 254:
