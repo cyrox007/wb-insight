@@ -167,6 +167,98 @@ def test_registration_handler_does_not_use_manual_request_rollback():
     assert "async with db_session.begin_nested():" in source
 
 
+class InvalidJsonRequestStub:
+    async def json(self):
+        raise ValueError("некорректный JSON")
+
+
+@pytest.mark.asyncio
+async def test_check_phone_uses_same_canonical_format_as_registration(monkeypatch):
+    captured = {}
+
+    async def get_phone(_session, phone):
+        captured["phone"] = phone
+        return None
+
+    monkeypatch.setattr(auth_handler, "get_user_by_phone", get_phone)
+    response = Response()
+    payload = await auth_handler.check_phone(
+        RegistrationRequestStub({"phone": "999 123-45-67"}),
+        response,
+        object(),
+    )
+
+    assert payload["status"] == "success"
+    assert captured["phone"] == "+79991234567"
+
+
+@pytest.mark.asyncio
+async def test_check_phone_rejects_missing_or_invalid_value(monkeypatch):
+    async def must_not_query(*_args, **_kwargs):
+        raise AssertionError("Некорректный телефон не должен доходить до БД")
+
+    monkeypatch.setattr(auth_handler, "get_user_by_phone", must_not_query)
+
+    for request in (
+        RegistrationRequestStub({}),
+        RegistrationRequestStub({"phone": "123"}),
+        InvalidJsonRequestStub(),
+    ):
+        response = Response()
+        payload = await auth_handler.check_phone(request, response, object())
+        assert response.status_code == 400
+        assert payload["error"]["code"] == "PHONE_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_check_email_rejects_malformed_payload_before_database(monkeypatch):
+    async def must_not_query(*_args, **_kwargs):
+        raise AssertionError("Некорректный email не должен доходить до БД")
+
+    monkeypatch.setattr(auth_handler, "get_user_by_email", must_not_query)
+
+    for request in (
+        RegistrationRequestStub({}),
+        RegistrationRequestStub({"email": "not-an-email"}),
+        RegistrationRequestStub({"email": 123}),
+        InvalidJsonRequestStub(),
+    ):
+        response = Response()
+        payload = await auth_handler.check_email(request, response, object())
+        assert response.status_code == 400
+        assert payload["error"]["code"] == "EMAIL_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_check_inn_accepts_only_ten_or_twelve_digits(monkeypatch):
+    captured = {}
+
+    async def get_inn(_session, inn):
+        captured["inn"] = inn
+        return None
+
+    monkeypatch.setattr(auth_handler, "get_user_by_inn", get_inn)
+
+    response = Response()
+    payload = await auth_handler.check_inn(
+        RegistrationRequestStub({"inn": "7707083893"}),
+        response,
+        object(),
+    )
+    assert payload["status"] == "success"
+    assert captured["inn"] == "7707083893"
+
+    for value in ("", "123", "12345678901", "12345abcde"):
+        response = Response()
+        payload = await auth_handler.check_inn(
+            RegistrationRequestStub({"inn": value}),
+            response,
+            object(),
+        )
+        assert response.status_code == 400
+        assert payload["error"]["code"] == "INN_INVALID"
+
+
 @pytest.mark.asyncio
 async def test_demo_subscription_uses_canonical_lowercase_tariff_code():
     tariff_id = uuid4()
