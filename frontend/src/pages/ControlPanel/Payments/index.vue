@@ -268,7 +268,7 @@ onMounted(loadProviders)
 								:placeholder="editingProvider?.provider === 'sber' ? (editingProvider.mode === 'test' ? 'https://ecomift.sberbank.ru/ecomm/gw/partner/api/v1' : 'https://ecommerce.sberbank.ru/ecomm/gw/partner/api/v1') : 'https://…'"
 							>
 							<small v-if="sberGatewayHint" class="cp-muted">
-								{{ sberGatewayHint }} · произвольные hosts для merchant credentials запрещены.
+								{{ sberGatewayHint }} · произвольные узлы для реквизитов мерчанта запрещены.
 							</small>
 						</label>
 						<label class="provider-field">Return URL<input v-model.trim="form.return_url" type="url" placeholder="https://…"></label>
