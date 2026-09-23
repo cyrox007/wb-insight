@@ -84,7 +84,11 @@ async def test_confirm_email_maps_conflict_to_409_inside_savepoint(monkeypatch, 
     async def fake_verify(_session, _raw_token):
         if failure_kind == "domain":
             raise EmailVerificationTargetConflict("email_already_in_use")
-        raise IntegrityError("UPDATE users", {}, RuntimeError("unique conflict"))
+        raise IntegrityError(
+            "UPDATE users",
+            {},
+            RuntimeError('duplicate key violates constraint "uq_users_email_lower"'),
+        )
 
     monkeypatch.setattr(handler, "verify_email", fake_verify)
 
@@ -97,6 +101,32 @@ async def test_confirm_email_maps_conflict_to_409_inside_savepoint(monkeypatch, 
 
     assert response.status_code == 409
     assert result["error"]["code"] == "EMAIL_ALREADY_EXISTS"
+    assert session.savepoint_entries == 1
+    assert session.savepoint_rollbacks == 1
+    assert session.rollback_called is False
+
+
+@pytest.mark.asyncio
+async def test_confirm_email_does_not_mask_unrelated_integrity_error(monkeypatch):
+    session = _Session()
+
+    async def fake_verify(_session, _raw_token):
+        raise IntegrityError(
+            "INSERT lifecycle",
+            {},
+            RuntimeError('duplicate key violates constraint "unrelated_constraint"'),
+        )
+
+    monkeypatch.setattr(handler, "verify_email", fake_verify)
+
+    response = Response()
+    with pytest.raises(IntegrityError):
+        await handler.confirm_email(
+            _request("/auth/email-verification/confirm", {"token": "test-token"}),
+            response,
+            session,
+        )
+
     assert session.savepoint_entries == 1
     assert session.savepoint_rollbacks == 1
     assert session.rollback_called is False
