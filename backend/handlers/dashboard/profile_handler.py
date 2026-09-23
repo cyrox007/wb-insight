@@ -379,6 +379,7 @@ async def request_email_change(
 )
 async def cancel_email_change(
     request: Request,
+    response: Response,
     db_session: AsyncSession = Depends(get_db_session),
 ):
     """Отменяет ожидающую подтверждения смену email."""
@@ -386,6 +387,7 @@ async def cancel_email_change(
     user_id = _current_user_id(request)
     current_user = await get_user_by_uuid(db_session, user_id)
     if current_user is None:
+        response.status_code = status.HTTP_401_UNAUTHORIZED
         return response_error(code="UNAUTHORIZED", message="Неавторизован")
 
     pending_email = normalize_email(getattr(current_user, "pending_email", None))
