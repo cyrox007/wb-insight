@@ -50,7 +50,8 @@
 - P90 строгая availability-проверка регистрации закрыта PR #172, merge `ec1a1e24512eade61ce41597f6f93df53b305cb3`; все шесть exact-head workflow зелёные.
 - P91 case-insensitive email identity закрыт PR #173, merge `33363e5c1eb0f5e8d2cba55726af162fe2b68a52`; все шесть exact-head workflow зелёные.
 - P92 cleanup несохраняемых банковских реквизитов регистрации закрыт PR #174, merge `0fced2ef5499ede654793af827c2186a2f491cc1`; все шесть exact-head workflow зелёные.
-- P93 строгий server-side контракт регистрации подготовлен поверх текущего `dev`: malformed/oversized/unsupported payload получает 400 до savepoint и БД.
+- P93 строгий server-side контракт регистрации закрыт PR #175, merge `b8e3085a8145e5adbeffa4dae43c0320d9669b07`; все шесть exact-head workflow зелёные.
+- P94 DB-уникальность нормализованного ИНН подготовлена поверх текущего `dev`: partial unique index защищает от race и fail-closed проверяет исторические дубли.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -83,6 +84,7 @@
 - P91 post-candidate email identity hardening использует lowercase для новых email, `lower(users.email)` для lookup и уникальный функциональный индекс; миграция не изменяет исторические значения и fail-closed останавливается на case-дубликатах;
 - P92 post-candidate registration UX/privacy cleanup прекращает сбор расчётного счёта и БИК до появления реального backend-контракта хранения, исключая молчаливую потерю введённых данных;
 - P93 post-candidate registration input hardening валидирует структуру JSON и все сохраняемые поля на backend, канонизирует email/телефон, блокирует unsupported поля и malformed/oversized значения до транзакции и bcrypt; login email нормализуется до format-check;
+- P94 post-candidate identity hardening закрепляет уникальность непустого нормализованного ИНН на уровне PostgreSQL и использует trim-safe lookup;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
