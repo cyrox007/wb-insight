@@ -57,6 +57,7 @@
 - P97 self-service смена email завершает существующий `pending_email`/verification pipeline: новый адрес применяется только после подтверждения, запрос сериализуется блокировкой пользователя, старые verification-токены отзываются при смене/отмене pending-адреса, resend throttled через durable outbox и email не раскрывается в idempotency/lifecycle metadata.
 - P98 email verification transaction hardening изолирует конкурентные unique-conflict через savepoint вместо ручного rollback request-сессии и строго валидирует confirm/resend payload.
 - P99 registration integrity hardening преобразует в 409 только известные ограничения уникальности email/телефона/ИНН; остальные integrity failures не маскируются и остаются внутренними ошибками общего request-контура.
+- P100 legacy API cleanup удаляет публичную заглушку `/users/`; пользовательское администрирование остаётся только в защищённом Control Panel.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -95,6 +96,7 @@
 - P97 post-candidate email identity hardening добавляет authenticated request/cancel flow поверх существующего `pending_email`: current email остаётся активным до verification, конфликт адреса даёт 409, mail readiness fail-closed, параллельные изменения сериализуются `FOR UPDATE`, смена/отмена отзывают старые verification-токены, повторная отправка throttled через durable outbox, а lifecycle/idempotency metadata не содержат открытый email; self-service смена телефона не заявляется без отдельного подтверждаемого провайдера;
 - P98 post-candidate email verification hardening использует nested savepoint для 409-конфликтов, запрещает ручной rollback в handler и отклоняет malformed/unsupported confirm-resend input как стабильные 400;
 - P99 post-candidate registration integrity hardening отличает реальные конфликты уникальности пользовательских идентификаторов от посторонних ошибок целостности: только известные уникальные индексы email/телефона/ИНН дают стабильный 409, остальные IntegrityError проходят в общий безопасный 500-handler;
+- P100 post-candidate API cleanup удаляет публичный неиспользуемый `GET /users/`; реальный список и управление пользователями доступны только через RBAC-защищённый `/control-panel/users`;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
