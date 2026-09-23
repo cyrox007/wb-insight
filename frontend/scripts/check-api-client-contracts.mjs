@@ -306,6 +306,12 @@ const emailChangeChecks = [
   },
   {
     ok:
+      sellerProfileSource.includes('ProfileServices.cancelEmailChange()') &&
+      sellerProfileSource.includes('Отменить смену'),
+    message: 'Профиль должен позволять безопасно отменить ожидающую смену email.',
+  },
+  {
+    ok:
       sellerProfileSource.includes('Email меняется после подтверждения нового адреса. Телефон — через администратора.') &&
       !sellerProfileSource.includes('Email и телефон меняются через отдельное подтверждение.'),
     message: 'Профиль не должен обещать несуществующее self-service подтверждение телефона.',
