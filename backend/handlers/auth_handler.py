@@ -118,6 +118,12 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
             "FULL_NAME_REQUIRED",
             "Укажите ФИО или название организации",
         )
+    if len(full_name.strip()) > 255:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "FULL_NAME_INVALID",
+            "ФИО или название организации не должно превышать 255 символов",
+        )
 
     email = _normalize_email_preflight(reg_data.get("email"))
     if email is None:
@@ -142,6 +148,12 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
             "PASSWORD_INVALID",
             "Пароль должен содержать минимум 8 символов",
         )
+    if len(password.encode("utf-8")) > 72:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "PASSWORD_TOO_LONG",
+            "Пароль не должен превышать 72 байта в кодировке UTF-8",
+        )
 
     if (
         "newsletter_subscription" in reg_data
@@ -155,7 +167,7 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
 
     raw_inn = reg_data.get("inn")
     inn = ""
-    if raw_inn not in {None, ""}:
+    if raw_inn is not None and raw_inn != "":
         inn = _normalize_inn_preflight(raw_inn) or ""
         expected_inn_length = 10 if entity_type == EntityType.LEGAL_ENTITY.value else 12
         if len(inn) != expected_inn_length:
@@ -178,7 +190,7 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
 
     raw_kpp = reg_data.get("kpp")
     kpp = ""
-    if raw_kpp not in {None, ""}:
+    if raw_kpp is not None and raw_kpp != "":
         if not isinstance(raw_kpp, str):
             raise RegistrationAbort(
                 status.HTTP_400_BAD_REQUEST,
@@ -204,6 +216,15 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
             "Юридический адрес обязателен для юридического лица",
         )
 
+    timezone_value = reg_data.get("timezone")
+    if timezone_value not in {None, ""}:
+        if not isinstance(timezone_value, str) or len(timezone_value.strip()) > 50:
+            raise RegistrationAbort(
+                status.HTTP_400_BAD_REQUEST,
+                "TIMEZONE_INVALID",
+                "Некорректный часовой пояс",
+            )
+
     normalized = dict(reg_data)
     normalized.update(
         {
@@ -217,6 +238,11 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
                 legal_address.strip()
                 if isinstance(legal_address, str) and legal_address.strip()
                 else None
+            ),
+            "timezone": (
+                timezone_value.strip()
+                if isinstance(timezone_value, str) and timezone_value.strip()
+                else "Europe/Moscow"
             ),
         }
     )
