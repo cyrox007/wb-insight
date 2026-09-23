@@ -21,6 +21,7 @@ const activeTab = ref('profile')
 const isLoading = ref(true)
 const isSavingProfile = ref(false)
 const isEmailChangeSaving = ref(false)
+const isEmailChangeCancelling = ref(false)
 const showEmailChange = ref(false)
 const emailChangeValue = ref('')
 const addBtnLoading = ref(false)
@@ -284,6 +285,35 @@ function openEmailChange() {
 function closeEmailChange() {
   showEmailChange.value = false
   emailChangeValue.value = ''
+}
+
+async function cancelPendingEmailChange() {
+  if (!user.value.pending_email || isEmailChangeCancelling.value) return
+  if (!confirm('Отменить смену email? Отправленные ранее ссылки подтверждения перестанут действовать.')) return
+
+  isEmailChangeCancelling.value = true
+  try {
+    const response = await ProfileServices.cancelEmailChange()
+    const result = response.data || {}
+    if (result.status === 'error') {
+      notify.error(result.error?.message || 'Не удалось отменить смену email')
+      return
+    }
+
+    user.value = {
+      ...user.value,
+      pending_email: null,
+    }
+    closeEmailChange()
+    notify.success(result.message || 'Смена email отменена')
+  } catch (error) {
+    notify.error(
+      error.response?.data?.error?.message ||
+      'Не удалось отменить смену email'
+    )
+  } finally {
+    isEmailChangeCancelling.value = false
+  }
 }
 
 async function requestEmailChange() {
@@ -677,9 +707,20 @@ onMounted(async () => {
             <span>Email</span>
             <strong>{{ user.email }}</strong>
             <small v-if="user.pending_email">Ожидает подтверждения: {{ user.pending_email }}</small>
-            <button class="inline-link" type="button" @click="openEmailChange">
-              {{ user.pending_email ? 'Изменить или отправить снова' : 'Изменить email' }}
-            </button>
+            <div class="email-contact-actions">
+              <button class="inline-link" type="button" @click="openEmailChange">
+                {{ user.pending_email ? 'Изменить или отправить снова' : 'Изменить email' }}
+              </button>
+              <button
+                v-if="user.pending_email"
+                class="inline-link inline-link--danger"
+                type="button"
+                :disabled="isEmailChangeCancelling"
+                @click="cancelPendingEmailChange"
+              >
+                {{ isEmailChangeCancelling ? 'Отменяем…' : 'Отменить смену' }}
+              </button>
+            </div>
             <div v-if="showEmailChange" class="email-change-box">
               <input
                 v-model="emailChangeValue"
@@ -966,6 +1007,8 @@ onMounted(async () => {
 .profile-contact { gap: 7px; }
 .inline-link { width: fit-content; padding: 0; border: 0; background: transparent; color: var(--secondary-color); font-size: 11px; font-weight: 650; cursor: pointer; }
 .inline-link:disabled { opacity: .5; cursor: default; }
+.inline-link--danger { color: var(--danger-color); }
+.email-contact-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .email-change-box { margin-top: 3px; padding-top: 8px; display: grid; gap: 7px; border-top: 1px solid var(--border-color); }
 .email-change-box input { min-height: 38px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); color: var(--text-color); }
 .email-change-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
