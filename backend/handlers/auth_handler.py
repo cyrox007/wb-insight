@@ -217,7 +217,7 @@ def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]
         )
 
     timezone_value = reg_data.get("timezone")
-    if timezone_value not in {None, ""}:
+    if timezone_value is not None and timezone_value != "":
         if not isinstance(timezone_value, str) or len(timezone_value.strip()) > 50:
             raise RegistrationAbort(
                 status.HTTP_400_BAD_REQUEST,
