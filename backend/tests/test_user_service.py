@@ -4,6 +4,7 @@ from services.user_service import (
     create_user_role_association,
     delete_role_association,
     delete_user,
+    get_role_associations_for_update,
     insert_user,
     update_user,
 )
@@ -149,3 +150,30 @@ async def test_delete_role_association_propagates_flush_failure():
             FailingSession(),
             object(),
         )
+
+
+
+@pytest.mark.asyncio
+async def test_super_admin_role_lookup_uses_for_update_lock():
+    captured = {}
+
+    class ScalarResult:
+        def all(self):
+            return [object(), object()]
+
+    class Result:
+        def scalars(self):
+            return ScalarResult()
+
+    class LockingSession:
+        async def execute(self, statement):
+            captured["statement"] = statement
+            return Result()
+
+    rows = await get_role_associations_for_update(
+        LockingSession(),
+        "super_admin",
+    )
+
+    assert len(rows) == 2
+    assert "FOR UPDATE" in str(captured["statement"]).upper()
