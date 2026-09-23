@@ -317,10 +317,11 @@ async def request_email_change(
 
     current_user.pending_email = target_email
     target_digest = hashlib.sha256(target_email.encode("utf-8")).hexdigest()[:16]
-    bucket = int(
-        datetime.now(timezone.utc).timestamp()
-        // lifecycle_config.EMAIL_VERIFICATION_RESEND_SECONDS
+    resend_seconds = max(
+        1,
+        int(lifecycle_config.EMAIL_VERIFICATION_RESEND_SECONDS),
     )
+    bucket = int(datetime.now(timezone.utc).timestamp() // resend_seconds)
     await queue_transactional_email(
         db_session,
         user=current_user,
