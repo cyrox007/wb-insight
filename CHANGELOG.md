@@ -34,7 +34,13 @@
 - OpenAPI-tag контура ролей приведён к русскому системному контракту, regression-тесты закрепляют 4xx-семантику и транзакционную блокировку;
 - P87: карточка пользователя больше не предлагает снять собственную роль `super_admin`; UI использует единый guard `canRemoveRole` и повторяет backend self-demotion policy;
 - кнопка удаления собственной роли скрыта, прямой вызов UI-handler также блокируется, а пользователю показывается понятное объяснение запрета;
-- frontend API-contract test закрепляет совпадение UI и backend role-management guard.
+- frontend API-contract test закрепляет совпадение UI и backend role-management guard;
+- P88: управляемая конфигурация Сбер-эквайринга больше не может направить merchant credentials на произвольный host; gateway обязан использовать HTTPS, маршрут `/ecomm/gw/partner/api/v1` и доверенный домен Сбера;
+- test-режим допускает только sandbox-hosts `ecomift.sberbank.ru` / `ecomtest.sberbank.ru`, live-режим запрещает sandbox и требует домен `sberbank.ru`;
+- уже сохранённая небезопасная конфигурация fail-closed получает `ready=false` и не выбирается для checkout/status-check;
+- сохранение provider config выполняется внутри savepoint: отклонённая финальной readiness-проверкой настройка откатывается и не может частично сохраниться после ответа `400`;
+- timeout принимает только конечное значение 0–120 секунд, код валюты — ровно три цифры, production return/fail URL обязаны использовать HTTPS;
+- Control Panel показывает допустимые Sber gateway для test/live, а regression-тесты закрепляют URL-policy, legacy fail-closed и savepoint semantics.
 
 ## [0.9.0-beta.1] — candidate, обновлено 2026-09-22
 
