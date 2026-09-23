@@ -58,6 +58,7 @@
 - P98 email verification transaction hardening изолирует конкурентные unique-conflict через savepoint вместо ручного rollback request-сессии и строго валидирует confirm/resend payload.
 - P99 registration integrity hardening преобразует в 409 только известные ограничения уникальности email/телефона/ИНН; остальные integrity failures не маскируются и остаются внутренними ошибками общего request-контура.
 - P100 legacy API cleanup удаляет публичную заглушку `/users/`; пользовательское администрирование остаётся только в защищённом Control Panel.
+- P101 объединяет самостоятельную смену email в один канонический контур профиля: старая параллельная реализация `/account/email/change-request` удалена, а страница безопасности использует тот же маршрут, блокировки и правила повторной отправки, что P97.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -97,6 +98,7 @@
 - P98 post-candidate email verification hardening использует nested savepoint для 409-конфликтов, запрещает ручной rollback в handler и отклоняет malformed/unsupported confirm-resend input как стабильные 400;
 - P99 post-candidate registration integrity hardening отличает реальные конфликты уникальности пользовательских идентификаторов от посторонних ошибок целостности: только известные уникальные индексы email/телефона/ИНН дают стабильный 409, остальные IntegrityError проходят в общий безопасный 500-handler;
 - P100 post-candidate API cleanup удаляет публичный неиспользуемый `GET /users/`; реальный список и управление пользователями доступны только через RBAC-защищённый `/control-panel/users`;
+- P101 после фиксации кандидата устраняет второй источник истины для смены email: `/account/email/change-request` больше не публикуется, а обе клиентские страницы используют защищённые `/dashboard/profile/email-change/request` и `/dashboard/profile/email-change/cancel`;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;

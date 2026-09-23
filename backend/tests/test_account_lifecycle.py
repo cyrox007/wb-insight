@@ -441,8 +441,9 @@ def test_account_lifecycle_routes_are_registered():
     assert "post" in paths["/auth/password-reset/confirm"]
     assert "post" in paths["/auth/email-verification/confirm"]
     assert "post" in paths["/auth/email-verification/resend"]
-    assert "post" in paths["/account/email/change-request"]
-    assert "delete" in paths["/account/email/change-request"]
+    assert "/account/email/change-request" not in paths
+    assert "post" in paths["/dashboard/profile/email-change/request"]
+    assert "post" in paths["/dashboard/profile/email-change/cancel"]
     assert "post" in paths["/account/deactivate"]
     assert "post" in paths["/account/subscription/cancel"]
     assert "delete" in paths["/account/subscription/cancel"]
