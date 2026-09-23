@@ -41,6 +41,22 @@ def _verification_target(user: User, requested_email: str | None = None) -> str:
     return target
 
 
+async def revoke_email_verification_tokens(
+    session: AsyncSession,
+    user_id,
+) -> None:
+    """Отзывает все неиспользованные токены подтверждения email аккаунта."""
+    await session.execute(
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user_id,
+            EmailVerificationToken.used_at.is_(None),
+            EmailVerificationToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+
+
 async def issue_email_verification_token(
     session: AsyncSession,
     user: User,
