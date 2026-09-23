@@ -45,6 +45,8 @@
 - P84 безопасное permanent delete пользователей закрыто PR #167, merge `c454763617ed1e298251d4e82ac91d0835ac1e6a`; удаление доступно только `admin/super_admin`, self-delete и удаление активного аккаунта запрещены, все шесть exact-head workflow зелёные.
 - P86 hardening управления системными ролями закрыт PR #168, merge `53962c0ad0cebd4ab7948c90b1b85a983c2a244b`; все шесть exact-head workflow зелёные.
 - P87 синхронизация UI удаления ролей с backend guard закрыта PR #169, merge `f215e2e2f2dfc1566e64a46e42d38eb118160740`; все шесть exact-head workflow зелёные.
+- P88 hardening управляемой конфигурации Сбер-эквайринга закрыт PR #170, merge `73a104af10cd7cbaa1c24ac08942db360058b9a1`; все шесть exact-head workflow зелёные.
+- P89 атомарная регистрация через savepoint подготовлена поверх текущего `dev`: auth handler больше не выполняет ручной rollback, а partial registration не может сохраниться.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -72,6 +74,7 @@
 - P86 post-candidate role-management hardening валидирует payload/UUID/системную роль, использует предсказуемые 4xx-ответы и защищает собственную/последнюю роль `super_admin` транзакционной блокировкой `FOR UPDATE`;
 - P87 post-candidate role UX hardening скрывает невозможное self-demotion действие `super_admin` и использует тот же guard в кнопке и обработчиках UI;
 - P88 усиливает эквайринг после фиксации кандидата: шлюз Сбера ограничен доверенными HTTPS-узлами и режимом, старые небезопасные настройки получают `ready=false`, а административное сохранение конфигурации изолировано точкой сохранения транзакции;
+- P89 post-candidate registration hardening объединяет создание пользователя, базовой роли, согласий, suppression и demo/verification-mail в один savepoint; handler не выполняет ручной rollback request-сессии;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;

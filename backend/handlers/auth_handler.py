@@ -35,6 +35,89 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 logger = setup_logger(__name__)
 
 
+class RegistrationAbort(Exception):
+    """Управляемая ошибка атомарного блока регистрации."""
+
+    def __init__(self, status_code: int, code: str, message: str):
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+
+
+async def _materialize_registration(
+    request: Request,
+    db_session: AsyncSession,
+    *,
+    reg_data: dict,
+    user_data: dict,
+    legal_documents,
+    legal_context: str,
+):
+    user = await insert_user(db_session, user_data)
+    if user is None:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "REGISTRATION_ERROR",
+            "Ошибка при регистрации",
+        )
+
+    role_created = await create_user_role_association(
+        db_session,
+        str(user.id),
+        "user",
+    )
+    if not role_created:
+        raise RegistrationAbort(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            "Ошибка при регистрации",
+        )
+
+    await record_consents(
+        db_session,
+        user_id=user.id,
+        documents=legal_documents,
+        context=legal_context,
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        context_reference=str(user.id),
+    )
+
+    if reg_data.get("newsletter_subscription") is False:
+        db_session.add(
+            MailSuppression(
+                user_id=user.id,
+                email=user.email.strip().lower(),
+                reason="registration_opt_out",
+                active=True,
+            )
+        )
+        await db_session.flush()
+
+    demo = await get_tariff_by_code(db_session, "demo")
+    if demo is None:
+        raise RegistrationAbort(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            "Ошибка при регистрации",
+        )
+
+    if lifecycle_config.EMAIL_VERIFICATION_ENABLED:
+        user.email_verified_at = None
+        await queue_transactional_email(
+            db_session,
+            user=user,
+            template_code="email_verification",
+            idempotency_key=f"registration-verify:{user.id}",
+        )
+        return user
+
+    user.email_verified_at = datetime.now(timezone.utc)
+    await create_demo_subscription(db=db_session, user_id=user.id)
+    return user
+
+
 @router.post("/login")
 async def login(login_data: LoginRequest, response: Response, db_session: AsyncSession = Depends(get_db_session)) -> dict:
     user = await get_user_by_email(db_session, login_data.email)
@@ -94,11 +177,19 @@ async def check_inn(request: Request, db_session: AsyncSession = Depends(get_db_
 
 
 @router.post("/registration")
-async def registration(request: Request, response: Response, db_session: AsyncSession = Depends(get_db_session)) -> dict:
-    """Create an account; demo access is activated only after email ownership is proven."""
+async def registration(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Создаёт аккаунт атомарно; demo-доступ выдаётся после проверки владения email."""
     data = await request.json()
     reg_data = data.get("registrationData") or {}
-    legal_context = "registration_legal" if reg_data.get("entity_type") == "legal_entity" else "registration"
+    legal_context = (
+        "registration_legal"
+        if reg_data.get("entity_type") == "legal_entity"
+        else "registration"
+    )
 
     if lifecycle_config.EMAIL_VERIFICATION_ENABLED:
         mail_runtime = await get_mail_transport_runtime(db_session)
@@ -110,7 +201,10 @@ async def registration(request: Request, response: Response, db_session: AsyncSe
             )
 
     try:
-        legal_documents = validate_consent_payload(reg_data.get("legal_consents"), context=legal_context)
+        legal_documents = validate_consent_payload(
+            reg_data.get("legal_consents"),
+            context=legal_context,
+        )
     except LegalConsentError as exc:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code=exc.code, message=str(exc))
@@ -128,64 +222,33 @@ async def registration(request: Request, response: Response, db_session: AsyncSe
     }
 
     try:
-        user = await insert_user(db_session, user_data)
-    except IntegrityError:
-        await db_session.rollback()
-        response.status_code = status.HTTP_409_CONFLICT
-        return response_error(code="REGISTRATION_CONFLICT", message="Email, телефон или другие уникальные данные уже используются")
-
-    if not user:
-        response.status_code = status.HTTP_400_BAD_REQUEST
-        return response_error(code="REGISTRATION_ERROR", message="Ошибка при регистрации")
-
-    role_created = await create_user_role_association(db_session, str(user.id), "user")
-    if not role_created:
-        await db_session.rollback()
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return response_error(code="INTERNAL_SERVER_ERROR", message="Ошибка при регистрации")
-
-    await record_consents(
-        db_session,
-        user_id=user.id,
-        documents=legal_documents,
-        context=legal_context,
-        client_ip=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        context_reference=str(user.id),
-    )
-
-    if reg_data.get("newsletter_subscription") is False:
-        db_session.add(
-            MailSuppression(
-                user_id=user.id,
-                email=user.email.strip().lower(),
-                reason="registration_opt_out",
-                active=True,
+        async with db_session.begin_nested():
+            user = await _materialize_registration(
+                request,
+                db_session,
+                reg_data=reg_data,
+                user_data=user_data,
+                legal_documents=legal_documents,
+                legal_context=legal_context,
             )
+    except IntegrityError:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="REGISTRATION_CONFLICT",
+            message="Email, телефон или другие уникальные данные уже используются",
         )
-        await db_session.flush()
-
-    demo = await get_tariff_by_code(db_session, "demo")
-    if demo is None:
-        await db_session.rollback()
-        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return response_error(code="INTERNAL_SERVER_ERROR", message="Ошибка при регистрации")
+    except RegistrationAbort as exc:
+        response.status_code = exc.status_code
+        return response_error(code=exc.code, message=exc.message)
 
     if lifecycle_config.EMAIL_VERIFICATION_ENABLED:
-        user.email_verified_at = None
-        await queue_transactional_email(
-            db_session,
-            user=user,
-            template_code="email_verification",
-            idempotency_key=f"registration-verify:{user.id}",
-        )
         return response_success(
             message="Регистрация создана. Подтвердите email по ссылке из письма.",
             email_verification_required=True,
             email=user.email,
         )
 
-    # Compatibility for local/staging environments where mail is intentionally disabled.
-    user.email_verified_at = datetime.now(timezone.utc)
-    await create_demo_subscription(db=db_session, user_id=user.id)
-    return response_success(message="Зарегистрирован", email_verification_required=False)
+    return response_success(
+        message="Зарегистрирован",
+        email_verification_required=False,
+    )
