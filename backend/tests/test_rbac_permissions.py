@@ -10,6 +10,7 @@ from handlers.control_panel.home import router as home_router
 from handlers.control_panel.mail import router as mail_router
 from handlers.control_panel.operations import router as operations_router
 from handlers.control_panel.payments import router as payments_router
+from handlers.control_panel import roles as roles_handler
 from handlers.control_panel.roles import router as roles_router
 from handlers.control_panel.tariffs import router as tariffs_router
 from handlers.control_panel.users import router as users_router
@@ -293,3 +294,235 @@ def test_control_panel_routes_enforce_granular_permissions():
     ) == {
         "system:manage"
     }
+
+
+
+class RoleRequestStub:
+    def __init__(self, payload, actor_id="11111111-1111-4111-8111-111111111111"):
+        self._payload = payload
+        self.state = SimpleNamespace(
+            user_id=actor_id,
+            permissions={Permission.ROLES_WRITE.value},
+        )
+
+    async def json(self):
+        if isinstance(self._payload, Exception):
+            raise self._payload
+        return self._payload
+
+
+@pytest.mark.asyncio
+async def test_create_role_rejects_invalid_payload_before_database_calls(monkeypatch):
+    async def must_not_call(*_args, **_kwargs):
+        raise AssertionError("База данных не должна вызываться для некорректного payload")
+
+    monkeypatch.setattr(roles_handler, "get_user_by_uuid", must_not_call)
+
+    response = SimpleNamespace(status_code=200)
+    result = await roles_handler.create_role(
+        RoleRequestStub({"user_id": "bad-id", "role": "admin"}),
+        response,
+        object(),
+    )
+
+    assert response.status_code == 400
+    assert result["error"]["code"] == "USER_ID_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_create_role_rejects_unknown_role(monkeypatch):
+    async def must_not_call(*_args, **_kwargs):
+        raise AssertionError("Неизвестная роль не должна доходить до БД")
+
+    monkeypatch.setattr(roles_handler, "get_user_by_uuid", must_not_call)
+
+    response = SimpleNamespace(status_code=200)
+    result = await roles_handler.create_role(
+        RoleRequestStub(
+            {
+                "user_id": "22222222-2222-4222-8222-222222222222",
+                "role": "root_owner",
+            }
+        ),
+        response,
+        object(),
+    )
+
+    assert response.status_code == 400
+    assert result["error"]["code"] == "ROLE_INVALID"
+
+
+@pytest.mark.asyncio
+async def test_create_role_returns_not_found_for_missing_user(monkeypatch):
+    async def missing_user(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(roles_handler, "get_user_by_uuid", missing_user)
+
+    response = SimpleNamespace(status_code=200)
+    result = await roles_handler.create_role(
+        RoleRequestStub(
+            {
+                "user_id": "22222222-2222-4222-8222-222222222222",
+                "role": "admin",
+            }
+        ),
+        response,
+        object(),
+    )
+
+    assert response.status_code == 404
+    assert result["error"]["code"] == "USER_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_create_role_returns_conflict_for_duplicate(monkeypatch):
+    async def existing_user(*_args, **_kwargs):
+        return object()
+
+    async def existing_role(*_args, **_kwargs):
+        return object()
+
+    monkeypatch.setattr(roles_handler, "get_user_by_uuid", existing_user)
+    monkeypatch.setattr(
+        roles_handler,
+        "get_user_role_association_by_code",
+        existing_role,
+    )
+
+    response = SimpleNamespace(status_code=200)
+    result = await roles_handler.create_role(
+        RoleRequestStub(
+            {
+                "user_id": "22222222-2222-4222-8222-222222222222",
+                "role": "admin",
+            }
+        ),
+        response,
+        object(),
+    )
+
+    assert response.status_code == 409
+    assert result["error"]["code"] == "ROLE_ALREADY_ASSIGNED"
+
+
+@pytest.mark.asyncio
+async def test_super_admin_cannot_remove_own_super_admin_role(monkeypatch):
+    target_id = "11111111-1111-4111-8111-111111111111"
+
+    async def existing_role(*_args, **_kwargs):
+        return object()
+
+    async def must_not_lock(*_args, **_kwargs):
+        raise AssertionError("Self-demotion должна блокироваться до удаления роли")
+
+    monkeypatch.setattr(
+        roles_handler,
+        "get_user_role_association_by_code",
+        existing_role,
+    )
+    monkeypatch.setattr(
+        roles_handler,
+        "get_role_associations_for_update",
+        must_not_lock,
+    )
+
+    response = SimpleNamespace(status_code=200)
+    result = await roles_handler.remove_role(
+        target_id,
+        "super_admin",
+        RoleRequestStub({}, actor_id=target_id),
+        response,
+        object(),
+    )
+
+    assert response.status_code == 409
+    assert result["error"]["code"] == "SELF_SUPER_ADMIN_REMOVAL_FORBIDDEN"
+
+
+@pytest.mark.asyncio
+async def test_last_super_admin_role_cannot_be_removed(monkeypatch):
+    target_id = "22222222-2222-4222-8222-222222222222"
+
+    async def existing_role(*_args, **_kwargs):
+        return object()
+
+    async def one_super_admin(*_args, **_kwargs):
+        return [object()]
+
+    async def must_not_delete(*_args, **_kwargs):
+        raise AssertionError("Последний super_admin не должен удаляться")
+
+    monkeypatch.setattr(
+        roles_handler,
+        "get_user_role_association_by_code",
+        existing_role,
+    )
+    monkeypatch.setattr(
+        roles_handler,
+        "get_role_associations_for_update",
+        one_super_admin,
+    )
+    monkeypatch.setattr(
+        roles_handler,
+        "delete_role_association",
+        must_not_delete,
+    )
+
+    response = SimpleNamespace(status_code=200)
+    result = await roles_handler.remove_role(
+        target_id,
+        "super_admin",
+        RoleRequestStub({}),
+        response,
+        object(),
+    )
+
+    assert response.status_code == 409
+    assert result["error"]["code"] == "LAST_SUPER_ADMIN_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_super_admin_role_can_be_removed_when_another_one_remains(monkeypatch):
+    target_id = "22222222-2222-4222-8222-222222222222"
+    target_role = object()
+    deleted = []
+
+    async def existing_role(*_args, **_kwargs):
+        return target_role
+
+    async def two_super_admins(*_args, **_kwargs):
+        return [object(), object()]
+
+    async def delete_role(*_args, **kwargs):
+        deleted.append(kwargs["target_role"])
+        return True
+
+    monkeypatch.setattr(
+        roles_handler,
+        "get_user_role_association_by_code",
+        existing_role,
+    )
+    monkeypatch.setattr(
+        roles_handler,
+        "get_role_associations_for_update",
+        two_super_admins,
+    )
+    monkeypatch.setattr(
+        roles_handler,
+        "delete_role_association",
+        delete_role,
+    )
+
+    response = SimpleNamespace(status_code=200)
+    result = await roles_handler.remove_role(
+        target_id,
+        "super_admin",
+        RoleRequestStub({}),
+        response,
+        object(),
+    )
+
+    assert result["status"] == "success"
+    assert result["code"] == "ROLE_DELETED"
+    assert deleted == [target_role]
