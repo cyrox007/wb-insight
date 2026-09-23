@@ -1,3 +1,4 @@
+from models.account_lifecycle import AccountLifecycleEvent
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -311,3 +312,12 @@ async def test_permanent_delete_rejects_self_delete(monkeypatch):
 
     assert response.status_code == 409
     assert result["error"]["code"] == "SELF_DELETE_FORBIDDEN"
+
+
+
+def test_permanent_delete_lifecycle_evidence_survives_user_removal():
+    user_fk = next(iter(AccountLifecycleEvent.__table__.c.user_id.foreign_keys))
+    actor_fk = next(iter(AccountLifecycleEvent.__table__.c.actor_user_id.foreign_keys))
+
+    assert user_fk.ondelete == "SET NULL"
+    assert actor_fk.ondelete == "SET NULL"
