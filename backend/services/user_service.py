@@ -24,9 +24,11 @@ async def insert_user(session: AsyncSession, user_data: dict):
             logger.warning(f"Отсутствует обязательное поле: {field}")
             return None
 
+    normalized_email = str(user_data["email"]).strip().lower()
+
     new_user = User(
         id=uuid4(),
-        email=user_data['email'],
+        email=normalized_email,
         phone=user_data['phone'],
         full_name=user_data['full_name'],
         hashed_password=hash_password(user_data['password']),
@@ -56,7 +58,13 @@ async def get_user_by_uuid(session: AsyncSession, user_id: UUID) -> Optional[Use
 
 
 async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]:
-    result = await session.execute(select(User).where(User.email == email))
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_email:
+        return None
+
+    result = await session.execute(
+        select(User).where(func.lower(User.email) == normalized_email)
+    )
     return result.scalar_one_or_none()
 
 
