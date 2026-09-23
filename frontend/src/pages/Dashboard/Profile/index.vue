@@ -20,6 +20,9 @@ const staffRoleLabels = computed(() =>
 const activeTab = ref('profile')
 const isLoading = ref(true)
 const isSavingProfile = ref(false)
+const isEmailChangeSaving = ref(false)
+const showEmailChange = ref(false)
+const emailChangeValue = ref('')
 const addBtnLoading = ref(false)
 const showAddTokenModal = ref(false)
 const showTariffModal = ref(false)
@@ -270,6 +273,51 @@ async function saveProfile() {
     notify.error(error.response?.data?.error?.message || 'Не удалось сохранить настройки')
   } finally {
     isSavingProfile.value = false
+  }
+}
+
+function openEmailChange() {
+  emailChangeValue.value = user.value.pending_email || ''
+  showEmailChange.value = true
+}
+
+function closeEmailChange() {
+  showEmailChange.value = false
+  emailChangeValue.value = ''
+}
+
+async function requestEmailChange() {
+  const email = emailChangeValue.value.trim().toLowerCase()
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    notify.error('Укажите корректный email')
+    return
+  }
+
+  isEmailChangeSaving.value = true
+  try {
+    const response = await ProfileServices.requestEmailChange(email)
+    const result = response.data || {}
+    if (result.status === 'error') {
+      notify.error(result.error?.message || 'Не удалось запросить смену email')
+      return
+    }
+
+    user.value = {
+      ...user.value,
+      pending_email: result.pending_email || email,
+    }
+    notify.success(
+      result.message ||
+      'Письмо подтверждения поставлено в очередь. Текущий email действует до подтверждения нового адреса.'
+    )
+    closeEmailChange()
+  } catch (error) {
+    notify.error(
+      error.response?.data?.error?.message ||
+      'Не удалось запросить смену email'
+    )
+  } finally {
+    isEmailChangeSaving.value = false
   }
 }
 
@@ -597,7 +645,7 @@ onMounted(async () => {
             <p class="eyebrow">{{ isStaff ? 'Аккаунт' : 'Расчётные параметры' }}</p>
             <h2>{{ isStaff ? 'Личные настройки' : 'Профиль продавца' }}</h2>
           </div>
-          <span class="section-note">Email и телефон меняются через отдельное подтверждение.</span>
+          <span class="section-note">Email меняется после подтверждения нового адреса. Телефон — через администратора.</span>
         </div>
 
         <form class="form-grid" @submit.prevent="saveProfile">
@@ -625,13 +673,47 @@ onMounted(async () => {
             </select>
           </label>
 
-          <div class="profile-readonly">
+          <div class="profile-readonly profile-contact">
             <span>Email</span>
             <strong>{{ user.email }}</strong>
+            <small v-if="user.pending_email">Ожидает подтверждения: {{ user.pending_email }}</small>
+            <button class="inline-link" type="button" @click="openEmailChange">
+              {{ user.pending_email ? 'Изменить или отправить снова' : 'Изменить email' }}
+            </button>
+            <div v-if="showEmailChange" class="email-change-box">
+              <input
+                v-model="emailChangeValue"
+                type="email"
+                maxlength="254"
+                autocomplete="email"
+                placeholder="Новый email"
+                @keydown.enter.prevent="requestEmailChange"
+              />
+              <div class="email-change-actions">
+                <button
+                  class="secondary-button"
+                  type="button"
+                  :disabled="isEmailChangeSaving"
+                  @click="requestEmailChange"
+                >
+                  {{ isEmailChangeSaving ? 'Отправляем…' : 'Отправить подтверждение' }}
+                </button>
+                <button
+                  class="inline-link"
+                  type="button"
+                  :disabled="isEmailChangeSaving"
+                  @click="closeEmailChange"
+                >
+                  Отмена
+                </button>
+              </div>
+              <small>До подтверждения вход выполняется по текущему email.</small>
+            </div>
           </div>
           <div class="profile-readonly">
             <span>Телефон</span>
             <strong>{{ user.phone }}</strong>
+            <small>Смена номера выполняется администратором.</small>
           </div>
 
           <div class="form-actions field--wide">
@@ -881,6 +963,12 @@ onMounted(async () => {
 .profile-readonly span { color: var(--text-subtle); font-size: 10px; }
 .profile-readonly strong { font-size: 12px; font-weight: 600; }
 .profile-readonly small { color: var(--text-subtle); font-size: 10px; line-height: 1.35; }
+.profile-contact { gap: 7px; }
+.inline-link { width: fit-content; padding: 0; border: 0; background: transparent; color: var(--secondary-color); font-size: 11px; font-weight: 650; cursor: pointer; }
+.inline-link:disabled { opacity: .5; cursor: default; }
+.email-change-box { margin-top: 3px; padding-top: 8px; display: grid; gap: 7px; border-top: 1px solid var(--border-color); }
+.email-change-box input { min-height: 38px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); color: var(--text-color); }
+.email-change-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .form-actions, .secondary-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .primary-button, .secondary-button, .row-actions button, .danger-link { min-height: 36px; padding: 7px 11px; border-radius: 8px; font-weight: 650; cursor: pointer; }
 .primary-button { border: 1px solid var(--secondary-color); background: var(--secondary-color); color: #fff; }
