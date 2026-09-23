@@ -142,6 +142,29 @@ async def test_profile_update_rejects_entity_type_change(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_profile_update_rejects_non_object_payload(monkeypatch):
+    user_id = uuid4()
+    user = make_user(user_id)
+    session = FakeSession()
+
+    async def fake_get_user(_session, _user_id):
+        return user
+
+    monkeypatch.setattr(profile_handler, "get_user_by_uuid", fake_get_user)
+
+    response = Response()
+    result = await profile_handler.update_profile(
+        make_request(user_id, ["not", "an", "object"]),
+        response,
+        session,
+    )
+
+    assert response.status_code == 400
+    assert result["error"]["code"] == "PROFILE_PAYLOAD_INVALID"
+    assert session.flush_count == 0
+
+
+@pytest.mark.asyncio
 async def test_profile_update_rejects_unsupported_fields(monkeypatch):
     user_id = uuid4()
     user = make_user(user_id)
