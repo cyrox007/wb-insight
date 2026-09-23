@@ -9,6 +9,7 @@ from services.user_service import (
     delete_user,
     get_role_associations_for_update,
     get_user_by_email,
+    get_user_by_inn,
     insert_user,
     update_user,
 )
@@ -116,6 +117,86 @@ def test_email_identity_migration_fails_closed_on_case_duplicates():
     assert "HAVING count(*) > 1" in migration
     assert "Разрешите дубликаты вручную" in migration
     assert '"uq_users_email_lower"' in migration
+
+
+@pytest.mark.asyncio
+async def test_insert_user_normalizes_optional_inn():
+    session = FakeSession()
+    user = await insert_user(
+        session,
+        {
+            "email": "inn@example.com",
+            "phone": "+10000000008",
+            "full_name": "Пользователь",
+            "password": "a-secure-test-password",
+            "entity_type": "individual",
+            "inn": " 7707083893 ",
+        },
+    )
+
+    assert user.inn == "7707083893"
+
+    empty_inn_user = await insert_user(
+        FakeSession(),
+        {
+            "email": "empty-inn@example.com",
+            "phone": "+10000000007",
+            "full_name": "Пользователь без ИНН",
+            "password": "a-secure-test-password",
+            "entity_type": "individual",
+            "inn": "   ",
+        },
+    )
+    assert empty_inn_user.inn is None
+
+
+@pytest.mark.asyncio
+async def test_get_user_by_inn_normalizes_input_and_skips_empty_lookup():
+    captured = {}
+
+    class Result:
+        def scalar_one_or_none(self):
+            return None
+
+    class Session:
+        async def execute(self, statement):
+            captured["params"] = statement.compile().params
+            return Result()
+
+    session = Session()
+    assert await get_user_by_inn(session, "   ") is None
+    assert captured == {}
+
+    result = await get_user_by_inn(session, " 7707083893 ")
+
+    assert result is None
+    assert "7707083893" in set(captured["params"].values())
+
+
+def test_user_model_has_unique_inn_index():
+    index = next(
+        item
+        for item in User.__table__.indexes
+        if item.name == "uq_users_inn"
+    )
+
+    assert index.unique is True
+    assert [column.name for column in index.columns] == ["inn"]
+
+
+def test_inn_identity_migration_fails_closed_on_duplicates():
+    migration = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "a5e1d7c9b842_unique_user_inn.py"
+    ).read_text(encoding="utf-8")
+
+    assert "GROUP BY btrim(inn)" in migration
+    assert "HAVING count(*) > 1" in migration
+    assert "Разрешите дубликаты вручную" in migration
+    assert 'SET inn = NULL' in migration
+    assert '"uq_users_inn"' in migration
 
 
 @pytest.mark.asyncio
