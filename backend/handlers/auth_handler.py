@@ -11,6 +11,7 @@ from core.lifecycle_config import lifecycle_config
 from core.logger import setup_logger
 from core.session_cookie import set_refresh_cookie
 from models.mail_delivery import MailSuppression
+from models.users_model import EntityType
 from schemas.auth import LoginRequest
 from services.legal_service import LegalConsentError, record_consents, validate_consent_payload
 from services.mail_service import queue_transactional_email
@@ -62,7 +63,7 @@ def _normalize_email_preflight(value) -> str | None:
     local_part, domain = email.split("@", 1)
     if not local_part or "." not in domain or domain.startswith(".") or domain.endswith("."):
         return None
-    return email
+    return email.lower()
 
 
 def _normalize_phone_preflight(value) -> str | None:
@@ -83,6 +84,160 @@ def _normalize_inn_preflight(value) -> str | None:
     if not inn.isdigit() or len(inn) not in {10, 12}:
         return None
     return inn
+
+
+def _validated_registration_data(payload: dict | None) -> tuple[dict, dict, str]:
+    if not isinstance(payload, dict):
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "REGISTRATION_PAYLOAD_INVALID",
+            "Ожидается JSON-объект регистрации",
+        )
+
+    reg_data = payload.get("registrationData")
+    if not isinstance(reg_data, dict):
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "REGISTRATION_DATA_INVALID",
+            "Поле registrationData должно быть объектом",
+        )
+
+    entity_type = str(reg_data.get("entity_type") or "").strip().lower()
+    allowed_entity_types = {item.value for item in EntityType}
+    if entity_type not in allowed_entity_types:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "ENTITY_TYPE_INVALID",
+            "Укажите корректный тип пользователя",
+        )
+
+    full_name = reg_data.get("full_name")
+    if not isinstance(full_name, str) or not full_name.strip():
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "FULL_NAME_REQUIRED",
+            "Укажите ФИО или название организации",
+        )
+
+    email = _normalize_email_preflight(reg_data.get("email"))
+    if email is None:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "EMAIL_INVALID",
+            "Укажите корректный email",
+        )
+
+    phone = _normalize_phone_preflight(reg_data.get("phone"))
+    if phone is None:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "PHONE_INVALID",
+            "Укажите корректный номер телефона",
+        )
+
+    password = reg_data.get("password")
+    if not isinstance(password, str) or len(password) < 8:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "PASSWORD_INVALID",
+            "Пароль должен содержать минимум 8 символов",
+        )
+
+    if (
+        "newsletter_subscription" in reg_data
+        and not isinstance(reg_data["newsletter_subscription"], bool)
+    ):
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "NEWSLETTER_FLAG_INVALID",
+            "Поле newsletter_subscription должно быть логическим значением",
+        )
+
+    raw_inn = reg_data.get("inn")
+    inn = ""
+    if raw_inn not in {None, ""}:
+        inn = _normalize_inn_preflight(raw_inn) or ""
+        expected_inn_length = 10 if entity_type == EntityType.LEGAL_ENTITY.value else 12
+        if len(inn) != expected_inn_length:
+            raise RegistrationAbort(
+                status.HTTP_400_BAD_REQUEST,
+                "INN_INVALID",
+                (
+                    "ИНН юридического лица должен содержать 10 цифр"
+                    if entity_type == EntityType.LEGAL_ENTITY.value
+                    else "ИНН физического лица или ИП должен содержать 12 цифр"
+                ),
+            )
+
+    if entity_type == EntityType.LEGAL_ENTITY.value and not inn:
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "INN_REQUIRED",
+            "ИНН обязателен для юридического лица",
+        )
+
+    raw_kpp = reg_data.get("kpp")
+    kpp = ""
+    if raw_kpp not in {None, ""}:
+        if not isinstance(raw_kpp, str):
+            raise RegistrationAbort(
+                status.HTTP_400_BAD_REQUEST,
+                "KPP_INVALID",
+                "КПП должен содержать 9 цифр",
+            )
+        kpp = raw_kpp.strip()
+        if not kpp.isdigit() or len(kpp) != 9:
+            raise RegistrationAbort(
+                status.HTTP_400_BAD_REQUEST,
+                "KPP_INVALID",
+                "КПП должен содержать 9 цифр",
+            )
+
+    legal_address = reg_data.get("legal_address")
+    if (
+        entity_type == EntityType.LEGAL_ENTITY.value
+        and (not isinstance(legal_address, str) or not legal_address.strip())
+    ):
+        raise RegistrationAbort(
+            status.HTTP_400_BAD_REQUEST,
+            "LEGAL_ADDRESS_REQUIRED",
+            "Юридический адрес обязателен для юридического лица",
+        )
+
+    normalized = dict(reg_data)
+    normalized.update(
+        {
+            "entity_type": entity_type,
+            "full_name": full_name.strip(),
+            "email": email,
+            "phone": phone,
+            "inn": inn or None,
+            "kpp": kpp or None,
+            "legal_address": (
+                legal_address.strip()
+                if isinstance(legal_address, str) and legal_address.strip()
+                else None
+            ),
+        }
+    )
+
+    user_data = {
+        key: value
+        for key, value in normalized.items()
+        if key not in {
+            "legal_consents",
+            "agree_terms",
+            "agree_privacy",
+            "agree_data_processing",
+            "newsletter_subscription",
+        }
+    }
+    legal_context = (
+        "registration_legal"
+        if entity_type == EntityType.LEGAL_ENTITY.value
+        else "registration"
+    )
+    return normalized, user_data, legal_context
 
 
 async def _materialize_registration(
@@ -265,13 +420,12 @@ async def registration(
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """Создаёт аккаунт атомарно; demo-доступ выдаётся после проверки владения email."""
-    data = await request.json()
-    reg_data = data.get("registrationData") or {}
-    legal_context = (
-        "registration_legal"
-        if reg_data.get("entity_type") == "legal_entity"
-        else "registration"
-    )
+    data = await _request_json_object(request)
+    try:
+        reg_data, user_data, legal_context = _validated_registration_data(data)
+    except RegistrationAbort as exc:
+        response.status_code = exc.status_code
+        return response_error(code=exc.code, message=exc.message)
 
     if lifecycle_config.EMAIL_VERIFICATION_ENABLED:
         mail_runtime = await get_mail_transport_runtime(db_session)
@@ -290,18 +444,6 @@ async def registration(
     except LegalConsentError as exc:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code=exc.code, message=str(exc))
-
-    user_data = {
-        key: value
-        for key, value in reg_data.items()
-        if key not in {
-            "legal_consents",
-            "agree_terms",
-            "agree_privacy",
-            "agree_data_processing",
-            "newsletter_subscription",
-        }
-    }
 
     try:
         async with db_session.begin_nested():
