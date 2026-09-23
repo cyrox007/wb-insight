@@ -71,7 +71,11 @@ const dismissKey = computed(() =>
   profile.value?.user?.id ? `wb-onboarding-dismissed-${profile.value.user.id}` : ''
 )
 
-const visible = computed(() => !dismissed.value)
+const staffRoles = new Set(['super_admin', 'admin', 'manager', 'support', 'analyst'])
+const isSellerProfile = computed(() =>
+  !(profile.value?.user?.roles || []).some(role => staffRoles.has(role))
+)
+const visible = computed(() => !dismissed.value && (isLoading.value || isSellerProfile.value))
 
 async function loadContext() {
   isLoading.value = true
