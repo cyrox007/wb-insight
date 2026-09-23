@@ -260,6 +260,21 @@ for (const check of registrationPreflightChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
+const registrationPersistenceChecks = [
+  {
+    ok:
+      !registrationSource.includes('formData.bank_account') &&
+      !registrationSource.includes('formData.bik') &&
+      !registrationSource.includes('Расчётный счёт') &&
+      !registrationSource.includes('БИК банка'),
+    message: 'Регистрация не должна собирать банковские реквизиты, которые backend не сохраняет.',
+  },
+]
+
+for (const check of registrationPersistenceChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
 if (errors.length) {
   console.error('Проверка контрактов клиентского приложения завершилась ошибкой:\n')
   console.error(errors.join('\n\n'))
