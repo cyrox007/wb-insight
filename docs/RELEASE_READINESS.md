@@ -53,7 +53,8 @@
 - P93 строгий server-side контракт регистрации закрыт PR #175, merge `b8e3085a8145e5adbeffa4dae43c0320d9669b07`; все шесть exact-head workflow зелёные.
 - P95 единый identity-контракт admin edit закрыт PR #177, merge `504c4549e1c60d1c5d38a8abdbdffddc357da37e`; все шесть exact-head workflow зелёные.
 - P94 DB-уникальность нормализованного ИНН закрыта PR #178, merge `b108c9a7425469d7709e292e54e2b006ed06efec`; все шесть exact-head workflow зелёные.
-- P96 self-service guard типа продавца подготовлен поверх текущего `dev`: `entity_type` read-only, direct API change получает 409, malformed/unsupported profile payload получает 400.
+- P96 self-service guard типа продавца закрыт PR #179, merge `b7de8ad15d20ae5a328befd2874e9ec423e819ca`; `entity_type` read-only, direct API change получает 409, malformed/unsupported profile payload получает 400, все шесть exact-head workflow зелёные.
+- P97 self-service смена email завершает существующий `pending_email`/verification pipeline: новый адрес применяется только после подтверждения, запрос идёт через durable transactional mail и не раскрывает email в idempotency/lifecycle metadata.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
@@ -89,6 +90,7 @@
 - P95 post-candidate admin identity hardening выравнивает Control Panel с регистрацией: общий normalizer для email/phone/ИНН, entity-specific legal identity validation, strict boolean staff flag и стабильный 409 на конкурентный unique-conflict;
 - P94 post-candidate INN identity hardening закрепляет уникальность непустого нормализованного ИНН на уровне PostgreSQL, использует trim-safe lookup и fail-closed миграцию на существующих дублях;
 - P96 post-candidate profile identity hardening запрещает менять `entity_type` через self-service без проверки юридических реквизитов; тип продавца отображается read-only, изменение остаётся в административном контуре P95;
+- P97 post-candidate email identity hardening добавляет authenticated request-change endpoint поверх существующего `pending_email`: current email остаётся активным до verification, конфликт адреса даёт 409, mail readiness fail-closed, durable outbox и lifecycle evidence не содержат открытый email; self-service смена телефона не заявляется без отдельного подтверждаемого провайдера;
 - orders/sales/returns, products/stocks/prices, advertising/funnel, paid storage;
 - finance/reconciliation, historical COGS, manual expenses, revenue plan;
 - Overview/Unit Economy/Finance/Inventory/Prices/Ads UI;
