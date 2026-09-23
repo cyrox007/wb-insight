@@ -497,3 +497,12 @@ def test_auth_validation_messages_are_russian():
 
     assert "Некорректный формат email" in str(exc_info.value)
     assert "Invalid email format" not in str(exc_info.value)
+
+
+def test_login_email_is_normalized_before_format_validation():
+    payload = LoginRequest(
+        email="  User.Name@Example.COM  ",
+        password="secret",
+    )
+
+    assert payload.email == "user.name@example.com"
