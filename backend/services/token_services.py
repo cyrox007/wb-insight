@@ -14,7 +14,11 @@ from integrations.wildberries.token_metadata import (
 from integrations.wildberries.token_validation import validate_wb_token_live
 from models.tokens_model import APIToken, Marketplace
 from settings import config
-from utils.token_crypto import decrypt_token, encrypt_token
+from utils.token_crypto import (
+    TokenDecryptionError,
+    decrypt_token_with_legacy_status,
+    encrypt_token,
+)
 
 
 async def get_user_token_count(session: AsyncSession, user_id: UUID) -> int:
@@ -81,7 +85,21 @@ async def check_stored_wb_token(
             "Проверка этого маркетплейса пока не поддерживается",
         )
 
-    raw_token = decrypt_token(token.encrypted_token, str(user_id))
+    try:
+        raw_token, used_legacy_encryption = decrypt_token_with_legacy_status(
+            token.encrypted_token,
+            str(user_id),
+        )
+    except TokenDecryptionError as exc:
+        raise WBTokenValidationError(
+            "WB_TOKEN_STORAGE_UNREADABLE",
+            (
+                "Сохранённый токен нельзя прочитать. "
+                "Удалите это подключение и добавьте новый токен Wildberries."
+            ),
+            status_code=409,
+        ) from exc
+
     persistent_invalid_codes = {
         "WB_TOKEN_REJECTED",
         "WB_TOKEN_EXPIRED",
@@ -113,6 +131,8 @@ async def check_stored_wb_token(
 
         token.is_active = False
         token.is_revoked = exc.code == "WB_TOKEN_REJECTED"
+        if used_legacy_encryption:
+            token.encrypted_token = encrypt_token(raw_token, str(user_id))
         await session.flush()
         connection_status = "inactive"
         if exc.code == "WB_TOKEN_REJECTED":
@@ -134,6 +154,8 @@ async def check_stored_wb_token(
     token.expires_at = metadata.expires_at
     token.is_active = True
     token.is_revoked = False
+    if used_legacy_encryption:
+        token.encrypted_token = encrypt_token(raw_token, str(user_id))
     await session.flush()
 
     return {
