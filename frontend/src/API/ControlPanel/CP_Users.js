@@ -9,6 +9,10 @@ export default class CP_Users {
         return await $api.get(`/control-panel/users/${userId}`)
     }
 
+    static async createStaffUser(payload) {
+        return await $api.post('/control-panel/users/', payload)
+    }
+
     static async getUserByUuid(userId) {
         return await this.getUser(userId)
     }
