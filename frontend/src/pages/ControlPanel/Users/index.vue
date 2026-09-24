@@ -228,7 +228,7 @@ async function permanentlyDeleteConfirmed() {
 		if (response.data?.status !== 'success' || response.data?.deleted !== true) {
 			throw new Error(response.data?.error?.message || 'Пользователь не удалён')
 		}
-		closePermanentDelete()
+		deleteConfirm.value = { isOpen: false, user: null, email: '', error: '' }
 		await loadUsers()
 	} catch (error) {
 		console.error('Ошибка необратимого удаления пользователя:', error)
