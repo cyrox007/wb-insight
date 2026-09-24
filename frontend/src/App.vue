@@ -71,7 +71,7 @@ const dashboardAccountIssue = computed(() => {
   if (!tokens.length) {
     return {
       title: 'Нет подключённого кабинета Wildberries',
-      message: 'Добавьте кабинет Wildberries в профиле — после проверки система запустит первичную синхронизацию автоматически.',
+      message: 'Откройте раздел «Кабинеты WB» и добавьте токен. После успешной проверки первичная синхронизация запустится автоматически.',
     }
   }
 
@@ -101,21 +101,21 @@ const dashboardAccountIssue = computed(() => {
   }
 
   const reasons = []
-  if (counts.revoked) reasons.push(`отозвано: ${counts.revoked}`)
-  if (counts.expired) reasons.push(`истёк срок: ${counts.expired}`)
-  if (counts.inactive) reasons.push(`отключено: ${counts.inactive}`)
+  if (counts.revoked) reasons.push(`отозванных подключений: ${counts.revoked}`)
+  if (counts.expired) reasons.push(`с истёкшим сроком: ${counts.expired}`)
+  if (counts.inactive) reasons.push(`отключённых подключений: ${counts.inactive}`)
   if (counts.outside_tariff) reasons.push(`вне лимита тарифа: ${counts.outside_tariff}`)
 
   if (reasons.length) {
     return {
       title: 'Подключение Wildberries требует внимания',
-      message: `${reasons.join(' · ')}. Откройте профиль, чтобы обновить, заменить или проверить подключение.`,
+      message: `${reasons.join(' · ')}. Откройте раздел «Кабинеты WB», чтобы проверить статус, удалить старое или добавить новое подключение.`,
     }
   }
 
   return {
     title: 'Нет доступного кабинета Wildberries',
-    message: 'Проверьте подключение Wildberries и ограничения текущего тарифа в профиле.',
+    message: 'Откройте раздел «Кабинеты WB» и проверьте состояние подключения или ограничения тарифа.',
   }
 })
 
@@ -350,8 +350,8 @@ const logout = async () => {
       kind="account"
       :title="dashboardAccountIssue.title"
       :message="dashboardAccountIssue.message"
-      action-label="Проверить подключения"
-      :action-to="{ name: 'dashboard.profile' }"
+      action-label="Открыть кабинеты WB"
+      :action-to="{ path: '/dashboard/profile', query: { tab: 'connections' } }"
     />
     <RouterView v-else v-slot="{ Component }">
       <Transition name="page-motion" mode="out-in">
