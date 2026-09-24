@@ -13,11 +13,15 @@ from services.legal_service import (
 )
 from services.marketplace_access_service import get_wb_account_quota
 from services.sync_onboarding_service import bootstrap_token_sync
-from services.token_services import insert_token
+from services.token_services import (
+    check_stored_wb_token,
+    get_token_by_id,
+    insert_token,
+)
 from utils.responce_helps import response_error, response_success
 
 
-router = APIRouter(prefix="/dashboard", tags=["Tokens"])
+router = APIRouter(prefix="/dashboard", tags=["Токены"])
 
 
 @router.post("/tokens", dependencies=[Depends(auth_middle)])
@@ -97,5 +101,45 @@ async def create_token(
             "expires_at": token.expires_at,
             "sync_states_created": sync_states_created,
             "sync_jobs_created": sync_jobs_created,
+        },
+    )
+
+
+@router.post("/tokens/{token_id}/check", dependencies=[Depends(auth_middle)])
+async def check_token(
+    token_id: UUID,
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+):
+    """Проверяет сохранённый токен текущего пользователя через Wildberries API."""
+
+    user_id = UUID(str(request.state.user["sub"]))
+    token = await get_token_by_id(db_session, token_id)
+    if token is None or token.user_id != user_id:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return response_error(
+            code="TOKEN_NOT_FOUND",
+            message="Подключение Wildberries не найдено",
+        )
+
+    try:
+        result = await check_stored_wb_token(
+            session=db_session,
+            user_id=user_id,
+            token=token,
+        )
+    except WBTokenValidationError as exc:
+        response.status_code = exc.status_code
+        return response_error(code=exc.code, message=str(exc))
+
+    return response_success(
+        message=result["message"],
+        data={
+            "id": str(token.id),
+            "valid": result["valid"],
+            "connection_status": result["connection_status"],
+            "code": result["code"],
+            "expires_at": token.expires_at,
         },
     )
