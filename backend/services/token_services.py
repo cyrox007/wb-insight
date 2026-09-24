@@ -140,14 +140,14 @@ async def check_stored_wb_token(
         if exc.code == "WB_TOKEN_EXPIRED":
             connection_status = "expired"
 
-        return {
+        result = {
             "valid": False,
             "connection_status": connection_status,
             "code": exc.code,
             "message": str(exc),
         }
-    finally:
         del raw_token
+        return result
 
     token.token_type = metadata.token_type
     token.external_account_id = metadata.seller_id
@@ -158,12 +158,14 @@ async def check_stored_wb_token(
         token.encrypted_token = encrypt_token(raw_token, str(user_id))
     await session.flush()
 
-    return {
+    result = {
         "valid": True,
         "connection_status": "active",
         "code": None,
         "message": "Подключение Wildberries активно и подтверждено через API.",
     }
+    del raw_token
+    return result
 
 
 async def get_tokens_by_user_id(
