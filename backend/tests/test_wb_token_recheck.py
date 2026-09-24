@@ -8,9 +8,10 @@ from integrations.wildberries.token_metadata import (
     WBTokenMetadata,
     WBTokenValidationError,
 )
-from models.tokens_model import Marketplace
 from handlers.dashboard import token_handler
+from models.tokens_model import Marketplace
 from services import token_services
+from utils.token_crypto import TokenDecryptionError
 
 
 class FakeSession:
@@ -49,8 +50,8 @@ def make_metadata():
 def prepare_validation(monkeypatch, metadata):
     monkeypatch.setattr(
         token_services,
-        "decrypt_token",
-        lambda _encrypted, _user_id: "raw-token",
+        "decrypt_token_with_legacy_status",
+        lambda _encrypted, _user_id: ("raw-token", False),
     )
     monkeypatch.setattr(
         token_services,
@@ -98,6 +99,76 @@ async def test_recheck_restores_confirmed_wb_connection(monkeypatch):
     assert token.external_account_id == "seller-new"
     assert token.expires_at == metadata.expires_at
     assert session.flush_count == 1
+
+
+@pytest.mark.asyncio
+async def test_recheck_migrates_legacy_ciphertext_after_success(monkeypatch):
+    session = FakeSession()
+    token = make_token()
+    prepare_validation(monkeypatch, make_metadata())
+    user_id = uuid4()
+    encrypted = {}
+
+    monkeypatch.setattr(
+        token_services,
+        "decrypt_token_with_legacy_status",
+        lambda _encrypted, _user_id: ("raw-token", True),
+    )
+
+    def fake_encrypt(raw_token, requested_user_id):
+        encrypted["raw_token"] = raw_token
+        encrypted["user_id"] = requested_user_id
+        return "новый-ciphertext"
+
+    monkeypatch.setattr(token_services, "encrypt_token", fake_encrypt)
+
+    async def valid_live_check(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(
+        token_services,
+        "validate_wb_token_live",
+        valid_live_check,
+    )
+
+    result = await token_services.check_stored_wb_token(
+        session=session,
+        user_id=user_id,
+        token=token,
+    )
+
+    assert result["valid"] is True
+    assert token.encrypted_token == "новый-ciphertext"
+    assert encrypted == {
+        "raw_token": "raw-token",
+        "user_id": str(user_id),
+    }
+    assert session.flush_count == 1
+
+
+@pytest.mark.asyncio
+async def test_recheck_returns_safe_error_for_unreadable_ciphertext(monkeypatch):
+    token = make_token()
+
+    def fail_decrypt(_encrypted, _user_id):
+        raise TokenDecryptionError("не удалось расшифровать")
+
+    monkeypatch.setattr(
+        token_services,
+        "decrypt_token_with_legacy_status",
+        fail_decrypt,
+    )
+
+    with pytest.raises(WBTokenValidationError) as exc_info:
+        await token_services.check_stored_wb_token(
+            session=FakeSession(),
+            user_id=uuid4(),
+            token=token,
+        )
+
+    assert exc_info.value.code == "WB_TOKEN_STORAGE_UNREADABLE"
+    assert exc_info.value.status_code == 409
+    assert "добавьте новый токен" in str(exc_info.value).lower()
 
 
 @pytest.mark.asyncio
