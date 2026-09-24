@@ -91,6 +91,7 @@ async def check_stored_wb_token(
         "WB_TEST_TOKEN_NOT_SUPPORTED",
         "WB_SERVICE_TOKEN_MISMATCH",
         "WB_TOKEN_UNSUPPORTED_TYPE",
+        "WB_TOKEN_MALFORMED",
     }
 
     try:
