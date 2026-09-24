@@ -40,4 +40,8 @@ export default class ProfileServices {
     static async add_user_token(data) {
         return await $api.post(`/dashboard/tokens`, data);
     }
+
+    static async check_user_token(id) {
+        return await $api.post(`/dashboard/tokens/${id}/check`);
+    }
 }

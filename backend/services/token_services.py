@@ -14,7 +14,7 @@ from integrations.wildberries.token_metadata import (
 from integrations.wildberries.token_validation import validate_wb_token_live
 from models.tokens_model import APIToken, Marketplace
 from settings import config
-from utils.token_crypto import encrypt_token
+from utils.token_crypto import decrypt_token, encrypt_token
 
 
 async def get_user_token_count(session: AsyncSession, user_id: UUID) -> int:
@@ -66,6 +66,82 @@ async def insert_token(
     session.add(token)
     await session.flush()
     return token
+
+
+async def check_stored_wb_token(
+    session: AsyncSession,
+    user_id: UUID,
+    token: APIToken,
+) -> dict:
+    """Повторно проверяет сохранённое подключение Wildberries через API."""
+
+    if token.marketplace != Marketplace.WILDBERRIES:
+        raise WBTokenValidationError(
+            "MARKETPLACE_NOT_SUPPORTED",
+            "Проверка этого маркетплейса пока не поддерживается",
+        )
+
+    raw_token = decrypt_token(token.encrypted_token, str(user_id))
+    persistent_invalid_codes = {
+        "WB_TOKEN_REJECTED",
+        "WB_TOKEN_EXPIRED",
+        "WB_TOKEN_PERMISSIONS_MISSING",
+        "WB_TOKEN_MUST_BE_READ_ONLY",
+        "WB_PERSONAL_TOKEN_NOT_ALLOWED",
+        "WB_TEST_TOKEN_NOT_SUPPORTED",
+        "WB_SERVICE_TOKEN_MISMATCH",
+        "WB_TOKEN_UNSUPPORTED_TYPE",
+        "WB_TOKEN_MALFORMED",
+    }
+
+    try:
+        metadata = decode_wb_token(raw_token)
+        validate_cloud_service_token(
+            metadata,
+            service_id=config.WB_SERVICE_ID,
+            service_secret_configured=bool(config.WB_SERVICE_SECRET),
+        )
+        validate_analytics_permissions(metadata)
+        await validate_wb_token_live(
+            raw_token,
+            metadata,
+            service_secret=config.WB_SERVICE_SECRET,
+        )
+    except WBTokenValidationError as exc:
+        if exc.code not in persistent_invalid_codes:
+            raise
+
+        token.is_active = False
+        token.is_revoked = exc.code == "WB_TOKEN_REJECTED"
+        await session.flush()
+        connection_status = "inactive"
+        if exc.code == "WB_TOKEN_REJECTED":
+            connection_status = "revoked"
+        if exc.code == "WB_TOKEN_EXPIRED":
+            connection_status = "expired"
+
+        return {
+            "valid": False,
+            "connection_status": connection_status,
+            "code": exc.code,
+            "message": str(exc),
+        }
+    finally:
+        del raw_token
+
+    token.token_type = metadata.token_type
+    token.external_account_id = metadata.seller_id
+    token.expires_at = metadata.expires_at
+    token.is_active = True
+    token.is_revoked = False
+    await session.flush()
+
+    return {
+        "valid": True,
+        "connection_status": "active",
+        "code": None,
+        "message": "Подключение Wildberries активно и подтверждено через API.",
+    }
 
 
 async def get_tokens_by_user_id(

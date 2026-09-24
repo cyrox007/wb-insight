@@ -384,6 +384,34 @@ for (const check of sellerOnboardingChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
+const staffWbConnectionChecks = [
+  {
+    ok:
+      appSource.includes("query: { tab: 'connections' }") &&
+      appSource.includes('Открыть кабинеты WB') &&
+      appSource.includes('connectionCountLabel'),
+    message: 'Состояние недоступного WB-кабинета должно вести прямо в управление подключениями и использовать корректные русские склонения.',
+  },
+  {
+    ok:
+      sellerProfileSource.includes("const staffTabs = [") &&
+      sellerProfileSource.includes("{ key: 'connections', label: 'Кабинеты WB' }") &&
+      sellerProfileSource.includes("tabs.value.some(tab => tab.key === requestedTab)"),
+    message: 'Staff-профиль должен открывать собственные WB-подключения и поддерживать прямую ссылку на вкладку connections.',
+  },
+  {
+    ok:
+      sellerProfileSource.includes('ProfileServices.check_user_token(id)') &&
+      sellerProfileSource.includes('Проверить статус') &&
+      sellerProfileSource.includes('<AddTokenModal v-if="showAddTokenModal"'),
+    message: 'Вкладка подключений должна позволять staff-пользователю добавить токен и повторно проверить его статус.',
+  },
+]
+
+for (const check of staffWbConnectionChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
 if (errors.length) {
   console.error('Проверка контрактов клиентского приложения завершилась ошибкой:\n')
   console.error(errors.join('\n\n'))

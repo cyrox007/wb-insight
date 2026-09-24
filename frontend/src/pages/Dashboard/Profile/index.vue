@@ -27,6 +27,7 @@ const isEmailChangeCancelling = ref(false)
 const showEmailChange = ref(false)
 const emailChangeValue = ref('')
 const addBtnLoading = ref(false)
+const checkingTokenId = ref('')
 const showAddTokenModal = ref(false)
 const showTariffModal = ref(false)
 
@@ -76,10 +77,13 @@ const sellerTabs = [
   { key: 'expenses', label: 'Прочие расходы' },
 ]
 
+const staffTabs = [
+  { key: 'profile', label: 'Профиль' },
+  { key: 'connections', label: 'Кабинеты WB' },
+]
+
 const tabs = computed(() => (
-  isStaff.value
-    ? [{ key: 'profile', label: 'Профиль' }]
-    : sellerTabs
+  isStaff.value ? staffTabs : sellerTabs
 ))
 
 const ENTITY_TYPE_LABELS = {
@@ -387,6 +391,37 @@ async function handleTokenAdded() {
   showAddTokenModal.value = false
 }
 
+async function checkToken(id) {
+  if (checkingTokenId.value) return
+
+  checkingTokenId.value = id
+  try {
+    const response = await ProfileServices.check_user_token(id)
+    const result = response.data || {}
+    if (result.status === 'error') {
+      notify.error(result.error?.message || 'Не удалось проверить подключение Wildberries')
+      return
+    }
+
+    if (result.data?.valid === false) {
+      notify.info(result.message || 'Подключение Wildberries требует замены')
+    } else {
+      notify.success(result.message || 'Подключение Wildberries активно')
+    }
+  } catch (error) {
+    notify.error(
+      error.response?.data?.error?.message ||
+      'Не удалось проверить подключение Wildberries'
+    )
+  } finally {
+    await Promise.all([
+      loadProfile(),
+      refreshDashboardAccounts({ force: true }),
+    ])
+    checkingTokenId.value = ''
+  }
+}
+
 async function deleteToken(id) {
   if (!confirm('Удалить подключение Wildberries? Это действие нельзя отменить.')) return
   try {
@@ -633,12 +668,12 @@ onMounted(async () => {
     resetExpenseForm()
   }
   await loadProfile()
-  if (!isStaff.value) {
-    resetExpenseForm()
-    const requestedTab = String(route.query.tab || '')
-    if (sellerTabs.some(tab => tab.key === requestedTab)) {
-      await selectTab(requestedTab)
-    }
+
+  if (!isStaff.value) resetExpenseForm()
+
+  const requestedTab = String(route.query.tab || '')
+  if (tabs.value.some(tab => tab.key === requestedTab)) {
+    await selectTab(requestedTab)
   }
 })
 </script>
@@ -649,7 +684,7 @@ onMounted(async () => {
       <div>
         <p class="eyebrow">{{ isStaff ? 'Рабочий аккаунт' : 'Настройки продавца' }}</p>
         <h1>{{ isStaff ? 'Профиль сотрудника' : 'Исходные данные и подключения' }}</h1>
-        <p v-if="isStaff">Личные данные рабочего аккаунта отделены от клиентского контура. Кабинеты Wildberries, себестоимость и расходы здесь не показываются.</p>
+        <p v-if="isStaff">Личные данные рабочего аккаунта отделены от клиентских расчётных данных. Свои подключения Wildberries можно проверять и менять во вкладке «Кабинеты WB»; себестоимость и расходы здесь не показываются.</p>
         <p v-else>WB Insight получает маркетплейс-данные автоматически. Здесь остаются только параметры, которые Wildberries не знает: налог, себестоимость, собственные расходы и подключения.</p>
         <div v-if="isStaff && staffRoleLabels.length" class="staff-role-row">
           <span v-for="role in staffRoleLabels" :key="role" class="staff-role-chip">{{ role }}</span>
@@ -780,9 +815,13 @@ onMounted(async () => {
             <h2>Кабинеты Wildberries</h2>
           </div>
           <button class="primary-button" type="button" :disabled="addBtnLoading" @click="openAddTokenModal">
-            {{ addBtnLoading ? 'Проверяем…' : 'Добавить кабинет' }}
+            {{ addBtnLoading ? 'Проверяем лимит…' : 'Добавить новый токен' }}
           </button>
         </div>
+
+        <p v-if="tokens.length" class="connection-help">
+          Для замены токена сначала добавьте новый, проверьте его статус, а затем удалите старое подключение.
+        </p>
 
         <div v-if="!tokens.length" class="empty-state">
           <strong>Нет подключённых кабинетов.</strong>
@@ -808,7 +847,16 @@ onMounted(async () => {
             >
               {{ tokenStatusLabel(token) }}
             </div>
-            <button class="danger-link" type="button" @click="deleteToken(token.id)">Удалить</button>
+            <div class="row-actions">
+              <button
+                type="button"
+                :disabled="Boolean(checkingTokenId)"
+                @click="checkToken(token.id)"
+              >
+                {{ checkingTokenId === token.id ? 'Проверяем…' : 'Проверить статус' }}
+              </button>
+              <button class="danger-link" type="button" @click="deleteToken(token.id)">Удалить</button>
+            </div>
           </article>
         </div>
       </section>
@@ -978,7 +1026,7 @@ onMounted(async () => {
   </section>
 
   <SelectTariffModal v-if="!isStaff && showTariffModal" :is-open="true" @close="showTariffModal = false" @payment="toPay" />
-  <AddTokenModal v-if="!isStaff && showAddTokenModal" :is-open="true" @close="showAddTokenModal = false" @success="handleTokenAdded" />
+  <AddTokenModal v-if="showAddTokenModal" :is-open="true" @close="showAddTokenModal = false" @success="handleTokenAdded" />
 </template>
 
 <style scoped>
@@ -999,6 +1047,7 @@ onMounted(async () => {
 .settings-tabs button.active { color: var(--secondary-color); background: color-mix(in srgb, var(--secondary-color) 11%, transparent); }
 .settings-card { padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: linear-gradient(180deg, var(--card-bg-elevated), var(--card-bg)); box-shadow: var(--shadow-sm); }
 .settings-stack { display: flex; flex-direction: column; gap: 12px; }
+.connection-help { margin: -6px 0 14px; color: var(--text-subtle); font-size: 11px; line-height: 1.45; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .section-heading h2 { margin-top: 2px; font-size: 18px; }
 .section-note, .section-description { margin-top: 5px; color: var(--text-subtle); font-size: 11px; line-height: 1.4; }

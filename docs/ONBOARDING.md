@@ -60,7 +60,7 @@
 
 Профиль поддерживает параметр `tab`:
 
-- `/dashboard/profile?tab=connections` — кабинеты Wildberries;
+- `/dashboard/profile?tab=connections` — кабинеты Wildberries; вкладка доступна также staff/super_admin для управления собственным подключением, когда рабочий аккаунт открывает seller analytics;
 - `/dashboard/profile?tab=costs` — себестоимость;
 - `/dashboard/profile?tab=expenses` — прочие расходы;
 - `/dashboard/profile?tab=profile` — профиль и налог.

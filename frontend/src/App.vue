@@ -66,12 +66,23 @@ const dashboardNeedsAccount = computed(
     accounts.value.length === 0
 )
 
+function connectionCountLabel(count, one, few, many) {
+  const value = Math.abs(Number(count) || 0)
+  const lastTwo = value % 100
+  const last = value % 10
+
+  if (lastTwo >= 11 && lastTwo <= 19) return `${value} ${many}`
+  if (last === 1) return `${value} ${one}`
+  if (last >= 2 && last <= 4) return `${value} ${few}`
+  return `${value} ${many}`
+}
+
 const dashboardAccountIssue = computed(() => {
   const tokens = allWbAccounts.value || []
   if (!tokens.length) {
     return {
       title: 'Нет подключённого кабинета Wildberries',
-      message: 'Добавьте кабинет Wildberries в профиле — после проверки система запустит первичную синхронизацию автоматически.',
+      message: 'Откройте раздел «Кабинеты WB» и добавьте токен. После успешной проверки первичная синхронизация запустится автоматически.',
     }
   }
 
@@ -101,21 +112,49 @@ const dashboardAccountIssue = computed(() => {
   }
 
   const reasons = []
-  if (counts.revoked) reasons.push(`отозвано: ${counts.revoked}`)
-  if (counts.expired) reasons.push(`истёк срок: ${counts.expired}`)
-  if (counts.inactive) reasons.push(`отключено: ${counts.inactive}`)
-  if (counts.outside_tariff) reasons.push(`вне лимита тарифа: ${counts.outside_tariff}`)
+  if (counts.revoked) {
+    reasons.push(connectionCountLabel(
+      counts.revoked,
+      'отозванное подключение',
+      'отозванных подключения',
+      'отозванных подключений',
+    ))
+  }
+  if (counts.expired) {
+    reasons.push(connectionCountLabel(
+      counts.expired,
+      'подключение с истёкшим сроком',
+      'подключения с истёкшим сроком',
+      'подключений с истёкшим сроком',
+    ))
+  }
+  if (counts.inactive) {
+    reasons.push(connectionCountLabel(
+      counts.inactive,
+      'отключённое подключение',
+      'отключённых подключения',
+      'отключённых подключений',
+    ))
+  }
+  if (counts.outside_tariff) {
+    reasons.push(connectionCountLabel(
+      counts.outside_tariff,
+      'подключение вне лимита тарифа',
+      'подключения вне лимита тарифа',
+      'подключений вне лимита тарифа',
+    ))
+  }
 
   if (reasons.length) {
     return {
       title: 'Подключение Wildberries требует внимания',
-      message: `${reasons.join(' · ')}. Откройте профиль, чтобы обновить, заменить или проверить подключение.`,
+      message: `${reasons.join(' · ')}. Откройте раздел «Кабинеты WB», чтобы проверить статус, удалить старое или добавить новое подключение.`,
     }
   }
 
   return {
     title: 'Нет доступного кабинета Wildberries',
-    message: 'Проверьте подключение Wildberries и ограничения текущего тарифа в профиле.',
+    message: 'Откройте раздел «Кабинеты WB» и проверьте состояние подключения или ограничения тарифа.',
   }
 })
 
@@ -350,8 +389,8 @@ const logout = async () => {
       kind="account"
       :title="dashboardAccountIssue.title"
       :message="dashboardAccountIssue.message"
-      action-label="Проверить подключения"
-      :action-to="{ name: 'dashboard.profile' }"
+      action-label="Открыть кабинеты WB"
+      :action-to="{ path: '/dashboard/profile', query: { tab: 'connections' } }"
     />
     <RouterView v-else v-slot="{ Component }">
       <Transition name="page-motion" mode="out-in">
