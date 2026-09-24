@@ -1,5 +1,6 @@
 """Модуль управления пользователями в панели администратора."""
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -26,11 +27,13 @@ from services.user_identity import (
     validate_legal_identity,
 )
 from services.user_service import (
+    create_user_role_association,
     delete_user,
     get_user_by_email,
     get_user_by_inn,
     get_user_by_phone,
     get_user_by_uuid,
+    insert_user,
 )
 from utils.responce_helps import response_error, response_success
 
@@ -47,6 +50,112 @@ SUPPORT_EVENT_TYPES = frozenset({
     'support_refund_requested',
     'support_refund_completed',
 })
+
+STAFF_CREATION_ROLES = frozenset({
+    UserRole.ADMIN.value,
+    UserRole.MANAGER.value,
+    UserRole.SUPPORT.value,
+    UserRole.ANALYST.value,
+})
+
+
+class StaffCreationError(ValueError):
+    """Ошибка проверки данных создаваемого служебного аккаунта."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _validated_staff_creation_payload(payload: object) -> dict:
+    if not isinstance(payload, dict):
+        raise StaffCreationError(
+            'STAFF_CREATE_PAYLOAD_INVALID',
+            'Ожидается JSON-объект с данными сотрудника',
+        )
+
+    allowed_fields = {
+        'full_name',
+        'email',
+        'phone',
+        'password',
+        'role',
+        'timezone',
+        'staff_id',
+        'department',
+        'position',
+    }
+    unsupported = sorted(set(payload) - allowed_fields)
+    if unsupported:
+        raise StaffCreationError(
+            'STAFF_CREATE_FIELDS_UNSUPPORTED',
+            'Запрос содержит неподдерживаемые поля',
+        )
+
+    full_name = str(payload.get('full_name') or '').strip()
+    if not full_name or len(full_name) > 255:
+        raise StaffCreationError(
+            'FULL_NAME_INVALID',
+            'Укажите имя сотрудника длиной до 255 символов',
+        )
+
+    email = normalize_email(payload.get('email'))
+    if email is None:
+        raise StaffCreationError('EMAIL_INVALID', 'Укажите корректный email')
+
+    phone = normalize_phone(payload.get('phone'))
+    if phone is None:
+        raise StaffCreationError('PHONE_INVALID', 'Укажите корректный номер телефона')
+
+    password = payload.get('password')
+    if not isinstance(password, str) or len(password) < 8:
+        raise StaffCreationError(
+            'PASSWORD_INVALID',
+            'Временный пароль должен содержать минимум 8 символов',
+        )
+    if len(password.encode('utf-8')) > 72:
+        raise StaffCreationError(
+            'PASSWORD_TOO_LONG',
+            'Временный пароль не должен превышать 72 байта в кодировке UTF-8',
+        )
+
+    role = str(payload.get('role') or '').strip().lower()
+    if role not in STAFF_CREATION_ROLES:
+        raise StaffCreationError(
+            'STAFF_ROLE_INVALID',
+            'Выберите допустимую служебную роль',
+        )
+
+    timezone_value = str(payload.get('timezone') or 'Europe/Moscow').strip()
+    if not timezone_value or len(timezone_value) > 50:
+        raise StaffCreationError(
+            'TIMEZONE_INVALID',
+            'Укажите корректный часовой пояс',
+        )
+
+    normalized = {
+        'full_name': full_name,
+        'email': email,
+        'phone': phone,
+        'password': password,
+        'role': role,
+        'timezone': timezone_value,
+    }
+    for field, limit in {
+        'staff_id': 50,
+        'department': 100,
+        'position': 100,
+    }.items():
+        value = str(payload.get(field) or '').strip()
+        if len(value) > limit:
+            raise StaffCreationError(
+                'STAFF_FIELD_INVALID',
+                f'Поле {field} слишком длинное',
+            )
+        normalized[field] = value or None
+
+    return normalized
 
 
 def _user_to_dict(user) -> dict:
@@ -176,6 +285,105 @@ async def get_users(
         total=int(total or 0),
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    '/',
+    dependencies=[
+        Depends(require_permission(Permission.USERS_WRITE)),
+        Depends(require_permission(Permission.ROLES_WRITE)),
+    ],
+)
+async def create_staff_user(
+    request: Request,
+    response: Response,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Создаёт служебный аккаунт из панели суперадминистратора."""
+
+    try:
+        payload = await request.json()
+    except (TypeError, ValueError):
+        payload = None
+
+    try:
+        data = _validated_staff_creation_payload(payload)
+    except StaffCreationError as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code=exc.code, message=exc.message)
+
+    if await get_user_by_email(db_session, data['email']) is not None:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code='EMAIL_ALREADY_EXISTS',
+            message='Этот email уже используется',
+        )
+
+    if await get_user_by_phone(db_session, data['phone']) is not None:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code='PHONE_ALREADY_EXISTS',
+            message='Этот телефон уже используется',
+        )
+
+    actor_user_id = UUID(str(request.state.user_id))
+    try:
+        async with db_session.begin_nested():
+            user = await insert_user(
+                db_session,
+                {
+                    'full_name': data['full_name'],
+                    'email': data['email'],
+                    'phone': data['phone'],
+                    'password': data['password'],
+                    'entity_type': EntityType.INDIVIDUAL.value,
+                    'timezone': data['timezone'],
+                },
+            )
+            if user is None:
+                raise StaffCreationError(
+                    'STAFF_CREATE_FAILED',
+                    'Не удалось создать служебный аккаунт',
+                )
+
+            user.is_staff = True
+            user.staff_id = data['staff_id']
+            user.department = data['department']
+            user.position = data['position']
+            user.email_verified_at = datetime.now(timezone.utc)
+
+            await create_user_role_association(
+                db_session,
+                str(user.id),
+                data['role'],
+                assigned_by=str(actor_user_id),
+            )
+            await record_lifecycle_event(
+                db_session,
+                user_id=user.id,
+                actor_user_id=actor_user_id,
+                event_type='staff_account_created_by_admin',
+                event_data={
+                    'source': 'control_panel',
+                    'role': data['role'],
+                },
+            )
+            await db_session.flush()
+    except IntegrityError:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code='STAFF_ACCOUNT_CONFLICT',
+            message='Email, телефон или ID сотрудника уже используются',
+        )
+    except StaffCreationError as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(code=exc.code, message=exc.message)
+
+    await db_session.refresh(user, attribute_names=['roles'])
+    return response_success(
+        message='Служебный аккаунт создан',
+        user=_user_to_dict(user),
     )
 
 
