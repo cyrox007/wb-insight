@@ -128,3 +128,51 @@ async def test_user_list_returns_server_side_total_limit_and_offset():
     assert "LIMIT" in sql
     assert "OFFSET" in sql
     assert "users.is_staff IS false" in sql
+
+
+def test_staff_creation_payload_normalizes_required_fields():
+    data = control_panel_users._validated_staff_creation_payload({
+        "full_name": "  Иван Петров  ",
+        "email": "  STAFF@Example.COM ",
+        "phone": " +7 (999) 000-00-01 ",
+        "password": "TempPass123!",
+        "role": "manager",
+        "timezone": "Europe/Moscow",
+        "staff_id": " EMP-001 ",
+        "department": " Поддержка ",
+        "position": " Менеджер ",
+    })
+
+    assert data["full_name"] == "Иван Петров"
+    assert data["email"] == "staff@example.com"
+    assert data["phone"] == "+79990000001"
+    assert data["role"] == "manager"
+    assert data["staff_id"] == "EMP-001"
+    assert data["department"] == "Поддержка"
+    assert data["position"] == "Менеджер"
+
+
+@pytest.mark.parametrize("role", ["user", "super_admin", "root", ""])
+def test_staff_creation_rejects_role_outside_safe_admin_list(role):
+    with pytest.raises(control_panel_users.StaffCreationError) as exc_info:
+        control_panel_users._validated_staff_creation_payload({
+            "full_name": "Иван Петров",
+            "email": "staff@example.com",
+            "phone": "+79990000001",
+            "password": "TempPass123!",
+            "role": role,
+        })
+
+    assert exc_info.value.code == "STAFF_ROLE_INVALID"
+
+
+def test_control_panel_user_router_exposes_staff_creation_and_delete_flows():
+    routes = {
+        (route.path, method)
+        for route in control_panel_users.router.routes
+        for method in route.methods
+    }
+
+    assert ("/control-panel/users/", "POST") in routes
+    assert ("/control-panel/users/{user_uuid}", "DELETE") in routes
+    assert ("/control-panel/users/{user_uuid}/purge", "DELETE") in routes
