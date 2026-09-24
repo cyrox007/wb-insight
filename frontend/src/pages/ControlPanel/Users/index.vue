@@ -3,10 +3,18 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import CP_Users from '@/API/ControlPanel/CP_Users'
 import DateTransform from '@/utils/date_transform.js'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
+import Modal from '@/components/UI/Modal.vue'
+import CreateStaffUserModal from '@/components/UserModals/create_staff_user.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 
 const isLoading = ref(false)
 const loadError = ref('')
 const users = ref([])
+const showCreateStaffModal = ref(false)
+const accountAction = ref({ userId: '', kind: '' })
+const deleteConfirm = ref({ isOpen: false, user: null, email: '', error: '' })
 const total = ref(0)
 const limit = ref(50)
 const offset = ref(0)
@@ -35,6 +43,30 @@ const ROLE_LABELS = {
 }
 
 const roleOptions = Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))
+
+const actorRoles = computed(() => authStore.user?.roles || [])
+const actorIsSuperAdmin = computed(() => actorRoles.value.includes('super_admin'))
+const actorCanManageUsers = computed(() =>
+	actorIsSuperAdmin.value || actorRoles.value.includes('admin')
+)
+
+const targetIsSuperAdmin = (user) =>
+	user?.roles?.some(role => role.role === 'super_admin') === true
+
+const isSelf = (user) =>
+	String(authStore.user?.id || '') === String(user?.id || '')
+
+const canManageTarget = (user) => {
+	if (!actorCanManageUsers.value || !user) return false
+	if (targetIsSuperAdmin(user) && !actorIsSuperAdmin.value) return false
+	return true
+}
+
+const canChangeActivity = (user) =>
+	canManageTarget(user) && !isSelf(user)
+
+const canPermanentlyDelete = (user) =>
+	canChangeActivity(user) && user?.is_active === false
 
 const getEntityLabel = (type) => ENTITY_LABELS[type] || type || '—'
 const getRoleLabel = (role) => ROLE_LABELS[role?.role] || role?.role || '—'
@@ -126,6 +158,95 @@ async function changePageSize() {
 	await loadUsers()
 }
 
+function actionLoading(user, kind) {
+	return (
+		accountAction.value.userId === user?.id &&
+		accountAction.value.kind === kind
+	)
+}
+
+async function runAccountAction(user, kind) {
+	if (!canChangeActivity(user) || accountAction.value.kind) return
+
+	const prompt = kind === 'deactivate'
+		? `Деактивировать аккаунт «${user.full_name || user.email}»? Активные сессии будут отозваны.`
+		: `Активировать аккаунт «${user.full_name || user.email}»?`
+	if (!window.confirm(prompt)) return
+
+	accountAction.value = { userId: user.id, kind }
+	loadError.value = ''
+	try {
+		const response = kind === 'deactivate'
+			? await CP_Users.deactivateUser(user.id)
+			: await CP_Users.reactivateUser(user.id, 'manual_control_panel_reactivation')
+
+		if (response.data?.status !== 'success') {
+			throw new Error(response.data?.error?.message || 'Операция не выполнена')
+		}
+		await loadUsers()
+	} catch (error) {
+		console.error('Ошибка изменения состояния аккаунта:', error)
+		loadError.value =
+			error.response?.data?.error?.message ||
+			error.message ||
+			'Не удалось изменить состояние аккаунта.'
+	} finally {
+		accountAction.value = { userId: '', kind: '' }
+	}
+}
+
+function openPermanentDelete(user) {
+	if (!canPermanentlyDelete(user) || accountAction.value.kind) return
+	deleteConfirm.value = {
+		isOpen: true,
+		user,
+		email: '',
+		error: '',
+	}
+}
+
+function closePermanentDelete() {
+	if (accountAction.value.kind === 'purge') return
+	deleteConfirm.value = { isOpen: false, user: null, email: '', error: '' }
+}
+
+async function permanentlyDeleteConfirmed() {
+	const user = deleteConfirm.value.user
+	if (!user || !canPermanentlyDelete(user) || accountAction.value.kind) return
+
+	const expectedEmail = String(user.email || '').trim().toLowerCase()
+	const confirmation = String(deleteConfirm.value.email || '').trim().toLowerCase()
+	if (!confirmation || confirmation !== expectedEmail) {
+		deleteConfirm.value.error = 'Введите email пользователя точно так, как он указан в таблице.'
+		return
+	}
+
+	accountAction.value = { userId: user.id, kind: 'purge' }
+	deleteConfirm.value.error = ''
+	try {
+		const response = await CP_Users.permanentlyDeleteUser(user.id, confirmation, 'Удаление из списка пользователей')
+		if (response.data?.status !== 'success' || response.data?.deleted !== true) {
+			throw new Error(response.data?.error?.message || 'Пользователь не удалён')
+		}
+		deleteConfirm.value = { isOpen: false, user: null, email: '', error: '' }
+		await loadUsers()
+	} catch (error) {
+		console.error('Ошибка необратимого удаления пользователя:', error)
+		deleteConfirm.value.error =
+			error.response?.data?.error?.message ||
+			error.message ||
+			'Не удалось удалить пользователя.'
+	} finally {
+		accountAction.value = { userId: '', kind: '' }
+	}
+}
+
+async function handleStaffCreated() {
+	showCreateStaffModal.value = false
+	offset.value = 0
+	await loadUsers()
+}
+
 onMounted(loadUsers)
 </script>
 
@@ -135,8 +256,14 @@ onMounted(loadUsers)
 			<div>
 				<p class="cp-eyebrow">Аккаунты</p>
 				<h2 class="cp-detail-title">Пользователи</h2>
-				<p class="cp-subtitle">Поиск, фильтрация и просмотр зарегистрированных аккаунтов без загрузки всей базы в браузер.</p>
+				<p class="cp-subtitle">Поиск, фильтрация и управление зарегистрированными аккаунтами без загрузки всей базы в браузер.</p>
 			</div>
+			<BaseButton
+				v-if="actorIsSuperAdmin"
+				variant="primary"
+				text="Добавить сотрудника"
+				@click="showCreateStaffModal = true"
+			/>
 		</header>
 
 		<form class="cp-card cp-filter-surface user-filters" @submit.prevent="applyFilters">
@@ -284,17 +411,44 @@ onMounted(loadUsers)
 							</td>
 							<td>{{ DateTransform.formatDate(user.created_at) }}</td>
 							<td>
-								<button
-									class="cp-icon-button"
-									type="button"
-									@click="$router.push({ name: 'control-panel.edit-user', params: { id: user.id } })"
-									title="Открыть карточку"
-									:aria-label="`Открыть карточку пользователя ${user.full_name || user.email}`"
-								>
-									<svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-										<path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-									</svg>
-								</button>
+								<div class="user-row-actions">
+									<BaseButton
+										variant="outline"
+										size="small"
+										text="Карточка"
+										:disabled="Boolean(accountAction.kind)"
+										@click="$router.push({ name: 'control-panel.edit-user', params: { id: user.id } })"
+									/>
+									<BaseButton
+										v-if="canChangeActivity(user) && user.is_active"
+										variant="outline"
+										size="small"
+										text="Деактивировать"
+										loading-text="Деактивируем…"
+										:loading="actionLoading(user, 'deactivate')"
+										:disabled="Boolean(accountAction.kind)"
+										title="Первый шаг перед необратимым удалением"
+										@click="runAccountAction(user, 'deactivate')"
+									/>
+									<BaseButton
+										v-if="canChangeActivity(user) && !user.is_active"
+										variant="outline"
+										size="small"
+										text="Активировать"
+										loading-text="Активируем…"
+										:loading="actionLoading(user, 'reactivate')"
+										:disabled="Boolean(accountAction.kind)"
+										@click="runAccountAction(user, 'reactivate')"
+									/>
+									<BaseButton
+										v-if="canPermanentlyDelete(user)"
+										variant="danger"
+										size="small"
+										text="Удалить"
+										:disabled="Boolean(accountAction.kind)"
+										@click="openPermanentDelete(user)"
+									/>
+								</div>
 							</td>
 						</tr>
 					</tbody>
@@ -309,6 +463,57 @@ onMounted(loadUsers)
 				</div>
 			</div>
 		</div>
+
+		<CreateStaffUserModal
+			v-if="showCreateStaffModal"
+			:is-open="true"
+			@close="showCreateStaffModal = false"
+			@created="handleStaffCreated"
+		/>
+
+		<Modal
+			v-if="deleteConfirm.isOpen"
+			:is-open="true"
+			aria-label="Подтверждение необратимого удаления пользователя"
+			:close-on-overlay-click="accountAction.kind !== 'purge'"
+			:close-on-escape="accountAction.kind !== 'purge'"
+			@close="closePermanentDelete"
+		>
+			<template #header>
+				<h3 class="cp-modal-title">Удалить пользователя навсегда</h3>
+			</template>
+			<template #body>
+				<div class="delete-confirm">
+					<p>
+						Аккаунт <strong>{{ deleteConfirm.user?.email }}</strong> уже деактивирован.
+						Следующее действие необратимо удалит аккаунт и связанные пользовательские данные.
+					</p>
+					<label class="cp-field-label">
+						<span>Введите email для подтверждения</span>
+						<input
+							v-model="deleteConfirm.email"
+							type="email"
+							autocomplete="off"
+							:placeholder="deleteConfirm.user?.email || ''"
+							:disabled="accountAction.kind === 'purge'"
+						/>
+					</label>
+					<p v-if="deleteConfirm.error" class="delete-error" role="alert">{{ deleteConfirm.error }}</p>
+				</div>
+			</template>
+			<template #footer>
+				<div class="cp-modal-footer">
+					<BaseButton variant="outline" text="Отмена" :disabled="accountAction.kind === 'purge'" @click="closePermanentDelete" />
+					<BaseButton
+						variant="danger"
+						text="Удалить навсегда"
+						loading-text="Удаляем…"
+						:loading="accountAction.kind === 'purge'"
+						@click="permanentlyDeleteConfirmed"
+					/>
+				</div>
+			</template>
+		</Modal>
 	</section>
 </template>
 
@@ -363,6 +568,31 @@ onMounted(loadUsers)
 .user-pagination__actions {
 	display: flex;
 	gap: 8px;
+}
+
+.user-row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	flex-wrap: wrap;
+	min-width: 260px;
+}
+
+.delete-confirm {
+	display: grid;
+	gap: 14px;
+}
+
+.delete-confirm p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 12px;
+	line-height: 1.55;
+}
+
+.delete-error {
+	color: var(--danger-color) !important;
 }
 
 @media (max-width: 1180px) {

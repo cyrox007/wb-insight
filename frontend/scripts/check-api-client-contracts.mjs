@@ -61,6 +61,8 @@ const apiPath = path.join(root, 'API/index.js')
 const authServicePath = path.join(root, 'API/AuthService.js')
 const authStorePath = path.join(root, 'stores/auth.js')
 const cpUsersPath = path.join(root, 'API/ControlPanel/CP_Users.js')
+const cpUsersIndexPath = path.join(root, 'pages/ControlPanel/Users/index.vue')
+const createStaffUserPath = path.join(root, 'components/UserModals/create_staff_user.vue')
 const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
 const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
 const registrationPath = path.join(root, 'components/CustomModals/AuthModals/RegistrationModal.vue')
@@ -75,6 +77,8 @@ const apiSource = fs.readFileSync(apiPath, 'utf8')
 const authServiceSource = fs.readFileSync(authServicePath, 'utf8')
 const authStoreSource = fs.readFileSync(authStorePath, 'utf8')
 const cpUsersSource = fs.readFileSync(cpUsersPath, 'utf8')
+const cpUsersIndexSource = fs.readFileSync(cpUsersIndexPath, 'utf8')
+const createStaffUserSource = fs.readFileSync(createStaffUserPath, 'utf8')
 const editUserSource = fs.readFileSync(editUserPath, 'utf8')
 const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
 const registrationSource = fs.readFileSync(registrationPath, 'utf8')
@@ -409,6 +413,35 @@ const staffWbConnectionChecks = [
 ]
 
 for (const check of staffWbConnectionChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const controlPanelUserCrudChecks = [
+  {
+    ok:
+      cpUsersSource.includes('createStaffUser(payload)') &&
+      cpUsersSource.includes("post('/control-panel/users/'") &&
+      cpUsersSource.includes('permanentlyDeleteUser'),
+    message: 'Клиент Control Panel должен поддерживать создание служебного аккаунта и необратимое удаление.',
+  },
+  {
+    ok:
+      cpUsersIndexSource.includes('Добавить сотрудника') &&
+      cpUsersIndexSource.includes('Деактивировать') &&
+      cpUsersIndexSource.includes('Удалить навсегда') &&
+      cpUsersIndexSource.includes('permanentlyDeleteConfirmed'),
+    message: 'Список пользователей должен явно показывать создание, деактивацию и необратимое удаление.',
+  },
+  {
+    ok:
+      createStaffUserSource.includes('Клиентские аккаунты здесь не создаются') &&
+      createStaffUserSource.includes('CP_Users.createStaffUser') &&
+      createStaffUserSource.includes('Сгенерировать'),
+    message: 'Создание служебного аккаунта должно быть отдельным потоком и не подменять клиентскую регистрацию.',
+  },
+]
+
+for (const check of controlPanelUserCrudChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
