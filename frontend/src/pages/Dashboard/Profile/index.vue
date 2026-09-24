@@ -403,7 +403,11 @@ async function checkToken(id) {
       return
     }
 
-    notify.success(result.message || 'Подключение Wildberries активно')
+    if (result.data?.valid === false) {
+      notify.info(result.message || 'Подключение Wildberries требует замены')
+    } else {
+      notify.success(result.message || 'Подключение Wildberries активно')
+    }
   } catch (error) {
     notify.error(
       error.response?.data?.error?.message ||
@@ -815,6 +819,10 @@ onMounted(async () => {
           </button>
         </div>
 
+        <p v-if="tokens.length" class="connection-help">
+          Для замены токена сначала добавьте новый, проверьте его статус, а затем удалите старое подключение.
+        </p>
+
         <div v-if="!tokens.length" class="empty-state">
           <strong>Нет подключённых кабинетов.</strong>
           <span>Добавьте API-токен Wildberries — дальше выгрузки и обновления выполняет система.</span>
@@ -1039,6 +1047,7 @@ onMounted(async () => {
 .settings-tabs button.active { color: var(--secondary-color); background: color-mix(in srgb, var(--secondary-color) 11%, transparent); }
 .settings-card { padding: 20px; border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: linear-gradient(180deg, var(--card-bg-elevated), var(--card-bg)); box-shadow: var(--shadow-sm); }
 .settings-stack { display: flex; flex-direction: column; gap: 12px; }
+.connection-help { margin: -6px 0 14px; color: var(--text-subtle); font-size: 11px; line-height: 1.45; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .section-heading h2 { margin-top: 2px; font-size: 18px; }
 .section-note, .section-description { margin-top: 5px; color: var(--text-subtle); font-size: 11px; line-height: 1.4; }
