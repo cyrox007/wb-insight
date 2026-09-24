@@ -113,15 +113,15 @@ async def check_stored_wb_token(
         token.is_active = False
         token.is_revoked = exc.code == "WB_TOKEN_REJECTED"
         await session.flush()
+        connection_status = "inactive"
+        if exc.code == "WB_TOKEN_REJECTED":
+            connection_status = "revoked"
+        if exc.code == "WB_TOKEN_EXPIRED":
+            connection_status = "expired"
+
         return {
             "valid": False,
-            "connection_status": (
-                "revoked"
-                if exc.code == "WB_TOKEN_REJECTED"
-                else "expired"
-                if exc.code == "WB_TOKEN_EXPIRED"
-                else "inactive"
-            ),
+            "connection_status": connection_status,
             "code": exc.code,
             "message": str(exc),
         }
