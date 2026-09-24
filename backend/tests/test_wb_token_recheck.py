@@ -9,6 +9,7 @@ from integrations.wildberries.token_metadata import (
     WBTokenValidationError,
 )
 from models.tokens_model import Marketplace
+from handlers.dashboard import token_handler
 from services import token_services
 
 
@@ -165,3 +166,12 @@ async def test_recheck_does_not_change_state_on_temporary_wb_failure(monkeypatch
     assert token.is_active is True
     assert token.is_revoked is False
     assert session.flush_count == 0
+
+
+def test_token_router_exposes_connection_recheck():
+    routes = {
+        (route.path, method)
+        for route in token_handler.router.routes
+        for method in route.methods
+    }
+    assert ("/dashboard/tokens/{token_id}/check", "POST") in routes
