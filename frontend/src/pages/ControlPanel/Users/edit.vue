@@ -373,6 +373,9 @@ async function runAccountAction(kind) {
 			</template>
 		</Modal>
 
+	</section>
+</template>
+
 <style scoped>
 .account-actions {
 	display: flex;
