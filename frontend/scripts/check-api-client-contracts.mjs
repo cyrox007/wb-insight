@@ -64,6 +64,9 @@ const cpUsersPath = path.join(root, 'API/ControlPanel/CP_Users.js')
 const cpUsersIndexPath = path.join(root, 'pages/ControlPanel/Users/index.vue')
 const createStaffUserPath = path.join(root, 'components/UserModals/create_staff_user.vue')
 const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
+const rolesPagePath = path.join(root, 'pages/ControlPanel/Roles/index.vue')
+const manageRolesPath = path.join(root, 'components/UserModals/manage_roles.vue')
+const cpRolesPath = path.join(root, 'API/ControlPanel/CP_Roles.js')
 const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
 const registrationPath = path.join(root, 'components/CustomModals/AuthModals/RegistrationModal.vue')
 const sellerProfilePath = path.join(root, 'pages/Dashboard/Profile/index.vue')
@@ -80,6 +83,9 @@ const cpUsersSource = fs.readFileSync(cpUsersPath, 'utf8')
 const cpUsersIndexSource = fs.readFileSync(cpUsersIndexPath, 'utf8')
 const createStaffUserSource = fs.readFileSync(createStaffUserPath, 'utf8')
 const editUserSource = fs.readFileSync(editUserPath, 'utf8')
+const rolesPageSource = fs.readFileSync(rolesPagePath, 'utf8')
+const manageRolesSource = fs.readFileSync(manageRolesPath, 'utf8')
+const cpRolesSource = fs.readFileSync(cpRolesPath, 'utf8')
 const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
 const registrationSource = fs.readFileSync(registrationPath, 'utf8')
 const sellerProfileSource = fs.readFileSync(sellerProfilePath, 'utf8')
@@ -211,20 +217,38 @@ for (const check of permanentUserDeleteChecks) {
 const roleManagementUiChecks = [
   {
     ok:
-      editUserSource.includes('const canRemoveRole = (roleCode) =>') &&
-      editUserSource.includes("isSelf.value && roleCode === 'super_admin'"),
-    message: 'UI должен блокировать снятие собственной роли super_admin.',
+      rolesPageSource.includes('Роли суммируются, а не заменяют друг друга.') &&
+      rolesPageSource.includes('Текущие назначения') &&
+      !rolesPageSource.includes('selectedRoles'),
+    message: 'Основной экран ролей должен показывать только фактические назначения и не содержать предвыбранных будущих ролей.',
   },
   {
     ok:
-      editUserSource.includes('v-if="canRemoveRole(roleItem.role)"') &&
-      editUserSource.includes('!canRemoveRole(roleCode)') &&
-      editUserSource.includes('!canRemoveRole(roleConfirm.value.role)'),
-    message: 'Кнопка и обработчики удаления роли должны использовать единый guard canRemoveRole.',
+      rolesPageSource.includes('Справочник ролей и permissions') &&
+      rolesPageSource.includes('<details class="cp-card role-reference">'),
+    message: 'Техническая матрица permissions должна быть свёрнутым справочным блоком.',
   },
   {
-    ok: editUserSource.includes('Собственную роль суперадминистратора удалить нельзя.'),
-    message: 'Карточка пользователя должна объяснять запрет self-demotion super_admin.',
+    ok:
+      manageRolesSource.includes('Роли суммируются.') &&
+      manageRolesSource.includes('Текущие роли') &&
+      manageRolesSource.includes('Добавить ещё одну роль') &&
+      manageRolesSource.includes("role === 'super_admin' && isSelf.value"),
+    message: 'Изменение ролей должно выполняться отдельной модалкой с текущим состоянием и защитой self-demotion.',
+  },
+  {
+    ok:
+      manageRolesSource.includes('Полный системный доступ') &&
+      manageRolesSource.includes('Email для подтверждения') &&
+      cpRolesSource.includes('confirm_email'),
+    message: 'Назначение super_admin должно требовать явное подтверждение email целевого пользователя.',
+  },
+  {
+    ok:
+      editUserSource.includes('ManageRolesModal') &&
+      editUserSource.includes('Показаны только роли, назначенные сейчас.') &&
+      !editUserSource.includes('AssignRoleModal'),
+    message: 'Карточка пользователя должна использовать единый безопасный редактор ролей.',
   },
 ]
 

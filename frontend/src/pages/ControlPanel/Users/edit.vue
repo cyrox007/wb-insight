@@ -1,9 +1,8 @@
 <script setup>
 import CP_Users from '@/API/ControlPanel/CP_Users'
-import CP_Roles from '@/API/ControlPanel/CP_Roles'
 import DateTransform from '@/utils/date_transform'
 import EditUserModal from '@/components/UserModals/edit_user.vue'
-import AssignRoleModal from '@/components/UserModals/assign_role.vue'
+import ManageRolesModal from '@/components/UserModals/manage_roles.vue'
 import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
 import Modal from '@/components/UI/Modal.vue'
 import { computed, onMounted, ref } from 'vue'
@@ -17,11 +16,9 @@ const authStore = useAuthStore()
 const targetUser = ref(null)
 const isLoading = ref(false)
 const loadError = ref('')
-const roleActionLoading = ref(false)
 const accountActionLoading = ref('')
 const showEditModal = ref(false)
-const showAssignRoleModal = ref(false)
-const roleConfirm = ref({ isOpen: false, role: '' })
+const showManageRolesModal = ref(false)
 const deleteConfirm = ref({ isOpen: false, email: '', reason: '', error: '' })
 
 const ENTITY_LABELS = {
@@ -54,11 +51,6 @@ const canPermanentlyDelete = computed(() =>
 	targetUser.value &&
 	targetUser.value.is_active === false
 )
-const canRemoveRole = (roleCode) => {
-	if (!canManageRoles.value || roleCode === 'user') return false
-	if (isSelf.value && roleCode === 'super_admin') return false
-	return true
-}
 const emailVerified = computed(() => Boolean(targetUser.value?.email_verified_at))
 
 onMounted(loadUser)
@@ -80,38 +72,6 @@ async function loadUser() {
 		loadError.value = 'Не удалось загрузить данные пользователя.'
 	} finally {
 		isLoading.value = false
-	}
-}
-
-function askRemoveRole(roleCode) {
-	if (roleActionLoading.value || !canRemoveRole(roleCode)) return
-	roleConfirm.value = { isOpen: true, role: roleCode }
-}
-
-function closeRoleConfirm() {
-	if (roleActionLoading.value) return
-	roleConfirm.value = { isOpen: false, role: '' }
-}
-
-async function removeRoleConfirmed() {
-	if (
-		roleActionLoading.value ||
-		!targetUser.value ||
-		!roleConfirm.value.role ||
-		!canRemoveRole(roleConfirm.value.role)
-	) return
-	roleActionLoading.value = true
-	loadError.value = ''
-	try {
-		const response = await CP_Roles.deleteRoleFromUser(targetUser.value.id, roleConfirm.value.role)
-		if (response.data?.status !== 'success') throw new Error(response.data?.message || 'Не удалось удалить роль')
-		roleConfirm.value = { isOpen: false, role: '' }
-		await loadUser()
-	} catch (error) {
-		console.error('Ошибка удаления роли:', error)
-		loadError.value = error.response?.data?.error?.message || error.message || 'Не удалось удалить роль. Повторите действие.'
-	} finally {
-		roleActionLoading.value = false
 	}
 }
 
@@ -317,51 +277,39 @@ async function runAccountAction(kind) {
 					<div class="cp-section-header">
 						<div>
 							<h3 class="cp-section-title">Роли и доступ</h3>
-							<p class="cp-muted">
-								{{ canManageRoles ? 'Системные роли управляются только суперадминистратором.' : 'Доступно только чтение назначенных ролей.' }}
-							</p>
+							<p class="cp-muted">Показаны только роли, назначенные сейчас. Добавление роли не заменяет существующие.</p>
 						</div>
 						<BaseButton
 							v-if="canManageRoles"
-							variant="success"
+							variant="outline"
 							size="small"
-							text="Назначить роль"
-							:disabled="roleActionLoading"
-							@click="showAssignRoleModal = true"
+							text="Изменить роли"
+							@click="showManageRolesModal = true"
 						/>
 					</div>
 
-					<div v-if="targetUser.roles?.length" class="cp-list">
-						<div v-for="roleItem in targetUser.roles" :key="roleItem.role" class="cp-list-row">
-							<div class="cp-list-row__main">
-								<div class="cp-chip-row"><span class="cp-chip cp-chip--accent">{{ ROLE_LABELS[roleItem.role] || roleItem.role }}</span></div>
-								<p class="cp-list-row__meta">
-									Назначена: {{ DateTransform.formatDate(roleItem.assigned_at) }}
-									<span v-if="roleItem.assigned_by"> · {{ roleItem.assigned_by }}</span>
-								</p>
-							</div>
-							<button
-								v-if="canRemoveRole(roleItem.role)"
-								class="cp-icon-button cp-icon-button--danger"
-								title="Удалить роль"
-								:aria-label="`Удалить роль ${roleItem.role}`"
-								:disabled="roleActionLoading"
-								@click="askRemoveRole(roleItem.role)"
-							>×</button>
-						</div>
+					<div v-if="targetUser.roles?.length" class="cp-chip-row">
+						<span v-for="roleItem in targetUser.roles" :key="roleItem.role" class="cp-chip cp-chip--accent">
+							{{ ROLE_LABELS[roleItem.role] || roleItem.role }}
+						</span>
 					</div>
-					<div v-else class="cp-state">Роли не назначены.</div>
-					<p
-						v-if="canManageRoles && isSelf && targetIsSuperAdmin"
-						class="cp-muted"
-					>
-						Собственную роль суперадминистратора удалить нельзя.
+					<div v-else class="cp-state cp-state--compact">Роли не назначены.</div>
+
+					<p v-if="isSelf && targetIsSuperAdmin" class="cp-muted">
+						Собственную роль суперадминистратора снять нельзя. Это дополнительно защищено backend.
 					</p>
 				</section>
 			</article>
 
 			<EditUserModal v-if="showEditModal" :is-open="true" :current-user="targetUser" @close="showEditModal = false" @updated="loadUser" />
-			<AssignRoleModal :is-open="showAssignRoleModal" :user-id="targetUser?.id" @close="showAssignRoleModal = false" @assigned="loadUser" />
+			<ManageRolesModal
+				v-if="showManageRolesModal"
+				:is-open="true"
+				:user="targetUser"
+				:current-user-id="String(authStore.user?.id || '')"
+				@close="showManageRolesModal = false"
+				@changed="loadUser"
+			/>
 		</template>
 
 		<Modal
@@ -425,23 +373,6 @@ async function runAccountAction(kind) {
 			</template>
 		</Modal>
 
-		<Modal
-			v-if="roleConfirm.isOpen"
-			:is-open="true"
-			aria-label="Подтверждение удаления роли"
-			:close-on-overlay-click="!roleActionLoading"
-			:close-on-escape="!roleActionLoading"
-			@close="closeRoleConfirm"
-		>
-			<template #header><h3 class="cp-modal-title">Удалить роль</h3></template>
-			<template #body><p class="cp-modal-copy">Удалить роль «{{ ROLE_LABELS[roleConfirm.role] || roleConfirm.role }}» у пользователя? Доступ изменится сразу после сохранения.</p></template>
-			<template #footer>
-				<div class="cp-modal-footer">
-					<BaseButton variant="outline" text="Отмена" :disabled="roleActionLoading" @click="closeRoleConfirm" />
-					<BaseButton variant="danger" text="Удалить роль" loading-text="Удаляем…" :loading="roleActionLoading" @click="removeRoleConfirmed" />
-				</div>
-			</template>
-		</Modal>
 	</section>
 </template>
 

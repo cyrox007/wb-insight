@@ -64,6 +64,7 @@
 - P104 восстанавливает чтение WB-токенов, сохранённых до смены схемы шифрования 30.04.2026: current-first + legacy fallback, автоматическое перешифрование после успешной проверки и безопасный `409` вместо `500` для необратимо нечитаемого ciphertext.
 - P105 завершает основной CRUD пользователей в Control Panel: список показывает деактивацию/активацию/необратимое удаление, а super_admin может создавать служебные аккаунты без обхода клиентского legal-consent flow.
 - P106 делает user administration операционно пригодным: auto-filter/debounce, server-side asc/desc sorting, расширенный поиск, компактная таблица и единый двухшаговый delete flow без скрытого destructive-действия.
+- P107 устраняет двусмысленное управление ролями: текущие роли отделены от будущих действий, permission-матрица стала справочной, super_admin assignment требует email-confirmation на frontend и backend.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.
