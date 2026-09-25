@@ -6,6 +6,8 @@ from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logger import setup_logger
+from models.payments_model import Payment
+from models.subscription_model import Subscription
 from models.tariffs_model import TariffLimit, TariffPlan
 
 
@@ -154,12 +156,38 @@ async def get_tariff_limits_by_id(
     return result.scalars().all()
 
 
+async def get_tariff_usage_counts(
+    session: AsyncSession,
+    tariff_id: UUID,
+) -> dict[str, int]:
+    """Возвращает количество исторических ссылок на тариф."""
+
+    subscriptions = await session.scalar(
+        select(func.count(Subscription.id)).where(
+            Subscription.tariff_id == tariff_id
+        )
+    )
+    payments = await session.scalar(
+        select(func.count(Payment.id)).where(
+            Payment.tariff_id == tariff_id
+        )
+    )
+    return {
+        "subscriptions": int(subscriptions or 0),
+        "payments": int(payments or 0),
+    }
+
+
 async def delete_tariff_by_id(
     session: AsyncSession,
     tariff_id: UUID,
 ) -> bool:
     tariff = await get_tariff_by_id(session, tariff_id)
-    if tariff is None or is_system_tariff(tariff):
+    if (
+        tariff is None
+        or is_system_tariff(tariff)
+        or bool(tariff.is_active)
+    ):
         return False
 
     query = delete(TariffPlan).where(TariffPlan.id == tariff_id)
