@@ -445,6 +445,42 @@ for (const check of controlPanelUserCrudChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
+const controlPanelUserListUxChecks = [
+  {
+    ok:
+      cpUsersIndexSource.includes('scheduleFilterReload') &&
+      cpUsersIndexSource.includes('watch(') &&
+      !cpUsersIndexSource.includes('text="Показать"'),
+    message: 'Фильтры списка пользователей должны применяться автоматически без отдельной кнопки «Показать».',
+  },
+  {
+    ok:
+      cpUsersIndexSource.includes("toggleSort('user')") &&
+      cpUsersIndexSource.includes("toggleSort('email')") &&
+      cpUsersIndexSource.includes("toggleSort('created_at')") &&
+      cpUsersIndexSource.includes('sort_by: sorting.by') &&
+      cpUsersIndexSource.includes('sort_order: sorting.order'),
+    message: 'Список пользователей должен передавать backend двустороннюю сортировку основных колонок.',
+  },
+  {
+    ok:
+      cpUsersIndexSource.includes("stage: user.is_active ? 'deactivate' : 'confirm'") &&
+      cpUsersIndexSource.includes('Деактивировать и продолжить') &&
+      cpUsersIndexSource.includes('Удалить навсегда'),
+    message: 'Удаление пользователя должно быть явным двухшаговым сценарием для активного аккаунта.',
+  },
+  {
+    ok:
+      cpUsersIndexSource.includes('let loadGeneration = 0') &&
+      cpUsersIndexSource.includes('generation !== loadGeneration'),
+    message: 'Автофильтрация должна отбрасывать поздние ответы предыдущих запросов.',
+  },
+]
+
+for (const check of controlPanelUserListUxChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
 if (errors.length) {
   console.error('Проверка контрактов клиентского приложения завершилась ошибкой:\n')
   console.error(errors.join('\n\n'))
