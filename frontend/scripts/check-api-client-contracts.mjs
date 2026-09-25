@@ -67,6 +67,8 @@ const editUserPath = path.join(root, 'pages/ControlPanel/Users/edit.vue')
 const rolesPagePath = path.join(root, 'pages/ControlPanel/Roles/index.vue')
 const manageRolesPath = path.join(root, 'components/UserModals/manage_roles.vue')
 const cpRolesPath = path.join(root, 'API/ControlPanel/CP_Roles.js')
+const tariffsPagePath = path.join(root, 'pages/ControlPanel/Tariffs/index.vue')
+const cpTariffsPath = path.join(root, 'API/ControlPanel/CP_Tariffs.js')
 const paymentsPath = path.join(root, 'pages/ControlPanel/Payments/index.vue')
 const registrationPath = path.join(root, 'components/CustomModals/AuthModals/RegistrationModal.vue')
 const sellerProfilePath = path.join(root, 'pages/Dashboard/Profile/index.vue')
@@ -86,6 +88,8 @@ const editUserSource = fs.readFileSync(editUserPath, 'utf8')
 const rolesPageSource = fs.readFileSync(rolesPagePath, 'utf8')
 const manageRolesSource = fs.readFileSync(manageRolesPath, 'utf8')
 const cpRolesSource = fs.readFileSync(cpRolesPath, 'utf8')
+const tariffsPageSource = fs.readFileSync(tariffsPagePath, 'utf8')
+const cpTariffsSource = fs.readFileSync(cpTariffsPath, 'utf8')
 const paymentsSource = fs.readFileSync(paymentsPath, 'utf8')
 const registrationSource = fs.readFileSync(registrationPath, 'utf8')
 const sellerProfileSource = fs.readFileSync(sellerProfilePath, 'utf8')
@@ -502,6 +506,40 @@ const controlPanelUserListUxChecks = [
 ]
 
 for (const check of controlPanelUserListUxChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const tariffLifecycleUiChecks = [
+  {
+    ok:
+      cpTariffsSource.includes('deleteTariff(tariffId)') &&
+      cpTariffsSource.includes("delete(`/control-panel/tariffs/${tariffId}`)"),
+    message: 'Клиент Control Panel должен поддерживать удаление тарифа через защищённый backend endpoint.',
+  },
+  {
+    ok:
+      tariffsPageSource.includes('Активный тариф сначала деактивируется.') &&
+      tariffsPageSource.includes("text=\"Удалить…\"") &&
+      tariffsPageSource.includes('deleteTariffConfirmed'),
+    message: 'Экран тарифов должен явно показывать lifecycle деактивация → удаление.',
+  },
+  {
+    ok:
+      tariffsPageSource.includes('Для подтверждения введите код') &&
+      tariffsPageSource.includes('Связанные записи: подписки') &&
+      tariffsPageSource.includes("tariff-row--system"),
+    message: 'Удаление тарифа должно требовать код, объяснять связанные данные и защищать системный demo.',
+  },
+  {
+    ok:
+      tariffsPageSource.includes('class="cp-card tariff-list"') &&
+      tariffsPageSource.includes('class="tariff-row"') &&
+      !tariffsPageSource.includes('cp-tariff-grid'),
+    message: 'Тарифы должны отображаться компактным стабильным списком вместо растягивающейся сетки карточек.',
+  },
+]
+
+for (const check of tariffLifecycleUiChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
