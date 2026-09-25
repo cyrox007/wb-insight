@@ -88,6 +88,110 @@ async def test_system_demo_cannot_be_deleted(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_active_tariff_cannot_be_deleted(monkeypatch):
+    tariff = SimpleNamespace(
+        id=uuid4(),
+        code="PRO",
+        is_active=True,
+    )
+
+    async def fake_get_tariff(_session, _tariff_id):
+        return tariff
+
+    async def unexpected_usage(*_args, **_kwargs):
+        raise AssertionError("Использование тарифа не проверяется до деактивации")
+
+    monkeypatch.setattr(tariff_handler, "get_tariff_by_id", fake_get_tariff)
+    monkeypatch.setattr(
+        tariff_handler,
+        "get_tariff_usage_counts",
+        unexpected_usage,
+    )
+
+    response = Response()
+    payload = await tariff_handler.delete_tariff(
+        tariff.id,
+        response,
+        object(),
+    )
+
+    assert response.status_code == 409
+    assert payload["error"]["code"] == "TARIFF_MUST_BE_INACTIVE"
+
+
+@pytest.mark.asyncio
+async def test_inactive_tariff_with_history_cannot_be_deleted(monkeypatch):
+    tariff = SimpleNamespace(
+        id=uuid4(),
+        code="PRO",
+        is_active=False,
+    )
+
+    async def fake_get_tariff(_session, _tariff_id):
+        return tariff
+
+    async def fake_usage(_session, _tariff_id):
+        return {"subscriptions": 2, "payments": 1}
+
+    async def unexpected_delete(*_args, **_kwargs):
+        raise AssertionError("Тариф с историей не должен удаляться")
+
+    monkeypatch.setattr(tariff_handler, "get_tariff_by_id", fake_get_tariff)
+    monkeypatch.setattr(tariff_handler, "get_tariff_usage_counts", fake_usage)
+    monkeypatch.setattr(tariff_handler, "delete_tariff_by_id", unexpected_delete)
+
+    response = Response()
+    payload = await tariff_handler.delete_tariff(
+        tariff.id,
+        response,
+        object(),
+    )
+
+    assert response.status_code == 409
+    assert payload["error"]["code"] == "TARIFF_IN_USE"
+    assert payload["error"]["usage"] == {
+        "subscriptions": 2,
+        "payments": 1,
+    }
+
+
+@pytest.mark.asyncio
+async def test_unused_inactive_tariff_can_be_deleted(monkeypatch):
+    tariff = SimpleNamespace(
+        id=uuid4(),
+        code="PRO",
+        is_active=False,
+    )
+    deleted = False
+
+    async def fake_get_tariff(_session, _tariff_id):
+        return tariff
+
+    async def fake_usage(_session, _tariff_id):
+        return {"subscriptions": 0, "payments": 0}
+
+    async def fake_delete(_session, _tariff_id):
+        nonlocal deleted
+        deleted = True
+        return True
+
+    monkeypatch.setattr(tariff_handler, "get_tariff_by_id", fake_get_tariff)
+    monkeypatch.setattr(tariff_handler, "get_tariff_usage_counts", fake_usage)
+    monkeypatch.setattr(tariff_handler, "delete_tariff_by_id", fake_delete)
+
+    response = Response()
+    payload = await tariff_handler.delete_tariff(
+        tariff.id,
+        response,
+        object(),
+    )
+
+    assert payload["status"] == "success"
+    assert payload["deleting"] is True
+    assert deleted is True
+
+
+@pytest.mark.asyncio
 async def test_required_limit_cannot_be_deleted_from_active_tariff(monkeypatch):
     tariff_id = uuid4()
     tariff = SimpleNamespace(id=tariff_id, code="PRO", is_active=True)
@@ -135,6 +239,20 @@ async def test_public_catalog_hides_incomplete_tariffs(monkeypatch):
     result = await tariff_service.get_public_runtime_ready_tariffs(object())
 
     assert result == [ready]
+
+
+@pytest.mark.asyncio
+async def test_service_refuses_active_tariff_delete(monkeypatch):
+    active = SimpleNamespace(id=uuid4(), code="PRO", is_active=True)
+
+    async def fake_get(_session, _tariff_id):
+        return active
+
+    monkeypatch.setattr(tariff_service, "get_tariff_by_id", fake_get)
+
+    deleted = await tariff_service.delete_tariff_by_id(object(), active.id)
+
+    assert deleted is False
 
 
 @pytest.mark.asyncio
