@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
-from sqlalchemy import func, inspect, or_, select
+from sqlalchemy import String, cast, func, inspect, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -208,6 +208,7 @@ def _user_list_conditions(
     active: bool | None,
     verified: bool | None,
     staff: bool | None,
+    entity_type: str | None,
     role: str | None,
 ):
     conditions = []
@@ -220,6 +221,10 @@ def _user_list_conditions(
                 User.email.ilike(pattern, escape="\\"),
                 User.phone.ilike(pattern, escape="\\"),
                 User.staff_id.ilike(pattern, escape="\\"),
+                User.inn.ilike(pattern, escape="\\"),
+                User.department.ilike(pattern, escape="\\"),
+                User.position.ilike(pattern, escape="\\"),
+                cast(User.id, String).ilike(pattern, escape="\\"),
             )
         )
     if active is not None:
@@ -232,11 +237,30 @@ def _user_list_conditions(
         )
     if staff is not None:
         conditions.append(User.is_staff.is_(staff))
+    if entity_type:
+        conditions.append(User.entity_type == entity_type)
     if role:
         conditions.append(
             User.roles.any(UserRoleAssociation.role == role)
         )
     return conditions
+
+
+def _user_list_order(sort_by: str, sort_order: str):
+    """Возвращает безопасную сортировку списка пользователей по allowlist."""
+
+    columns = {
+        "user": func.lower(User.full_name),
+        "email": func.lower(User.email),
+        "phone": User.phone,
+        "entity_type": User.entity_type,
+        "status": User.is_active,
+        "created_at": User.created_at,
+    }
+    column = columns[sort_by]
+    direction = column.asc if sort_order == "asc" else column.desc
+    id_direction = User.id.asc if sort_order == "asc" else User.id.desc
+    return direction(), id_direction()
 
 
 @router.get('/')
@@ -246,12 +270,19 @@ async def get_users(
     active: bool | None = Query(default=None),
     verified: bool | None = Query(default=None),
     staff: bool | None = Query(default=None),
+    entity_type: str | None = Query(default=None, max_length=20),
     role: str | None = Query(default=None, max_length=20),
+    sort_by: str = Query(default="created_at", max_length=20),
+    sort_order: str = Query(default="desc", max_length=4),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     normalized_role = str(role or "").strip().lower() or None
+    normalized_entity_type = str(entity_type or "").strip().lower() or None
+    normalized_sort_by = str(sort_by or "").strip().lower()
+    normalized_sort_order = str(sort_order or "").strip().lower()
+
     if normalized_role and normalized_role not in {item.value for item in UserRole}:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
@@ -259,17 +290,41 @@ async def get_users(
             message="Неизвестная роль пользователя",
         )
 
+    if normalized_entity_type and normalized_entity_type not in {item.value for item in EntityType}:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="USER_FILTER_INVALID",
+            message="Неизвестный тип аккаунта",
+        )
+
+    allowed_sort_fields = {
+        "user",
+        "email",
+        "phone",
+        "entity_type",
+        "status",
+        "created_at",
+    }
+    if normalized_sort_by not in allowed_sort_fields or normalized_sort_order not in {"asc", "desc"}:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="USER_SORT_INVALID",
+            message="Некорректные параметры сортировки пользователей",
+        )
+
     conditions = _user_list_conditions(
         search=search,
         active=active,
         verified=verified,
         staff=staff,
+        entity_type=normalized_entity_type,
         role=normalized_role,
     )
+    order_by = _user_list_order(normalized_sort_by, normalized_sort_order)
     query = (
         select(User)
         .options(selectinload(User.roles))
-        .order_by(User.created_at.desc(), User.id.desc())
+        .order_by(*order_by)
         .offset(offset)
         .limit(limit)
     )
@@ -285,6 +340,8 @@ async def get_users(
         total=int(total or 0),
         limit=limit,
         offset=offset,
+        sort_by=normalized_sort_by,
+        sort_order=normalized_sort_order,
     )
 
 
