@@ -16,6 +16,9 @@ export default class CP_Tariffs {
 	static async editTariff(tariffId, tariff) {
 		return await $api.put(`/control-panel/tariffs/${tariffId}/edit`, tariff)
 	}
+	static async deleteTariff(tariffId) {
+		return await $api.delete(`/control-panel/tariffs/${tariffId}`)
+	}
 	static async createLimit(tariffId, limit) {
 		return await $api.post(`/control-panel/tariffs/${tariffId}/limits/create`, { ...limit});
 	}
