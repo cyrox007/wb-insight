@@ -43,6 +43,7 @@ const sorting = reactive({
 })
 
 let filterTimer = null
+let loadGeneration = 0
 
 const ENTITY_LABELS = {
 	individual: 'Физ. лицо',
@@ -123,10 +124,12 @@ function requestParams() {
 }
 
 async function loadUsers() {
+	const generation = ++loadGeneration
 	isLoading.value = true
 	loadError.value = ''
 	try {
 		const response = await CP_Users.getUserList(requestParams())
+		if (generation !== loadGeneration) return
 		if (response.data?.status !== 'success' || !Array.isArray(response.data?.user_list)) {
 			throw new Error('Некорректный ответ API пользователей')
 		}
@@ -135,6 +138,7 @@ async function loadUsers() {
 		limit.value = Number(response.data?.limit ?? limit.value)
 		offset.value = Number(response.data?.offset ?? offset.value)
 	} catch (error) {
+		if (generation !== loadGeneration) return
 		console.error('Ошибка загрузки пользователей:', error)
 		users.value = []
 		total.value = 0
@@ -142,7 +146,7 @@ async function loadUsers() {
 			error.response?.data?.error?.message ||
 			'Не удалось загрузить список пользователей. Проверьте API панели управления.'
 	} finally {
-		isLoading.value = false
+		if (generation === loadGeneration) isLoading.value = false
 	}
 }
 
@@ -164,6 +168,7 @@ function resetFilters() {
 }
 
 function toggleSort(field) {
+	if (filterTimer) window.clearTimeout(filterTimer)
 	if (sorting.by === field) {
 		sorting.order = sorting.order === 'asc' ? 'desc' : 'asc'
 	} else {
@@ -781,12 +786,12 @@ onBeforeUnmount(() => {
 }
 
 .col-user { width: 17%; }
-.col-email { width: 18%; }
+.col-email { width: 17%; }
 .col-phone { width: 12%; }
-.col-access { width: 18%; }
-.col-status { width: 16%; }
-.col-created { width: 12%; }
-.col-actions { width: 7%; }
+.col-access { width: 17%; }
+.col-status { width: 15%; }
+.col-created { width: 13%; }
+.col-actions { width: 9%; }
 
 .sort-button {
 	display: inline-flex;
