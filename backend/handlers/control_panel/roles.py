@@ -37,6 +37,21 @@ def _normalize_role_code(raw_value) -> str:
     return str(raw_value or "").strip().lower()
 
 
+def _super_admin_confirmation_matches(
+    role_code: str,
+    confirm_email: object,
+    target_email: object,
+) -> bool:
+    """Проверяет дополнительное подтверждение назначения полного доступа."""
+
+    if role_code != UserRole.SUPER_ADMIN.value:
+        return True
+
+    confirmation = str(confirm_email or "").strip().lower()
+    expected = str(target_email or "").strip().lower()
+    return bool(confirmation and expected and confirmation == expected)
+
+
 @router.get("/")
 async def get_roles(
     request: Request,
@@ -106,6 +121,20 @@ async def create_role(
         return response_error(
             message="Пользователь не найден",
             code="USER_NOT_FOUND",
+        )
+
+    if not _super_admin_confirmation_matches(
+        role_code,
+        input_data.get("confirm_email"),
+        target_user.email,
+    ):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            message=(
+                "Для назначения роли суперадминистратора введите email "
+                "пользователя точно так, как он указан в его аккаунте"
+            ),
+            code="SUPER_ADMIN_CONFIRMATION_REQUIRED",
         )
 
     existing = await get_user_role_association_by_code(
