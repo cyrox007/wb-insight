@@ -16,6 +16,7 @@ from services.tariff_service import (
     get_tariff_by_code,
     get_tariff_by_id,
     get_tariff_limits_by_id,
+    get_tariff_usage_counts,
     get_tariffs_list,
     insert_tariff,
     is_system_tariff,
@@ -341,6 +342,25 @@ async def delete_tariff(
         return response_error(
             code="SYSTEM_TARIFF_PROTECTED",
             message="Системный тариф demo нельзя удалить",
+        )
+
+    if tariff.is_active:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="TARIFF_MUST_BE_INACTIVE",
+            message="Сначала деактивируйте тариф, затем повторите удаление",
+        )
+
+    usage = await get_tariff_usage_counts(db_session, tariff_id)
+    if usage["subscriptions"] or usage["payments"]:
+        response.status_code = status.HTTP_409_CONFLICT
+        return response_error(
+            code="TARIFF_IN_USE",
+            message=(
+                "Тариф нельзя удалить, потому что он используется в истории "
+                "подписок или платежей. Оставьте его неактивным."
+            ),
+            usage=usage,
         )
 
     deleted = await delete_tariff_by_id(db_session, tariff_id)
