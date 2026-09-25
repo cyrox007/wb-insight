@@ -123,10 +123,13 @@ async def create_role(
             code="USER_NOT_FOUND",
         )
 
-    if not _super_admin_confirmation_matches(
-        role_code,
-        input_data.get("confirm_email"),
-        target_user.email,
+    if (
+        role_code == UserRole.SUPER_ADMIN.value
+        and not _super_admin_confirmation_matches(
+            role_code,
+            input_data.get("confirm_email"),
+            getattr(target_user, "email", None),
+        )
     ):
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(
