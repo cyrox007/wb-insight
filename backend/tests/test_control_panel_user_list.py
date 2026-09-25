@@ -19,6 +19,7 @@ def test_user_list_conditions_cover_client_status_and_role_filters():
         active=True,
         verified=False,
         staff=False,
+        entity_type="individual",
         role="user",
     )
     statement = select(User).where(*conditions)
@@ -27,6 +28,7 @@ def test_user_list_conditions_cover_client_status_and_role_filters():
     assert "users.is_active IS true" in sql
     assert "users.email_verified_at IS NULL" in sql
     assert "users.is_staff IS false" in sql
+    assert "users.entity_type" in sql
     assert "user_roles" in sql
     assert "EXISTS" in sql
     assert "lower(users.email)" in sql
@@ -48,7 +50,10 @@ async def test_invalid_user_role_filter_returns_stable_400_without_querying_data
         active=None,
         verified=None,
         staff=None,
+        entity_type=None,
         role="root",
+        sort_by="created_at",
+        sort_order="desc",
         limit=50,
         offset=0,
         db_session=ForbiddenSession(),  # type: ignore[arg-type]
@@ -112,7 +117,10 @@ async def test_user_list_returns_server_side_total_limit_and_offset():
         active=True,
         verified=None,
         staff=False,
+        entity_type="individual",
         role="user",
+        sort_by="email",
+        sort_order="asc",
         limit=25,
         offset=50,
         db_session=session,  # type: ignore[arg-type]
@@ -122,12 +130,75 @@ async def test_user_list_returns_server_side_total_limit_and_offset():
     assert result["total"] == 137
     assert result["limit"] == 25
     assert result["offset"] == 50
+    assert result["sort_by"] == "email"
+    assert result["sort_order"] == "asc"
     assert len(result["user_list"]) == 1
 
     sql = str(session.statement)
     assert "LIMIT" in sql
     assert "OFFSET" in sql
     assert "users.is_staff IS false" in sql
+    assert "lower(users.email)" in sql
+    assert "ASC" in sql
+
+
+def test_user_list_search_covers_extended_admin_fields():
+    conditions = control_panel_users._user_list_conditions(
+        search="needle",
+        active=None,
+        verified=None,
+        staff=None,
+        entity_type=None,
+        role=None,
+    )
+    sql = str(select(User).where(*conditions))
+
+    assert "users.inn" in sql
+    assert "users.department" in sql
+    assert "users.position" in sql
+    assert "CAST(users.id AS VARCHAR)" in sql
+
+
+def test_user_list_order_supports_both_directions():
+    ascending = str(
+        select(User).order_by(*control_panel_users._user_list_order("user", "asc"))
+    )
+    descending = str(
+        select(User).order_by(*control_panel_users._user_list_order("created_at", "desc"))
+    )
+
+    assert "lower(users.full_name) ASC" in ascending
+    assert "users.created_at DESC" in descending
+
+
+@pytest.mark.asyncio
+async def test_invalid_user_sort_returns_stable_400_without_querying_database():
+    class ForbiddenSession:
+        async def execute(self, *_args, **_kwargs):
+            raise AssertionError("invalid sort must fail before DB query")
+
+        async def scalar(self, *_args, **_kwargs):
+            raise AssertionError("invalid sort must fail before DB count")
+
+    response = Response()
+    result = await control_panel_users.get_users(
+        response=response,
+        search=None,
+        active=None,
+        verified=None,
+        staff=None,
+        entity_type=None,
+        role=None,
+        sort_by="password",
+        sort_order="sideways",
+        limit=50,
+        offset=0,
+        db_session=ForbiddenSession(),  # type: ignore[arg-type]
+    )
+
+    assert response.status_code == 400
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "USER_SORT_INVALID"
 
 
 def test_staff_creation_payload_normalizes_required_fields():
