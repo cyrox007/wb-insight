@@ -821,6 +821,10 @@ const logout = async () => {
 .route-motion-frame {
   min-width: 0;
   transform-origin: 50% 18%;
+}
+
+.page-motion-enter-active,
+.page-motion-leave-active {
   will-change: opacity, transform;
 }
 
