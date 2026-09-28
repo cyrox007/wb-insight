@@ -66,6 +66,7 @@
 - P106 делает user administration операционно пригодным: auto-filter/debounce, server-side asc/desc sorting, расширенный поиск, компактная таблица и единый двухшаговый delete flow без скрытого destructive-действия.
 - P107 устраняет двусмысленное управление ролями: текущие роли отделены от будущих действий, permission-матрица стала справочной, super_admin assignment требует email-confirmation на frontend и backend.
 - P108 завершает tariff lifecycle: компактный список, деактивация перед destructive delete, подтверждение кода и явная блокировка удаления тарифов с историческими subscriptions/payments.
+- P109 исправляет системный UI-дефект модалок внутри route transition: fixed-overlay снова привязан к viewport, размеры диалогов заданы базовым компонентом, edit-user больше не превращается в узкую вертикальную простыню.
 - основной WB Web v1 feature scope **заморожен**;
 - текущий release stage — **P40 / issue #78: production-like beta acceptance и evidence closure**;
 - candidate VERSION уже поднят до `0.9.0-beta.1`, но публикация/tag разрешены только после фактического P40 acceptance на exact SHA зафиксированной ветки `release/0.9.0-beta.1-acceptance`; последующие изменения `dev` не переопределяют этот acceptance baseline.

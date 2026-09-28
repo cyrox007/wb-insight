@@ -126,7 +126,7 @@ async function saveUser() {
 <template>
 	<Modal
 		:is-open="isOpen"
-		size="large"
+		size="xlarge"
 		aria-label="Редактирование пользователя"
 		:close-on-overlay-click="!isSaving"
 		:close-on-escape="!isSaving"
@@ -140,7 +140,7 @@ async function saveUser() {
 		</template>
 
 		<template #body>
-			<div class="cp-form-grid" :aria-busy="isSaving">
+			<div class="cp-form-grid edit-user-grid" :aria-busy="isSaving">
 				<TextInput label="ФИО / название" v-model="userData.full_name" placeholder="Введите имя или название" :disabled="isSaving" />
 				<TextInput label="Email" v-model="userData.email" type="email" :disabled="isSaving" />
 				<TextInput label="Телефон" v-model="userData.phone" :disabled="isSaving" />
@@ -171,7 +171,9 @@ async function saveUser() {
 
 				<TextInput label="ИНН" v-model="userData.inn" placeholder="Введите ИНН" :disabled="isSaving" />
 				<TextInput v-if="userData.entity_type === 'legal_entity'" label="КПП" v-model="userData.kpp" placeholder="Введите КПП" :disabled="isSaving" />
-				<TextInput v-if="userData.entity_type === 'legal_entity'" label="Юридический адрес" v-model="userData.legal_address" placeholder="Введите юридический адрес" :disabled="isSaving" />
+				<div v-if="userData.entity_type === 'legal_entity'" class="edit-user-wide">
+					<TextInput label="Юридический адрес" v-model="userData.legal_address" placeholder="Введите юридический адрес" :disabled="isSaving" />
+				</div>
 
 				<div class="cp-form-row cp-form-row--wide">
 					<label class="cp-checkbox-row">
@@ -211,8 +213,25 @@ async function saveUser() {
 </template>
 
 <style scoped>
-.cp-form-row--wide {
+.edit-user-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: start;
+}
+
+.cp-form-row--wide,
+.edit-user-wide {
 	grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+	.edit-user-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.cp-form-row--wide,
+	.edit-user-wide {
+		grid-column: auto;
+	}
 }
 
 .cp-checkbox-row {
