@@ -164,11 +164,12 @@ onBeforeUnmount(restorePreviousFocus)
 	border: 1px solid var(--border-color);
 	border-radius: var(--radius-lg);
 	padding: 20px;
-	width: 500px;
-	max-width: 90%;
+	width: min(100%, 500px);
+	max-width: none;
 	max-height: calc(100dvh - 32px);
 	display: flex;
 	flex-direction: column;
+	overflow: hidden;
 	box-shadow: var(--shadow);
 	opacity: 1;
 	transform: translateY(0) scale(1);
@@ -180,6 +181,22 @@ onBeforeUnmount(restorePreviousFocus)
 
 .modal:focus {
 	outline: none;
+}
+
+.modal-small {
+	width: min(100%, 400px);
+}
+
+.modal-medium {
+	width: min(100%, 500px);
+}
+
+.modal-large {
+	width: min(100%, 720px);
+}
+
+.modal-xlarge {
+	width: min(100%, 920px);
 }
 
 .modal-motion-enter-from,
