@@ -76,6 +76,8 @@ const accountLifecyclePath = path.join(root, 'API/AccountLifecycleService.js')
 const sellerOnboardingPath = path.join(root, 'components/SellerOnboarding.vue')
 const addTokenModalPath = path.join(root, 'components/CustomModals/ProfileModals/AddTokenModal.vue')
 const dashboardMainPath = path.join(root, 'pages/Dashboard/Main/index.vue')
+const modalPath = path.join(root, 'components/UI/Modal.vue')
+const editUserModalPath = path.join(root, 'components/UserModals/edit_user.vue')
 const dashboardAccountSource = fs.readFileSync(dashboardAccountPath, 'utf8')
 const appSource = fs.readFileSync(appPath, 'utf8')
 const apiSource = fs.readFileSync(apiPath, 'utf8')
@@ -97,6 +99,8 @@ const accountLifecycleSource = fs.readFileSync(accountLifecyclePath, 'utf8')
 const sellerOnboardingSource = fs.readFileSync(sellerOnboardingPath, 'utf8')
 const addTokenModalSource = fs.readFileSync(addTokenModalPath, 'utf8')
 const dashboardMainSource = fs.readFileSync(dashboardMainPath, 'utf8')
+const modalSource = fs.readFileSync(modalPath, 'utf8')
+const editUserModalSource = fs.readFileSync(editUserModalPath, 'utf8')
 
 const sessionIsolationChecks = [
   {
@@ -540,6 +544,35 @@ const tariffLifecycleUiChecks = [
 ]
 
 for (const check of tariffLifecycleUiChecks) {
+  if (!check.ok) errors.push(check.message)
+}
+
+const modalViewportChecks = [
+  {
+    ok:
+      appSource.includes('.route-motion-frame {\n  min-width: 0;\n  transform-origin: 50% 18%;\n}') &&
+      appSource.includes('.page-motion-enter-active,\n.page-motion-leave-active {\n  will-change: opacity, transform;\n}'),
+    message: 'Постоянный transform containing block маршрута не должен ломать viewport-позиционирование модальных окон.',
+  },
+  {
+    ok:
+      modalSource.includes('.modal-small') &&
+      modalSource.includes('.modal-medium') &&
+      modalSource.includes('.modal-large') &&
+      modalSource.includes('.modal-xlarge') &&
+      modalSource.includes('overflow: hidden;'),
+    message: 'Базовая модалка должна сама определять все заявленные размеры и ограничивать внутреннее переполнение.',
+  },
+  {
+    ok:
+      editUserModalSource.includes('size="xlarge"') &&
+      editUserModalSource.includes('class="cp-form-grid edit-user-grid"') &&
+      editUserModalSource.includes('grid-template-columns: repeat(2, minmax(0, 1fr));'),
+    message: 'Редактирование пользователя должно использовать широкий двухколоночный desktop-layout вместо длинной узкой простыни.',
+  },
+]
+
+for (const check of modalViewportChecks) {
   if (!check.ok) errors.push(check.message)
 }
 
