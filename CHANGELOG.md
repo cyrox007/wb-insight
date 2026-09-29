@@ -8,7 +8,7 @@
 
 Параллельные улучшения после фиксации acceptance-candidate. Они не входят в тестируемую ветку `release/0.9.0-beta.1-acceptance` на SHA `71aa437198f872a4285a4ee7539b771b097acd42`.
 
-- P109: исправлено viewport-позиционирование модальных окон внутри route transition: постоянный transform containing block больше не ограничивает fixed-overlay областью страницы;
+- P110: базовый Modal.vue переведён на Vue Teleport в `body`, поэтому overlay и диалог больше не зависят от transform/overflow/contain контекста страницы и всегда работают относительно viewport;\n- overlay закреплён через `inset: 0`, `100vw` и `100dvh`; прокрутка фоновой страницы блокируется на время открытого диалога с корректным счётчиком нескольких модалок;\n- focus trap, Escape, overlay click, темы и размеры small/medium/large/xlarge сохранены;\n\n- P109: исправлено viewport-позиционирование модальных окон внутри route transition: постоянный transform containing block больше не ограничивает fixed-overlay областью страницы;
 - базовый Modal.vue теперь сам определяет размеры small/medium/large/xlarge и ограничивает внутреннее переполнение;
 - форма редактирования пользователя переведена на широкий двухколоночный desktop-layout с возвратом к одной колонке на узких экранах;
 
