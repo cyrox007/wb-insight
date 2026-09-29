@@ -556,6 +556,22 @@ const modalViewportChecks = [
   },
   {
     ok:
+      modalSource.includes('<Teleport to="body">') &&
+      modalSource.includes('position: fixed;') &&
+      modalSource.includes('inset: 0;') &&
+      modalSource.includes('width: 100vw;') &&
+      modalSource.includes('height: 100dvh;'),
+    message: 'Базовая модалка должна рендерить overlay напрямую в body и занимать весь viewport независимо от контейнера страницы.',
+  },
+  {
+    ok:
+      modalSource.includes('BODY_LOCK_COUNT_ATTRIBUTE') &&
+      modalSource.includes('lockBodyScroll()') &&
+      modalSource.includes('unlockBodyScroll()'),
+    message: 'Базовая модалка должна блокировать прокрутку страницы и корректно поддерживать несколько открытых диалогов.',
+  },
+  {
+    ok:
       modalSource.includes('.modal-small') &&
       modalSource.includes('.modal-medium') &&
       modalSource.includes('.modal-large') &&
