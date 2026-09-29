@@ -1,30 +1,32 @@
 <template>
-	<Transition name="modal-motion" appear>
-		<div
-			v-if="isOpen"
-			class="modal-overlay"
-			@click.self="handleOverlayClick"
-			@keydown="handleKeydown"
-		>
+	<Teleport to="body">
+		<Transition name="modal-motion" appear>
 			<div
-				ref="dialogRef"
-				class="modal"
-				:class="sizeClass"
-				role="dialog"
-				aria-modal="true"
-				:aria-label="ariaLabel"
-				tabindex="-1"
+				v-if="isOpen"
+				class="modal-overlay"
+				@click.self="handleOverlayClick"
+				@keydown="handleKeydown"
 			>
-				<slot name="header"></slot>
-				<div class="modal-body">
-					<slot name="body"></slot>
-				</div>
-				<div v-if="$slots.footer" class="modal-footer">
-					<slot name="footer"></slot>
+				<div
+					ref="dialogRef"
+					class="modal"
+					:class="sizeClass"
+					role="dialog"
+					aria-modal="true"
+					:aria-label="ariaLabel"
+					tabindex="-1"
+				>
+					<slot name="header"></slot>
+					<div class="modal-body">
+						<slot name="body"></slot>
+					</div>
+					<div v-if="$slots.footer" class="modal-footer">
+						<slot name="footer"></slot>
+					</div>
 				</div>
 			</div>
-		</div>
-	</Transition>
+		</Transition>
+	</Teleport>
 </template>
 
 <script setup>
@@ -35,25 +37,26 @@ const props = defineProps({
 	size: {
 		type: String,
 		default: 'medium',
-		validator: (value) => ['small', 'medium', 'large', 'xlarge'].includes(value)
+		validator: (value) => ['small', 'medium', 'large', 'xlarge'].includes(value),
 	},
 	closeOnOverlayClick: {
 		type: Boolean,
-		default: true
+		default: true,
 	},
 	closeOnEscape: {
 		type: Boolean,
-		default: true
+		default: true,
 	},
 	ariaLabel: {
 		type: String,
-		default: 'Диалоговое окно'
-	}
+		default: 'Диалоговое окно',
+	},
 })
 
 const emit = defineEmits(['close'])
 const dialogRef = ref(null)
 const previousActiveElement = ref(null)
+const bodyScrollLocked = ref(false)
 
 const sizeClass = computed(() => `modal-${props.size}`)
 
@@ -63,14 +66,52 @@ const FOCUSABLE_SELECTOR = [
 	'input:not([disabled])',
 	'select:not([disabled])',
 	'textarea:not([disabled])',
-	'[tabindex]:not([tabindex="-1"])'
+	'[tabindex]:not([tabindex="-1"])',
 ].join(',')
+
+const BODY_LOCK_COUNT_ATTRIBUTE = 'data-wb-modal-lock-count'
+const BODY_PREVIOUS_OVERFLOW_ATTRIBUTE = 'data-wb-modal-previous-overflow'
 
 function getFocusableElements() {
 	if (!dialogRef.value) return []
 	return Array.from(dialogRef.value.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
 		(element) => element.getAttribute('aria-hidden') !== 'true'
 	)
+}
+
+function lockBodyScroll() {
+	if (typeof document === 'undefined' || bodyScrollLocked.value) return
+
+	const body = document.body
+	const currentCount = Number(body.getAttribute(BODY_LOCK_COUNT_ATTRIBUTE) || 0)
+
+	if (currentCount === 0) {
+		body.setAttribute(BODY_PREVIOUS_OVERFLOW_ATTRIBUTE, body.style.overflow || '')
+		body.style.overflow = 'hidden'
+	}
+
+	body.setAttribute(BODY_LOCK_COUNT_ATTRIBUTE, String(currentCount + 1))
+	bodyScrollLocked.value = true
+}
+
+function unlockBodyScroll() {
+	if (typeof document === 'undefined' || !bodyScrollLocked.value) return
+
+	const body = document.body
+	const currentCount = Number(body.getAttribute(BODY_LOCK_COUNT_ATTRIBUTE) || 0)
+	const nextCount = Math.max(0, currentCount - 1)
+
+	if (nextCount > 0) {
+		body.setAttribute(BODY_LOCK_COUNT_ATTRIBUTE, String(nextCount))
+		bodyScrollLocked.value = false
+		return
+	}
+
+	const previousOverflow = body.getAttribute(BODY_PREVIOUS_OVERFLOW_ATTRIBUTE) || ''
+	body.style.overflow = previousOverflow
+	body.removeAttribute(BODY_LOCK_COUNT_ATTRIBUTE)
+	body.removeAttribute(BODY_PREVIOUS_OVERFLOW_ATTRIBUTE)
+	bodyScrollLocked.value = false
 }
 
 function restorePreviousFocus() {
@@ -123,11 +164,13 @@ watch(
 	() => props.isOpen,
 	async (isOpen) => {
 		if (!isOpen) {
+			unlockBodyScroll()
 			restorePreviousFocus()
 			return
 		}
 
 		previousActiveElement.value = document.activeElement
+		lockBodyScroll()
 		await nextTick()
 		const focusable = getFocusableElements()
 		;(focusable[0] || dialogRef.value)?.focus({ preventScroll: true })
@@ -135,28 +178,32 @@ watch(
 	{ immediate: true }
 )
 
-onBeforeUnmount(restorePreviousFocus)
+onBeforeUnmount(() => {
+	unlockBodyScroll()
+	restorePreviousFocus()
+})
 </script>
 
 <style scoped>
 .modal-overlay {
 	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
+	inset: 0;
+	width: 100vw;
+	height: 100dvh;
+	box-sizing: border-box;
 	padding: 16px;
 	background-color: var(--overlay-bg);
 	backdrop-filter: blur(4px);
 	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: auto;
+	overscroll-behavior: contain;
 	opacity: 1;
 	transition:
 		opacity 260ms ease,
 		backdrop-filter 300ms ease;
-	align-items: center;
-	justify-content: center;
-	overflow-y: auto;
-	z-index: 1000;
+	z-index: 10000;
 }
 
 .modal {
@@ -167,6 +214,7 @@ onBeforeUnmount(restorePreviousFocus)
 	width: min(100%, 500px);
 	max-width: none;
 	max-height: calc(100dvh - 32px);
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
@@ -238,6 +286,7 @@ onBeforeUnmount(restorePreviousFocus)
 .modal-body {
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .modal-footer {
