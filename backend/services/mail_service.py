@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config as config
-from integrations.mail.rusender import RuSenderAPIError
+from integrations.mail.provider import MailProviderError
 from models.mail_delivery import (
     CampaignStatus,
     MailCampaign,
@@ -38,14 +38,12 @@ class TransactionalMailContent:
 
 
 def _provider_idempotency_key(message: MailMessage) -> str:
-    """Bind token-bearing payloads to one provider attempt, not one DB message.
+    """Привязывает секрет-содержащий payload к одной попытке отправки.
 
-    Verification/reset tokens are minted inside the delivery transaction. If a
-    provider accepted attempt times out before our response arrives, the DB
-    transaction is rolled back and the next attempt mints a different token.
-    Reusing the same provider idempotency key with changed content could cause
-    the provider to return the first accepted message whose token no longer
-    exists locally. A short attempt-scoped key keeps retry bodies consistent.
+    Токены подтверждения и восстановления создаются внутри транзакции доставки.
+    Если провайдер принял письмо, но ответ потерялся по таймауту, транзакция
+    откатится и следующая попытка создаст новый токен. Поэтому для таких писем
+    ключ идемпотентности должен быть уникален на каждую попытку.
     """
     if (
         message.kind == MailKind.TRANSACTIONAL.value
@@ -56,7 +54,7 @@ def _provider_idempotency_key(message: MailMessage) -> str:
 
 
 class PermanentMailDeliveryError(RuntimeError):
-    """A safe deterministic failure that must not be retried."""
+    """Безопасная постоянная ошибка доставки, которую нельзя повторять."""
 
     def __init__(self, code: str):
         super().__init__(code)
@@ -72,7 +70,7 @@ def _token_url(base_url: str, token: str) -> str:
 
 
 def _password_reset_url(token: str) -> str:
-    """Compatibility helper: raw reset secrets stay in the URL fragment."""
+    """Сохраняет секрет восстановления только во фрагменте URL."""
     return _token_url(config.PASSWORD_RESET_BASE_URL, token)
 
 
@@ -88,7 +86,7 @@ async def _transport_send(
     headers: dict[str, str] | None = None,
     idempotency_key: str | None = None,
 ) -> str:
-    """Dispatch through the effective provider without exposing secrets."""
+    """Отправляет письмо через выбранный транспорт без раскрытия секретов."""
     runtime = await get_mail_transport_runtime(session)
     feature_enabled = (
         runtime.MAIL_DELIVERY_ENABLED
@@ -100,16 +98,15 @@ async def _transport_send(
     if not runtime.ready:
         raise RuntimeError("mail_transport_not_ready")
 
-    # RuSender accepts only custom X-* headers. RFC list/unsubscribe headers
-    # remain SMTP-only, while transactional trace metadata can pass through.
+    provider = mail_provider_for_runtime(runtime)
+    capabilities = provider.capabilities
     if (
         headers
-        and runtime.MAIL_PROVIDER == "rusender"
+        and not capabilities.rfc_headers
         and any(not str(name).lower().startswith("x-") for name in headers)
     ):
-        raise PermanentMailDeliveryError("rusender_marketing_transport_unsupported")
+        raise PermanentMailDeliveryError("mail_transport_headers_unsupported")
 
-    provider = mail_provider_for_runtime(runtime)
     try:
         receipt = await provider.send(
             sender=runtime.SMTP_FROM_EMAIL,
@@ -124,15 +121,14 @@ async def _transport_send(
             headers=headers,
             idempotency_key=idempotency_key,
         )
-    except RuSenderAPIError as exc:
+    except MailProviderError as exc:
         if not exc.retryable:
             raise PermanentMailDeliveryError(exc.safe_code) from exc
         raise
     return receipt.provider_message_id or ""
 
 
-# Compatibility alias for older callers/tests. The implementation is now
-# provider-neutral even though the historical helper name was SMTP-specific.
+# Совместимое имя для старых вызовов и тестов. Реализация уже не зависит от SMTP.
 _smtp_send = _transport_send
 
 
@@ -145,10 +141,10 @@ async def queue_transactional_email(
     recipient_email: str | None = None,
 ) -> MailMessage:
     if template_code not in TRANSACTIONAL_TEMPLATES:
-        raise ValueError(f"Unknown transactional template: {template_code}")
+        raise ValueError(f"Неизвестный транзакционный шаблон: {template_code}")
     recipient = _normalized_email(recipient_email or user.email)
     if not recipient:
-        raise ValueError("transactional_recipient_required")
+        raise ValueError("Для транзакционного письма нужен адрес получателя")
     key = idempotency_key or f"{template_code}:{user.id}:{uuid.uuid4()}"
     existing = await session.execute(select(MailMessage).where(MailMessage.idempotency_key == key))
     found = existing.scalar_one_or_none()
