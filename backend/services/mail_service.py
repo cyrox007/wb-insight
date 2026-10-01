@@ -256,8 +256,8 @@ async def _render_transactional(
         )
 
     if message.template_code == "password_reset":
-        # A queued reset must never be delivered to an address that ceased to be
-        # the account identity after the request was queued.
+        # Письмо восстановления из очереди нельзя отправлять на адрес,
+        # который после постановки в очередь перестал принадлежать аккаунту.
         if recipient != _normalized_email(user.email):
             raise PermanentMailDeliveryError("password_reset_target_stale")
         raw_token = await issue_password_reset_token(session, user)
@@ -301,7 +301,7 @@ async def _is_suppressed(
 ) -> bool:
     predicates = [MailSuppression.email == _normalized_email(email)]
     if user_id is not None:
-        # User-scoped suppression survives a later verified email change.
+        # Пользовательский запрет рассылки сохраняется после подтверждённой смены email.
         predicates.append(MailSuppression.user_id == user_id)
     result = await session.execute(
         select(MailSuppression.id).where(
@@ -313,7 +313,7 @@ async def _is_suppressed(
 
 
 async def _campaign_target_is_current(session: AsyncSession, message: MailMessage) -> bool:
-    """Never send queued marketing mail to an address no longer owned by user."""
+    """Не отправляет маркетинговое письмо на адрес, который больше не принадлежит пользователю."""
     if message.user_id is None:
         return False
     result = await session.execute(select(User).where(User.id == message.user_id))
@@ -327,11 +327,11 @@ async def _campaign_target_is_current(session: AsyncSession, message: MailMessag
 
 
 async def deliver_message(session: AsyncSession, message_id) -> str:
-    """Deliver one message inside caller-owned transaction.
+    """Доставляет одно письмо внутри транзакции вызывающего кода.
 
-    Delivery exceptions intentionally escape. The Celery task rolls the transaction
-    back first, which also rolls back a freshly-issued reset/verification token,
-    then records only a safe retry state in a new transaction.
+    Ошибки доставки намеренно выходят наружу. Celery-задача сначала откатывает
+    транзакцию вместе со свежим токеном восстановления или подтверждения, а затем
+    в новой транзакции сохраняет только безопасное состояние повторной попытки.
     """
     now = datetime.now(timezone.utc)
     result = await session.execute(select(MailMessage).where(MailMessage.id == message_id).with_for_update())
@@ -344,8 +344,8 @@ async def deliver_message(session: AsyncSession, message_id) -> str:
         return "not_due"
 
     if message.kind == MailKind.CAMPAIGN.value:
-        # A campaign can sit in the outbox while the user changes email or loses
-        # eligibility. Treat that as a suppression rather than sending to stale PII.
+        # Пока кампания ждёт в очереди, пользователь может сменить email или
+        # потерять право на рассылку. Такое письмо подавляется, а не уходит на старый адрес.
         if not await _campaign_target_is_current(session, message):
             message.status = MailStatus.SUPPRESSED.value
             message.safe_error_code = "campaign_target_stale"
@@ -453,7 +453,7 @@ async def mark_message_failure(
     message.safe_error_code = (error_code or "delivery_error")[:96]
     if terminal or message.attempt_count >= message.max_attempts:
         message.status = MailStatus.FAILED.value
-        # Prevent deterministic failures from being picked up again by due_message_ids.
+        # Постоянная ошибка не должна снова попадать в выборку очереди для отправки.
         if terminal:
             message.attempt_count = message.max_attempts
     else:
@@ -470,7 +470,7 @@ async def due_message_ids(
     *,
     include_marketing: bool = True,
 ) -> list:
-    """Return due outbox ids without letting disabled campaign mail starve auth mail."""
+    """Возвращает готовые к отправке ID, не позволяя выключенным кампаниям блокировать системную почту."""
     now = datetime.now(timezone.utc)
     query = select(MailMessage.id).where(
         MailMessage.status.in_([MailStatus.QUEUED.value, MailStatus.FAILED.value]),
@@ -509,7 +509,7 @@ async def refresh_campaign_counters(session: AsyncSession, campaign_id) -> None:
 
 
 async def send_password_reset_email(email: str, token: str) -> None:
-    """Compatibility helper for legacy callers/tests; request flow uses the queue."""
+    """Совместимый помощник для старых вызовов и тестов; рабочий поток использует очередь."""
     reset_url = _password_reset_url(token)
     text = (
         "Здравствуйте.\n\n"
