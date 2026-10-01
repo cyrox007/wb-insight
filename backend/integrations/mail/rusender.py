@@ -74,6 +74,10 @@ class RuSenderAPIError(MailProviderError):
 class RuSenderMailProvider:
     code = "rusender"
     display_name = "RuSender API"
+    configuration_kind = "https_api_key"
+    default_port = 443
+    default_api_base_url = "https://api.rusender.ru"
+    key_id_numeric = True
     capabilities = MailProviderCapabilities(
         transport_kind="https_api",
         transactional=True,
