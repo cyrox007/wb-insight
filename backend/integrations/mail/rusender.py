@@ -2,7 +2,11 @@ import re
 
 import httpx
 
-from integrations.mail.provider import MailDeliveryReceipt
+from integrations.mail.provider import (
+    MailDeliveryReceipt,
+    MailProviderCapabilities,
+    MailProviderError,
+)
 
 
 _PROVIDER_ERROR_CODE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
@@ -27,8 +31,24 @@ def _safe_provider_error_code(response: httpx.Response) -> str | None:
     return value
 
 
-class RuSenderAPIError(RuntimeError):
-    """Безопасная ошибка провайдера с признаком допустимости повторной попытки."""
+def _rusender_error_message(code: str) -> str:
+    messages = {
+        "rusender_not_configured": "Настройки RuSender неполные. Проверьте Key ID, API-токен и адрес отправителя.",
+        "rusender_http_401": "RuSender отклонил API-токен. Проверьте или перевыпустите токен.",
+        "rusender_http_402": "RuSender сообщает, что лимит или баланс отправок исчерпан.",
+        "rusender_http_403": "RuSender запретил отправку. Проверьте права ключа и разрешение на отправку писем.",
+        "rusender_http_404": "RuSender не нашёл ключ отправки или домен отправителя. Проверьте Key ID и адрес From.",
+        "rusender_http_422": "RuSender не может доставить письмо на указанный адрес.",
+        "rusender_http_429": "RuSender временно ограничил частоту запросов. Повторите отправку позже.",
+        "rusender_http_503": "RuSender временно недоступен. Повторите отправку позже.",
+        "rusender_timeout": "RuSender не ответил вовремя. Повторите отправку позже.",
+        "rusender_network_error": "Не удалось подключиться к RuSender по HTTPS.",
+    }
+    return messages.get(code, "RuSender не принял письмо. Проверьте настройки транспорта.")
+
+
+class RuSenderAPIError(MailProviderError):
+    """Совместимая ошибка адаптера RuSender на общем контракте провайдеров."""
 
     def __init__(
         self,
@@ -37,24 +57,37 @@ class RuSenderAPIError(RuntimeError):
         retryable: bool,
         provider_error_code: str | None = None,
     ) -> None:
-        super().__init__(code)
-        self.code = code[:96]
-        self.retryable = retryable
-        self.provider_error_code = (
+        safe_provider_code = (
             provider_error_code
             if provider_error_code and _PROVIDER_ERROR_CODE_RE.fullmatch(provider_error_code)
             else None
         )
-
-    @property
-    def safe_code(self) -> str:
-        if not self.provider_error_code:
-            return self.code
-        return f"{self.code}:{self.provider_error_code}"[:96]
+        super().__init__(
+            code,
+            provider_code="rusender",
+            retryable=retryable,
+            user_message=_rusender_error_message(code),
+            provider_error_code=safe_provider_code,
+        )
 
 
 class RuSenderMailProvider:
     code = "rusender"
+    display_name = "RuSender API"
+    capabilities = MailProviderCapabilities(
+        transport_kind="https_api",
+        transactional=True,
+        marketing=False,
+        custom_headers=True,
+        rfc_headers=False,
+        one_click_unsubscribe=False,
+        reply_to=False,
+        preview_title=True,
+        idempotency_key=True,
+        provider_managed_tls=True,
+        provider_managed_ptr=True,
+        outbound_port=443,
+    )
 
     def __init__(self, config) -> None:
         self._config = config
@@ -99,9 +132,8 @@ class RuSenderMailProvider:
         else:
             mail_payload["text"] = body
 
-        # RuSender поддерживает пользовательские mail.headers для заголовков X-*.
-        # Произвольные RFC-заголовки из SMTP-контура не передаём: шлюз может
-        # отклонить такой запрос с кодом 400.
+        # API RuSender принимает пользовательские заголовки только в формате X-*.
+        # Заголовки SMTP-контура здесь фильтруются, чтобы провайдер не отклонил запрос.
         safe_headers = {}
         for raw_name, raw_value in (headers or {}).items():
             name = str(raw_name or "").strip()
@@ -138,10 +170,8 @@ class RuSenderMailProvider:
             raise RuSenderAPIError("rusender_network_error", retryable=True) from exc
 
         if 200 <= response.status_code < 300:
-            # После ответа 2xx провайдер уже принял запрос. Повторная отправка
-            # только из-за отсутствующего uuid в нестандартном успешном ответе
-            # может создать дубликат письма. Сохраняем uuid, когда он есть, но
-            # не превращаем принятую доставку в повторяемую ошибку.
+            # После ответа 2xx провайдер уже принял запрос. Отсутствие UUID
+            # не должно запускать повторную отправку и создавать дубликат.
             provider_id = None
             try:
                 data = response.json()
@@ -153,13 +183,10 @@ class RuSenderMailProvider:
             return MailDeliveryReceipt(provider_message_id=provider_id)
 
         error_code = f"rusender_http_{response.status_code}"
-        # RuSender возвращает машинный код ошибки в теле ответа. Для диагностики
-        # сохраняем только ограниченный код; описание провайдера и сырое тело
-        # ответа не сохраняем и не возвращаем, так как там может быть контекст запроса.
+        # В журнал попадает только ограниченный машинный код. Описание провайдера
+        # и сырое тело ответа не сохраняются, чтобы не протекал контекст запроса.
         provider_error_code = _safe_provider_error_code(response)
-        # Ошибки 429 и 5xx считаются временными. Ошибки авторизации, отправителя,
-        # домена и политики получателя требуют настройки или действий пользователя
-        # и не должны запускать бесконечные повторные попытки.
+        # Ограничение частоты и серверные ошибки считаются временными.
         retryable = response.status_code == 429 or response.status_code >= 500
         raise RuSenderAPIError(
             error_code,
