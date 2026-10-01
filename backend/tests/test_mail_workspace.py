@@ -870,16 +870,30 @@ def test_mail_provider_catalog_describes_capabilities_without_business_switches(
 
 
 def test_mail_business_layers_do_not_depend_on_rusender_type():
-    root = Path(__file__).resolve().parents[1]
-    mail_service = (root / "services" / "mail_service.py").read_text(encoding="utf-8")
+    backend_root = Path(__file__).resolve().parents[1]
+    repository_root = Path(__file__).resolve().parents[2]
+    mail_service = (
+        backend_root / "services" / "mail_service.py"
+    ).read_text(encoding="utf-8")
     mail_handler = (
-        root / "handlers" / "control_panel" / "mail.py"
+        backend_root / "handlers" / "control_panel" / "mail.py"
+    ).read_text(encoding="utf-8")
+    mail_frontend = (
+        repository_root
+        / "frontend"
+        / "src"
+        / "pages"
+        / "ControlPanel"
+        / "Mail"
+        / "index.vue"
     ).read_text(encoding="utf-8")
 
     assert "RuSenderAPIError" not in mail_service
     assert "RuSenderAPIError" not in mail_handler
     assert 'MAIL_PROVIDER == "rusender"' not in mail_service
     assert 'MAIL_PROVIDER == "rusender"' not in mail_handler
+    assert "provider === 'rusender'" not in mail_frontend
+    assert 'provider === "rusender"' not in mail_frontend
 
 
 @pytest.mark.asyncio
