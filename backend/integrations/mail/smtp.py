@@ -16,6 +16,10 @@ from integrations.mail.provider import (
 class SMTPMailProvider:
     code = "smtp"
     display_name = "SMTP"
+    configuration_kind = "smtp"
+    default_port = 587
+    default_api_base_url = None
+    key_id_numeric = False
     capabilities = MailProviderCapabilities(
         transport_kind="smtp",
         transactional=True,
