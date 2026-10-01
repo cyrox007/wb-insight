@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Protocol
 
 
@@ -7,10 +7,63 @@ class MailDeliveryReceipt:
     provider_message_id: str | None = None
 
 
+@dataclass(frozen=True)
+class MailProviderCapabilities:
+    """Описывает возможности транспорта без привязки бизнес-логики к его названию."""
+
+    transport_kind: str
+    transactional: bool = True
+    marketing: bool = False
+    custom_headers: bool = False
+    rfc_headers: bool = False
+    one_click_unsubscribe: bool = False
+    reply_to: bool = False
+    preview_title: bool = False
+    idempotency_key: bool = False
+    provider_managed_tls: bool = False
+    provider_managed_ptr: bool = False
+    outbound_port: int | None = None
+
+    def as_payload(self) -> dict:
+        return asdict(self)
+
+
+class MailProviderError(RuntimeError):
+    """Безопасная ошибка транспортного адаптера, пригодная для общей обработки."""
+
+    def __init__(
+        self,
+        code: str,
+        *,
+        provider_code: str,
+        retryable: bool,
+        user_message: str,
+        provider_error_code: str | None = None,
+    ) -> None:
+        super().__init__(code)
+        self.code = str(code or "mail_provider_error")[:96]
+        self.provider_code = str(provider_code or "unknown")[:64]
+        self.retryable = bool(retryable)
+        self.user_message = str(user_message or "Почтовый провайдер не принял сообщение.")[:500]
+        self.provider_error_code = (
+            str(provider_error_code)[:64]
+            if provider_error_code
+            else None
+        )
+
+    @property
+    def safe_code(self) -> str:
+        if not self.provider_error_code:
+            return self.code
+        return f"{self.code}:{self.provider_error_code}"[:96]
+
+
 class MailProvider(Protocol):
     """Контракт транспортного адаптера для устойчивого сервиса почтовой доставки."""
 
     code: str
+    display_name: str
+    capabilities: MailProviderCapabilities
 
     async def send(
         self,
@@ -45,7 +98,9 @@ class MailProviderRegistry:
         try:
             return self._providers[normalized]
         except KeyError as exc:
-            raise RuntimeError(f"Почтовый провайдер не зарегистрирован: {normalized or 'пустое значение'}") from exc
+            raise RuntimeError(
+                f"Почтовый провайдер не зарегистрирован: {normalized or 'пустое значение'}"
+            ) from exc
 
     @property
     def codes(self) -> tuple[str, ...]:
