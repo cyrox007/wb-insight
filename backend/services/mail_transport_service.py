@@ -14,8 +14,53 @@ from settings import config
 from utils.secret_crypto import decrypt_secret_payload, encrypt_secret_payload
 
 
-_SUPPORTED_PROVIDERS = {"smtp", "rusender"}
 _DEFAULT_RUSENDER_API_BASE_URL = "https://api.rusender.ru"
+_PROVIDER_FACTORIES = {
+    SMTPMailProvider.code: SMTPMailProvider,
+    RuSenderMailProvider.code: RuSenderMailProvider,
+}
+_SUPPORTED_PROVIDERS = frozenset(_PROVIDER_FACTORIES)
+
+
+def _provider_class(code: str):
+    normalized = str(code or "").strip().lower()
+    provider_class = _PROVIDER_FACTORIES.get(normalized)
+    if provider_class is None:
+        raise RuntimeError(
+            f"Почтовый провайдер не зарегистрирован: {normalized or 'пустое значение'}"
+        )
+    return provider_class
+
+
+def mail_provider_capabilities(code: str):
+    return _provider_class(code).capabilities
+
+
+def mail_provider_catalog() -> list[dict[str, Any]]:
+    catalog = []
+    for code in sorted(_SUPPORTED_PROVIDERS):
+        provider_class = _provider_class(code)
+        capabilities = provider_class.capabilities
+        transport_label = (
+            "HTTPS API"
+            if capabilities.transport_kind == "https_api"
+            else "SMTP"
+        )
+        outbound_port = capabilities.outbound_port
+        connection_note = (
+            f"{transport_label} · исходящий порт {outbound_port}"
+            if outbound_port
+            else transport_label
+        )
+        catalog.append(
+            {
+                "code": code,
+                "label": provider_class.display_name,
+                "connection_note": connection_note,
+                "capabilities": capabilities.as_payload(),
+            }
+        )
+    return catalog
 
 
 @dataclass(frozen=True)
@@ -97,12 +142,11 @@ def _read_secrets(row: MailProviderConfig | None) -> dict[str, Any]:
 async def get_mail_provider_config(
     session: AsyncSession | None,
 ) -> MailProviderConfig | None:
-    """Return the effective database mail transport.
+    """Возвращает действующую конфигурацию почтового транспорта из базы.
 
-    The table predates multiple adapters. To stay migration-free, we keep one
-    effective row and allow its provider code to switch between smtp/rusender.
-    If legacy duplicate supported rows exist, the most recently updated one is
-    treated as effective and the next save consolidates configuration.
+    Таблица появилась до нескольких адаптеров, поэтому без миграции сохраняется
+    одна эффективная запись. Если остались исторические дубликаты поддерживаемых
+    провайдеров, используется наиболее недавно обновлённая запись.
     """
     if session is None:
         return None
@@ -188,9 +232,8 @@ async def get_mail_transport_runtime(
                 diagnostic_code="environment_fallback_invalid",
             )
         try:
-            # Startup validation deliberately cannot inspect DB configuration.
-            # Once runtime selection knows DB has no provider row, validate the
-            # environment fallback before it becomes effective.
+            # Проверка при старте не видит конфигурацию в базе. После выбора
+            # runtime проверяем ENV-fallback только если записи провайдера в базе нет.
             lifecycle_config._validate_mail_transport(
                 production=config.IS_PRODUCTION,
             )
@@ -257,13 +300,16 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
         lifecycle_config.MAIL_UNSUBSCRIBE_BASE_URL
         and len(lifecycle_config.MAIL_UNSUBSCRIBE_HMAC_KEY) >= 32
     )
-    # The native RuSender transactional endpoint documents custom X-* headers
-    # only, so the app does not claim RFC 8058 marketing readiness on that
-    # adapter. Campaigns can later use RuSender's campaign API separately.
-    marketing_transport_supported = runtime.MAIL_PROVIDER == "smtp"
+    provider = mail_provider_for_runtime(runtime)
+    capabilities = provider.capabilities
+    marketing_transport_supported = capabilities.marketing
 
     return {
         "provider": runtime.MAIL_PROVIDER,
+        "provider_label": provider.display_name,
+        "transport_kind": capabilities.transport_kind,
+        "capabilities": capabilities.as_payload(),
+        "available_providers": mail_provider_catalog(),
         "enabled": runtime.MAIL_DELIVERY_ENABLED,
         "ready": runtime.ready,
         "marketing_ready": bool(
@@ -325,18 +371,23 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
         },
         "deliverability": {
             "tls": bool(
-                runtime.MAIL_PROVIDER == "rusender"
-                or runtime.SMTP_STARTTLS
+                capabilities.provider_managed_tls
+                or (
+                    capabilities.transport_kind == "smtp"
+                    and runtime.SMTP_STARTTLS
+                )
             ),
             "sender_identity": bool(runtime.SMTP_FROM_EMAIL and runtime.SMTP_FROM_NAME),
-            "reply_to_configured": bool(runtime.SMTP_REPLY_TO_EMAIL and runtime.MAIL_PROVIDER == "smtp"),
+            "reply_to_configured": bool(
+                capabilities.reply_to and runtime.SMTP_REPLY_TO_EMAIL
+            ),
             "one_click_unsubscribe": bool(
-                unsubscribe_configured and marketing_transport_supported
+                unsubscribe_configured and capabilities.one_click_unsubscribe
             ),
             "spf": "external",
             "dkim": "external",
             "dmarc": "external",
-            "ptr": "provider" if runtime.MAIL_PROVIDER == "rusender" else "external",
+            "ptr": "provider" if capabilities.provider_managed_ptr else "external",
         },
     }
 
@@ -357,7 +408,11 @@ async def upsert_mail_transport(
         current = await get_mail_provider_config(session)
         provider = str(current.provider if current is not None else "smtp").lower()
     if provider not in _SUPPORTED_PROVIDERS:
-        raise ValueError("Поддерживаются только SMTP и RuSender API")
+        supported = ", ".join(
+            _provider_class(code).display_name
+            for code in sorted(_SUPPORTED_PROVIDERS)
+        )
+        raise ValueError(f"Поддерживаемые почтовые транспорты: {supported}")
 
     enabled_value = _optional_bool(values, "enabled")
     clear_credentials = _optional_bool(values, "clear_credentials")
@@ -372,9 +427,8 @@ async def upsert_mail_transport(
     elif str(row.provider).lower() == provider:
         existing = _read_secrets(row)
     else:
-        # Provider switch is intentionally destructive for old credentials:
-        # secrets encrypted under one provider context are never re-used by the
-        # other adapter.
+        # При смене провайдера старые реквизиты намеренно сбрасываются:
+        # секреты одного адаптера нельзя повторно использовать в другом.
         row.provider = provider
         row.encrypted_secrets = None
         row.host = None
@@ -440,9 +494,8 @@ async def upsert_mail_transport(
         if bool(existing.get("username")) != bool(existing.get("password")):
             raise ValueError("SMTP username и password должны быть настроены вместе")
     else:
-        # The DB-managed RuSender adapter is pinned to the official API origin
-        # so an administrative setting cannot redirect the bearer token to an
-        # arbitrary host.
+        # Для RuSender endpoint закреплён на официальном API, чтобы настройка
+        # из панели не могла перенаправить bearer-токен на произвольный узел.
         row.host = _DEFAULT_RUSENDER_API_BASE_URL
         row.port = 443
         row.starttls = True
@@ -507,11 +560,8 @@ async def upsert_mail_transport(
 
 
 def mail_provider_for_runtime(runtime: MailTransportRuntime):
-    if runtime.MAIL_PROVIDER == "rusender":
-        return RuSenderMailProvider(runtime)
-    if runtime.MAIL_PROVIDER == "smtp":
-        return SMTPMailProvider(runtime)
-    raise RuntimeError("mail_transport_not_supported")
+    provider_class = _provider_class(runtime.MAIL_PROVIDER)
+    return provider_class(runtime)
 
 
 async def send_mail_transport_test(
