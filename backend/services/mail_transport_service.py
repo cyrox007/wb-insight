@@ -86,19 +86,23 @@ class MailTransportRuntime:
 
     @property
     def credentials_configured(self) -> bool:
-        if self.MAIL_PROVIDER == "rusender":
+        capabilities = mail_provider_capabilities(self.MAIL_PROVIDER)
+        if capabilities.transport_kind == "https_api":
             return bool(self.RUSENDER_KEY_ID and self.RUSENDER_API_TOKEN)
-        return bool(self.SMTP_USERNAME and self.SMTP_PASSWORD)
+        if capabilities.transport_kind == "smtp":
+            return bool(self.SMTP_USERNAME and self.SMTP_PASSWORD)
+        return False
 
     @property
     def ready(self) -> bool:
         if not self.SMTP_FROM_EMAIL:
             return False
-        if self.MAIL_PROVIDER == "smtp":
+        capabilities = mail_provider_capabilities(self.MAIL_PROVIDER)
+        if capabilities.transport_kind == "smtp":
             if not self.SMTP_HOST:
                 return False
             return bool(self.SMTP_USERNAME) == bool(self.SMTP_PASSWORD)
-        if self.MAIL_PROVIDER == "rusender":
+        if capabilities.transport_kind == "https_api":
             return bool(
                 self.RUSENDER_API_BASE_URL
                 and self.RUSENDER_KEY_ID
@@ -185,17 +189,28 @@ def _unconfigured_runtime(
 
 def _environment_runtime() -> MailTransportRuntime:
     provider = lifecycle_config.MAIL_PROVIDER
+    provider_class = _provider_class(provider)
+    capabilities = provider_class.capabilities
+    uses_smtp = capabilities.transport_kind == "smtp"
     return MailTransportRuntime(
         MAIL_PROVIDER=provider,
-        MAIL_DELIVERY_ENABLED=(lifecycle_config.MAIL_DELIVERY_ENABLED if provider == "smtp" else False),
-        SMTP_HOST=lifecycle_config.SMTP_HOST,
-        SMTP_PORT=int(lifecycle_config.SMTP_PORT),
+        MAIL_DELIVERY_ENABLED=(
+            lifecycle_config.MAIL_DELIVERY_ENABLED
+            if capabilities.marketing
+            else False
+        ),
+        SMTP_HOST=lifecycle_config.SMTP_HOST if uses_smtp else "",
+        SMTP_PORT=(
+            int(lifecycle_config.SMTP_PORT)
+            if uses_smtp
+            else int(provider_class.default_port)
+        ),
         SMTP_USERNAME=lifecycle_config.SMTP_USERNAME,
         SMTP_PASSWORD=lifecycle_config.SMTP_PASSWORD,
         SMTP_FROM_EMAIL=lifecycle_config.SMTP_FROM_EMAIL,
         SMTP_FROM_NAME=lifecycle_config.SMTP_FROM_NAME,
         SMTP_REPLY_TO_EMAIL=lifecycle_config.SMTP_REPLY_TO_EMAIL,
-        SMTP_STARTTLS=bool(lifecycle_config.SMTP_STARTTLS),
+        SMTP_STARTTLS=(bool(lifecycle_config.SMTP_STARTTLS) if uses_smtp else True),
         SMTP_TIMEOUT_SECONDS=float(lifecycle_config.SMTP_TIMEOUT_SECONDS),
         RUSENDER_API_BASE_URL=lifecycle_config.RUSENDER_API_BASE_URL,
         RUSENDER_KEY_ID=lifecycle_config.RUSENDER_KEY_ID or None,
@@ -223,8 +238,8 @@ async def get_mail_transport_runtime(
                 diagnostic_code="environment_fallback_incomplete",
             )
         if (
-            runtime.MAIL_PROVIDER == "rusender"
-            and lifecycle_config.MAIL_DELIVERY_ENABLED
+            lifecycle_config.MAIL_DELIVERY_ENABLED
+            and not mail_provider_capabilities(runtime.MAIL_PROVIDER).marketing
         ):
             return _unconfigured_runtime(
                 source="unconfigured",
@@ -253,10 +268,13 @@ async def get_mail_transport_runtime(
 
     secrets = _read_secrets(row)
     provider = str(row.provider or "smtp").lower()
+    provider_class = _provider_class(provider)
+    capabilities = provider_class.capabilities
+    uses_smtp = capabilities.transport_kind == "smtp"
     runtime = MailTransportRuntime(
         MAIL_PROVIDER=provider,
-        MAIL_DELIVERY_ENABLED=(bool(row.enabled) if provider == "smtp" else False),
-        SMTP_HOST=str(row.host or "") if provider == "smtp" else "",
+        MAIL_DELIVERY_ENABLED=(bool(row.enabled) if capabilities.marketing else False),
+        SMTP_HOST=str(row.host or "") if uses_smtp else "",
         SMTP_PORT=int(row.port),
         SMTP_USERNAME=str(secrets.get("username") or "") or None,
         SMTP_PASSWORD=str(secrets.get("password") or "") or None,
@@ -266,8 +284,8 @@ async def get_mail_transport_runtime(
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
         RUSENDER_API_BASE_URL=(
-            str(row.host or _DEFAULT_RUSENDER_API_BASE_URL)
-            if provider == "rusender"
+            str(row.host or provider_class.default_api_base_url or "")
+            if capabilities.transport_kind == "https_api"
             else _DEFAULT_RUSENDER_API_BASE_URL
         ),
         RUSENDER_KEY_ID=str(secrets.get("key_id") or "") or None,
@@ -331,13 +349,13 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
         "starttls": runtime.SMTP_STARTTLS,
         "timeout_seconds": (
             runtime.RUSENDER_TIMEOUT_SECONDS
-            if runtime.MAIL_PROVIDER == "rusender"
+            if capabilities.transport_kind == "https_api"
             else runtime.SMTP_TIMEOUT_SECONDS
         ),
         "credentials_configured": runtime.credentials_configured,
         "credential_fingerprint": (
             _secret_fingerprint(runtime.RUSENDER_API_TOKEN)
-            if runtime.MAIL_PROVIDER == "rusender"
+            if capabilities.transport_kind == "https_api"
             else None
         ),
         "username_hint": username_hint,
@@ -414,6 +432,10 @@ async def upsert_mail_transport(
         )
         raise ValueError(f"Поддерживаемые почтовые транспорты: {supported}")
 
+    provider_class = _provider_class(provider)
+    capabilities = provider_class.capabilities
+    uses_smtp = capabilities.transport_kind == "smtp"
+
     enabled_value = _optional_bool(values, "enabled")
     clear_credentials = _optional_bool(values, "clear_credentials")
     starttls_value = _optional_bool(values, "starttls")
@@ -432,11 +454,11 @@ async def upsert_mail_transport(
         row.provider = provider
         row.encrypted_secrets = None
         row.host = None
-        row.port = 443 if provider == "rusender" else 587
-        row.starttls = provider == "smtp"
+        row.port = int(provider_class.default_port)
+        row.starttls = not uses_smtp
         existing = {}
 
-    if provider == "rusender":
+    if not capabilities.marketing:
         row.enabled = False
     elif enabled_value is not None:
         row.enabled = enabled_value
@@ -468,7 +490,7 @@ async def upsert_mail_transport(
     if clear_credentials is True:
         existing = {}
 
-    if provider == "smtp":
+    if uses_smtp:
         if "host" in values:
             row.host = str(values.get("host") or "").strip() or None
         if "port" in values:
@@ -493,16 +515,19 @@ async def upsert_mail_transport(
 
         if bool(existing.get("username")) != bool(existing.get("password")):
             raise ValueError("SMTP username и password должны быть настроены вместе")
-    else:
-        # Для RuSender endpoint закреплён на официальном API, чтобы настройка
-        # из панели не могла перенаправить bearer-токен на произвольный узел.
-        row.host = _DEFAULT_RUSENDER_API_BASE_URL
-        row.port = 443
+    elif capabilities.transport_kind == "https_api":
+        # HTTPS endpoint задаётся самим адаптером и не редактируется из браузера,
+        # чтобы API-токен нельзя было перенаправить на произвольный узел.
+        api_base_url = str(provider_class.default_api_base_url or "").strip()
+        if not api_base_url:
+            raise ValueError("HTTPS API провайдера не содержит доверенного endpoint")
+        row.host = api_base_url
+        row.port = int(provider_class.default_port)
         row.starttls = True
 
         key_id = str(values.get("key_id") or existing.get("key_id") or "").strip()
-        if key_id and not key_id.isdigit():
-            raise ValueError("RuSender key ID должен быть числом")
+        if key_id and provider_class.key_id_numeric and not key_id.isdigit():
+            raise ValueError("ID ключа почтового провайдера должен быть числом")
         if key_id:
             existing["key_id"] = key_id
         else:
@@ -514,6 +539,8 @@ async def upsert_mail_transport(
                 existing["api_token"] = api_token
         if clear_credentials is True:
             existing.pop("api_token", None)
+    else:
+        raise ValueError("Тип конфигурации почтового провайдера не поддерживается")
 
     row.encrypted_secrets = (
         encrypt_secret_payload(existing, context=_secret_context(provider))
@@ -525,7 +552,7 @@ async def upsert_mail_transport(
     runtime = MailTransportRuntime(
         MAIL_PROVIDER=provider,
         MAIL_DELIVERY_ENABLED=bool(row.enabled),
-        SMTP_HOST=str(row.host or "") if provider == "smtp" else "",
+        SMTP_HOST=str(row.host or "") if uses_smtp else "",
         SMTP_PORT=int(row.port),
         SMTP_USERNAME=str(existing.get("username") or "") or None,
         SMTP_PASSWORD=str(existing.get("password") or "") or None,
@@ -535,8 +562,8 @@ async def upsert_mail_transport(
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
         RUSENDER_API_BASE_URL=(
-            str(row.host or _DEFAULT_RUSENDER_API_BASE_URL)
-            if provider == "rusender"
+            str(row.host or provider_class.default_api_base_url or "")
+            if capabilities.transport_kind == "https_api"
             else _DEFAULT_RUSENDER_API_BASE_URL
         ),
         RUSENDER_KEY_ID=str(existing.get("key_id") or "") or None,
@@ -545,15 +572,21 @@ async def upsert_mail_transport(
         source="database",
     )
     if not runtime.ready:
-        if provider == "rusender":
-            raise ValueError("Заполните key ID, API token и email отправителя RuSender")
+        if capabilities.transport_kind == "https_api":
+            raise ValueError(
+                "Заполните ID ключа, API-токен и email отправителя почтового провайдера"
+            )
         raise ValueError(
-            "Заполните host, from email и согласованную пару username/password"
+            "Заполните SMTP host, email отправителя и согласованную пару логин/пароль"
         )
-    if config.IS_PRODUCTION and provider == "smtp" and not runtime.SMTP_STARTTLS:
+    if config.IS_PRODUCTION and uses_smtp and not runtime.SMTP_STARTTLS:
         raise ValueError("В production SMTP должен использовать STARTTLS")
-    if config.IS_PRODUCTION and provider == "rusender" and not runtime.RUSENDER_API_BASE_URL.startswith("https://"):
-        raise ValueError("В production RuSender API должен использовать HTTPS")
+    if (
+        config.IS_PRODUCTION
+        and capabilities.transport_kind == "https_api"
+        and not runtime.RUSENDER_API_BASE_URL.startswith("https://")
+    ):
+        raise ValueError("В production почтовый API должен использовать HTTPS")
 
     await session.flush()
     return row
