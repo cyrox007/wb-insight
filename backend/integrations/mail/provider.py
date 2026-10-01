@@ -64,6 +64,10 @@ class MailProvider(Protocol):
     code: str
     display_name: str
     capabilities: MailProviderCapabilities
+    configuration_kind: str
+    default_port: int
+    default_api_base_url: str | None
+    key_id_numeric: bool
 
     async def send(
         self,
