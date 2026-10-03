@@ -78,13 +78,35 @@ const subscriptionLabels = {
 const canManage = computed(() => Boolean(meta.value.can_manage))
 const gatewayCapabilities = computed(() => meta.value.gateway?.capabilities || {})
 const gatewayUsesHttpsApi = computed(() => meta.value.gateway?.transport_kind === 'https_api')
+const currentProviderDefinition = computed(() =>
+	(meta.value.gateway?.available_providers || []).find(
+		(provider) => provider.code === meta.value.gateway?.provider
+	) || null
+)
+const gatewayRequiresKeyId = computed(() =>
+	Boolean(currentProviderDefinition.value?.configuration?.requires_key_id)
+)
 const selectedProviderDefinition = computed(() =>
 	(meta.value.gateway?.available_providers || []).find(
 		(provider) => provider.code === gatewayForm.provider
 	) || null
 )
+const selectedProviderCapabilities = computed(() => selectedProviderDefinition.value?.capabilities || {})
+const selectedProviderConfiguration = computed(() => selectedProviderDefinition.value?.configuration || {})
 const selectedProviderUsesHttpsApi = computed(() =>
-	selectedProviderDefinition.value?.capabilities?.transport_kind === 'https_api'
+	selectedProviderCapabilities.value.transport_kind === 'https_api'
+)
+const selectedProviderSupportsMarketing = computed(() =>
+	Boolean(selectedProviderCapabilities.value.marketing)
+)
+const selectedProviderSupportsReplyTo = computed(() =>
+	Boolean(selectedProviderCapabilities.value.reply_to)
+)
+const selectedProviderRequiresKeyId = computed(() =>
+	Boolean(selectedProviderConfiguration.value.requires_key_id)
+)
+const selectedProviderApiBaseUrl = computed(() =>
+	selectedProviderConfiguration.value.api_base_url || gatewayForm.api_base_url || ''
 )
 const campaignPage = computed(() => Math.floor(campaignOffset.value / campaignLimit) + 1)
 const campaignPages = computed(() => Math.max(1, Math.ceil(campaignTotal.value / campaignLimit)))
@@ -423,10 +445,10 @@ async function saveGateway() {
 	try {
 		const payload = {
 			provider: gatewayForm.provider,
-			enabled: selectedProviderUsesHttpsApi.value ? false : gatewayForm.enabled,
+			enabled: selectedProviderSupportsMarketing.value ? gatewayForm.enabled : false,
 			from_email: gatewayForm.from_email,
 			from_name: gatewayForm.from_name,
-			reply_to_email: selectedProviderUsesHttpsApi.value ? '' : gatewayForm.reply_to_email,
+			reply_to_email: selectedProviderSupportsReplyTo.value ? gatewayForm.reply_to_email : '',
 			timeout_seconds: gatewayForm.timeout_seconds,
 			clear_credentials: gatewayForm.clear_credentials,
 		}
@@ -437,8 +459,7 @@ async function saveGateway() {
 			if (gatewayForm.username) payload.username = gatewayForm.username
 			if (gatewayForm.password) payload.password = gatewayForm.password
 		} else {
-			payload.api_base_url = gatewayForm.api_base_url
-			payload.key_id = gatewayForm.key_id
+			if (selectedProviderRequiresKeyId.value) payload.key_id = gatewayForm.key_id
 			if (gatewayForm.api_token) payload.api_token = gatewayForm.api_token
 		}
 		const { data } = await CP_Mail.updateGateway(payload)
@@ -458,7 +479,7 @@ async function testGateway() {
 	gatewayBusy.value = true
 	try {
 		const { data } = await CP_Mail.testGateway(gatewayTestEmail.value)
-		if (data?.status !== 'success') throw new Error(data?.error?.message || 'Mail transport test failed')
+		if (data?.status !== 'success') throw new Error(data?.error?.message || 'Проверка почтового транспорта завершилась ошибкой')
 		setMessage('Тестовое письмо отправлено через текущий почтовый транспорт.')
 	} catch (e) {
 		const apiError = e.response?.data?.error
@@ -690,7 +711,7 @@ onMounted(async () => {
 					</div>
 					<div v-if="!meta.gateway?.marketing_ready" class="cp-info-callout">
 						<strong>Маркетинговая отправка пока недоступна.</strong>
-						<span>Нужен готовый транспорт с поддержкой кампаний, включённая отправка и безопасный one-click unsubscribe. Проверьте вкладку «Почтовый шлюз».</span>
+						<span>Нужен готовый транспорт с поддержкой кампаний, включённая отправка и безопасная отписка одним нажатием. Проверьте вкладку «Почтовый шлюз».</span>
 					</div>
 					<div v-if="canManage && ['draft','scheduled'].includes(selected.status)" class="mail-schedule">
 						<label>Запланировать запуск<input v-model="scheduleAt" type="datetime-local" :min="minScheduleAt"></label>
@@ -737,14 +758,14 @@ onMounted(async () => {
 							<dd>{{ meta.gateway?.system_mail?.password_reset?.ready ? 'Готово' : (meta.gateway?.system_mail?.password_reset?.enabled ? 'Не готово' : 'Выключено') }}</dd>
 						</div>
 						<div><dt>Кампании</dt><dd>{{ meta.gateway?.marketing_ready ? 'Готовы' : 'Выключены' }}</dd></div>
-						<div><dt>Credentials</dt><dd>{{ meta.gateway?.credentials_configured ? 'Настроены' : 'Не настроены' }}</dd></div>
-						<div v-if="gatewayUsesHttpsApi"><dt>ID ключа</dt><dd>{{ meta.gateway?.key_id || '—' }}</dd></div>
+						<div><dt>Учётные данные</dt><dd>{{ meta.gateway?.credentials_configured ? 'Настроены' : 'Не настроены' }}</dd></div>
+						<div v-if="gatewayUsesHttpsApi && gatewayRequiresKeyId"><dt>ID ключа</dt><dd>{{ meta.gateway?.key_id || '—' }}</dd></div>
 						<div v-if="gatewayUsesHttpsApi"><dt>Отпечаток токена</dt><dd><code>{{ meta.gateway?.credential_fingerprint || '—' }}</code></dd></div>
 						<div v-else><dt>Пользователь</dt><dd>{{ meta.gateway?.username_hint || '—' }}</dd></div>
 					</dl>
 					<div v-if="meta.gateway?.diagnostic_code" class="cp-info-callout gateway-diagnostic">
 						<strong>Шлюз не выбран как рабочий.</strong>
-						<span v-if="meta.gateway.diagnostic_code === 'environment_fallback_invalid'">ENV fallback содержит неполную или шаблонную production-конфигурацию. При <code>MAIL_CONFIG_SOURCE=auto</code> сохраните реальный транспорт в панели — после этого DB-конфигурация станет приоритетной.</span>
+						<span v-if="meta.gateway.diagnostic_code === 'environment_fallback_invalid'">Резервная ENV-конфигурация неполная или содержит шаблонные production-значения. При <code>MAIL_CONFIG_SOURCE=auto</code> сохраните реальный транспорт в панели — после этого конфигурация из БД станет приоритетной.</span>
 						<span v-else-if="meta.gateway.diagnostic_code === 'environment_fallback_incomplete'">В ENV нет полного резервного транспорта. Сохраните SMTP или HTTPS API в панели.</span>
 						<span v-else-if="meta.gateway.diagnostic_code === 'database_transport_missing'">Режим <code>database</code> включён, но почтовый транспорт ещё не сохранён.</span>
 						<span v-else>Текущая конфигурация транспорта неполна. Проверьте обязательные поля и учётные данные.</span>
@@ -774,32 +795,34 @@ onMounted(async () => {
 					</div>
 
 					<div v-if="selectedProviderUsesHttpsApi" class="gateway-fields">
-						<label class="wide"><span>API endpoint</span><input v-model="gatewayForm.api_base_url" disabled></label>
-						<label><span>ID ключа</span><input v-model.trim="gatewayForm.key_id" inputmode="numeric" placeholder="ID ключа провайдера"></label>
-						<label><span>Timeout, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
+						<label class="wide"><span>API-адрес</span><input :value="selectedProviderApiBaseUrl" disabled></label>
+						<label v-if="selectedProviderRequiresKeyId"><span>ID ключа</span><input v-model.trim="gatewayForm.key_id" :inputmode="selectedProviderConfiguration.key_id_numeric ? 'numeric' : 'text'" placeholder="ID ключа провайдера"></label>
+						<label><span>Тайм-аут, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
 						<label><span>Имя отправителя</span><input v-model.trim="gatewayForm.from_name" maxlength="160" placeholder="WB Insight"></label>
 						<label><span>Email отправителя</span><input v-model.trim="gatewayForm.from_email" type="email" placeholder="no-reply@your-domain.ru"></label>
+						<label v-if="selectedProviderSupportsReplyTo" class="wide"><span>Reply-To</span><input v-model.trim="gatewayForm.reply_to_email" type="email" placeholder="support@your-domain.ru"></label>
 						<label class="wide">
 							<span>API-токен</span>
-							<input v-model="gatewayForm.api_token" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && gatewayUsesHttpsApi ? 'Пусто = оставить текущий токен' : 'API-токен провайдера'">
-							<small v-if="meta.gateway?.credential_fingerprint">Сейчас сохранён {{ meta.gateway.credential_fingerprint }}. Вставьте рабочий токен заново, чтобы гарантированно заменить старый.</small>
+							<input v-model="gatewayForm.api_token" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && gatewayUsesHttpsApi && meta.gateway?.provider === gatewayForm.provider ? 'Пусто = оставить текущий токен' : 'API-токен провайдера'">
+							<small v-if="meta.gateway?.credential_fingerprint && meta.gateway?.provider === gatewayForm.provider">Сейчас сохранён {{ meta.gateway.credential_fingerprint }}. Вставьте рабочий токен заново, чтобы гарантированно заменить старый.</small>
 						</label>
 						<label class="switch-line wide danger-toggle"><input v-model="gatewayForm.clear_credentials" type="checkbox"> Очистить сохранённый API-токен</label>
 					</div>
 
 					<div v-else class="gateway-fields">
-						<label class="wide"><span>SMTP host</span><input v-model.trim="gatewayForm.host" placeholder="smtp.provider.ru"></label>
-						<label><span>Port</span><input v-model.number="gatewayForm.port" type="number" min="1" max="65535"></label>
-						<label><span>Timeout, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
+						<label class="wide"><span>SMTP-сервер</span><input v-model.trim="gatewayForm.host" placeholder="smtp.provider.ru"></label>
+						<label><span>Порт</span><input v-model.number="gatewayForm.port" type="number" min="1" max="65535"></label>
+						<label><span>Тайм-аут, сек.</span><input v-model.number="gatewayForm.timeout_seconds" type="number" min="1" max="120"></label>
 						<label><span>Имя отправителя</span><input v-model.trim="gatewayForm.from_name" maxlength="160" placeholder="WB Insight"></label>
 						<label><span>Email отправителя</span><input v-model.trim="gatewayForm.from_email" type="email" placeholder="news@jsinteractive.ru"></label>
-						<label class="wide"><span>Reply-To</span><input v-model.trim="gatewayForm.reply_to_email" type="email" placeholder="support@jsinteractive.ru"></label>
+						<label v-if="selectedProviderSupportsReplyTo" class="wide"><span>Reply-To</span><input v-model.trim="gatewayForm.reply_to_email" type="email" placeholder="support@jsinteractive.ru"></label>
 						<label class="switch-line wide"><input v-model="gatewayForm.starttls" type="checkbox"> Использовать STARTTLS</label>
-						<label><span>Логин</span><input v-model.trim="gatewayForm.username" autocomplete="off" :placeholder="meta.gateway?.credentials_configured && !gatewayUsesHttpsApi ? 'Пусто = оставить текущий' : 'SMTP username'"></label>
-						<label><span>Пароль</span><input v-model="gatewayForm.password" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && !gatewayUsesHttpsApi ? 'Пусто = оставить текущий' : 'SMTP password'"></label>
+						<label><span>Логин</span><input v-model.trim="gatewayForm.username" autocomplete="off" :placeholder="meta.gateway?.credentials_configured && !gatewayUsesHttpsApi ? 'Пусто = оставить текущий' : 'SMTP-логин'"></label>
+						<label><span>Пароль</span><input v-model="gatewayForm.password" type="password" autocomplete="new-password" :placeholder="meta.gateway?.credentials_configured && !gatewayUsesHttpsApi ? 'Пусто = оставить текущий' : 'SMTP-пароль'"></label>
 						<label class="switch-line wide danger-toggle"><input v-model="gatewayForm.clear_credentials" type="checkbox"> Очистить сохранённые учётные данные</label>
-						<label class="switch-line wide"><input v-model="gatewayForm.enabled" type="checkbox"> Разрешить пользовательские кампании</label>
 					</div>
+
+					<label v-if="selectedProviderSupportsMarketing" class="switch-line campaign-toggle"><input v-model="gatewayForm.enabled" type="checkbox"> Разрешить пользовательские кампании</label>
 
 					<div class="cp-info-callout">
 						<strong>Секреты хранятся зашифрованно.</strong>
@@ -809,12 +832,12 @@ onMounted(async () => {
 
 					<div class="cp-info-callout">
 						<strong>Системные функции включаются отдельно в ENV.</strong>
-						<span>После настройки транспорта для production должны быть включены <code>EMAIL_VERIFICATION_ENABLED=true</code> и <code>PASSWORD_RESET_ENABLED=true</code> с реальными HTTPS base URL. Статусы слева показывают готовность каждого контура отдельно.</span>
+						<span>После настройки транспорта для production должны быть включены <code>EMAIL_VERIFICATION_ENABLED=true</code> и <code>PASSWORD_RESET_ENABLED=true</code> с реальными HTTPS-адресами. Статусы слева показывают готовность каждого контура отдельно.</span>
 					</div>
 
-					<div v-if="!selectedProviderDefinition?.capabilities?.marketing" class="cp-info-callout">
+					<div v-if="!selectedProviderSupportsMarketing" class="cp-info-callout">
 						<strong>Выбранный адаптер предназначен для системной почты.</strong>
-						<span>Кампании включаются только у транспорта, который явно поддерживает маркетинговую отправку и безопасный one-click unsubscribe. Бизнес-логика больше не привязана к названию конкретного провайдера.</span>
+						<span>Кампании включаются только у транспорта, который явно поддерживает маркетинговую отправку и безопасную отписку одним нажатием.</span>
 					</div>
 
 					<div class="editor-actions">
@@ -841,14 +864,14 @@ onMounted(async () => {
 				</div>
 				<div class="deliverability-grid">
 					<div :class="{ ok: meta.gateway?.deliverability?.tls }"><strong>{{ gatewayUsesHttpsApi ? 'HTTPS / TLS' : 'STARTTLS' }}</strong><span>{{ meta.gateway?.deliverability?.tls ? 'Защищено' : 'Требует настройки' }}</span></div>
-					<div :class="{ ok: meta.gateway?.deliverability?.sender_identity }"><strong>From identity</strong><span>{{ meta.gateway?.deliverability?.sender_identity ? 'Настроен' : 'Требует настройки' }}</span></div>
-					<div class="ok"><strong>Text + HTML</strong><span>Транзакционные письма multipart-ready</span></div>
-					<div class="ok"><strong>Preview / preheader</strong><span>{{ gatewayCapabilities.preview_title ? 'Поддерживается транспортом' : 'Встраивается в HTML' }}</span></div>
-					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>One-click unsubscribe</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готов' : (gatewayCapabilities.marketing ? 'Нужны MAIL_UNSUBSCRIBE_BASE_URL + HMAC key' : 'Не поддерживается этим адаптером') }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.sender_identity }"><strong>Идентичность отправителя</strong><span>{{ meta.gateway?.deliverability?.sender_identity ? 'Настроена' : 'Требует настройки' }}</span></div>
+					<div class="ok"><strong>Текст + HTML</strong><span>Транзакционные письма готовы к двум форматам</span></div>
+					<div class="ok"><strong>Предпросмотр / прехедер</strong><span>{{ gatewayCapabilities.preview_title ? 'Поддерживается транспортом' : 'Встраивается в HTML' }}</span></div>
+					<div :class="{ ok: meta.gateway?.deliverability?.one_click_unsubscribe }"><strong>Отписка одним нажатием</strong><span>{{ meta.gateway?.deliverability?.one_click_unsubscribe ? 'Готова' : (gatewayCapabilities.marketing ? 'Нужны MAIL_UNSUBSCRIBE_BASE_URL и HMAC-ключ' : 'Не поддерживается этим адаптером') }}</span></div>
 					<div :class="{ ok: meta.gateway?.deliverability?.reply_to_configured }"><strong>Reply-To</strong><span>{{ meta.gateway?.deliverability?.reply_to_configured ? 'Настроен' : (gatewayCapabilities.reply_to ? 'Рекомендуется' : 'Не поддерживается этим адаптером') }}</span></div>
 					<div class="external"><strong>SPF</strong><span>Проверить PASS в полученном письме</span></div>
 					<div class="external"><strong>DKIM</strong><span>Проверить PASS и домен подписи</span></div>
-					<div class="external"><strong>DMARC</strong><span>Проверить PASS / alignment</span></div>
+					<div class="external"><strong>DMARC</strong><span>Проверить PASS и выравнивание домена</span></div>
 					<div class="external"><strong>PTR / rDNS</strong><span>{{ gatewayCapabilities.provider_managed_ptr ? 'На стороне почтового провайдера' : 'Проверить у провайдера IP' }}</span></div>
 				</div>
 				<div class="cp-info-callout">
@@ -866,7 +889,7 @@ onMounted(async () => {
 				<div>
 					<p class="cp-eyebrow">Проверка</p>
 					<h3>Отправить тестовое письмо</h3>
-					<p class="cp-card-note">{{ gatewayUsesHttpsApi ? 'Тест идёт через выбранный HTTPS API и проверяет доступность адаптера, учётные данные и адрес отправителя.' : 'Тест идёт через текущую SMTP-конфигурацию и проверяет host, STARTTLS и учётные данные.' }}</p>
+					<p class="cp-card-note">{{ gatewayUsesHttpsApi ? 'Тест идёт через выбранный HTTPS API и проверяет доступность адаптера, учётные данные и адрес отправителя.' : 'Тест идёт через текущую SMTP-конфигурацию и проверяет сервер, STARTTLS и учётные данные.' }}</p>
 				</div>
 				<div class="gateway-test-action">
 					<input v-model.trim="gatewayTestEmail" type="email" placeholder="your@email.com">
@@ -975,7 +998,7 @@ onMounted(async () => {
 .gateway-status-card dt { color:var(--text-muted); }
 .gateway-status-card dd { margin:0; font-weight:700; }
 .gateway-form { display:grid; gap:16px; }
-.provider-choice { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.provider-choice { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; }
 .provider-choice label { display:flex; align-items:flex-start; gap:9px; padding:12px; border:1px solid var(--border-color); border-radius:10px; background:var(--light-bg); cursor:pointer; }
 .provider-choice label.active { border-color:color-mix(in srgb,var(--secondary-color) 45%,var(--border-color)); background:color-mix(in srgb,var(--secondary-color) 8%,var(--card-bg)); }
 .provider-choice input { margin-top:3px; }
@@ -984,6 +1007,7 @@ onMounted(async () => {
 .provider-choice small { color:var(--text-muted); font-size:10px; line-height:1.35; }
 .gateway-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .gateway-fields .wide { grid-column:1/-1; }
+.campaign-toggle { padding:10px 12px; border:1px solid var(--border-color); border-radius:9px; background:var(--light-bg); }
 .danger-toggle { color:var(--danger-color) !important; }
 .gateway-test-card { display:flex; align-items:center; justify-content:space-between; gap:20px; }
 .gateway-test-action { width:min(520px,100%); display:flex; gap:8px; }
