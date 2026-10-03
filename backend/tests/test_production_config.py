@@ -129,7 +129,7 @@ def test_valid_production_password_recovery_config_passes():
         ({"PASSWORD_RESET_BASE_URL": "http://app.wbinsight.ru/reset-password"}, "PASSWORD_RESET_BASE_URL"),
         ({"SMTP_HOST": "smtp.example.com"}, "SMTP_HOST"),
         ({"SMTP_FROM_EMAIL": "no-reply@example.com"}, "SMTP_FROM_EMAIL"),
-        ({"SMTP_STARTTLS": False}, "SMTP_STARTTLS"),
+        ({"SMTP_STARTTLS": False}, "STARTTLS"),
         ({"SMTP_USERNAME": "replace-with-smtp-user"}, "SMTP_USERNAME"),
         ({"SMTP_PASSWORD": "password"}, "SMTP_PASSWORD"),
     ],
