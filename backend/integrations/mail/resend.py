@@ -1,5 +1,4 @@
 import re
-from email.utils import formataddr
 from html import escape
 
 import httpx
@@ -51,6 +50,22 @@ def _error_message(code: str) -> str:
         "resend_network_error": "Не удалось подключиться к Resend по HTTPS.",
     }
     return messages.get(code, "Resend не принял письмо. Проверьте настройки транспорта.")
+
+
+def _address_with_name(email: str, name: str | None) -> str:
+    """Формирует JSON-адрес API без MIME-кодирования Unicode-имени."""
+    clean_email = str(email or "").strip()
+    clean_name = str(name or "").strip()
+    if "\r" in clean_email or "\n" in clean_email:
+        raise ValueError("Недопустимый email почтового сообщения")
+    if not clean_name:
+        return clean_email
+    if "\r" in clean_name or "\n" in clean_name:
+        raise ValueError("Недопустимое имя участника почтового сообщения")
+    # API принимает форму `Имя <email>`. Угловые скобки в отображаемом имени
+    # убираются, чтобы имя не могло изменить адресную часть строки.
+    clean_name = clean_name.replace("<", "").replace(">", "").strip()
+    return f"{clean_name[:255]} <{clean_email}>" if clean_name else clean_email
 
 
 class ResendAPIError(MailProviderError):
@@ -156,12 +171,8 @@ class ResendMailProvider:
             html_payload = preheader + html_payload
 
         payload: dict[str, object] = {
-            "from": formataddr((sender_name or "", sender)) if sender_name else sender,
-            "to": [
-                formataddr((recipient_name or "", recipient))
-                if recipient_name
-                else recipient
-            ],
+            "from": _address_with_name(sender, sender_name),
+            "to": [_address_with_name(recipient, recipient_name)],
             "subject": subject[:255],
         }
         if body:
