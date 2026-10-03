@@ -4,13 +4,18 @@ from urllib.parse import urlparse
 
 _RESERVED_EXAMPLE_DOMAINS = ("example.com", "example.org", "example.net")
 _WEAK_SECRET_VALUES = {"admin", "changeme", "change-me", "password", "secret"}
+_MAIL_PROVIDERS = {"smtp", "rusender", "resend"}
+_MARKETING_MAIL_PROVIDERS = {"smtp", "resend"}
 
 
 def _is_reserved_example_host(hostname: str | None) -> bool:
     if not hostname:
         return True
     host = hostname.rstrip(".").lower()
-    return any(host == domain or host.endswith(f".{domain}") for domain in _RESERVED_EXAMPLE_DOMAINS)
+    return any(
+        host == domain or host.endswith(f".{domain}")
+        for domain in _RESERVED_EXAMPLE_DOMAINS
+    )
 
 
 def _is_placeholder(value: str | None) -> bool:
@@ -25,8 +30,12 @@ def _is_placeholder(value: str | None) -> bool:
 class LifecycleConfig:
     PASSWORD_RESET_ENABLED = os.getenv("PASSWORD_RESET_ENABLED", "false").lower() == "true"
     PASSWORD_RESET_BASE_URL = os.getenv("PASSWORD_RESET_BASE_URL", "").strip()
-    PASSWORD_RESET_TOKEN_TTL_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_TTL_MINUTES", "30"))
-    PASSWORD_RESET_RESEND_SECONDS = int(os.getenv("PASSWORD_RESET_RESEND_SECONDS", "60"))
+    PASSWORD_RESET_TOKEN_TTL_MINUTES = int(
+        os.getenv("PASSWORD_RESET_TOKEN_TTL_MINUTES", "30")
+    )
+    PASSWORD_RESET_RESEND_SECONDS = int(
+        os.getenv("PASSWORD_RESET_RESEND_SECONDS", "60")
+    )
 
     EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "false").lower() == "true"
     EMAIL_VERIFICATION_BASE_URL = os.getenv("EMAIL_VERIFICATION_BASE_URL", "").strip()
@@ -64,6 +73,13 @@ class LifecycleConfig:
     RUSENDER_API_TOKEN = os.getenv("RUSENDER_API_TOKEN", "").strip() or None
     RUSENDER_TIMEOUT_SECONDS = float(os.getenv("RUSENDER_TIMEOUT_SECONDS", "10"))
 
+    RESEND_API_BASE_URL = os.getenv(
+        "RESEND_API_BASE_URL",
+        "https://api.resend.com",
+    ).strip().rstrip("/")
+    RESEND_API_TOKEN = os.getenv("RESEND_API_TOKEN", "").strip() or None
+    RESEND_TIMEOUT_SECONDS = float(os.getenv("RESEND_TIMEOUT_SECONDS", "10"))
+
     ACCOUNT_DEACTIVATION_RETENTION_DAYS = int(
         os.getenv("ACCOUNT_DEACTIVATION_RETENTION_DAYS", "90")
     )
@@ -71,47 +87,55 @@ class LifecycleConfig:
     def _validate_https_url(self, name: str, value: str, *, production: bool) -> None:
         parsed = urlparse(value)
         if not parsed.scheme or not parsed.hostname:
-            raise RuntimeError(f"{name} must be an absolute URL")
-        if production:
-            if parsed.scheme.lower() != "https":
-                raise RuntimeError(f"Production {name} must use https://")
-            hostname = parsed.hostname.lower()
-            if "replace-with-" in hostname or _is_reserved_example_host(hostname):
-                raise RuntimeError(f"Production {name} must use the real service host")
-
-    def _validate_mail_transport(self, *, production: bool) -> None:
-        if self.MAIL_PROVIDER not in {"smtp", "rusender"}:
-            raise RuntimeError(f"Unsupported MAIL_PROVIDER: {self.MAIL_PROVIDER}")
-
-        if self.MAIL_PROVIDER == "smtp":
-            missing = [
-                name
-                for name, value in {
-                    "SMTP_HOST": self.SMTP_HOST,
-                    "SMTP_FROM_EMAIL": self.SMTP_FROM_EMAIL,
-                }.items()
-                if not value
-            ]
-            if missing:
-                raise RuntimeError("Mail delivery requires: " + ", ".join(missing))
-            if bool(self.SMTP_USERNAME) != bool(self.SMTP_PASSWORD):
-                raise RuntimeError("SMTP_USERNAME and SMTP_PASSWORD must be configured together")
-            if not production:
-                return
-            if not self.SMTP_STARTTLS:
-                raise RuntimeError("Production mail delivery requires SMTP_STARTTLS=true")
-            smtp_host = self.SMTP_HOST.rstrip(".").lower()
-            if "replace-with-" in smtp_host or _is_reserved_example_host(smtp_host):
-                raise RuntimeError("Production SMTP_HOST must use the real provider host")
-            from_domain = self.SMTP_FROM_EMAIL.rpartition("@")[2].strip().lower()
-            if not from_domain or _is_reserved_example_host(from_domain):
-                raise RuntimeError("Production SMTP_FROM_EMAIL must use the real sender domain")
-            if self.SMTP_USERNAME and _is_placeholder(self.SMTP_USERNAME):
-                raise RuntimeError("Production SMTP_USERNAME must be replaced with a provider value")
-            if self.SMTP_PASSWORD and _is_placeholder(self.SMTP_PASSWORD):
-                raise RuntimeError("Production SMTP_PASSWORD must be replaced with a provider secret")
+            raise RuntimeError(f"{name} должен содержать абсолютный URL")
+        if not production:
             return
+        if parsed.scheme.lower() != "https":
+            raise RuntimeError(f"В production {name} должен использовать https://")
+        hostname = parsed.hostname.lower()
+        if "replace-with-" in hostname or _is_reserved_example_host(hostname):
+            raise RuntimeError(f"В production {name} должен указывать на реальный сервис")
 
+    def _validate_sender_domain(self, *, production: bool) -> None:
+        if not self.SMTP_FROM_EMAIL or "@" not in self.SMTP_FROM_EMAIL:
+            raise RuntimeError("Для почтовой доставки нужен корректный SMTP_FROM_EMAIL")
+        if not production:
+            return
+        from_domain = self.SMTP_FROM_EMAIL.rpartition("@")[2].strip().lower()
+        if not from_domain or _is_reserved_example_host(from_domain):
+            raise RuntimeError(
+                "В production SMTP_FROM_EMAIL должен использовать реальный домен отправителя"
+            )
+
+    def _validate_smtp_transport(self, *, production: bool) -> None:
+        missing = [
+            name
+            for name, value in {
+                "SMTP_HOST": self.SMTP_HOST,
+                "SMTP_FROM_EMAIL": self.SMTP_FROM_EMAIL,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise RuntimeError(
+                "Для SMTP-доставки нужны параметры: " + ", ".join(missing)
+            )
+        if bool(self.SMTP_USERNAME) != bool(self.SMTP_PASSWORD):
+            raise RuntimeError("SMTP_USERNAME и SMTP_PASSWORD должны быть настроены вместе")
+        self._validate_sender_domain(production=production)
+        if not production:
+            return
+        if not self.SMTP_STARTTLS:
+            raise RuntimeError("В production SMTP должен использовать STARTTLS")
+        smtp_host = self.SMTP_HOST.rstrip(".").lower()
+        if "replace-with-" in smtp_host or _is_reserved_example_host(smtp_host):
+            raise RuntimeError("В production SMTP_HOST должен указывать на реальный сервер")
+        if self.SMTP_USERNAME and _is_placeholder(self.SMTP_USERNAME):
+            raise RuntimeError("В production SMTP_USERNAME должен быть заменён реальным значением")
+        if self.SMTP_PASSWORD and _is_placeholder(self.SMTP_PASSWORD):
+            raise RuntimeError("В production SMTP_PASSWORD должен быть заменён реальным секретом")
+
+    def _validate_rusender_transport(self, *, production: bool) -> None:
         missing = [
             name
             for name, value in {
@@ -123,57 +147,107 @@ class LifecycleConfig:
             if not value
         ]
         if missing:
-            raise RuntimeError("RuSender delivery requires: " + ", ".join(missing))
+            raise RuntimeError(
+                "Для RuSender нужны параметры: " + ", ".join(missing)
+            )
         if not self.RUSENDER_KEY_ID.isdigit():
-            raise RuntimeError("RUSENDER_KEY_ID must be numeric")
+            raise RuntimeError("RUSENDER_KEY_ID должен быть числом")
         if self.RUSENDER_TIMEOUT_SECONDS <= 0:
-            raise RuntimeError("RUSENDER_TIMEOUT_SECONDS must be positive")
+            raise RuntimeError("RUSENDER_TIMEOUT_SECONDS должен быть больше нуля")
         self._validate_https_url(
             "RUSENDER_API_BASE_URL",
             self.RUSENDER_API_BASE_URL,
             production=production,
         )
-        if production:
-            from_domain = self.SMTP_FROM_EMAIL.rpartition("@")[2].strip().lower()
-            if not from_domain or _is_reserved_example_host(from_domain):
-                raise RuntimeError("Production SMTP_FROM_EMAIL must use the real sender domain")
-            if _is_placeholder(self.RUSENDER_API_TOKEN):
-                raise RuntimeError("Production RUSENDER_API_TOKEN must be replaced with a provider secret")
+        self._validate_sender_domain(production=production)
+        if production and _is_placeholder(self.RUSENDER_API_TOKEN):
+            raise RuntimeError(
+                "В production RUSENDER_API_TOKEN должен быть заменён реальным секретом"
+            )
+
+    def _validate_resend_transport(self, *, production: bool) -> None:
+        missing = [
+            name
+            for name, value in {
+                "RESEND_API_BASE_URL": self.RESEND_API_BASE_URL,
+                "RESEND_API_TOKEN": self.RESEND_API_TOKEN,
+                "SMTP_FROM_EMAIL": self.SMTP_FROM_EMAIL,
+            }.items()
+            if not value
+        ]
+        if missing:
+            raise RuntimeError(
+                "Для Resend нужны параметры: " + ", ".join(missing)
+            )
+        if self.RESEND_TIMEOUT_SECONDS <= 0:
+            raise RuntimeError("RESEND_TIMEOUT_SECONDS должен быть больше нуля")
+        self._validate_https_url(
+            "RESEND_API_BASE_URL",
+            self.RESEND_API_BASE_URL,
+            production=production,
+        )
+        self._validate_sender_domain(production=production)
+        if production and _is_placeholder(self.RESEND_API_TOKEN):
+            raise RuntimeError(
+                "В production RESEND_API_TOKEN должен быть заменён реальным секретом"
+            )
+
+    def _validate_mail_transport(self, *, production: bool) -> None:
+        if self.MAIL_PROVIDER not in _MAIL_PROVIDERS:
+            supported = ", ".join(sorted(_MAIL_PROVIDERS))
+            raise RuntimeError(
+                f"Неподдерживаемый MAIL_PROVIDER: {self.MAIL_PROVIDER}. Доступны: {supported}"
+            )
+        if self.MAIL_PROVIDER == "smtp":
+            self._validate_smtp_transport(production=production)
+            return
+        if self.MAIL_PROVIDER == "rusender":
+            self._validate_rusender_transport(production=production)
+            return
+        self._validate_resend_transport(production=production)
 
     def validate(self, *, production: bool) -> None:
         if self.PASSWORD_RESET_TOKEN_TTL_MINUTES <= 0:
-            raise RuntimeError("PASSWORD_RESET_TOKEN_TTL_MINUTES must be positive")
+            raise RuntimeError("PASSWORD_RESET_TOKEN_TTL_MINUTES должен быть больше нуля")
         if self.PASSWORD_RESET_RESEND_SECONDS <= 0:
-            raise RuntimeError("PASSWORD_RESET_RESEND_SECONDS must be positive")
+            raise RuntimeError("PASSWORD_RESET_RESEND_SECONDS должен быть больше нуля")
         if self.EMAIL_VERIFICATION_TOKEN_TTL_MINUTES <= 0:
-            raise RuntimeError("EMAIL_VERIFICATION_TOKEN_TTL_MINUTES must be positive")
+            raise RuntimeError("EMAIL_VERIFICATION_TOKEN_TTL_MINUTES должен быть больше нуля")
         if self.EMAIL_VERIFICATION_RESEND_SECONDS <= 0:
-            raise RuntimeError("EMAIL_VERIFICATION_RESEND_SECONDS must be positive")
+            raise RuntimeError("EMAIL_VERIFICATION_RESEND_SECONDS должен быть больше нуля")
         if len(self.SMTP_FROM_NAME) > 160:
-            raise RuntimeError("SMTP_FROM_NAME must be at most 160 characters")
+            raise RuntimeError("SMTP_FROM_NAME не должен превышать 160 символов")
         if self.SMTP_REPLY_TO_EMAIL and (
             "@" not in self.SMTP_REPLY_TO_EMAIL or len(self.SMTP_REPLY_TO_EMAIL) > 320
         ):
-            raise RuntimeError("SMTP_REPLY_TO_EMAIL must be a valid email address")
-        if self.MAIL_BATCH_SIZE <= 0 or self.MAIL_MAX_ATTEMPTS <= 0 or self.MAIL_RETRY_BASE_SECONDS <= 0:
-            raise RuntimeError("Mail queue limits must be positive")
+            raise RuntimeError("SMTP_REPLY_TO_EMAIL должен содержать корректный email")
+        if (
+            self.MAIL_BATCH_SIZE <= 0
+            or self.MAIL_MAX_ATTEMPTS <= 0
+            or self.MAIL_RETRY_BASE_SECONDS <= 0
+        ):
+            raise RuntimeError("Параметры почтовой очереди должны быть больше нуля")
         if self.SMTP_PORT <= 0 or self.SMTP_TIMEOUT_SECONDS <= 0:
-            raise RuntimeError("SMTP port and timeout must be positive")
+            raise RuntimeError("SMTP port и timeout должны быть больше нуля")
         if self.RUSENDER_TIMEOUT_SECONDS <= 0:
-            raise RuntimeError("RUSENDER_TIMEOUT_SECONDS must be positive")
+            raise RuntimeError("RUSENDER_TIMEOUT_SECONDS должен быть больше нуля")
+        if self.RESEND_TIMEOUT_SECONDS <= 0:
+            raise RuntimeError("RESEND_TIMEOUT_SECONDS должен быть больше нуля")
         if self.ACCOUNT_DEACTIVATION_RETENTION_DAYS <= 0:
-            raise RuntimeError("ACCOUNT_DEACTIVATION_RETENTION_DAYS must be positive")
+            raise RuntimeError("ACCOUNT_DEACTIVATION_RETENTION_DAYS должен быть больше нуля")
 
         if self.MAIL_CONFIG_SOURCE not in {"auto", "environment", "database"}:
-            raise RuntimeError("MAIL_CONFIG_SOURCE must be auto, environment or database")
+            raise RuntimeError(
+                "MAIL_CONFIG_SOURCE должен быть auto, environment или database"
+            )
 
         if (
             self.MAIL_CONFIG_SOURCE == "environment"
-            and self.MAIL_PROVIDER == "rusender"
             and self.MAIL_DELIVERY_ENABLED
+            and self.MAIL_PROVIDER not in _MARKETING_MAIL_PROVIDERS
         ):
             raise RuntimeError(
-                "RuSender transactional adapter does not support marketing campaigns; set MAIL_DELIVERY_ENABLED=false"
+                "Выбранный почтовый адаптер не поддерживает маркетинговые кампании; установите MAIL_DELIVERY_ENABLED=false"
             )
 
         needs_mail = (
@@ -184,16 +258,15 @@ class LifecycleConfig:
         if needs_mail and self.MAIL_CONFIG_SOURCE == "environment":
             self._validate_mail_transport(production=production)
         elif needs_mail and self.MAIL_CONFIG_SOURCE == "auto":
-            # Auto mode is intentionally bootstrap-safe: an encrypted database
-            # transport may be the effective provider, but import-time config
-            # validation cannot query PostgreSQL. Runtime selection validates
-            # the ENV fallback only when no DB provider exists and fails that
-            # capability closed if the fallback is incomplete/placeholder.
+            # В auto-конфигурации действующий транспорт может храниться в базе.
+            # Проверка ENV выполняется позднее только при отсутствии DB-настройки.
             pass
 
         if self.PASSWORD_RESET_ENABLED:
             if not self.PASSWORD_RESET_BASE_URL:
-                raise RuntimeError("PASSWORD_RESET_ENABLED requires PASSWORD_RESET_BASE_URL")
+                raise RuntimeError(
+                    "PASSWORD_RESET_ENABLED требует PASSWORD_RESET_BASE_URL"
+                )
             self._validate_https_url(
                 "PASSWORD_RESET_BASE_URL",
                 self.PASSWORD_RESET_BASE_URL,
@@ -202,20 +275,27 @@ class LifecycleConfig:
 
         if self.MAIL_DELIVERY_ENABLED and production:
             if not self.MAIL_UNSUBSCRIBE_BASE_URL:
-                raise RuntimeError("Production marketing mail requires MAIL_UNSUBSCRIBE_BASE_URL")
+                raise RuntimeError(
+                    "Маркетинговая почта в production требует MAIL_UNSUBSCRIBE_BASE_URL"
+                )
             self._validate_https_url(
                 "MAIL_UNSUBSCRIBE_BASE_URL",
                 self.MAIL_UNSUBSCRIBE_BASE_URL,
                 production=True,
             )
-            if len(self.MAIL_UNSUBSCRIBE_HMAC_KEY) < 32 or _is_placeholder(self.MAIL_UNSUBSCRIBE_HMAC_KEY):
+            if (
+                len(self.MAIL_UNSUBSCRIBE_HMAC_KEY) < 32
+                or _is_placeholder(self.MAIL_UNSUBSCRIBE_HMAC_KEY)
+            ):
                 raise RuntimeError(
-                    "Production marketing mail requires a strong MAIL_UNSUBSCRIBE_HMAC_KEY"
+                    "Маркетинговая почта в production требует стойкий MAIL_UNSUBSCRIBE_HMAC_KEY"
                 )
 
         if self.EMAIL_VERIFICATION_ENABLED:
             if not self.EMAIL_VERIFICATION_BASE_URL:
-                raise RuntimeError("EMAIL_VERIFICATION_ENABLED requires EMAIL_VERIFICATION_BASE_URL")
+                raise RuntimeError(
+                    "EMAIL_VERIFICATION_ENABLED требует EMAIL_VERIFICATION_BASE_URL"
+                )
             self._validate_https_url(
                 "EMAIL_VERIFICATION_BASE_URL",
                 self.EMAIL_VERIFICATION_BASE_URL,
