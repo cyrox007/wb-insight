@@ -107,10 +107,14 @@ Endpoint не раскрывает существование аккаунта: 
 
 ## Почтовый транспорт
 
-WB Insight поддерживает два транспорта:
+Почтовая подсистема построена вокруг общего контракта адаптера. Бизнес-логика регистрации, восстановления доступа, системных уведомлений и кампаний не проверяет имя конкретного провайдера, а использует заявленные возможности транспорта: транзакционная отправка, кампании, RFC-заголовки, one-click unsubscribe, Reply-To, preview и идемпотентность.
 
-- `smtp` — универсальный SMTP-адаптер; может использоваться для транзакционной почты и маркетинговых кампаний;
-- `rusender` — нативный RuSender HTTPS API для транзакционных писем (email verification, password recovery, системные уведомления и gateway test).
+Сейчас зарегистрированы два адаптера:
+
+- `smtp` — универсальный SMTP-транспорт; поддерживает транзакционную почту, кампании и RFC-заголовки;
+- `rusender` — текущая реализация HTTPS API на исходящем порту 443; используется для транзакционных писем и не зависит от доступности SMTP-портов хостера.
+
+Добавление следующего HTTPS-провайдера не должно менять `mail_service`, очереди сообщений или Control Panel handler: новый адаптер регистрируется в транспортном слое и объявляет собственные capabilities. UI получает каталог и возможности адаптеров из backend API.
 
 Общие параметры:
 
@@ -119,7 +123,7 @@ WB Insight поддерживает два транспорта:
 - `environment` остаётся fail-closed на startup: включённая auth-mail capability требует полностью валидный ENV transport;
 - `MAIL_PROVIDER` — `smtp` или `rusender` для ENV-конфигурации;
 - `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` — sender identity, используются обоими адаптерами;
-- `MAIL_DELIVERY_ENABLED` — разрешает маркетинговые кампании. Для текущего RuSender transactional adapter должен оставаться `false`.
+- `MAIL_DELIVERY_ENABLED` — разрешает маркетинговые кампании только если выбранный адаптер объявляет поддержку `marketing` и безопасной отписки.
 
 RuSender ENV:
 
@@ -128,7 +132,7 @@ RuSender ENV:
 - `RUSENDER_API_TOKEN` — bearer token с permission `external_mail.send`;
 - `RUSENDER_TIMEOUT_SECONDS`.
 
-При `MAIL_CONFIG_SOURCE=auto` или `database` RuSender можно настроить из Control Panel. API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. Вместо секрета UI показывает короткий SHA-256 fingerprint эффективного token-а, чтобы безопасно отличать старый сохранённый credential от нового рабочего token-а при диагностике. Экран шлюза отдельно показывает готовность transport, email verification и password recovery, поэтому наличие рабочего provider не маскирует выключенный feature flag или отсутствующий HTTPS base URL. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
+При `MAIL_CONFIG_SOURCE=auto` или `database` транспорт можно выбрать и настроить из Control Panel. Для текущего HTTPS-адаптера RuSender API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. Вместо секрета UI показывает короткий SHA-256 fingerprint эффективного token-а, чтобы безопасно отличать старый сохранённый credential от нового рабочего token-а при диагностике. Экран шлюза отдельно показывает готовность transport, email verification и password recovery, поэтому наличие рабочего provider не маскирует выключенный feature flag или отсутствующий HTTPS base URL. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
 
 RuSender transactional transport передаёт sender/recipient identity, subject, plain-text + HTML body, `previewTitle`, `idempotencyKey` и только безопасные custom `X-*` headers. Возвращаемый `uuid` сохраняется как `provider_message_id`, когда провайдер его прислал. Любой подтверждённый HTTP `2xx` считается accepted: повторять уже принятый запрос только из-за отсутствующего/нестандартного JSON body опасно дубликатами. При HTTP-ошибке adapter извлекает только bounded machine-readable provider code; raw description/body не сохраняются и не возвращаются.
 
@@ -136,7 +140,7 @@ RuSender transactional transport передаёт sender/recipient identity, sub
 
 Для RuSender приложение **не подделывает** transport/RFC headers, которые формирует почтовая инфраструктура: `Date`, `Message-ID`, `Return-Path`, MIME boundary, `Received`, `DKIM-Signature` и результаты SPF/DMARC. Их нужно проверять в исходнике реально доставленного письма. Текущий RuSender API документирует custom headers только `X-*`; `Reply-To` и RFC 8058 list headers через этот transactional endpoint приложение не заявляет.
 
-Маркетинговые кампании поэтому пока не используют transactional endpoint RuSender. Через SMTP приложение добавляет `List-Unsubscribe`, `List-Unsubscribe-Post`, `List-ID`, `Precedence: bulk` и видимую ссылку отписки. Verification/recovery остаются транзакционными и **не** получают bulk/unsubscribe metadata.
+Маркетинговые кампании запускаются только через адаптер, который объявляет поддержку `marketing` и RFC 8058. Текущий transactional endpoint RuSender этих возможностей не заявляет. Через SMTP приложение добавляет `List-Unsubscribe`, `List-Unsubscribe-Post`, `List-ID`, `Precedence: bulk` и видимую ссылку отписки. Verification/recovery остаются транзакционными и **не** получают bulk/unsubscribe metadata.
 
 ### Диагностика попадания в спам
 
@@ -148,7 +152,7 @@ RuSender transactional transport передаёт sender/recipient identity, sub
 - TLS и корректные forward/reverse DNS/PTR на стороне транспортного провайдера;
 - низкую долю жалоб/отказов и отправку тестов только на существующие адреса.
 
-Произвольные дополнительные `X-*` headers не исправляют SPF/DKIM/DMARC или репутацию отправителя. Если все три проверки PASS, а письмо всё равно попадает в spam, следующим этапом являются reputation/warm-up/content diagnostics у RuSender и в postmaster-инструментах принимающей почты.
+Произвольные дополнительные `X-*` headers не исправляют SPF/DKIM/DMARC или репутацию отправителя. Если все три проверки PASS, а письмо всё равно попадает в spam, следующим этапом являются проверка репутации/прогрева/содержимого у выбранного почтового провайдера и postmaster-инструменты принимающей почты.
 
 ## Operations monitoring
 

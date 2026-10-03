@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 
+from integrations.mail.provider import MailProviderError
 from integrations.mail.rusender import RuSenderAPIError, RuSenderMailProvider, _safe_provider_error_code
 from integrations.mail.smtp import SMTPMailProvider
 from services import mail_transport_service as transport
@@ -88,6 +89,10 @@ async def test_mail_transport_payload_never_returns_password(monkeypatch):
     assert payload["from_name"] == "WB Insight"
     assert payload["reply_to_email"] == "support@example.net"
     assert payload["marketing_ready"] is True
+    assert payload["provider_label"] == "SMTP"
+    assert payload["transport_kind"] == "smtp"
+    assert payload["capabilities"]["marketing"] is True
+    assert payload["capabilities"]["rfc_headers"] is True
     assert payload["deliverability"]["one_click_unsubscribe"] is True
     assert "diagnostic_code" in payload
     assert "system_mail" in payload
@@ -847,3 +852,88 @@ def test_admin_config_sources_do_not_coerce_raw_json_flags_with_bool():
     for phrase in forbidden:
         assert phrase not in payment_source
         assert phrase not in mail_source
+
+
+
+def test_mail_provider_catalog_describes_capabilities_without_business_switches():
+    catalog = {
+        item["code"]: item
+        for item in transport.mail_provider_catalog()
+    }
+
+    assert set(catalog) == {"smtp", "rusender"}
+    assert catalog["smtp"]["capabilities"]["marketing"] is True
+    assert catalog["smtp"]["capabilities"]["one_click_unsubscribe"] is True
+    assert catalog["rusender"]["capabilities"]["transport_kind"] == "https_api"
+    assert catalog["rusender"]["capabilities"]["marketing"] is False
+    assert catalog["rusender"]["capabilities"]["outbound_port"] == 443
+
+
+def test_mail_business_layers_do_not_depend_on_rusender_type():
+    backend_root = Path(__file__).resolve().parents[1]
+    repository_root = Path(__file__).resolve().parents[2]
+    mail_service = (
+        backend_root / "services" / "mail_service.py"
+    ).read_text(encoding="utf-8")
+    mail_handler = (
+        backend_root / "handlers" / "control_panel" / "mail.py"
+    ).read_text(encoding="utf-8")
+    mail_frontend = (
+        repository_root
+        / "frontend"
+        / "src"
+        / "pages"
+        / "ControlPanel"
+        / "Mail"
+        / "index.vue"
+    ).read_text(encoding="utf-8")
+
+    assert "RuSenderAPIError" not in mail_service
+    assert "RuSenderAPIError" not in mail_handler
+    assert 'MAIL_PROVIDER == "rusender"' not in mail_service
+    assert 'MAIL_PROVIDER == "rusender"' not in mail_handler
+    assert "provider === 'rusender'" not in mail_frontend
+    assert 'provider === "rusender"' not in mail_frontend
+
+
+@pytest.mark.asyncio
+async def test_smtp_provider_converts_connection_failure_to_common_error(monkeypatch):
+    provider = SMTPMailProvider(
+        SimpleNamespace(
+            SMTP_HOST="smtp.example.net",
+            SMTP_PORT=587,
+            SMTP_TIMEOUT_SECONDS=10,
+            SMTP_STARTTLS=True,
+            SMTP_USERNAME=None,
+            SMTP_PASSWORD=None,
+        )
+    )
+
+    def fail_send(**_kwargs):
+        raise OSError("порт недоступен")
+
+    monkeypatch.setattr(provider, "_send_sync", fail_send)
+
+    with pytest.raises(MailProviderError) as exc_info:
+        await provider.send(
+            sender="no-reply@example.net",
+            recipient="seller@example.org",
+            subject="Проверка",
+            body="Текст",
+        )
+
+    error = exc_info.value
+    assert error.provider_code == "smtp"
+    assert error.code == "smtp_connection_failed"
+    assert error.retryable is True
+    assert "SMTP" in error.user_message
+
+
+@pytest.mark.asyncio
+async def test_rusender_error_is_compatible_with_common_provider_error():
+    error = RuSenderAPIError("rusender_http_429", retryable=True)
+
+    assert isinstance(error, MailProviderError)
+    assert error.provider_code == "rusender"
+    assert error.retryable is True
+    assert error.user_message

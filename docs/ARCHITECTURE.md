@@ -140,6 +140,29 @@ Payment attempt создаётся backend-ом. Redirect/callback не явля
 
 Текущие версии legal documents задаются backend registry. При критичных действиях frontend передаёт точную принятую версию, а backend проверяет code/version/SHA-256 и записывает append-only evidence. UI checkbox сам по себе не является enforcement.
 
+## Почтовая доставка
+
+Почтовая очередь и бизнес-сценарии не зависят от конкретного провайдера. Транспортный адаптер объявляет capabilities: тип соединения, поддержку транзакционных писем, кампаний, RFC-заголовков, one-click unsubscribe, Reply-To, preview и идемпотентности.
+
+Высокоуровневые слои работают только с общими `MailProvider`, `MailProviderCapabilities` и `MailProviderError`. Провайдер-специфичная авторизация, endpoint и формат запроса остаются внутри адаптера/транспортной конфигурации.
+
+Текущая схема:
+
+```text
+Mail queue / lifecycle events
+          |
+          v
+   MailProvider contract
+      |           |
+      v           v
+    SMTP      HTTPS API
+                  |
+                  v
+          RuSender adapter
+```
+
+RuSender является текущим HTTPS-адаптером, а не обязательной частью бизнес-логики. Следующий API-провайдер добавляется новым адаптером и регистрацией его возможностей; сценарии регистрации, recovery, уведомлений и журнал доставки при этом не переписываются.
+
 ## Production topology
 
 `compose.production.yml` содержит:

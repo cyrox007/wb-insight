@@ -9,7 +9,7 @@ from core.access_control import Permission
 from core.authorization import require_permission
 from core.dependencies import get_db_session
 from core.lifecycle_config import lifecycle_config
-from integrations.mail.rusender import RuSenderAPIError
+from integrations.mail.provider import MailProviderError
 from models.mail_delivery import CampaignStatus, MailCampaign, MailMessage, MailStatus
 from models.subscription_model import SubscriptionStatus
 from models.tariffs_model import TariffPlan
@@ -33,7 +33,7 @@ from utils.responce_helps import response_error, response_success
 
 router = APIRouter(
     prefix="/control-panel/mail",
-    tags=["Control Panel - Mail"],
+    tags=["Панель управления — почта"],
     dependencies=[Depends(require_permission(Permission.MAIL_READ))],
 )
 
@@ -253,32 +253,25 @@ async def gateway_test(
     except ValueError as exc:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(code="MAIL_GATEWAY_TEST_INVALID", message=str(exc))
-    except RuSenderAPIError as exc:
+    except MailProviderError as exc:
         response.status_code = status.HTTP_502_BAD_GATEWAY
-        messages = {
-            "rusender_http_401": "RuSender отклонил API token. Проверьте или перевыпустите токен.",
-            "rusender_http_402": "RuSender сообщает, что лимит или баланс отправок исчерпан.",
-            "rusender_http_403": "RuSender запретил отправку. Проверьте право external_mail.send и активность ключа отправки.",
-            "rusender_http_404": "RuSender не нашёл ключ отправки или домен From. Проверьте Key ID и email отправителя.",
-            "rusender_http_422": "RuSender не может доставлять на этот тестовый адрес.",
-            "rusender_http_429": "Превышен лимит запросов RuSender. Повторите тест позже.",
-            "rusender_http_503": "RuSender временно недоступен. Повторите тест позже.",
-            "rusender_timeout": "RuSender не ответил вовремя. Повторите тест позже.",
-            "rusender_network_error": "Не удалось подключиться к RuSender по HTTPS.",
+        details = {
+            "provider": exc.provider_code,
+            "transport_code": exc.code,
+            "retryable": exc.retryable,
         }
-        details = {"transport_code": exc.code}
         if exc.provider_error_code:
             details["provider_error_code"] = exc.provider_error_code
         return response_error(
             code="MAIL_GATEWAY_TEST_FAILED",
-            message=messages.get(exc.code, "RuSender не принял тестовое письмо."),
+            message=exc.user_message,
             details=details,
         )
     except Exception:
         response.status_code = status.HTTP_502_BAD_GATEWAY
         return response_error(
             code="MAIL_GATEWAY_TEST_FAILED",
-            message="Почтовый провайдер не принял тестовое письмо. Проверьте настройки транспорта и credentials.",
+            message="Почтовый провайдер не принял тестовое письмо. Проверьте настройки транспорта и учётные данные.",
         )
     return response_success(provider_message_id=message_id)
 
@@ -288,11 +281,10 @@ async def password_reset_diagnostics(
     user_id: UUID,
     db_session: AsyncSession = Depends(get_db_session),
 ):
-    """Return a PII-free aggregate used to verify recovery throttling.
+    """Возвращает обезличенный агрегат для проверки ограничения восстановления доступа.
 
-    The caller already needs MAIL_READ. The response intentionally exposes only
-    a count and configured resend window: no recipient address, message id,
-    provider id, token, subject, body, or provider response is returned.
+    В ответе остаются только количество сообщений и окно повторной отправки.
+    Адрес, идентификаторы, токен, тема, содержимое и ответ провайдера не выдаются.
     """
     total = await db_session.scalar(
         select(func.count(MailMessage.id)).where(
