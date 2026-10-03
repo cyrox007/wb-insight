@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.lifecycle_config import lifecycle_config
+from integrations.mail.resend import ResendMailProvider
 from integrations.mail.rusender import RuSenderMailProvider
 from integrations.mail.smtp import SMTPMailProvider
 from models.mail_delivery import MailProviderConfig
@@ -17,6 +18,7 @@ from utils.secret_crypto import decrypt_secret_payload, encrypt_secret_payload
 _PROVIDER_FACTORIES = {
     SMTPMailProvider.code: SMTPMailProvider,
     RuSenderMailProvider.code: RuSenderMailProvider,
+    ResendMailProvider.code: ResendMailProvider,
 }
 _SUPPORTED_PROVIDERS = frozenset(_PROVIDER_FACTORIES)
 
@@ -57,6 +59,12 @@ def mail_provider_catalog() -> list[dict[str, Any]]:
                 "label": provider_class.display_name,
                 "connection_note": connection_note,
                 "capabilities": capabilities.as_payload(),
+                "configuration": {
+                    "kind": provider_class.configuration_kind,
+                    "api_base_url": provider_class.default_api_base_url,
+                    "requires_key_id": provider_class.requires_key_id,
+                    "key_id_numeric": provider_class.key_id_numeric,
+                },
             }
         )
     return catalog
@@ -317,7 +325,7 @@ def _environment_runtime() -> MailTransportRuntime:
         SMTP_FROM_EMAIL=lifecycle_config.SMTP_FROM_EMAIL,
         SMTP_FROM_NAME=lifecycle_config.SMTP_FROM_NAME,
         SMTP_REPLY_TO_EMAIL=(
-            lifecycle_config.SMTP_REPLY_TO_EMAIL if uses_smtp else None
+            lifecycle_config.SMTP_REPLY_TO_EMAIL if capabilities.reply_to else None
         ),
         SMTP_STARTTLS=(bool(lifecycle_config.SMTP_STARTTLS) if uses_smtp else True),
         SMTP_TIMEOUT_SECONDS=float(lifecycle_config.SMTP_TIMEOUT_SECONDS),
@@ -388,7 +396,11 @@ async def get_mail_transport_runtime(
         SMTP_PASSWORD=(str(secrets.get("password") or "") or None) if uses_smtp else None,
         SMTP_FROM_EMAIL=str(row.from_email or ""),
         SMTP_FROM_NAME=str(row.from_name or "WB Insight"),
-        SMTP_REPLY_TO_EMAIL=(str(row.reply_to_email or "") or None) if uses_smtp else None,
+        SMTP_REPLY_TO_EMAIL=(
+            (str(row.reply_to_email or "") or None)
+            if capabilities.reply_to
+            else None
+        ),
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
         API_BASE_URL=(
@@ -672,10 +684,18 @@ async def upsert_mail_transport(
         SMTP_PASSWORD=(str(existing.get("password") or "") or None) if uses_smtp else None,
         SMTP_FROM_EMAIL=str(row.from_email or ""),
         SMTP_FROM_NAME=str(row.from_name or "WB Insight"),
-        SMTP_REPLY_TO_EMAIL=(str(row.reply_to_email or "") or None) if uses_smtp else None,
+        SMTP_REPLY_TO_EMAIL=(
+            (str(row.reply_to_email or "") or None)
+            if capabilities.reply_to
+            else None
+        ),
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
-        API_BASE_URL=(str(row.host or "") if capabilities.transport_kind == "https_api" else ""),
+        API_BASE_URL=(
+            str(row.host or "")
+            if capabilities.transport_kind == "https_api"
+            else ""
+        ),
         API_KEY_ID=(
             str(existing.get("key_id") or "") or None
             if capabilities.transport_kind == "https_api"
