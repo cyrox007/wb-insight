@@ -292,7 +292,6 @@ async def test_production_mail_transport_requires_starttls(monkeypatch):
         )
 
 
-
 def test_marketing_document_contains_visible_unsubscribe_link():
     url = "https://app.example.net/api/account/mail/unsubscribe/signed-token"
     document = render_mail_document(
@@ -302,7 +301,6 @@ def test_marketing_document_contains_visible_unsubscribe_link():
 
     assert url in document
     assert "Отписаться от маркетинговых писем" in document
-
 
 
 def test_signed_unsubscribe_token_round_trip_and_tamper_rejection(monkeypatch):
@@ -333,7 +331,6 @@ def test_signed_unsubscribe_token_round_trip_and_tamper_rejection(monkeypatch):
 
     with pytest.raises(ValueError, match="unsubscribe_token_invalid"):
         unsubscribe.parse_unsubscribe_token(token[:-1] + ("A" if token[-1] != "A" else "B"))
-
 
 
 def test_smtp_provider_emits_sender_identity_and_bulk_headers(monkeypatch):
@@ -816,7 +813,6 @@ def test_smtp_provider_rejects_header_injection(monkeypatch):
         )
 
 
-
 @pytest.mark.parametrize(
     "field",
     ["enabled", "clear_credentials", "starttls"],
@@ -854,19 +850,21 @@ def test_admin_config_sources_do_not_coerce_raw_json_flags_with_bool():
         assert phrase not in mail_source
 
 
-
 def test_mail_provider_catalog_describes_capabilities_without_business_switches():
     catalog = {
         item["code"]: item
         for item in transport.mail_provider_catalog()
     }
 
-    assert set(catalog) == {"smtp", "rusender"}
+    assert set(catalog) == {"smtp", "rusender", "resend"}
     assert catalog["smtp"]["capabilities"]["marketing"] is True
     assert catalog["smtp"]["capabilities"]["one_click_unsubscribe"] is True
     assert catalog["rusender"]["capabilities"]["transport_kind"] == "https_api"
     assert catalog["rusender"]["capabilities"]["marketing"] is False
     assert catalog["rusender"]["capabilities"]["outbound_port"] == 443
+    assert catalog["resend"]["capabilities"]["transport_kind"] == "https_api"
+    assert catalog["resend"]["capabilities"]["marketing"] is True
+    assert catalog["resend"]["configuration"]["requires_key_id"] is False
 
 
 def test_mail_business_layers_do_not_depend_on_rusender_type():

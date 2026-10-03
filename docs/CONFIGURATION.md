@@ -96,55 +96,87 @@ Production activation запрещена до merchant onboarding и smoke. По
 
 ## Восстановление доступа
 
-Password recovery включается отдельно от маркетинговой почты:
+Восстановление пароля включается отдельно от маркетинговой почты:
 
-- `PASSWORD_RESET_ENABLED=true` — включает публичный recovery flow;
+- `PASSWORD_RESET_ENABLED=true` — включает публичный сценарий восстановления;
 - `PASSWORD_RESET_BASE_URL` — HTTPS-страница `/reset-password`;
 - `PASSWORD_RESET_TOKEN_TTL_MINUTES` — срок жизни одноразовой ссылки;
 - `PASSWORD_RESET_RESEND_SECONDS` — минимальный интервал между письмами восстановления для одного аккаунта.
 
-Endpoint не раскрывает существование аккаунта: одинаковый успешный ответ возвращается для неизвестного, неактивного, неподтверждённого и throttled адреса. Одноразовый token создаётся только worker-ом непосредственно перед отправкой письма, в БД хранится только SHA-256 digest, а после смены пароля `session_version` отзывают ранее выданные сессии.
+Endpoint не раскрывает существование аккаунта: одинаковый успешный ответ возвращается для неизвестного, неактивного, неподтверждённого и ограниченного по частоте адреса. Одноразовый token создаётся только worker-ом непосредственно перед отправкой письма, в БД хранится только SHA-256 digest, а после смены пароля `session_version` отзывает ранее выданные сессии.
 
 ## Почтовый транспорт
 
-Почтовая подсистема построена вокруг общего контракта адаптера. Бизнес-логика регистрации, восстановления доступа, системных уведомлений и кампаний не проверяет имя конкретного провайдера, а использует заявленные возможности транспорта: транзакционная отправка, кампании, RFC-заголовки, one-click unsubscribe, Reply-To, preview и идемпотентность.
+Почтовая подсистема построена вокруг общего контракта адаптера. Бизнес-логика регистрации, восстановления доступа, системных уведомлений и кампаний не проверяет имя конкретного провайдера, а использует заявленные возможности транспорта: транзакционную отправку, кампании, RFC-заголовки, one-click unsubscribe, Reply-To, preview и идемпотентность.
 
-Сейчас зарегистрированы два адаптера:
+Сейчас зарегистрированы три адаптера:
 
-- `smtp` — универсальный SMTP-транспорт; поддерживает транзакционную почту, кампании и RFC-заголовки;
-- `rusender` — текущая реализация HTTPS API на исходящем порту 443; используется для транзакционных писем и не зависит от доступности SMTP-портов хостера.
+- `smtp` — классический SMTP-транспорт; поддерживает транзакционную почту, кампании и RFC-заголовки;
+- `rusender` — HTTPS API на исходящем порту `443`; используется для транзакционных писем и не зависит от доступности SMTP-портов хостера;
+- `resend` — второй независимый HTTPS API на исходящем порту `443`; поддерживает транзакционные письма, Reply-To, RFC-заголовки и маркетинговые кампании.
 
-Добавление следующего HTTPS-провайдера не должно менять `mail_service`, очереди сообщений или Control Panel handler: новый адаптер регистрируется в транспортном слое и объявляет собственные capabilities. UI получает каталог и возможности адаптеров из backend API.
+Подробный capability-контракт и правила добавления новых адаптеров описаны в [`MAIL_PROVIDERS.md`](MAIL_PROVIDERS.md).
 
 Общие параметры:
 
 - `MAIL_CONFIG_SOURCE` — `auto`, `environment` или `database`;
-- при `auto` encrypted DB config имеет приоритет. ENV становится fallback только если в БД нет provider row; incomplete/example fallback в production считается недоступным на runtime, но не мешает приложению стартовать и настроить реальный provider из Control Panel;
-- `environment` остаётся fail-closed на startup: включённая auth-mail capability требует полностью валидный ENV transport;
-- `MAIL_PROVIDER` — `smtp` или `rusender` для ENV-конфигурации;
-- `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` — sender identity, используются обоими адаптерами;
-- `MAIL_DELIVERY_ENABLED` — разрешает маркетинговые кампании только если выбранный адаптер объявляет поддержку `marketing` и безопасной отписки.
+- при `auto` зашифрованная конфигурация из БД имеет приоритет, а ENV используется только как резервный источник, если в БД ещё нет провайдера;
+- `environment` остаётся fail-closed на старте: включённая почтовая функция требует полностью валидный ENV-транспорт;
+- `MAIL_PROVIDER` — `smtp`, `rusender` или `resend` для ENV-конфигурации;
+- `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` — общая идентичность отправителя для всех адаптеров;
+- `SMTP_REPLY_TO_EMAIL` используется только адаптерами, объявляющими поддержку Reply-To;
+- `MAIL_DELIVERY_ENABLED` разрешает маркетинговые кампании только если выбранный адаптер объявляет `marketing=true` и настроена безопасная отписка.
 
-RuSender ENV:
+### SMTP
+
+Основные параметры:
+
+- `SMTP_HOST`;
+- `SMTP_PORT`;
+- `SMTP_USERNAME` и `SMTP_PASSWORD` — указываются только вместе;
+- `SMTP_STARTTLS=true` — обязательно в production;
+- `SMTP_TIMEOUT_SECONDS`.
+
+SMTP требует доступности исходящего почтового порта у хостера. Если `25`, `465` или `587` заблокированы, используйте HTTPS API-адаптер.
+
+### RuSender
+
+ENV-параметры:
 
 - `RUSENDER_API_BASE_URL=https://api.rusender.ru`;
 - `RUSENDER_KEY_ID` — числовой ID активированного ключа отправки;
 - `RUSENDER_API_TOKEN` — bearer token с permission `external_mail.send`;
 - `RUSENDER_TIMEOUT_SECONDS`.
 
-При `MAIL_CONFIG_SOURCE=auto` или `database` транспорт можно выбрать и настроить из Control Panel. Для текущего HTTPS-адаптера RuSender API token хранится только в encrypted secrets и после сохранения не возвращается frontend-у. Вместо секрета UI показывает короткий SHA-256 fingerprint эффективного token-а, чтобы безопасно отличать старый сохранённый credential от нового рабочего token-а при диагностике. Экран шлюза отдельно показывает готовность transport, email verification и password recovery, поэтому наличие рабочего provider не маскирует выключенный feature flag или отсутствующий HTTPS base URL. DB-managed endpoint намеренно закреплён на `https://api.rusender.ru`, чтобы bearer token нельзя было перенаправить на сторонний host.
+Текущий transactional endpoint RuSender передаёт sender/recipient identity, subject, plain-text + HTML body, `previewTitle`, `idempotencyKey` и безопасные custom `X-*` headers. Возвращаемый `uuid` сохраняется как `provider_message_id`, когда провайдер его прислал. Любой подтверждённый HTTP `2xx` считается принятым.
 
-RuSender transactional transport передаёт sender/recipient identity, subject, plain-text + HTML body, `previewTitle`, `idempotencyKey` и только безопасные custom `X-*` headers. Возвращаемый `uuid` сохраняется как `provider_message_id`, когда провайдер его прислал. Любой подтверждённый HTTP `2xx` считается accepted: повторять уже принятый запрос только из-за отсутствующего/нестандартного JSON body опасно дубликатами. При HTTP-ошибке adapter извлекает только bounded machine-readable provider code; raw description/body не сохраняются и не возвращаются.
+RuSender в текущем адаптере не объявляет поддержку используемых WB Insight RFC 8058 заголовков маркетинговой рассылки, поэтому `marketing=false`.
 
-Для verification/password-reset provider idempotency key привязан к **attempt**, а не только к durable `MailMessage`: одноразовый token создаётся внутри транзакции непосредственно перед отправкой и откатывается при неопределённой transport-ошибке. Новый attempt получает новый token и новый provider key, поэтому provider не может дедуплицировать retry к уже недействительной первой ссылке. Durable queue idempotency при этом остаётся прежней и продолжает защищать от повторного создания одной и той же операции.
+### Resend
 
-Для RuSender приложение **не подделывает** transport/RFC headers, которые формирует почтовая инфраструктура: `Date`, `Message-ID`, `Return-Path`, MIME boundary, `Received`, `DKIM-Signature` и результаты SPF/DMARC. Их нужно проверять в исходнике реально доставленного письма. Текущий RuSender API документирует custom headers только `X-*`; `Reply-To` и RFC 8058 list headers через этот transactional endpoint приложение не заявляет.
+ENV-параметры:
 
-Маркетинговые кампании запускаются только через адаптер, который объявляет поддержку `marketing` и RFC 8058. Текущий transactional endpoint RuSender этих возможностей не заявляет. Через SMTP приложение добавляет `List-Unsubscribe`, `List-Unsubscribe-Post`, `List-ID`, `Precedence: bulk` и видимую ссылку отписки. Verification/recovery остаются транзакционными и **не** получают bulk/unsubscribe metadata.
+- `RESEND_API_BASE_URL=https://api.resend.com`;
+- `RESEND_API_TOKEN` — API-токен провайдера;
+- `RESEND_TIMEOUT_SECONDS`.
+
+Resend работает через HTTPS `443`, не требует отдельного ID ключа и поддерживает `Reply-To`, пользовательские/RFC-заголовки и `Idempotency-Key`. Поэтому его можно использовать как для подтверждения email и восстановления доступа, так и для кампаний без открытия SMTP-портов.
+
+Перед production-отправкой отправляющий домен должен быть подтверждён у провайдера. API-токен хранится только в зашифрованных secrets и не возвращается frontend-у; Control Panel получает только короткий SHA-256 fingerprint.
+
+Для маркетинговых кампаний дополнительно необходимы:
+
+- `MAIL_DELIVERY_ENABLED=true`;
+- `MAIL_UNSUBSCRIBE_BASE_URL`;
+- стойкий независимый `MAIL_UNSUBSCRIBE_HMAC_KEY` длиной не менее 32 символов.
+
+Для verification/password-reset provider idempotency key привязан к **attempt**, а не только к durable `MailMessage`: одноразовый token создаётся внутри транзакции непосредственно перед отправкой и откатывается при неопределённой transport-ошибке. Новый attempt получает новый token и новый provider key, поэтому провайдер не может дедуплицировать retry к уже недействительной первой ссылке. Durable queue idempotency при этом продолжает защищать от повторного создания одной и той же операции.
+
+Маркетинговые кампании запускаются только через адаптер, который объявляет поддержку `marketing` и RFC 8058. SMTP и Resend эти возможности поддерживают; текущий transactional endpoint RuSender — нет. Приложение добавляет `List-Unsubscribe`, `List-Unsubscribe-Post`, `List-ID`, `Precedence: bulk` и видимую ссылку отписки. Verification/recovery остаются транзакционными и не получают bulk/unsubscribe metadata.
 
 ### Диагностика попадания в спам
 
-Наличие корректного JSON payload и HTTP 2xx доказывает только приём письма провайдером. Inbox placement зависит также от доменной аутентификации и репутации. Для полученного письма проверяйте:
+Успешный HTTP-ответ API или успешная передача SMTP доказывают только приём письма транспортом. Inbox placement зависит также от доменной аутентификации и репутации. Для полученного письма проверяйте:
 
 - SPF = `PASS`;
 - DKIM = `PASS`, подпись относится к ожидаемому отправляющему домену/провайдеру;
@@ -152,7 +184,7 @@ RuSender transactional transport передаёт sender/recipient identity, sub
 - TLS и корректные forward/reverse DNS/PTR на стороне транспортного провайдера;
 - низкую долю жалоб/отказов и отправку тестов только на существующие адреса.
 
-Произвольные дополнительные `X-*` headers не исправляют SPF/DKIM/DMARC или репутацию отправителя. Если все три проверки PASS, а письмо всё равно попадает в spam, следующим этапом являются проверка репутации/прогрева/содержимого у выбранного почтового провайдера и postmaster-инструменты принимающей почты.
+Произвольные дополнительные `X-*` headers не исправляют SPF/DKIM/DMARC или репутацию отправителя. Если проверки проходят, а письмо всё равно попадает в spam, следующим этапом являются диагностика репутации/прогрева/содержимого у выбранного почтового провайдера и postmaster-инструменты принимающей почты.
 
 ## Operations monitoring
 

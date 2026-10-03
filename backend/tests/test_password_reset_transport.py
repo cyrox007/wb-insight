@@ -32,9 +32,8 @@ def test_production_password_recovery_requires_starttls(monkeypatch):
     monkeypatch.setattr(lifecycle_config, "SMTP_USERNAME", None)
     monkeypatch.setattr(lifecycle_config, "SMTP_PASSWORD", None)
 
-    with pytest.raises(RuntimeError, match="SMTP_STARTTLS"):
+    with pytest.raises(RuntimeError, match="STARTTLS"):
         lifecycle_config.validate(production=True)
-
 
 
 def test_auto_mail_source_allows_database_bootstrap_with_placeholder_env(monkeypatch):
@@ -54,7 +53,7 @@ def test_auto_mail_source_allows_database_bootstrap_with_placeholder_env(monkeyp
     monkeypatch.setattr(lifecycle_config, "SMTP_USERNAME", None)
     monkeypatch.setattr(lifecycle_config, "SMTP_PASSWORD", None)
 
-    # Import/startup cannot know whether encrypted DB mail config exists. In
-    # auto mode it validates the feature URL now and defers provider fallback
-    # validation until runtime selection has checked the DB.
+    # При старте приложение ещё не знает, существует ли зашифрованная почтовая
+    # конфигурация в БД. В режиме auto URL функции проверяется сразу, а ENV
+    # проверяется позднее, только если runtime не найдёт провайдера в БД.
     lifecycle_config.validate(production=True)
