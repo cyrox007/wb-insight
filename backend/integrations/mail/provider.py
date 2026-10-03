@@ -44,7 +44,9 @@ class MailProviderError(RuntimeError):
         self.code = str(code or "mail_provider_error")[:96]
         self.provider_code = str(provider_code or "unknown")[:64]
         self.retryable = bool(retryable)
-        self.user_message = str(user_message or "Почтовый провайдер не принял сообщение.")[:500]
+        self.user_message = str(
+            user_message or "Почтовый провайдер не принял сообщение."
+        )[:500]
         self.provider_error_code = (
             str(provider_error_code)[:64]
             if provider_error_code
@@ -67,7 +69,12 @@ class MailProvider(Protocol):
     configuration_kind: str
     default_port: int
     default_api_base_url: str | None
+    requires_key_id: bool
     key_id_numeric: bool
+    environment_api_base_url_attr: str | None
+    environment_key_id_attr: str | None
+    environment_api_token_attr: str | None
+    environment_timeout_attr: str | None
 
     async def send(
         self,
