@@ -19,7 +19,12 @@ class SMTPMailProvider:
     configuration_kind = "smtp"
     default_port = 587
     default_api_base_url = None
+    requires_key_id = False
     key_id_numeric = False
+    environment_api_base_url_attr = None
+    environment_key_id_attr = None
+    environment_api_token_attr = None
+    environment_timeout_attr = None
     capabilities = MailProviderCapabilities(
         transport_kind="smtp",
         transactional=True,

@@ -14,7 +14,6 @@ from settings import config
 from utils.secret_crypto import decrypt_secret_payload, encrypt_secret_payload
 
 
-_DEFAULT_RUSENDER_API_BASE_URL = "https://api.rusender.ru"
 _PROVIDER_FACTORIES = {
     SMTPMailProvider.code: SMTPMailProvider,
     RuSenderMailProvider.code: RuSenderMailProvider,
@@ -63,7 +62,7 @@ def mail_provider_catalog() -> list[dict[str, Any]]:
     return catalog
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class MailTransportRuntime:
     MAIL_PROVIDER: str
     MAIL_DELIVERY_ENABLED: bool
@@ -77,18 +76,95 @@ class MailTransportRuntime:
     SMTP_STARTTLS: bool
     SMTP_TIMEOUT_SECONDS: float
     source: str
-    updated_at: str | None = None
-    RUSENDER_API_BASE_URL: str = _DEFAULT_RUSENDER_API_BASE_URL
-    RUSENDER_KEY_ID: str | None = None
-    RUSENDER_API_TOKEN: str | None = None
-    RUSENDER_TIMEOUT_SECONDS: float = 10.0
-    diagnostic_code: str | None = None
+    updated_at: str | None
+    API_BASE_URL: str
+    API_KEY_ID: str | None
+    API_TOKEN: str | None
+    API_TIMEOUT_SECONDS: float
+    diagnostic_code: str | None
+
+    def __init__(
+        self,
+        *,
+        MAIL_PROVIDER: str,
+        MAIL_DELIVERY_ENABLED: bool,
+        SMTP_HOST: str,
+        SMTP_PORT: int,
+        SMTP_USERNAME: str | None,
+        SMTP_PASSWORD: str | None,
+        SMTP_FROM_EMAIL: str,
+        SMTP_FROM_NAME: str,
+        SMTP_REPLY_TO_EMAIL: str | None,
+        SMTP_STARTTLS: bool,
+        SMTP_TIMEOUT_SECONDS: float,
+        source: str,
+        updated_at: str | None = None,
+        API_BASE_URL: str = "",
+        API_KEY_ID: str | None = None,
+        API_TOKEN: str | None = None,
+        API_TIMEOUT_SECONDS: float = 10.0,
+        diagnostic_code: str | None = None,
+        **legacy: Any,
+    ) -> None:
+        # Поддержка старых имён нужна только на переходный период для тестов и
+        # исторических внутренних вызовов. В runtime сохраняются нейтральные поля.
+        if not API_BASE_URL:
+            API_BASE_URL = str(legacy.pop("RUSENDER_API_BASE_URL", "") or "")
+        if API_KEY_ID is None:
+            API_KEY_ID = str(legacy.pop("RUSENDER_KEY_ID", "") or "") or None
+        if API_TOKEN is None:
+            API_TOKEN = str(legacy.pop("RUSENDER_API_TOKEN", "") or "") or None
+        legacy_timeout = legacy.pop("RUSENDER_TIMEOUT_SECONDS", None)
+        if legacy_timeout is not None and API_TIMEOUT_SECONDS == 10.0:
+            API_TIMEOUT_SECONDS = float(legacy_timeout)
+        if legacy:
+            unknown = ", ".join(sorted(legacy))
+            raise TypeError(f"Неизвестные параметры почтового runtime: {unknown}")
+
+        values = {
+            "MAIL_PROVIDER": str(MAIL_PROVIDER or "").strip().lower(),
+            "MAIL_DELIVERY_ENABLED": bool(MAIL_DELIVERY_ENABLED),
+            "SMTP_HOST": str(SMTP_HOST or ""),
+            "SMTP_PORT": int(SMTP_PORT),
+            "SMTP_USERNAME": SMTP_USERNAME,
+            "SMTP_PASSWORD": SMTP_PASSWORD,
+            "SMTP_FROM_EMAIL": str(SMTP_FROM_EMAIL or ""),
+            "SMTP_FROM_NAME": str(SMTP_FROM_NAME or "WB Insight"),
+            "SMTP_REPLY_TO_EMAIL": SMTP_REPLY_TO_EMAIL,
+            "SMTP_STARTTLS": bool(SMTP_STARTTLS),
+            "SMTP_TIMEOUT_SECONDS": float(SMTP_TIMEOUT_SECONDS),
+            "source": str(source or ""),
+            "updated_at": updated_at,
+            "API_BASE_URL": str(API_BASE_URL or ""),
+            "API_KEY_ID": API_KEY_ID,
+            "API_TOKEN": API_TOKEN,
+            "API_TIMEOUT_SECONDS": float(API_TIMEOUT_SECONDS),
+            "diagnostic_code": diagnostic_code,
+        }
+        for name, value in values.items():
+            object.__setattr__(self, name, value)
+
+    def __getattr__(self, name: str):
+        # Совместимое чтение старых внутренних имён без хранения vendor-specific
+        # полей в самом runtime-контракте.
+        legacy_map = {
+            "RUSENDER_API_BASE_URL": "API_BASE_URL",
+            "RUSENDER_KEY_ID": "API_KEY_ID",
+            "RUSENDER_API_TOKEN": "API_TOKEN",
+            "RUSENDER_TIMEOUT_SECONDS": "API_TIMEOUT_SECONDS",
+        }
+        target = legacy_map.get(name)
+        if target is None:
+            raise AttributeError(name)
+        return object.__getattribute__(self, target)
 
     @property
     def credentials_configured(self) -> bool:
-        capabilities = mail_provider_capabilities(self.MAIL_PROVIDER)
+        provider_class = _provider_class(self.MAIL_PROVIDER)
+        capabilities = provider_class.capabilities
         if capabilities.transport_kind == "https_api":
-            return bool(self.RUSENDER_KEY_ID and self.RUSENDER_API_TOKEN)
+            key_id_ready = bool(self.API_KEY_ID) or not provider_class.requires_key_id
+            return bool(self.API_TOKEN and key_id_ready)
         if capabilities.transport_kind == "smtp":
             return bool(self.SMTP_USERNAME and self.SMTP_PASSWORD)
         return False
@@ -97,17 +173,15 @@ class MailTransportRuntime:
     def ready(self) -> bool:
         if not self.SMTP_FROM_EMAIL:
             return False
-        capabilities = mail_provider_capabilities(self.MAIL_PROVIDER)
+        provider_class = _provider_class(self.MAIL_PROVIDER)
+        capabilities = provider_class.capabilities
         if capabilities.transport_kind == "smtp":
             if not self.SMTP_HOST:
                 return False
             return bool(self.SMTP_USERNAME) == bool(self.SMTP_PASSWORD)
         if capabilities.transport_kind == "https_api":
-            return bool(
-                self.RUSENDER_API_BASE_URL
-                and self.RUSENDER_KEY_ID
-                and self.RUSENDER_API_TOKEN
-            )
+            key_id_ready = bool(self.API_KEY_ID) or not provider_class.requires_key_id
+            return bool(self.API_BASE_URL and self.API_TOKEN and key_id_ready)
         return False
 
 
@@ -146,21 +220,25 @@ def _read_secrets(row: MailProviderConfig | None) -> dict[str, Any]:
 async def get_mail_provider_config(
     session: AsyncSession | None,
 ) -> MailProviderConfig | None:
-    """Возвращает действующую конфигурацию почтового транспорта из базы.
-
-    Таблица появилась до нескольких адаптеров, поэтому без миграции сохраняется
-    одна эффективная запись. Если остались исторические дубликаты поддерживаемых
-    провайдеров, используется наиболее недавно обновлённая запись.
-    """
+    """Возвращает действующую конфигурацию почтового транспорта из базы."""
     if session is None:
         return None
     result = await session.execute(
         select(MailProviderConfig)
         .where(MailProviderConfig.provider.in_(_SUPPORTED_PROVIDERS))
-        .order_by(MailProviderConfig.updated_at.desc(), MailProviderConfig.created_at.desc())
+        .order_by(
+            MailProviderConfig.updated_at.desc(),
+            MailProviderConfig.created_at.desc(),
+        )
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+def _environment_value(attribute_name: str | None, default=None):
+    if not attribute_name:
+        return default
+    return getattr(lifecycle_config, attribute_name, default)
 
 
 def _unconfigured_runtime(
@@ -169,11 +247,15 @@ def _unconfigured_runtime(
     provider: str = "smtp",
     diagnostic_code: str | None = None,
 ) -> MailTransportRuntime:
+    normalized = provider if provider in _SUPPORTED_PROVIDERS else "smtp"
+    provider_class = _provider_class(normalized)
+    capabilities = provider_class.capabilities
+    uses_smtp = capabilities.transport_kind == "smtp"
     return MailTransportRuntime(
-        MAIL_PROVIDER=provider if provider in _SUPPORTED_PROVIDERS else "smtp",
+        MAIL_PROVIDER=normalized,
         MAIL_DELIVERY_ENABLED=False,
         SMTP_HOST="",
-        SMTP_PORT=587,
+        SMTP_PORT=(587 if uses_smtp else int(provider_class.default_port)),
         SMTP_USERNAME=None,
         SMTP_PASSWORD=None,
         SMTP_FROM_EMAIL="",
@@ -181,7 +263,8 @@ def _unconfigured_runtime(
         SMTP_REPLY_TO_EMAIL=None,
         SMTP_STARTTLS=True,
         SMTP_TIMEOUT_SECONDS=10.0,
-        RUSENDER_API_BASE_URL=_DEFAULT_RUSENDER_API_BASE_URL,
+        API_BASE_URL=str(provider_class.default_api_base_url or ""),
+        API_TIMEOUT_SECONDS=10.0,
         source=source,
         diagnostic_code=diagnostic_code,
     )
@@ -192,6 +275,30 @@ def _environment_runtime() -> MailTransportRuntime:
     provider_class = _provider_class(provider)
     capabilities = provider_class.capabilities
     uses_smtp = capabilities.transport_kind == "smtp"
+
+    api_base_url = ""
+    api_key_id = None
+    api_token = None
+    api_timeout = 10.0
+    if capabilities.transport_kind == "https_api":
+        api_base_url = str(
+            _environment_value(
+                provider_class.environment_api_base_url_attr,
+                provider_class.default_api_base_url or "",
+            )
+            or provider_class.default_api_base_url
+            or ""
+        )
+        api_key_id = str(
+            _environment_value(provider_class.environment_key_id_attr, "") or ""
+        ) or None
+        api_token = str(
+            _environment_value(provider_class.environment_api_token_attr, "") or ""
+        ) or None
+        api_timeout = float(
+            _environment_value(provider_class.environment_timeout_attr, 10.0) or 10.0
+        )
+
     return MailTransportRuntime(
         MAIL_PROVIDER=provider,
         MAIL_DELIVERY_ENABLED=(
@@ -205,17 +312,19 @@ def _environment_runtime() -> MailTransportRuntime:
             if uses_smtp
             else int(provider_class.default_port)
         ),
-        SMTP_USERNAME=lifecycle_config.SMTP_USERNAME,
-        SMTP_PASSWORD=lifecycle_config.SMTP_PASSWORD,
+        SMTP_USERNAME=lifecycle_config.SMTP_USERNAME if uses_smtp else None,
+        SMTP_PASSWORD=lifecycle_config.SMTP_PASSWORD if uses_smtp else None,
         SMTP_FROM_EMAIL=lifecycle_config.SMTP_FROM_EMAIL,
         SMTP_FROM_NAME=lifecycle_config.SMTP_FROM_NAME,
-        SMTP_REPLY_TO_EMAIL=lifecycle_config.SMTP_REPLY_TO_EMAIL,
+        SMTP_REPLY_TO_EMAIL=(
+            lifecycle_config.SMTP_REPLY_TO_EMAIL if uses_smtp else None
+        ),
         SMTP_STARTTLS=(bool(lifecycle_config.SMTP_STARTTLS) if uses_smtp else True),
         SMTP_TIMEOUT_SECONDS=float(lifecycle_config.SMTP_TIMEOUT_SECONDS),
-        RUSENDER_API_BASE_URL=lifecycle_config.RUSENDER_API_BASE_URL,
-        RUSENDER_KEY_ID=lifecycle_config.RUSENDER_KEY_ID or None,
-        RUSENDER_API_TOKEN=lifecycle_config.RUSENDER_API_TOKEN,
-        RUSENDER_TIMEOUT_SECONDS=float(lifecycle_config.RUSENDER_TIMEOUT_SECONDS),
+        API_BASE_URL=api_base_url,
+        API_KEY_ID=api_key_id,
+        API_TOKEN=api_token,
+        API_TIMEOUT_SECONDS=api_timeout,
         source="environment",
     )
 
@@ -247,8 +356,6 @@ async def get_mail_transport_runtime(
                 diagnostic_code="environment_fallback_invalid",
             )
         try:
-            # Проверка при старте не видит конфигурацию в базе. После выбора
-            # runtime проверяем ENV-fallback только если записи провайдера в базе нет.
             lifecycle_config._validate_mail_transport(
                 production=config.IS_PRODUCTION,
             )
@@ -271,41 +378,53 @@ async def get_mail_transport_runtime(
     provider_class = _provider_class(provider)
     capabilities = provider_class.capabilities
     uses_smtp = capabilities.transport_kind == "smtp"
+
     runtime = MailTransportRuntime(
         MAIL_PROVIDER=provider,
         MAIL_DELIVERY_ENABLED=(bool(row.enabled) if capabilities.marketing else False),
         SMTP_HOST=str(row.host or "") if uses_smtp else "",
-        SMTP_PORT=int(row.port),
-        SMTP_USERNAME=str(secrets.get("username") or "") or None,
-        SMTP_PASSWORD=str(secrets.get("password") or "") or None,
+        SMTP_PORT=int(row.port or provider_class.default_port),
+        SMTP_USERNAME=(str(secrets.get("username") or "") or None) if uses_smtp else None,
+        SMTP_PASSWORD=(str(secrets.get("password") or "") or None) if uses_smtp else None,
         SMTP_FROM_EMAIL=str(row.from_email or ""),
         SMTP_FROM_NAME=str(row.from_name or "WB Insight"),
-        SMTP_REPLY_TO_EMAIL=str(row.reply_to_email or "") or None,
+        SMTP_REPLY_TO_EMAIL=(str(row.reply_to_email or "") or None) if uses_smtp else None,
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
-        RUSENDER_API_BASE_URL=(
+        API_BASE_URL=(
             str(row.host or provider_class.default_api_base_url or "")
             if capabilities.transport_kind == "https_api"
-            else _DEFAULT_RUSENDER_API_BASE_URL
+            else ""
         ),
-        RUSENDER_KEY_ID=str(secrets.get("key_id") or "") or None,
-        RUSENDER_API_TOKEN=str(secrets.get("api_token") or "") or None,
-        RUSENDER_TIMEOUT_SECONDS=float(row.timeout_seconds),
+        API_KEY_ID=(
+            str(secrets.get("key_id") or "") or None
+            if capabilities.transport_kind == "https_api"
+            else None
+        ),
+        API_TOKEN=(
+            str(secrets.get("api_token") or "") or None
+            if capabilities.transport_kind == "https_api"
+            else None
+        ),
+        API_TIMEOUT_SECONDS=float(row.timeout_seconds),
         source="database",
         updated_at=row.updated_at.isoformat() if row.updated_at else None,
     )
-    if not runtime.ready:
-        return MailTransportRuntime(
-            **{
-                **runtime.__dict__,
-                "diagnostic_code": "database_transport_incomplete",
-            }
-        )
-    return runtime
+    if runtime.ready:
+        return runtime
+    return MailTransportRuntime(
+        **{
+            **runtime.__dict__,
+            "diagnostic_code": "database_transport_incomplete",
+        }
+    )
 
 
 async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
     runtime = await get_mail_transport_runtime(session)
+    provider = mail_provider_for_runtime(runtime)
+    capabilities = provider.capabilities
+
     username_hint = None
     if runtime.SMTP_USERNAME:
         value = runtime.SMTP_USERNAME
@@ -314,13 +433,11 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
             if len(value) <= 4
             else f"{value[:2]}{'•' * max(4, len(value) - 4)}{value[-2:]}"
         )
+
     unsubscribe_configured = bool(
         lifecycle_config.MAIL_UNSUBSCRIBE_BASE_URL
         and len(lifecycle_config.MAIL_UNSUBSCRIBE_HMAC_KEY) >= 32
     )
-    provider = mail_provider_for_runtime(runtime)
-    capabilities = provider.capabilities
-    marketing_transport_supported = capabilities.marketing
 
     return {
         "provider": runtime.MAIL_PROVIDER,
@@ -334,27 +451,27 @@ async def mail_transport_payload(session: AsyncSession) -> dict[str, Any]:
             runtime.ready
             and runtime.MAIL_DELIVERY_ENABLED
             and unsubscribe_configured
-            and marketing_transport_supported
+            and capabilities.marketing
         ),
-        "marketing_transport_supported": marketing_transport_supported,
+        "marketing_transport_supported": capabilities.marketing,
         "unsubscribe_configured": unsubscribe_configured,
         "source": runtime.source,
         "host": runtime.SMTP_HOST,
         "port": runtime.SMTP_PORT,
-        "api_base_url": runtime.RUSENDER_API_BASE_URL,
-        "key_id": runtime.RUSENDER_KEY_ID,
+        "api_base_url": runtime.API_BASE_URL,
+        "key_id": runtime.API_KEY_ID,
         "from_email": runtime.SMTP_FROM_EMAIL,
         "from_name": runtime.SMTP_FROM_NAME,
         "reply_to_email": runtime.SMTP_REPLY_TO_EMAIL,
         "starttls": runtime.SMTP_STARTTLS,
         "timeout_seconds": (
-            runtime.RUSENDER_TIMEOUT_SECONDS
+            runtime.API_TIMEOUT_SECONDS
             if capabilities.transport_kind == "https_api"
             else runtime.SMTP_TIMEOUT_SECONDS
         ),
         "credentials_configured": runtime.credentials_configured,
         "credential_fingerprint": (
-            _secret_fingerprint(runtime.RUSENDER_API_TOKEN)
+            _secret_fingerprint(runtime.API_TOKEN)
             if capabilities.transport_kind == "https_api"
             else None
         ),
@@ -444,13 +561,12 @@ async def upsert_mail_transport(
     existing: dict[str, Any] = {}
     if row is None:
         row = MailProviderConfig(provider=provider)
+        row.port = int(provider_class.default_port)
         session.add(row)
         await session.flush()
     elif str(row.provider).lower() == provider:
         existing = _read_secrets(row)
     else:
-        # При смене провайдера старые реквизиты намеренно сбрасываются:
-        # секреты одного адаптера нельзя повторно использовать в другом.
         row.provider = provider
         row.encrypted_secrets = None
         row.host = None
@@ -514,10 +630,8 @@ async def upsert_mail_transport(
                     existing["password"] = password
 
         if bool(existing.get("username")) != bool(existing.get("password")):
-            raise ValueError("SMTP username и password должны быть настроены вместе")
+            raise ValueError("SMTP логин и пароль должны быть настроены вместе")
     elif capabilities.transport_kind == "https_api":
-        # HTTPS endpoint задаётся самим адаптером и не редактируется из браузера,
-        # чтобы API-токен нельзя было перенаправить на произвольный узел.
         api_base_url = str(provider_class.default_api_base_url or "").strip()
         if not api_base_url:
             raise ValueError("HTTPS API провайдера не содержит доверенного endpoint")
@@ -551,40 +665,47 @@ async def upsert_mail_transport(
 
     runtime = MailTransportRuntime(
         MAIL_PROVIDER=provider,
-        MAIL_DELIVERY_ENABLED=bool(row.enabled),
+        MAIL_DELIVERY_ENABLED=bool(row.enabled) if capabilities.marketing else False,
         SMTP_HOST=str(row.host or "") if uses_smtp else "",
-        SMTP_PORT=int(row.port),
-        SMTP_USERNAME=str(existing.get("username") or "") or None,
-        SMTP_PASSWORD=str(existing.get("password") or "") or None,
+        SMTP_PORT=int(row.port or provider_class.default_port),
+        SMTP_USERNAME=(str(existing.get("username") or "") or None) if uses_smtp else None,
+        SMTP_PASSWORD=(str(existing.get("password") or "") or None) if uses_smtp else None,
         SMTP_FROM_EMAIL=str(row.from_email or ""),
         SMTP_FROM_NAME=str(row.from_name or "WB Insight"),
-        SMTP_REPLY_TO_EMAIL=str(row.reply_to_email or "") or None,
+        SMTP_REPLY_TO_EMAIL=(str(row.reply_to_email or "") or None) if uses_smtp else None,
         SMTP_STARTTLS=bool(row.starttls),
         SMTP_TIMEOUT_SECONDS=float(row.timeout_seconds),
-        RUSENDER_API_BASE_URL=(
-            str(row.host or provider_class.default_api_base_url or "")
+        API_BASE_URL=(str(row.host or "") if capabilities.transport_kind == "https_api" else ""),
+        API_KEY_ID=(
+            str(existing.get("key_id") or "") or None
             if capabilities.transport_kind == "https_api"
-            else _DEFAULT_RUSENDER_API_BASE_URL
+            else None
         ),
-        RUSENDER_KEY_ID=str(existing.get("key_id") or "") or None,
-        RUSENDER_API_TOKEN=str(existing.get("api_token") or "") or None,
-        RUSENDER_TIMEOUT_SECONDS=float(row.timeout_seconds),
+        API_TOKEN=(
+            str(existing.get("api_token") or "") or None
+            if capabilities.transport_kind == "https_api"
+            else None
+        ),
+        API_TIMEOUT_SECONDS=float(row.timeout_seconds),
         source="database",
     )
+
     if not runtime.ready:
         if capabilities.transport_kind == "https_api":
-            raise ValueError(
-                "Заполните ID ключа, API-токен и email отправителя почтового провайдера"
-            )
+            required = "API-токен и email отправителя"
+            if provider_class.requires_key_id:
+                required = "ID ключа, API-токен и email отправителя"
+            raise ValueError(f"Заполните {required} почтового провайдера")
         raise ValueError(
             "Заполните SMTP host, email отправителя и согласованную пару логин/пароль"
         )
+
     if config.IS_PRODUCTION and uses_smtp and not runtime.SMTP_STARTTLS:
         raise ValueError("В production SMTP должен использовать STARTTLS")
     if (
         config.IS_PRODUCTION
         and capabilities.transport_kind == "https_api"
-        and not runtime.RUSENDER_API_BASE_URL.startswith("https://")
+        and not runtime.API_BASE_URL.startswith("https://")
     ):
         raise ValueError("В production почтовый API должен использовать HTTPS")
 
