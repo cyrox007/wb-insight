@@ -33,11 +33,11 @@ def _safe_provider_error_code(response: httpx.Response) -> str | None:
 
 def _rusender_error_message(code: str) -> str:
     messages = {
-        "rusender_not_configured": "Настройки RuSender неполные. Проверьте Key ID, API-токен и адрес отправителя.",
+        "rusender_not_configured": "Настройки RuSender неполные. Проверьте ID ключа, API-токен и адрес отправителя.",
         "rusender_http_401": "RuSender отклонил API-токен. Проверьте или перевыпустите токен.",
         "rusender_http_402": "RuSender сообщает, что лимит или баланс отправок исчерпан.",
         "rusender_http_403": "RuSender запретил отправку. Проверьте права ключа и разрешение на отправку писем.",
-        "rusender_http_404": "RuSender не нашёл ключ отправки или домен отправителя. Проверьте Key ID и адрес From.",
+        "rusender_http_404": "RuSender не нашёл ключ отправки или домен отправителя. Проверьте ID ключа и адрес From.",
         "rusender_http_422": "RuSender не может доставить письмо на указанный адрес.",
         "rusender_http_429": "RuSender временно ограничил частоту запросов. Повторите отправку позже.",
         "rusender_http_503": "RuSender временно недоступен. Повторите отправку позже.",
@@ -45,6 +45,13 @@ def _rusender_error_message(code: str) -> str:
         "rusender_network_error": "Не удалось подключиться к RuSender по HTTPS.",
     }
     return messages.get(code, "RuSender не принял письмо. Проверьте настройки транспорта.")
+
+
+def _runtime_value(config, generic_name: str, legacy_name: str, default=None):
+    value = getattr(config, generic_name, None)
+    if value not in (None, ""):
+        return value
+    return getattr(config, legacy_name, default)
 
 
 class RuSenderAPIError(MailProviderError):
@@ -77,7 +84,12 @@ class RuSenderMailProvider:
     configuration_kind = "https_api_key"
     default_port = 443
     default_api_base_url = "https://api.rusender.ru"
+    requires_key_id = True
     key_id_numeric = True
+    environment_api_base_url_attr = "RUSENDER_API_BASE_URL"
+    environment_key_id_attr = "RUSENDER_KEY_ID"
+    environment_api_token_attr = "RUSENDER_API_TOKEN"
+    environment_timeout_attr = "RUSENDER_TIMEOUT_SECONDS"
     capabilities = MailProviderCapabilities(
         transport_kind="https_api",
         transactional=True,
@@ -111,9 +123,30 @@ class RuSenderMailProvider:
         headers: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> MailDeliveryReceipt:
-        base_url = str(self._config.RUSENDER_API_BASE_URL or "").rstrip("/")
-        key_id = str(self._config.RUSENDER_KEY_ID or "").strip()
-        token = str(self._config.RUSENDER_API_TOKEN or "").strip()
+        base_url = str(
+            _runtime_value(
+                self._config,
+                "API_BASE_URL",
+                "RUSENDER_API_BASE_URL",
+                self.default_api_base_url,
+            )
+            or ""
+        ).rstrip("/")
+        key_id = str(
+            _runtime_value(self._config, "API_KEY_ID", "RUSENDER_KEY_ID", "") or ""
+        ).strip()
+        token = str(
+            _runtime_value(self._config, "API_TOKEN", "RUSENDER_API_TOKEN", "") or ""
+        ).strip()
+        timeout = float(
+            _runtime_value(
+                self._config,
+                "API_TIMEOUT_SECONDS",
+                "RUSENDER_TIMEOUT_SECONDS",
+                10.0,
+            )
+            or 10.0
+        )
         if not base_url or not key_id or not token:
             raise RuSenderAPIError("rusender_not_configured", retryable=False)
 
@@ -159,7 +192,7 @@ class RuSenderMailProvider:
 
         url = f"{base_url}/api/v1/external-mails/send/{key_id}"
         try:
-            async with httpx.AsyncClient(timeout=float(self._config.RUSENDER_TIMEOUT_SECONDS)) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.post(
                     url,
                     headers={
