@@ -17,6 +17,7 @@
 ## Для разработчика
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — компоненты, потоки данных и границы ответственности.
+- [`MAIL_PROVIDERS.md`](MAIL_PROVIDERS.md) — общий контракт почтовых адаптеров, HTTPS-доставка через порт 443 и правила добавления нового провайдера.
 - [`API_REFERENCE.md`](API_REFERENCE.md) — группы API и правила использования OpenAPI.
 - [`DEVELOPMENT.md`](DEVELOPMENT.md) — workflow разработки, миграции, тесты и CI.
 - [`SECURITY.md`](SECURITY.md) — модель угроз, сессии, секреты, credentials и security gates.
