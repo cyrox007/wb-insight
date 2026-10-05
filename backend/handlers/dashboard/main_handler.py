@@ -16,11 +16,8 @@ from services.dashboard.account_scope import (
 )
 from services.dashboard.finance_metrics import (
     get_abc_analysis,
-    get_base_report_stats,
     get_category_data,
     get_chart_data,
-    get_returns_report_stats,
-    get_sales_report_stats,
     get_size_chart,
     get_warehouse_data,
 )
@@ -63,6 +60,25 @@ def _moscow_today() -> date:
     return datetime.now(MOSCOW_TZ).date()
 
 
+def _profit_metadata(unit_economy: dict) -> dict:
+    complete = bool(unit_economy.get("profit_complete", True))
+    coverage = float(unit_economy.get("cost_coverage_percent", 100) or 0)
+    missing = int(unit_economy.get("cost_missing_operations", 0) or 0)
+    return {
+        "complete": complete,
+        "cost_coverage_percent": round(coverage, 2),
+        "missing_cost_operations": missing,
+        "warning": (
+            None
+            if complete
+            else (
+                "Прибыль неполная: для части операций отсутствует себестоимость "
+                "на дату операции."
+            )
+        ),
+    }
+
+
 async def _calculate_stats(
     session: AsyncSession,
     user_id: UUID,
@@ -72,15 +88,6 @@ async def _calculate_stats(
     *,
     today: date | None = None,
 ) -> dict:
-    base_result = await get_base_report_stats(
-        session, user_id, start_date, end_date, scope
-    )
-    sales_result = await get_sales_report_stats(
-        session, user_id, start_date, end_date, scope
-    )
-    returns_result = await get_returns_report_stats(
-        session, user_id, start_date, end_date, scope
-    )
     unit_economy = await get_dashboard_unit_economy_scoped(
         session, user_id, start_date, end_date, scope
     )
@@ -91,29 +98,18 @@ async def _calculate_stats(
 
     ordered_amount = orders.amount
     ordered_units = orders.count
-    sales_amount = float(getattr(sales_result, "sales_amount", 0) or 0)
-    sales_units = int(getattr(sales_result, "sales_units", 0) or 0)
-    returns_amount = float(getattr(returns_result, "returns_amount", 0) or 0)
-    to_pay = float(getattr(base_result, "to_pay", 0) or 0)
-
-    revenue = sales_amount - returns_amount
-    profit = float(unit_economy["total_profit"] or 0)
-    marginality = float(unit_economy["avg_margin_percent"] or 0)
-    profitability = profit / to_pay * 100 if to_pay > 0 else 0.0
-    ddr = float(unit_economy["avg_drr_percent"] or 0)
+    revenue = float(unit_economy.get("sales_with_spp", 0) or 0)
+    sales_units = int(unit_economy.get("sales_quantity", 0) or 0)
+    returns_amount = float(unit_economy.get("returns_amount", 0) or 0)
+    to_pay = float(unit_economy.get("ppvz_for_pay", 0) or 0)
+    profit = float(unit_economy.get("total_profit", 0) or 0)
+    marginality = float(unit_economy.get("avg_margin_percent", 0) or 0)
+    profitability = float(unit_economy.get("roi_percent", 0) or 0)
+    drr = float(unit_economy.get("avg_drr_percent", 0) or 0)
     buyout_rate = sales_units / ordered_units * 100 if ordered_units else 0.0
     avg_price = ordered_amount / ordered_units if ordered_units else 0.0
 
     prev_start_date, prev_end_date = previous_period(start_date, end_date)
-    prev_base_result = await get_base_report_stats(
-        session, user_id, prev_start_date, prev_end_date, scope
-    )
-    prev_sales_result = await get_sales_report_stats(
-        session, user_id, prev_start_date, prev_end_date, scope
-    )
-    prev_returns_result = await get_returns_report_stats(
-        session, user_id, prev_start_date, prev_end_date, scope
-    )
     prev_unit_economy = await get_dashboard_unit_economy_scoped(
         session, user_id, prev_start_date, prev_end_date, scope
     )
@@ -123,12 +119,10 @@ async def _calculate_stats(
 
     prev_ordered_amount = prev_orders.amount
     prev_ordered_units = prev_orders.count
-    prev_sales_units = int(getattr(prev_sales_result, "sales_units", 0) or 0)
-    prev_revenue = float(getattr(prev_sales_result, "sales_amount", 0) or 0) - float(
-        getattr(prev_returns_result, "returns_amount", 0) or 0
-    )
-    prev_to_pay = float(getattr(prev_base_result, "to_pay", 0) or 0)
-    prev_profit = float(prev_unit_economy["total_profit"] or 0)
+    prev_sales_units = int(prev_unit_economy.get("sales_quantity", 0) or 0)
+    prev_revenue = float(prev_unit_economy.get("sales_with_spp", 0) or 0)
+    prev_to_pay = float(prev_unit_economy.get("ppvz_for_pay", 0) or 0)
+    prev_profit = float(prev_unit_economy.get("total_profit", 0) or 0)
     prev_buyout_rate = (
         prev_sales_units / prev_ordered_units * 100 if prev_ordered_units else 0.0
     )
@@ -168,10 +162,7 @@ async def _calculate_stats(
     # независимо от произвольного периода сравнения, выбранного в дашборде.
     today = today or _moscow_today()
     month_start = normalize_month(today)
-    month_sales = await get_sales_report_stats(
-        session, user_id, month_start, today, scope
-    )
-    month_returns = await get_returns_report_stats(
+    month_unit_economy = await get_dashboard_unit_economy_scoped(
         session, user_id, month_start, today, scope
     )
     month_orders = await get_order_totals(
@@ -180,9 +171,7 @@ async def _calculate_stats(
     plan_summary = await get_monthly_plan_summary(
         session, user_id, month_start, scope
     )
-    fact_current_month = float(getattr(month_sales, "sales_amount", 0) or 0) - float(
-        getattr(month_returns, "returns_amount", 0) or 0
-    )
+    fact_current_month = float(month_unit_economy.get("sales_with_spp", 0) or 0)
     plan_metrics = calculate_monthly_plan_metrics(
         fact_revenue=fact_current_month,
         revenue_target=plan_summary.revenue_target,
@@ -191,6 +180,7 @@ async def _calculate_stats(
         today=today,
     )
 
+    profit_metadata = _profit_metadata(unit_economy)
     return {
         "stats": {
             "ordered_amount": {
@@ -222,6 +212,7 @@ async def _calculate_stats(
                 "value": round(profit, 2),
                 "change_percent": profit_change_percent,
                 "change_abs": profit_change_abs,
+                **profit_metadata,
             },
             "buyout_rate": {
                 "value": round(buyout_rate, 1),
@@ -235,7 +226,7 @@ async def _calculate_stats(
             },
             "marginality": {"value": round(marginality, 1)},
             "profitability": {"value": round(profitability, 1)},
-            "ddr": {"value": round(ddr, 2)},
+            "ddr": {"value": round(drr, 2)},
             "fact_current_month": {"value": plan_metrics.fact_revenue},
             "plan_current_month": {
                 "value": plan_metrics.revenue_target,
@@ -261,15 +252,22 @@ async def _calculate_stats(
             "orderedTotalCount": ordered_units,
             "orderedTotalAmount": round(ordered_amount, 2),
             "boughtTotalCount": sales_units,
-            "boughtTotalAmount": round(sales_amount, 2),
+            "boughtTotalAmount": round(revenue, 2),
+            "returnsAmount": round(returns_amount, 2),
             "buyoutPercent": round(buyout_rate, 2),
             "avgOrderValue": round(avg_price, 2),
             "marginality": round(marginality, 1),
-            "expenseRatio": round(ddr, 1),
+            "expenseRatio": round(drr, 1),
             "profit": round(profit, 2),
+            "profitComplete": profit_metadata["complete"],
+            "costCoveragePercent": profit_metadata["cost_coverage_percent"],
+            "missingCostOperations": profit_metadata["missing_cost_operations"],
             "revenue": round(revenue, 2),
-            "logistics": round(float(getattr(base_result, "logistics", 0) or 0), 2),
-            "storage": round(float(getattr(base_result, "storage_fee", 0) or 0), 2),
+            "logistics": round(float(unit_economy.get("logistics", 0) or 0), 2),
+            "storage": round(float(unit_economy.get("storage", 0) or 0), 2),
+            "unallocatedWbExpenses": round(
+                float(unit_economy.get("unallocated_wb_expenses", 0) or 0), 2
+            ),
         },
     }
 
