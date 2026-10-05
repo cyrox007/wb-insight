@@ -184,6 +184,15 @@ onMounted(loadData)
     />
 
     <template v-else>
+      <div v-if="unityData?.profit_complete === false" class="status-banner" role="status">
+        <strong>Прибыль рассчитана не полностью.</strong>
+        <span>
+          {{ unityData.profit_warning || 'Для части операций отсутствует себестоимость на дату операции.' }}
+          Покрытие: {{ formatMetric(unityData.cost_coverage_percent, 'percent') }};
+          без себестоимости: {{ formatNumber(unityData.cost_missing_operations, 0) }} операций.
+        </span>
+      </div>
+
       <div class="summary-grid">
         <article v-for="item in summaryKpis" :key="item.label" class="summary-card">
           <span>{{ item.label }}</span>
@@ -303,6 +312,7 @@ onMounted(loadData)
 }
 
 .status-banner {
+  margin-bottom: 12px;
   padding: 14px 15px;
   display: flex;
   align-items: center;
