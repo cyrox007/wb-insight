@@ -120,7 +120,7 @@ def test_ads_semantics_keep_attributed_and_total_orders_separate():
 
 
 @pytest.mark.asyncio
-async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatch):
+async def test_main_dashboard_uses_canonical_finance_for_headline_metrics(monkeypatch):
     current_start = date(2026, 9, 1)
     current_end = date(2026, 9, 10)
     today = date(2026, 9, 14)
@@ -140,39 +140,70 @@ async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatc
         assert resolved is scope
         return resolved
 
-    async def fake_base(*args, **kwargs):
-        scope_from_args(args, kwargs)
-        return SimpleNamespace(to_pay=600, logistics=30, storage_fee=10)
-
-    async def fake_sales(*args, **kwargs):
-        scope_from_args(args, kwargs)
-        start = kwargs.get("start_date", args[2] if len(args) > 2 else None)
-        current = start == current_start
-        return SimpleNamespace(
-            sales_amount=800 if current else 350,
-            sales_units=8 if current else 4,
-        )
-
-    async def fake_returns(*args, **kwargs):
-        scope_from_args(args, kwargs)
-        start = kwargs.get("start_date", args[2] if len(args) > 2 else None)
-        return SimpleNamespace(returns_amount=100 if start == current_start else 50)
-
     async def fake_unit(*args, **kwargs):
         scope_from_args(args, kwargs)
         start = kwargs.get("start_date", args[2] if len(args) > 2 else None)
+        end = kwargs.get("end_date", args[3] if len(args) > 3 else None)
+        if start == current_start and end == current_end:
+            return {
+                "sales_with_spp": 700,
+                "sales_quantity": 8,
+                "returns_amount": 100,
+                "ppvz_for_pay": 600,
+                "total_profit": 200,
+                "avg_margin_percent": 20,
+                "roi_percent": 25,
+                "avg_drr_percent": 10,
+                "logistics": 30,
+                "storage": 10,
+                "unallocated_wb_expenses": 15,
+                "profit_complete": False,
+                "cost_coverage_percent": 75,
+                "cost_missing_operations": 2,
+            }
+        if start == date(2026, 8, 22):
+            return {
+                "sales_with_spp": 300,
+                "sales_quantity": 4,
+                "returns_amount": 50,
+                "ppvz_for_pay": 250,
+                "total_profit": 100,
+                "avg_margin_percent": 20,
+                "roi_percent": 25,
+                "avg_drr_percent": 10,
+                "logistics": 20,
+                "storage": 5,
+                "unallocated_wb_expenses": 0,
+                "profit_complete": True,
+                "cost_coverage_percent": 100,
+                "cost_missing_operations": 0,
+            }
         return {
-            "total_profit": 200 if start == current_start else 100,
+            "sales_with_spp": 900,
+            "sales_quantity": 10,
+            "returns_amount": 120,
+            "ppvz_for_pay": 750,
+            "total_profit": 250,
             "avg_margin_percent": 20,
+            "roi_percent": 25,
             "avg_drr_percent": 10,
+            "logistics": 40,
+            "storage": 12,
+            "unallocated_wb_expenses": 20,
+            "profit_complete": True,
+            "cost_coverage_percent": 100,
+            "cost_missing_operations": 0,
         }
 
     async def fake_orders(*args, **kwargs):
         scope_from_args(args, kwargs)
         start = kwargs.get("start_date", args[2] if len(args) > 2 else None)
-        if start == current_start:
+        end = kwargs.get("end_date", args[3] if len(args) > 3 else None)
+        if start == current_start and end == current_end:
             return OrderTotals(count=10, amount=1000, canceled_count=1)
-        return OrderTotals(count=5, amount=400, canceled_count=1)
+        if start == date(2026, 8, 22):
+            return OrderTotals(count=5, amount=400, canceled_count=1)
+        return OrderTotals(count=12, amount=1200, canceled_count=1)
 
     async def fake_ads(*args, **kwargs):
         scope_from_args(args, kwargs)
@@ -198,9 +229,6 @@ async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatc
             complete=True,
         )
 
-    monkeypatch.setattr(main_handler, "get_base_report_stats", fake_base)
-    monkeypatch.setattr(main_handler, "get_sales_report_stats", fake_sales)
-    monkeypatch.setattr(main_handler, "get_returns_report_stats", fake_returns)
     monkeypatch.setattr(
         main_handler, "get_dashboard_unit_economy_scoped", fake_unit
     )
@@ -220,12 +248,25 @@ async def test_main_dashboard_uses_one_account_scope_for_every_metric(monkeypatc
     assert result["stats"]["ordered_units"]["value"] == 10
     assert result["stats"]["ordered_amount"]["value"] == 1000
     assert result["stats"]["avg_price"]["value"] == 100
-    assert result["base_stats"]["orderedTotalCount"] == 10
+    assert result["stats"]["revenue"]["value"] == 700
+    assert result["stats"]["sold_units"]["value"] == 8
+    assert result["stats"]["to_pay"]["value"] == 600
+    assert result["stats"]["profit"]["value"] == 200
+    assert result["stats"]["profit"]["complete"] is False
+    assert result["stats"]["profit"]["cost_coverage_percent"] == 75
+    assert result["stats"]["profit"]["missing_cost_operations"] == 2
+    assert result["stats"]["marginality"]["value"] == 20
+    assert result["stats"]["profitability"]["value"] == 25
+    assert result["stats"]["ddr"]["value"] == 10
+    assert result["base_stats"]["revenue"] == 700
+    assert result["base_stats"]["logistics"] == 30
+    assert result["base_stats"]["storage"] == 10
+    assert result["base_stats"]["unallocatedWbExpenses"] == 15
     assert result["base_stats"]["adViews"] == 1000
     assert result["base_stats"]["clicks"] == 100
     assert result["base_stats"]["clicksPercentage"] == 10
     assert result["base_stats"]["addToCartPercentage"] == 30
-    assert result["stats"]["fact_current_month"]["value"] == 700
+    assert result["stats"]["fact_current_month"]["value"] == 900
     assert result["stats"]["plan_current_month"]["value"] == 3000
     assert result["stats"]["plan_current_month"]["complete"] is True
     assert seen_scopes
