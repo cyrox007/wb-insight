@@ -32,10 +32,14 @@ async def get_dashboard_unit_economy_scoped(
             "logistics": 0.0,
             "storage": 0.0,
             "total_cost": 0.0,
+            "total_expenses": 0.0,
             "other_expenses": 0.0,
             "total_profit": 0.0,
             "avg_margin_percent": 0.0,
+            "roi_percent": 0.0,
             "avg_drr_percent": 0.0,
+            "unallocated_wb_expenses": 0.0,
+            "unallocated_financial_adjustments": 0.0,
             "profit_complete": result.profit_complete,
             "cost_coverage_percent": result.cost_coverage_percent,
             "cost_missing_operations": result.cost_missing_operations,
@@ -53,10 +57,18 @@ async def get_dashboard_unit_economy_scoped(
         "logistics": float(summary.get("delivery_rub", 0) or 0),
         "storage": float(summary.get("storage_fee", 0) or 0),
         "total_cost": float(summary.get("product_cost", 0) or 0),
+        "total_expenses": float(summary.get("total_costs", 0) or 0),
         "other_expenses": float(summary.get("other_expenses", 0) or 0),
         "total_profit": float(summary.get("profit", 0) or 0),
         "avg_margin_percent": float(summary.get("margin", 0) or 0),
+        "roi_percent": float(summary.get("roi", 0) or 0),
         "avg_drr_percent": float(summary.get("drr", 0) or 0),
+        "unallocated_wb_expenses": float(
+            summary.get("unallocated_wb_expenses", 0) or 0
+        ),
+        "unallocated_financial_adjustments": float(
+            summary.get("unallocated_financial_adjustments", 0) or 0
+        ),
         "profit_complete": result.profit_complete,
         "cost_coverage_percent": result.cost_coverage_percent,
         "cost_missing_operations": result.cost_missing_operations,
