@@ -67,6 +67,19 @@
       <span>{{ syncProgressText }}</span>
     </div>
 
+    <div
+      v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && !isInitialSync && stats.profit?.complete === false"
+      class="status-banner status-banner--error"
+      role="status"
+    >
+      <strong>Прибыль рассчитана не полностью.</strong>
+      <span>
+        {{ stats.profit?.warning || 'Для части операций отсутствует себестоимость на дату операции.' }}
+        Покрытие себестоимостью: {{ formatMetric(stats.profit?.cost_coverage_percent, 'percent') }};
+        без себестоимости: {{ formatMetric(stats.profit?.missing_cost_operations, 'number') }} операций.
+      </span>
+    </div>
+
     <div v-if="!errorMessage && !accountMissing && (!isLoading || hasLoadedOnce) && !isInitialSync" class="kpi-grid" aria-label="Ключевые показатели">
       <article v-for="item in primaryKpis" :key="item.key" class="kpi-card">
         <div class="kpi-card__topline">
@@ -338,7 +351,9 @@ const primaryKpis = computed(() => [
     value: stats.value.profit?.value,
     change: stats.value.profit?.change_percent ?? null,
     format: 'money',
-    caption: 'После себестоимости и учтённых расходов',
+    caption: stats.value.profit?.complete === false
+      ? 'Оценка: себестоимость заполнена не для всех операций'
+      : 'После себестоимости и учтённых расходов',
   },
   {
     key: 'to_pay',

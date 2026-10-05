@@ -13,19 +13,16 @@ from services.dashboard.account_scope import (
     DashboardAccountUnavailableError,
     resolve_dashboard_scope,
 )
-from services.dashboard.semantic_metrics import (
-    get_advertising_spend_by_nm,
-    is_auth_sync_error,
+from services.dashboard.financial_semantics import (
+    FinancialMetricsResult,
+    calculate_financial_metrics_scoped,
 )
-from services.dashboard.unit_economy_metrics import UnitEconomyMetricsService
-from services.dashboard.unit_report_scope import get_reports_with_costs_scoped
-from services.manual_expense_service import get_manual_expense_totals
-from services.user_service import get_user_tax_rate
+from services.dashboard.semantic_metrics import is_auth_sync_error
 from services.user_sync_state_service import get_user_sync_states
 from utils.responce_helps import response_error, response_success
 
 
-router = APIRouter(prefix="/dashboard/unity", tags=["Unit"])
+router = APIRouter(prefix="/dashboard/unity", tags=["Юнит-экономика"])
 
 
 @router.get("/", dependencies=[Depends(auth_middle)])
@@ -65,14 +62,14 @@ async def get_unit_economy(
             code="NO_VALID_TOKENS",
         )
 
-    reports_with_costs = await get_reports_with_costs_scoped(
+    financial = await calculate_financial_metrics_scoped(
         db_session,
         user_id,
         start_date,
         end_date,
         scope,
     )
-    if not reports_with_costs:
+    if financial.metrics.empty:
         has_success = any(state.last_success_at is not None for state in scoped_states)
         if not has_success:
             return response_error(
@@ -87,54 +84,11 @@ async def get_unit_economy(
             message="Нет данных за выбранный период. Попробуйте изменить диапазон дат.",
         )
 
-    report_data = []
-    for report, cost in reports_with_costs:
-        report_data.append(
-            {
-                "nm_id": report.nm_id,
-                "supplier_oper_name": report.supplier_oper_name,
-                "doc_type_name": report.doc_type_name,
-                "quantity": report.quantity,
-                "retail_price_with_disc_rub": report.retail_price_with_disc_rub,
-                "retail_amount": report.retail_amount,
-                "delivery_amount": report.delivery_amount,
-                "ppvz_kvw_prc_base": report.ppvz_kvw_prc_base,
-                "ppvz_sales_commission": report.ppvz_sales_commission,
-                "ppvz_for_pay": report.ppvz_for_pay,
-                "delivery_rub": report.delivery_rub,
-                "acquiring_fee": report.acquiring_fee,
-                "storage_fee": report.storage_fee,
-                "penalty": report.penalty,
-                "deduction": report.deduction,
-                "acceptance": report.acceptance,
-                "ppvz_vw_nds": report.ppvz_vw_nds,
-                "product_cost": cost.cost_price if cost else 0,
-            }
-        )
-
-    advertising_costs_map = await get_advertising_spend_by_nm(
-        db_session,
-        user_id,
-        start_date,
-        end_date,
-        scope,
+    return _format_response(
+        financial.metrics,
+        scope.selected_token_id,
+        financial=financial,
     )
-    manual_expenses_total, manual_expenses_map = await get_manual_expense_totals(
-        db_session,
-        user_id,
-        start_date,
-        end_date,
-        scope,
-    )
-    tax_rate = await get_user_tax_rate(db_session, user_id)
-    metrics_service = UnitEconomyMetricsService(tax_rate=tax_rate)
-    result_df = metrics_service.calculate_all_metrics(
-        pd.DataFrame(report_data),
-        advertising_costs_map=advertising_costs_map,
-        manual_expenses_map=manual_expenses_map,
-        manual_expenses_total=manual_expenses_total,
-    )
-    return _format_response(result_df, scope.selected_token_id)
 
 
 def _clean_number(value: Any, default: float = 0.0):
@@ -183,12 +137,19 @@ def _serialize_table_row(row: dict[str, Any]) -> dict[str, Any]:
         "margin": _clean_number(row.get("margin")),
         "profitability": _clean_number(row.get("roi")),
         "avg_sale_price": _clean_number(row.get("avg_selling_price")),
+        "financial_adjustments": _clean_number(row.get("financial_adjustments")),
+        "unallocated_wb_expenses": _clean_number(row.get("unallocated_wb_expenses")),
+        "unallocated_financial_adjustments": _clean_number(
+            row.get("unallocated_financial_adjustments")
+        ),
     }
 
 
 def _format_response(
     df: pd.DataFrame,
     selected_token_id: UUID | None = None,
+    *,
+    financial: FinancialMetricsResult | None = None,
 ) -> Dict[str, Any]:
     selected = str(selected_token_id) if selected_token_id is not None else None
     if df.empty:
@@ -200,8 +161,13 @@ def _format_response(
         for row in df.iloc[1:].replace([np.nan], [None]).to_dict(orient="records")
     ]
 
+    profit_complete = financial.profit_complete if financial else True
+    cost_coverage_percent = financial.cost_coverage_percent if financial else 100.0
+    cost_missing_operations = financial.cost_missing_operations if financial else 0
     summary_data = {
         "sales_with_spp": summary["sales_with_spp"],
+        "sales_without_spp": summary["sales_without_spp"],
+        "returns_amount": summary["returns_amount"],
         "wb_commission_percent": summary["wb_commission_percent"],
         "wb_commission_amount": summary["wb_commission_amount"],
         "to_pay_seller": summary["to_pay_seller"],
@@ -220,6 +186,22 @@ def _format_response(
         "profitability": summary["profitability"],
         "profit_per_unit": summary["profit_per_unit"],
         "profit": summary["profit"],
+        "financial_adjustments": summary["financial_adjustments"],
+        "unallocated_wb_expenses": summary["unallocated_wb_expenses"],
+        "unallocated_financial_adjustments": summary[
+            "unallocated_financial_adjustments"
+        ],
+        "profit_complete": profit_complete,
+        "cost_coverage_percent": cost_coverage_percent,
+        "cost_missing_operations": cost_missing_operations,
+        "profit_warning": (
+            None
+            if profit_complete
+            else (
+                "Прибыль неполная: для части операций отсутствует себестоимость "
+                "на дату операции."
+            )
+        ),
     }
     return response_success(
         data={
