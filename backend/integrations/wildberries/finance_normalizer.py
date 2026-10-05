@@ -85,8 +85,13 @@ def normalize_finance_row(item: dict[str, Any], user_id: UUID, account_id: UUID)
     rr_date = date_value(pick(item, "rrDate", "rrDt", "rr_dt"))
     operation = text(pick(item, "sellerOperName", "supplierOperName", "supplier_oper_name"))
 
-    if not rrd_id or not nm_id or rr_date is None or not operation:
+    if not rrd_id or rr_date is None or not operation:
         raise ValueError("В финансовой строке Wildberries отсутствуют обязательные идентификаторы")
+
+    # Некоторые расходы и корректировки WB относятся ко всему кабинету и не имеют
+    # артикула. Такие строки нельзя отбрасывать: внутренний nm_id=0 означает
+    # нераспределённую финансовую операцию и участвует только в общем итоге.
+    normalized_nm_id = nm_id if nm_id and nm_id > 0 else 0
 
     return {
         "user_id": user_id,
@@ -97,7 +102,7 @@ def normalize_finance_row(item: dict[str, Any], user_id: UUID, account_id: UUID)
         "date_from": date_value(pick(item, "dateFrom", "date_from")),
         "date_to": date_value(pick(item, "dateTo", "date_to")),
         "create_dt": datetime_value(pick(item, "createDate", "createDt", "create_dt")),
-        "nm_id": nm_id,
+        "nm_id": normalized_nm_id,
         "rrd_id": rrd_id,
         "gi_id": optional_int(pick(item, "giId", "gi_id")),
         "shk_id": optional_int(pick(item, "shkId", "shk_id")),
