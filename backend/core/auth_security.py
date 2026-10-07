@@ -10,21 +10,14 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from core.logger import setup_logger
 from services.auth_rate_limit_service import (
     AuthRateLimitUnavailable,
     RateLimitDecision,
     RateLimitRule,
     check_auth_rate_limit,
 )
-from services.user_identity import (
-    normalize_email,
-    normalize_inn,
-    normalize_phone,
-)
-
-
-logger = setup_logger(__name__)
+from services.user_identity import normalize_email, normalize_inn, normalize_phone
+from utils.responce_helps import response_error, response_success
 
 
 def _positive_int(name: str, default: int) -> int:
@@ -83,41 +76,39 @@ _CHECK_ENDPOINTS = {
 }
 
 
-def _payload_response(
+def _error_response(
     *,
     http_status: int,
-    payload_status: str,
-    code: str | None = None,
-    message: str | None = None,
-    **extra,
+    code: str,
+    message: str,
+    details: dict | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
-    payload = {"status": payload_status}
-    if code:
-        payload["code"] = code
-    if message:
-        payload["message"] = message
-    payload.update(extra)
-    return JSONResponse(status_code=http_status, content=payload)
+    return JSONResponse(
+        status_code=http_status,
+        headers=headers,
+        content=response_error(
+            code=code,
+            message=message,
+            details=details or {},
+        ),
+    )
 
 
 def _rate_limited(decision: RateLimitDecision) -> JSONResponse:
     retry_after = max(int(decision.retry_after_seconds), 1)
-    return JSONResponse(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+    return _error_response(
+        http_status=status.HTTP_429_TOO_MANY_REQUESTS,
+        code="AUTH_RATE_LIMITED",
+        message="Слишком много попыток. Повторите позже.",
+        details={"retry_after_seconds": retry_after},
         headers={"Retry-After": str(retry_after)},
-        content={
-            "status": "error",
-            "code": "AUTH_RATE_LIMITED",
-            "message": "Слишком много попыток. Повторите позже.",
-            "retry_after_seconds": retry_after,
-        },
     )
 
 
 def _limiter_unavailable() -> JSONResponse:
-    return _payload_response(
+    return _error_response(
         http_status=status.HTTP_503_SERVICE_UNAVAILABLE,
-        payload_status="error",
         code="AUTH_RATE_LIMIT_UNAVAILABLE",
         message="Сервис защиты авторизации временно недоступен. Повторите позже.",
     )
@@ -159,9 +150,8 @@ async def _neutral_check_response(request: Request) -> JSONResponse:
     payload = await _json_object(request)
     normalized = normalizer(payload.get(field))
     if normalized is None:
-        return _payload_response(
+        return _error_response(
             http_status=status.HTTP_400_BAD_REQUEST,
-            payload_status="error",
             code=error_code,
             message=error_message,
         )
@@ -176,11 +166,12 @@ async def _neutral_check_response(request: Request) -> JSONResponse:
     if limited is not None:
         return limited
 
-    return _payload_response(
-        http_status=status.HTTP_200_OK,
-        payload_status="success",
-        message="Формат данных проверен",
-        checked=True,
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=response_success(
+            message="Формат данных проверен",
+            checked=True,
+        ),
     )
 
 
