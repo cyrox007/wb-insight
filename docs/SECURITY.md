@@ -10,15 +10,32 @@ Legacy fallback не означает поддержку старого маст
 
 ## Основные принципы
 
-WB Insight обрабатывает чувствительные данные продавца, поэтому security rules являются частью product contract, а не только deployment-настройкой.
+WB Insight обрабатывает чувствительные данные продавца, поэтому правила безопасности являются частью product contract, а не только deployment-настройкой.
 
 ## Сессия пользователя
 
 - короткоживущий access token хранится только в памяти frontend;
 - refresh session использует HttpOnly cookie;
 - production cookie работает только по HTTPS;
-- logout отзывает refresh session;
+- access и refresh JWT содержат `session_version`, которая проверяется сервером на защищённых запросах и refresh;
+- `POST /auth/logout` очищает cookie и атомарно увеличивает серверную `session_version`; поэтому ранее выданные access/refresh токены пользователя становятся недействительными на всех устройствах;
+- повторный logout со старым или уже отозванным токеном идемпотентен и всё равно очищает cookie;
 - CI проверяет, что access token не вернулся в persistent browser storage.
+
+## Защита публичной авторизации
+
+Публичные login, registration и preflight-проверки идентификаторов проходят общий security middleware до бизнес-handler.
+
+- `/auth/login` ограничивается одновременно по клиентскому IP и непрозрачному идентификатору email;
+- `/auth/registration` ограничивается по IP и email;
+- `/auth/check-email`, `/auth/check-phone`, `/auth/check-inn` больше не раскрывают, существует ли аккаунт: после проверки формата они возвращают одинаковый успешный результат;
+- email, телефон, ИНН и IP не сохраняются в Redis-ключах открытым текстом: для ключа используется HMAC-SHA256 с серверным секретом;
+- `X-Real-IP` учитывается только когда непосредственный peer — локальный reverse proxy;
+- превышение лимита возвращает HTTP `429`, код `AUTH_RATE_LIMITED` и `Retry-After`;
+- в production Redis является обязательной частью защиты: если счётчик недоступен, публичная авторизация закрывается с HTTP `503` и `AUTH_RATE_LIMIT_UNAVAILABLE`, а не продолжает работу без rate-limit;
+- вне production при недоступном Redis разрешён process-local fallback, чтобы локальная разработка не зависела от внешнего Redis.
+
+Production-пределы настраиваются переменными `AUTH_LOGIN_RATE_*`, `AUTH_CHECK_RATE_*`, `AUTH_REGISTRATION_RATE_*`; канонические значения приведены в `.env.production.example`.
 
 ## Права доступа
 
