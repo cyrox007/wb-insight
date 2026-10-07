@@ -4,28 +4,34 @@ set -Eeuo pipefail
 umask 077
 
 if [[ $# -ne 1 ]]; then
-  echo "Usage: RESTORE_CONFIRM=YES $0 <backup.dump.enc>" >&2
+  echo "Использование: RESTORE_CONFIRM=YES $0 <backup.dump.enc>" >&2
   exit 2
 fi
 if [[ "${RESTORE_CONFIRM:-}" != "YES" ]]; then
-  echo "Refusing destructive restore: set RESTORE_CONFIRM=YES" >&2
+  echo "Разрушающее восстановление отменено: задайте RESTORE_CONFIRM=YES" >&2
   exit 2
 fi
 
 backup="$1"
 checksum="${backup}.sha256"
 
-: "${DB_HOST:?DB_HOST is required}"
+: "${DB_HOST:?Не задан DB_HOST}"
 : "${DB_PORT:=5432}"
-: "${DB_NAME:?DB_NAME is required}"
-: "${DB_USER:?DB_USER is required}"
-: "${DB_PASSWORD:?DB_PASSWORD is required}"
-: "${BACKUP_ENCRYPTION_PASSPHRASE_FILE:?BACKUP_ENCRYPTION_PASSPHRASE_FILE is required}"
+: "${DB_NAME:?Не задан DB_NAME}"
+: "${DB_USER:?Не задан DB_USER}"
+: "${DB_PASSWORD:?Не задан DB_PASSWORD}"
+: "${BACKUP_ENCRYPTION_PASSPHRASE_FILE:?Не задан BACKUP_ENCRYPTION_PASSPHRASE_FILE}"
 
-[[ -r "$backup" ]] || { echo "Backup is not readable: $backup" >&2; exit 1; }
-[[ -r "$checksum" ]] || { echo "Checksum is not readable: $checksum" >&2; exit 1; }
+[[ -r "$backup" ]] || {
+  echo "Резервная копия недоступна для чтения: $backup" >&2
+  exit 1
+}
+[[ -r "$checksum" ]] || {
+  echo "Контрольная сумма недоступна для чтения: $checksum" >&2
+  exit 1
+}
 [[ -r "$BACKUP_ENCRYPTION_PASSPHRASE_FILE" ]] || {
-  echo "Backup encryption passphrase file is not readable" >&2
+  echo "Файл ключевой фразы шифрования резервной копии недоступен для чтения" >&2
   exit 1
 }
 
@@ -66,4 +72,4 @@ psql \
   --tuples-only \
   --command='SELECT version_num FROM alembic_version;'
 
-echo "Restore completed and alembic_version is readable."
+echo "Восстановление завершено, alembic_version доступна для чтения."

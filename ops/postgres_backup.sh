@@ -3,22 +3,22 @@ set -Eeuo pipefail
 
 umask 077
 
-: "${DB_HOST:?DB_HOST is required}"
+: "${DB_HOST:?Не задан DB_HOST}"
 : "${DB_PORT:=5432}"
-: "${DB_NAME:?DB_NAME is required}"
-: "${DB_USER:?DB_USER is required}"
-: "${DB_PASSWORD:?DB_PASSWORD is required}"
-: "${BACKUP_ENCRYPTION_PASSPHRASE_FILE:?BACKUP_ENCRYPTION_PASSPHRASE_FILE is required}"
+: "${DB_NAME:?Не задан DB_NAME}"
+: "${DB_USER:?Не задан DB_USER}"
+: "${DB_PASSWORD:?Не задан DB_PASSWORD}"
+: "${BACKUP_ENCRYPTION_PASSPHRASE_FILE:?Не задан BACKUP_ENCRYPTION_PASSPHRASE_FILE}"
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 
 if [[ ! -r "$BACKUP_ENCRYPTION_PASSPHRASE_FILE" ]]; then
-  echo "Backup encryption passphrase file is not readable" >&2
+  echo "Файл ключевой фразы шифрования резервной копии недоступен для чтения" >&2
   exit 1
 fi
 if ! [[ "$BACKUP_RETENTION_DAYS" =~ ^[0-9]+$ ]] || (( BACKUP_RETENTION_DAYS < 1 )); then
-  echo "BACKUP_RETENTION_DAYS must be a positive integer" >&2
+  echo "BACKUP_RETENTION_DAYS должен быть положительным целым числом" >&2
   exit 1
 fi
 
@@ -54,7 +54,7 @@ openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
 
 (
   cd "$BACKUP_DIR"
-  sha256sum "$(basename "$encrypted")" > "$(basename "$checksum")"
+  sha256sum "$(basename "$encrypted")" >"$(basename "$checksum")"
 )
 
 find "$BACKUP_DIR" -type f \

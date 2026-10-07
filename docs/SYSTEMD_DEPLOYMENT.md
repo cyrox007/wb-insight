@@ -1,203 +1,200 @@
 # WB Insight — deployment через systemd
 
-Канонический production baseline проекта — Docker Compose, но существующая установка на Ubuntu может продолжать работать через systemd при соблюдении того же runtime contract.
+Канонический production baseline проекта — Docker Compose, но существующая установка на Ubuntu может продолжать работать через systemd при соблюдении того же runtime-контракта.
 
 ## Обязательные версии
 
-- Python **3.12** для backend/worker/beat;
-- Node.js `^20.19.0` или `>=22.12.0` для frontend build;
+- Python **3.12** для backend, worker и beat;
+- Node.js `^20.19.0` или `>=22.12.0` для сборки frontend;
 - PostgreSQL 16 рекомендуется;
 - Redis 7 рекомендуется;
 - nginx как внешний web/gateway слой;
-- текущие зависимости строго из `backend/requirements.txt` и `frontend/package-lock.json`.
+- `flock`, `pg_dump`, `pg_restore`, `psql`, `openssl`, `sha256sum` для транзакционного обновления и восстановления;
+- зависимости строго из `backend/requirements.txt` и `frontend/package-lock.json`.
 
-Не используйте Python 3.10 для актуальной release line. В частности, `numpy 2.4.x` и `pandas 3.x` требуют Python >=3.11, а проект стандартизирован на Python 3.12.
+Не обновляйте старый Python `venv` на месте. Updater создаёт неизменяемый `venv.release.<timestamp>` по окончательному пути и переключает стабильный `backend/venv` через symlink. Перемещать release-venv после установки нельзя: launchers Python содержат абсолютный путь к интерпретатору.
 
-## Почему нельзя обновлять старый venv «на месте»
+## Обязательная подготовка rollback БД
 
-`venv` привязан к интерпретатору, которым он создан. Если существующий `backend/venv/bin/python` показывает Python 3.10, установка Python 3.12 в систему не превращает этот venv в 3.12.
+Транзакционное обновление fail-closed: перед первой миграцией оно обязано создать зашифрованную резервную копию PostgreSQL. В runtime должны быть доступны:
 
-Нужно создать новый venv через `python3.12 -m venv ...`, установить зависимости и только после успешной установки переключить systemd на новый environment/путь.
+```env
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=wb
+DB_USER=wb
+DB_PASSWORD=...
+BACKUP_ENCRYPTION_PASSPHRASE_FILE=/etc/wb-insight/backup-passphrase
+BACKUP_RETENTION_DAYS=14
+```
 
-Также нельзя после `pip install` просто переименовывать созданный venv. Console scripts (`celery`, `alembic`, `uvicorn` и другие) содержат абсолютный shebang до Python по пути, на котором venv был создан. После `mv venv.next venv` такой launcher может существовать на диске, но systemd получит `203/EXEC` / `No such file or directory`, потому что interpreter из shebang уже не существует.
+Файл `BACKUP_ENCRYPTION_PASSPHRASE_FILE` должен существовать, читаться пользователем updater-а и храниться вне репозитория. По умолчанию update-backup сохраняется в `/var/backups/wb-insight/update`; путь можно изменить через `UPDATE_BACKUP_DIR`.
 
-Поэтому updater создаёт неизменяемый release-venv (`venv.release.<timestamp>`) и переключает стабильный путь `backend/venv` через symlink. Сам release-venv после установки не перемещается.
+Если резервную копию создать нельзя, updater **не применяет миграции и не переключает release**.
 
-## Проверка текущего host
+## Канонический запуск
+
+Используйте корневой entrypoint, а не ручной `git pull`:
 
 ```bash
 cd /home/projects/wb
-python3.12 --version
-node --version
-npm --version
-backend/venv/bin/python --version || true
-git status --short
-git rev-parse HEAD
-cat VERSION
+./update.sh
 ```
 
-Working tree перед deployment должен быть чистым.
-
-## Канонический updater для существующей systemd-установки
-
-В репозитории есть executable-скрипт:
-
-```bash
-ops/update_systemd.sh
-```
-
-Executable bit хранится в Git и проверяется CI. Не выполняйте локальный `chmod +x`: изменение mode tracked-файла делает working tree dirty и блокирует clean-tree guard updater-а. Если mode уже был изменён локально, восстановите его через `git restore -- ops/update_systemd.sh`, обновите целевую ветку и только затем запускайте updater.
-
-По умолчанию он ожидает проект в `/home/projects/wb` и сервисы:
-
-- `wb-backend`;
-- `wb-celery`;
-- `wb-celery-beat`;
-- nginx.
-
-Запуск:
+Для acceptance ветки `dev`:
 
 ```bash
 cd /home/projects/wb
-./ops/update_systemd.sh
+TARGET_BRANCH=dev ./update.sh
 ```
 
-При другом пути/health endpoint:
+Для другого пути и health endpoint:
 
 ```bash
 PROJECT_DIR=/srv/wb-insight \
 HEALTH_URL=http://127.0.0.1:9000/health/ready \
-./ops/update_systemd.sh
-```
-
-Updater:
-
-1. проверяет Python 3.12 и Node до изменения runtime;
-2. требует clean checkout целевой ветки (`main` по умолчанию; для pre-promotion production-like acceptance допускается exact `dev` head через `TARGET_BRANCH=dev`);
-3. выполняет `git fetch` + `ff-only` вместо неявного merge;
-4. создаёт свежий Python 3.12 release-venv рядом со старым и не перемещает его после установки;
-5. полностью устанавливает backend requirements до переключения venv;
-6. применяет Alembic migration новым environment;
-7. использует `npm ci`, затем `npm run build`;
-8. только после успешных install/build атомарно переключает стабильный `backend/venv` на release-venv через symlink;
-9. проверяет реальные launchers `celery` и `alembic` до рестарта systemd;
-10. перезапускает API/worker/beat и reload nginx;
-11. проверяет systemd state и `/health/ready`;
-12. сохраняет предыдущий venv как `venv.previous.<timestamp>` для диагностики.
-
-## Публичный nginx: HTTPS и frontend cache
-
-Для systemd-инсталляции внешний nginx является частью browser security/runtime contract. Публичный hostname должен:
-
-- перенаправлять весь HTTP-трафик на HTTPS до загрузки SPA;
-- проксировать API same-origin под `/api`;
-- отдавать `index.html` с `no-store/no-cache`;
-- кешировать hashed `/assets/*` как immutable;
-- возвращать настоящий `404` для отсутствующего asset вместо fallback на `index.html`.
-
-Если браузер показывает `Не защищено`, а console содержит CORS для `https://.../api/auth/refresh` или MIME `text/html` для `/assets/*.css|js`, сначала исправьте nginx/TLS boundary: это приводит к ложному logout на cold start и stale-chunk blank screen.
-
-## Pre-promotion acceptance из `dev`
-
-По dev-first flow production-like candidate допускается проверять **до** promotion в `main`. Acceptance host должен находиться на exact `origin/dev` head, а updater запускается с тем же target branch:
-
-```bash
-cd /home/projects/wb
-export TARGET_BRANCH=dev
+TARGET_BRANCH=dev \
 ./update.sh
 ```
 
-После deployment collector вызывается с `--target-branch dev`; он fail-closed проверяет clean tree и совпадение local HEAD с `origin/dev`. Для production/release deployment default остаётся `main`.
+Быстрый preflight без установки зависимостей, миграций и переключения runtime:
 
-## Восстановление после ошибки `numpy==2.4.6` на Python 3.10
+```bash
+TARGET_BRANCH=dev ./update.sh --preflight-only
+```
 
-Если `git pull` уже прошёл, но dependency install завершился ошибкой до Alembic/frontend/restart, исходники на диске новые, а процессы обычно продолжают выполнять старый загруженный код.
+## Транзакционная модель P116
 
-Не перезапускайте сервисы, пока новый Python environment не готов.
+Обновление выполняется как одна согласованная транзакция приложения:
+
+1. `update.sh` получает эксклюзивный `flock`; второй параллельный запуск завершается до любых изменений;
+2. фиксируются текущий и целевой Git commit;
+3. проверяется только fast-forward путь от текущей версии к `origin/<TARGET_BRANCH>`;
+4. последняя версия самого updater-а извлекается через `git show` во временный файл **без переключения рабочего дерева**;
+5. целевой commit распаковывается через `git archive` во временный каталог кандидата;
+6. в кандидате полностью создаётся новый Python 3.12 release-venv, устанавливаются backend dependencies, выполняются import/Celery/Alembic проверки;
+7. frontend кандидата полностью проходит `npm ci` и `npm run build` до изменения БД и активного runtime;
+8. проверяется конфигурация nginx;
+9. только после готовности кандидата останавливаются `wb-backend`, `wb-celery`, `wb-celery-beat`, чтобы rollback БД не терял новые записи;
+10. создаётся зашифрованный `pg_dump` и SHA-256 контрольная сумма;
+11. миграции Alembic выполняются кодом и Python-средой кандидата;
+12. рабочая ветка переключается на заранее проверенный целевой commit;
+13. `backend/venv` переключается на новый immutable release-venv;
+14. устанавливаются canonical systemd drop-ins и запускаются сервисы;
+15. локальная проверка готовности backend должна пройти **до** публикации новой клиентской сборки;
+16. frontend публикуется с собственным rollback-контуром;
+17. выполняются повторная проверка systemd, Celery ping, nginx и `/health/ready`;
+18. только после postcheck обновление считается завершённым.
+
+Таким образом, `git fetch`, установка зависимостей и сборка frontend не меняют текущую обслуживаемую версию.
+
+## Автоматический rollback
+
+После входа в фазу переключения любая необработанная ошибка запускает coordinated rollback. Updater:
+
+1. останавливает API и фоновые обработчики;
+2. если миграции уже могли изменить БД — восстанавливает зашифрованный dump через `ops/postgres_restore.sh`;
+3. возвращает предыдущий опубликованный frontend;
+4. возвращает Git на исходный commit;
+5. возвращает предыдущий `backend/venv`;
+6. восстанавливает systemd drop-ins из предыдущего commit;
+7. запускает старые сервисы только если критические части rollback завершились успешно.
+
+Если восстановление БД или runtime не удалось, updater **не пытается скрыть аварию запуском потенциально несовместимой версии**: сервисы остаются остановленными, а оператор получает сообщение о ручном вмешательстве.
+
+Доказательство попытки rollback записывается без секретов в:
+
+```text
+/var/tmp/wb-insight-update/rollback-<timestamp>.txt
+```
+
+Путь можно изменить через `UPDATE_STATE_DIR`.
+
+Автоматический `alembic downgrade` намеренно не используется: rollback схемы выполняется восстановлением согласованной резервной копии.
+
+## Защита от параллельного обновления
+
+Корневой `update.sh` удерживает lock-файл весь жизненный цикл процесса:
+
+```text
+/tmp/wb-insight-update.lock
+```
+
+Путь можно изменить через `UPDATE_LOCK_FILE`. Второй updater не ждёт первый процесс и не начинает собственную миграцию — он завершается с понятной ошибкой.
+
+## Безопасная публикация frontend
+
+`ops/publish_frontend.sh` сначала копирует готовую сборку во staging-каталог. Если существует текущий nginx root, он перемещается в `wb-prev-*`, и **сразу после этого** фиксируется состояние `OLD_MOVED=true`. Поэтому ошибка между переносом старой версии и установкой новой больше не оставляет nginx без активного frontend: trap возвращает предыдущий каталог.
+
+При вызове из updater-а скрипт принимает:
+
+- `FRONTEND_BUILD_DIR` — готовый `dist` кандидата;
+- `FRONTEND_PUBLISH_STATE_FILE` — безопасный файл состояния для coordinated rollback;
+- `FRONTEND_DEPLOY_DIR` — явный nginx root, если autodetect не подходит.
+
+Без `FRONTEND_DEPLOY_DIR` root определяется из `nginx -T` по upstream `127.0.0.1:9001`.
+
+## Проверка отказоустойчивости
+
+В коде есть fault-injection точки, которые отключены по умолчанию. Использовать их разрешено только на acceptance/staging host:
+
+```bash
+WB_UPDATE_ENABLE_FAULT_INJECTION=1 \
+WB_UPDATE_FAIL_PHASE=migrations \
+TARGET_BRANCH=dev \
+./update.sh
+```
+
+Поддерживаемые точки: `candidate`, `backup`, `migrations`, `runtime`, `frontend`.
+
+После искусственного сбоя необходимо проверить:
+
+```bash
+git rev-parse HEAD
+systemctl is-active wb-backend wb-celery wb-celery-beat
+curl -fsS http://127.0.0.1:9001/health/ready
+ls -la /var/tmp/wb-insight-update/
+```
+
+CI запускает `ops/updater_transaction_contract.py`, который закрепляет обязательный порядок сборки, backup, migration, activation и rollback, а также закрытие опасного окна публикации frontend.
+
+## Публичный nginx
+
+Публичный hostname должен:
+
+- перенаправлять HTTP на HTTPS;
+- проксировать API same-origin под `/api`;
+- отдавать `index.html` с `no-store/no-cache`;
+- кешировать hashed `/assets/*` как immutable;
+- возвращать настоящий `404` для отсутствующего asset вместо SPA fallback.
+
+Если браузер показывает CORS для `/api/auth/refresh` или MIME `text/html` для `/assets/*.css|js`, сначала исправьте nginx/TLS boundary.
+
+## Диагностика после неуспешного обновления
 
 Проверьте:
 
 ```bash
 cd /home/projects/wb
-backend/venv/bin/python --version
+git status --short
 git rev-parse HEAD
-systemctl is-active wb-backend wb-celery wb-celery-beat
-```
-
-После установки Python 3.12 создайте release environment по его окончательному пути:
-
-```bash
-cd /home/projects/wb/backend
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-RELEASE_VENV="$PWD/venv.release.$STAMP"
-python3.12 -m venv "$RELEASE_VENV"
-"$RELEASE_VENV/bin/python" -m pip install --upgrade pip setuptools wheel
-"$RELEASE_VENV/bin/python" -m pip install -r requirements.txt
-"$RELEASE_VENV/bin/python" -c 'import numpy,pandas; print(numpy.__version__, pandas.__version__)'
-"$RELEASE_VENV/bin/alembic" upgrade head
-"$RELEASE_VENV/bin/celery" --version
-```
-
-Frontend:
-
-```bash
-cd /home/projects/wb/frontend
-npm ci
-npm run build
-```
-
-После успешных шагов переключите стабильный `backend/venv`, не перемещая release-venv:
-
-```bash
-cd /home/projects/wb/backend
-STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-if [ -L venv ]; then
-  old_target="$(readlink -f venv)"
-  ln -s "$old_target" "venv.previous.$STAMP"
-  rm venv
-elif [ -d venv ]; then
-  mv venv "venv.previous.$STAMP"
-fi
-ln -s "$RELEASE_VENV" venv
-venv/bin/celery --version
-```
-
-И только затем:
-
-```bash
-systemctl restart wb-backend wb-celery wb-celery-beat
-systemctl reload nginx
+readlink -f backend/venv || true
 systemctl --no-pager --full status wb-backend wb-celery wb-celery-beat
-curl -fsS http://127.0.0.1:9000/health/ready
-```
-
-Если service не стартует, сразу смотрите:
-
-```bash
 journalctl -u wb-backend -n 150 --no-pager
 journalctl -u wb-celery -n 150 --no-pager
 journalctl -u wb-celery-beat -n 150 --no-pager
+ls -lah /var/backups/wb-insight/update/
+ls -lah /var/tmp/wb-insight-update/
 ```
 
-## Установка Python 3.12
+Не выполняйте ручной `alembic downgrade` и не удаляйте update-backup до выяснения причины ошибки.
 
-Сначала проверьте, предоставляет ли его текущий Ubuntu repository:
+## Acceptance после deployment
+
+Production-like acceptance по-прежнему требует exact head целевой ветки. Для `dev`:
 
 ```bash
-apt update
-apt-cache policy python3.12 python3.12-venv
+TARGET_BRANCH=dev ./update.sh
 ```
 
-Если candidate доступен:
-
-```bash
-apt install -y python3.12 python3.12-venv python3.12-dev
-```
-
-Если host distribution не предоставляет Python 3.12 штатно, предпочтительный долгосрочный вариант — перейти на container deployment из `compose.production.yml` или обновить host OS до поддерживаемой версии. Добавление стороннего Python package repository является отдельным инфраструктурным решением и не должно выполняться updater-скриптом автоматически.
-
-## Rollback
-
-До migration фиксируйте previous commit и делайте backup БД. Обычный rollback — previous known-good application commit/image/venv. Автоматический `alembic downgrade` не является стандартным rollback механизмом.
-
-После migration нельзя без анализа просто сделать `git reset --hard` и считать rollback завершённым: schema могла уже измениться. Используйте `PRODUCTION_DEPLOYMENT.md` и `OPERATIONS.md`.
+После успешного deployment collector запускается с `--target-branch dev` и проверяет clean tree, exact `origin/dev`, immutable release-venv, systemd services, Celery, Alembic head, nginx, локальную и публичную readiness и соответствие опубликованных frontend assets.
