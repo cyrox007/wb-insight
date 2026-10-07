@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 import models
 from core.audit import AuditMiddleware
+from core.auth_security import PublicAuthSecurityMiddleware
 from core.http_metrics import HTTPMetricsMiddleware
 from core.logger import setup_logger
 from core.session_security import SessionSecurityMiddleware
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, _handle_unexpected_exception)
     app.add_middleware(HTTPMetricsMiddleware)
     app.add_middleware(SessionSecurityMiddleware)
+    app.add_middleware(PublicAuthSecurityMiddleware)
     app.add_middleware(AuditMiddleware)
     _setup_cors(app)
     _setup_static_files(app)
