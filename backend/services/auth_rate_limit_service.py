@@ -38,7 +38,7 @@ class RateLimitDecision:
 
 
 class AuthRateLimitUnavailable(RuntimeError):
-    """Хранилище production rate-limit временно недоступно."""
+    """Хранилище ограничения частоты в боевом окружении временно недоступно."""
 
 
 _LUA_INCREMENT = """
@@ -83,7 +83,7 @@ def _safe_ip(value: str | None) -> str:
 
 
 def client_ip(request: Request) -> str:
-    """Возвращает клиентский IP, доверяя X-Real-IP только локальному reverse proxy."""
+    """Возвращает клиентский IP, доверяя X-Real-IP только локальному обратному прокси."""
 
     peer = _safe_ip(request.client.host if request.client else None)
     if peer not in {"127.0.0.1", "::1"}:
@@ -118,7 +118,7 @@ async def _redis_increment(key: str, rule: RateLimitRule) -> RateLimitDecision:
 
 
 async def _local_increment(key: str, rule: RateLimitRule) -> RateLimitDecision:
-    """Локальный fallback разрешён только вне production."""
+    """Локальный резервный счётчик разрешён только вне боевого окружения."""
 
     now = time.monotonic()
     async with _local_lock:
@@ -146,7 +146,7 @@ async def _check_key(key: str, rule: RateLimitRule) -> RateLimitDecision:
         if config.IS_PRODUCTION:
             raise
         logger.warning(
-            "Redis недоступен; вне production используется локальный лимитер авторизации"
+            "Redis недоступен; вне боевого окружения используется локальный счётчик авторизации"
         )
         return await _local_increment(key, rule)
 
@@ -159,7 +159,7 @@ async def check_auth_rate_limit(
     identity: Optional[str] = None,
     identity_rule: Optional[RateLimitRule] = None,
 ) -> RateLimitDecision:
-    """Проверяет IP и при необходимости идентификатор без сохранения PII в Redis-ключах."""
+    """Проверяет IP и идентификатор без сохранения персональных данных в Redis-ключах."""
 
     ip_decision = await _check_key(
         _key(action, "ip", client_ip(request)),
