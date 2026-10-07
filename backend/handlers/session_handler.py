@@ -57,7 +57,7 @@ async def _revoke_session_version(
         )
         .values(session_version=User.session_version + 1)
     )
-    return bool(result.rowcount)
+    return result.rowcount == 1
 
 
 @router.post("/refresh")
