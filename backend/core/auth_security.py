@@ -1,4 +1,4 @@
-"""Защита публичного контура аутентификации от перебора и enumeration."""
+"""Защита публичного контура аутентификации от перебора и раскрытия аккаунтов."""
 
 from __future__ import annotations
 
@@ -204,7 +204,7 @@ async def _registration_guard(request: Request) -> JSONResponse | None:
 
 
 class PublicAuthSecurityMiddleware(BaseHTTPMiddleware):
-    """Ограничивает brute force и не позволяет публичным preflight-проверкам раскрывать аккаунты."""
+    """Ограничивает перебор и не позволяет публичным предварительным проверкам раскрывать аккаунты."""
 
     async def dispatch(
         self,
