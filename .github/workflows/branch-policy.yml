@@ -12,6 +12,12 @@ jobs:
   branch-policy:
     runs-on: ubuntu-latest
     steps:
+      - name: Получить исходники
+        uses: actions/checkout@v4
+
+      - name: Проверить контракт branch protection
+        run: python3 ops/acceptance/branch_protection_selftest.py
+
       - name: Проверить направление pull request
         if: github.event_name == 'pull_request'
         shell: bash
