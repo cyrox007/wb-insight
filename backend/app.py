@@ -10,6 +10,7 @@ from core.audit import AuditMiddleware
 from core.auth_security import PublicAuthSecurityMiddleware
 from core.http_metrics import HTTPMetricsMiddleware
 from core.logger import setup_logger
+from core.operation_trace import OperationTraceMiddleware
 from core.session_security import SessionSecurityMiddleware
 from core.version import APP_VERSION
 from handlers.account_lifecycle_handler import account_router, auth_router as account_auth_router
@@ -131,6 +132,7 @@ def create_app() -> FastAPI:
     app.add_middleware(PublicAuthSecurityMiddleware)
     app.add_middleware(AuditMiddleware)
     _setup_cors(app)
+    app.add_middleware(OperationTraceMiddleware)
     _setup_static_files(app)
     _register_routers(app)
     return app
