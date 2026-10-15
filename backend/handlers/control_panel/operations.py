@@ -8,12 +8,14 @@ from core.authorization import require_permission
 from core.dependencies import get_db_session
 from services.diagnostic_lookup_service import resolve_diagnostic_query
 from services.operation_log_service import (
-    get_request_timeline,
     list_operation_events,
     operation_event_payload,
     sanitize_operation_data,
 )
-from services.operation_trace_query_service import get_complete_operation_trace
+from services.operation_trace_query_service import (
+    get_complete_operation_trace,
+    get_complete_request_trace,
+)
 from services.operational_monitoring_service import build_operational_snapshot
 from services.user_diagnostics_service import (
     build_user_diagnostics,
@@ -143,17 +145,20 @@ async def get_request_diagnostics(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Некорректный request_id",
         )
-    events = await get_request_timeline(db_session, normalized)
+    root_operation_ids, operation_ids, events = await get_complete_request_trace(
+        db_session,
+        normalized,
+    )
     if not events:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="HTTP-запрос в диагностическом журнале не найден",
         )
-    operation_ids = sorted({str(item.operation_id) for item in events})
     return sanitize_operation_data(
         {
             "request_id": normalized,
-            "operation_ids": operation_ids,
+            "root_operation_ids": [str(item) for item in root_operation_ids],
+            "operation_ids": [str(item) for item in operation_ids],
             "events": [operation_event_payload(item) for item in events],
         }
     )
