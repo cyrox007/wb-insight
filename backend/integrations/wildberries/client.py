@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -10,6 +11,10 @@ from core.logger import setup_logger
 from integrations.wildberries import endpoints
 from integrations.wildberries.rate_limit import DistributedRateLimiter
 from models.tokens_model import APIToken
+from services.external_operation_trace_service import (
+    trace_external_request,
+    trace_external_response,
+)
 from settings import config
 from utils.token_crypto import decrypt_token
 
@@ -44,6 +49,32 @@ class WBFeatureUnavailableError(WBAPIError):
 
 class WBRateLimitError(WBAPIError):
     pass
+
+
+def _diagnostic_response_data(response: httpx.Response) -> dict[str, Any]:
+    try:
+        data = response.json()
+    except ValueError:
+        return {
+            "body_type": "text",
+            "body": response.text[:2000],
+        }
+
+    if isinstance(data, list):
+        return {
+            "body_type": "list",
+            "items_count": len(data),
+            "body": data[:20],
+        }
+    if isinstance(data, dict):
+        return {
+            "body_type": "object",
+            "body": data,
+        }
+    return {
+        "body_type": type(data).__name__,
+        "body": data,
+    }
 
 
 class WBClient:
@@ -157,7 +188,23 @@ class WBClient:
                 endpoint,
                 self._endpoint_interval(endpoint),
             )
+            await trace_external_request(
+                provider="wildberries",
+                endpoint=endpoint,
+                method=method,
+                url=url,
+                subject_type="wb_credential",
+                subject_id=self._credential_id,
+                attempt=attempt,
+                input_data={
+                    "credential_id": self._credential_id,
+                    "token_type": self._token_type,
+                    "params": params or {},
+                    "json": json_data or {},
+                },
+            )
 
+            started = time.perf_counter()
             token = self._get_token()
             try:
                 response = await self._client.request(
@@ -169,6 +216,17 @@ class WBClient:
                 )
             except httpx.TransportError as exc:
                 last_transport_error = exc
+                await trace_external_response(
+                    provider="wildberries",
+                    endpoint=endpoint,
+                    http_status=None,
+                    duration_ms=max(0, int((time.perf_counter() - started) * 1000)),
+                    subject_type="wb_credential",
+                    subject_id=self._credential_id,
+                    attempt=attempt,
+                    error_code=type(exc).__name__,
+                    message="Транспортная ошибка запроса к Wildberries",
+                )
                 if attempt >= config.WB_API_MAX_ATTEMPTS:
                     raise WBAPIError(
                         "Ошибка транспорта Wildberries после исчерпания попыток повтора",
@@ -186,6 +244,22 @@ class WBClient:
                 continue
             finally:
                 del token
+
+            await trace_external_response(
+                provider="wildberries",
+                endpoint=endpoint,
+                http_status=response.status_code,
+                duration_ms=max(0, int((time.perf_counter() - started) * 1000)),
+                subject_type="wb_credential",
+                subject_id=self._credential_id,
+                attempt=attempt,
+                output_data=_diagnostic_response_data(response),
+                error_code=(
+                    None
+                    if response.is_success
+                    else f"WB_HTTP_{response.status_code}"
+                ),
+            )
 
             if response.status_code == 204:
                 return []
