@@ -30,6 +30,10 @@ def upgrade() -> None:
         sa.Column("step", sa.String(length=96), nullable=False),
         sa.Column("status", sa.String(length=16), nullable=False),
         sa.Column("severity", sa.String(length=16), server_default=sa.text("'info'"), nullable=False),
+        sa.Column("sequence_no", sa.Integer(), nullable=True),
+        sa.Column("event_kind", sa.String(length=32), server_default=sa.text("'business_step'"), nullable=False),
+        sa.Column("component", sa.String(length=96), nullable=True),
+        sa.Column("direction", sa.String(length=16), server_default=sa.text("'internal'"), nullable=False),
         sa.Column("subject_type", sa.String(length=64), nullable=True),
         sa.Column("subject_id", sa.String(length=160), nullable=True),
         sa.Column("provider", sa.String(length=64), nullable=True),
@@ -41,6 +45,7 @@ def upgrade() -> None:
         sa.Column("input_data", sa.JSON(), server_default=sa.text("'{}'::json"), nullable=False),
         sa.Column("output_data", sa.JSON(), server_default=sa.text("'{}'::json"), nullable=False),
         sa.Column("metrics", sa.JSON(), server_default=sa.text("'{}'::json"), nullable=False),
+        sa.Column("context_data", sa.JSON(), server_default=sa.text("'{}'::json"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -80,6 +85,18 @@ def upgrade() -> None:
         ["request_id"],
         unique=False,
     )
+    op.create_index(
+        "ix_operation_log_request_sequence",
+        "operation_log_events",
+        ["request_id", "sequence_no"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_operation_log_component_created",
+        "operation_log_events",
+        ["component", "created_at"],
+        unique=False,
+    )
 
     op.execute(
         """
@@ -105,6 +122,8 @@ def downgrade() -> None:
         "DROP TRIGGER IF EXISTS trg_operation_log_events_append_only ON operation_log_events"
     )
     op.execute("DROP FUNCTION IF EXISTS wb_reject_operation_log_mutation()")
+    op.drop_index("ix_operation_log_component_created", table_name="operation_log_events")
+    op.drop_index("ix_operation_log_request_sequence", table_name="operation_log_events")
     op.drop_index("ix_operation_log_request_id", table_name="operation_log_events")
     op.drop_index("ix_operation_log_subject_created", table_name="operation_log_events")
     op.drop_index("ix_operation_log_status_created", table_name="operation_log_events")
