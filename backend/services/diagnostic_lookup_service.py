@@ -61,6 +61,7 @@ async def resolve_diagnostic_query(
             "events": [],
         }
 
+    lowered = normalized.lower()
     matches: list[dict[str, Any]] = []
     user_ids: set[UUID] = set()
     operation_ids: set[UUID] = set()
@@ -68,7 +69,7 @@ async def resolve_diagnostic_query(
     parsed_uuid = _uuid(normalized)
 
     user_result = await session.execute(
-        select(User).where(func.lower(User.email) == normalized.lower()).limit(1)
+        select(User).where(func.lower(User.email) == lowered).limit(1)
     )
     user = user_result.scalar_one_or_none()
     if user is not None:
@@ -87,8 +88,8 @@ async def resolve_diagnostic_query(
         select(APIToken)
         .where(
             or_(
-                APIToken.external_account_id == normalized,
-                APIToken.label == normalized,
+                func.lower(APIToken.external_account_id) == lowered,
+                func.lower(APIToken.label) == lowered,
             )
         )
         .limit(20)
@@ -108,6 +109,57 @@ async def resolve_diagnostic_query(
                 },
             )
         )
+
+    external_payment_result = await session.execute(
+        select(Payment)
+        .where(Payment.external_payment_id == normalized)
+        .order_by(Payment.created_at.desc())
+        .limit(20)
+    )
+    for payment in external_payment_result.scalars().all():
+        user_ids.add(payment.user_id)
+        matches.append(
+            _match(
+                "payment",
+                str(payment.id),
+                user_id=payment.user_id,
+                label=f"{payment.amount} {payment.currency}",
+                details={
+                    "status": payment.status.value,
+                    "provider": payment.provider.value,
+                    "external_payment_id": payment.external_payment_id,
+                    "tariff_id": str(payment.tariff_id),
+                },
+            )
+        )
+
+    tariff_result = await session.execute(
+        select(TariffPlan)
+        .where(
+            or_(
+                func.lower(TariffPlan.code) == lowered,
+                func.lower(TariffPlan.name) == lowered,
+            )
+        )
+        .limit(20)
+    )
+    matched_tariffs = list(tariff_result.scalars().all())
+    for tariff in matched_tariffs:
+        matches.append(
+            _match(
+                "tariff",
+                str(tariff.id),
+                label=tariff.name,
+                details={"code": tariff.code, "is_active": bool(tariff.is_active)},
+            )
+        )
+        subscribers_result = await session.execute(
+            select(Subscription.user_id)
+            .where(Subscription.tariff_id == tariff.id)
+            .distinct()
+            .limit(50)
+        )
+        user_ids.update(subscribers_result.scalars().all())
 
     if parsed_uuid is not None:
         if user is None:
@@ -157,6 +209,7 @@ async def resolve_diagnostic_query(
                     details={
                         "status": payment.status.value,
                         "provider": payment.provider.value,
+                        "external_payment_id": payment.external_payment_id,
                         "tariff_id": str(payment.tariff_id),
                     },
                 )
@@ -192,23 +245,24 @@ async def resolve_diagnostic_query(
                 )
             )
 
-        tariff = await session.get(TariffPlan, parsed_uuid)
-        if tariff is not None:
-            matches.append(
-                _match(
-                    "tariff",
-                    str(tariff.id),
-                    label=tariff.name,
-                    details={"code": tariff.code, "is_active": bool(tariff.is_active)},
+        if not any(item.id == parsed_uuid for item in matched_tariffs):
+            tariff = await session.get(TariffPlan, parsed_uuid)
+            if tariff is not None:
+                matches.append(
+                    _match(
+                        "tariff",
+                        str(tariff.id),
+                        label=tariff.name,
+                        details={"code": tariff.code, "is_active": bool(tariff.is_active)},
+                    )
                 )
-            )
-            subscribers_result = await session.execute(
-                select(Subscription.user_id)
-                .where(Subscription.tariff_id == tariff.id)
-                .distinct()
-                .limit(50)
-            )
-            user_ids.update(subscribers_result.scalars().all())
+                subscribers_result = await session.execute(
+                    select(Subscription.user_id)
+                    .where(Subscription.tariff_id == tariff.id)
+                    .distinct()
+                    .limit(50)
+                )
+                user_ids.update(subscribers_result.scalars().all())
 
     event_clauses = [
         OperationLogEvent.request_id == normalized,
