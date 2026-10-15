@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.operation_context import get_operation_context
 from integrations.sber.client import SberOrderStatus
 from models.payments_model import (
     Payment,
@@ -15,7 +16,7 @@ from models.payments_model import (
     PaymentStatus,
 )
 from models.users_model import User
-from services.operation_log_service import record_operation_event
+from services.operation_log_service import persist_current_operation_event
 from services.subscription_service import (
     create_subscription,
     deactivate_active_subscriptions,
@@ -32,23 +33,52 @@ def _payment_event_level(event_type: str) -> tuple[str, str]:
     return "success", "info"
 
 
+async def _trace_payment_operation(
+    payment: Payment,
+    *,
+    step: str,
+    status: str,
+    severity: str = "info",
+    request_id: str | None = None,
+    duration_ms: int | None = None,
+    error_code: str | None = None,
+    message: str | None = None,
+    input_data: dict[str, Any] | None = None,
+    output_data: dict[str, Any] | None = None,
+) -> None:
+    """Пишет диагностический шаг независимо от транзакции платежа."""
+    if get_operation_context() is None:
+        return
+    await persist_current_operation_event(
+        operation_id=payment.id,
+        domain="payment",
+        operation="tariff_payment",
+        step=step,
+        status=status,
+        severity=severity,
+        user_id=payment.user_id,
+        subject_type="payment",
+        subject_id=payment.id,
+        provider=payment.provider.value,
+        request_id=request_id,
+        duration_ms=duration_ms,
+        error_code=error_code,
+        message=message,
+        input_data=input_data or {},
+        output_data=output_data or {},
+    )
+
+
 async def _trace_payment_created(
     session: AsyncSession,
     payment: Payment,
     *,
     reused: bool = False,
 ) -> None:
-    await record_operation_event(
-        session,
-        operation_id=payment.id,
-        domain="payment",
-        operation="tariff_payment",
+    await _trace_payment_operation(
+        payment,
         step="idempotency_reused" if reused else "payment_created",
         status="info" if reused else "started",
-        user_id=payment.user_id,
-        subject_type="payment",
-        subject_id=payment.id,
-        provider=payment.provider.value,
         message=(
             "Повторный запрос использовал ранее созданную платёжную попытку"
             if reused
@@ -233,18 +263,11 @@ async def record_payment_event(
     payment = await session.get(Payment, payment_id)
     if payment is not None:
         event_status, severity = _payment_event_level(event_type)
-        await record_operation_event(
-            session,
-            operation_id=payment.id,
-            domain="payment",
-            operation="tariff_payment",
+        await _trace_payment_operation(
+            payment,
             step=event_type,
             status=event_status,
             severity=severity,
-            user_id=payment.user_id,
-            subject_type="payment",
-            subject_id=payment.id,
-            provider=payment.provider.value,
             request_id=request_id,
             duration_ms=duration_ms,
             error_code=error_code,
@@ -272,17 +295,10 @@ async def mark_payment_succeeded(
     payment.provider_data = provider_data or payment.provider_data
     payment.confirmed_at = payment.confirmed_at or datetime.now(timezone.utc)
     payment.updated_at = datetime.now(timezone.utc)
-    await record_operation_event(
-        session,
-        operation_id=payment.id,
-        domain="payment",
-        operation="tariff_payment",
+    await _trace_payment_operation(
+        payment,
         step="payment_succeeded",
         status="success",
-        user_id=payment.user_id,
-        subject_type="payment",
-        subject_id=payment.id,
-        provider=payment.provider.value,
         message="Провайдер подтвердил успешную оплату",
         output_data=provider_data or {},
     )
@@ -300,18 +316,11 @@ async def mark_payment_failed(
     payment.status = PaymentStatus.FAILED
     payment.provider_data = provider_data or payment.provider_data
     payment.updated_at = datetime.now(timezone.utc)
-    await record_operation_event(
-        session,
-        operation_id=payment.id,
-        domain="payment",
-        operation="tariff_payment",
+    await _trace_payment_operation(
+        payment,
         step="payment_failed",
         status="failed",
         severity="error",
-        user_id=payment.user_id,
-        subject_type="payment",
-        subject_id=payment.id,
-        provider=payment.provider.value,
         error_code="PAYMENT_FAILED",
         message="Платёж завершён с ошибкой",
         output_data=provider_data or {},
@@ -383,17 +392,10 @@ async def apply_sber_status(
     if status.is_paid:
         payment.status = PaymentStatus.SUCCEEDED
         payment.confirmed_at = datetime.now(timezone.utc)
-        await record_operation_event(
-            session,
-            operation_id=payment.id,
-            domain="payment",
-            operation="tariff_payment",
+        await _trace_payment_operation(
+            payment,
             step="bank_confirmed_paid",
             status="success",
-            user_id=payment.user_id,
-            subject_type="payment",
-            subject_id=payment.id,
-            provider=payment.provider.value,
             message="Банк подтвердил оплату",
             output_data=safe_data,
         )
