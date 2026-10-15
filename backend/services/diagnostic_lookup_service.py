@@ -217,6 +217,8 @@ async def resolve_diagnostic_query(
     if parsed_uuid is not None:
         event_clauses.append(OperationLogEvent.operation_id == parsed_uuid)
         event_clauses.append(OperationLogEvent.user_id == parsed_uuid)
+    if user_ids:
+        event_clauses.append(OperationLogEvent.user_id.in_(user_ids))
 
     event_result = await session.execute(
         select(OperationLogEvent)
