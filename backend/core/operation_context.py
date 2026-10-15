@@ -12,6 +12,7 @@ class OperationContext:
     operation_id: UUID
     request_id: str | None = None
     actor_user_id: UUID | None = None
+    sequence_no: int = 0
 
 
 _operation_context: ContextVar[OperationContext | None] = ContextVar(
@@ -45,6 +46,16 @@ def get_request_id() -> str | None:
 def get_actor_user_id() -> UUID | None:
     context = get_operation_context()
     return context.actor_user_id if context else None
+
+
+def next_operation_sequence() -> int | None:
+    """Возвращает следующий номер шага внутри текущей цепочки."""
+    context = get_operation_context()
+    if context is None:
+        return None
+    sequence_no = int(context.sequence_no or 0) + 1
+    _operation_context.set(replace(context, sequence_no=sequence_no))
+    return sequence_no
 
 
 def bind_actor_user(user_id: UUID | str | None) -> None:
