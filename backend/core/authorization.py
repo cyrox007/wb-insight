@@ -7,7 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.access_control import Permission, permissions_for_roles
 from core.dependencies import get_db_session
 from core.middleware import auth_middle
+from core.operation_context import get_operation_context
 from models.users_model import User, UserRole, UserRoleAssociation
+from services.operation_log_service import persist_current_operation_event
 
 
 ADMIN_ROLES = {
@@ -16,15 +18,57 @@ ADMIN_ROLES = {
 }
 
 
+async def _trace_authorization(
+    *,
+    request: Request,
+    required_permission: str,
+    roles: set[str],
+    permissions: set[Permission],
+    allowed: bool,
+) -> None:
+    if get_operation_context() is None:
+        return
+    user_id = getattr(request.state, "user_id", None)
+    await persist_current_operation_event(
+        domain="auth",
+        operation="permission_check",
+        step="permission_allowed" if allowed else "permission_denied",
+        status="success" if allowed else "warning",
+        severity="info" if allowed else "warning",
+        event_kind="security_decision",
+        component="authorization",
+        direction="internal",
+        user_id=user_id,
+        subject_type="user" if user_id else None,
+        subject_id=user_id,
+        error_code=None if allowed else "permission_denied",
+        message=(
+            f"Доступ разрешён по праву {required_permission}"
+            if allowed
+            else f"Доступ отклонён: отсутствует право {required_permission}"
+        ),
+        input_data={
+            "required_permission": required_permission,
+            "path": request.url.path,
+            "method": request.method,
+        },
+        output_data={
+            "roles": sorted(roles),
+            "effective_permissions": sorted(item.value for item in permissions),
+            "allowed": allowed,
+        },
+    )
+
+
 async def _get_active_user_roles(
     request: Request,
     db_session: AsyncSession,
 ) -> set[str]:
-    """Load roles from the database for the authenticated active user.
+    """Загружает роли из БД для активного аутентифицированного пользователя.
 
-    Roles are deliberately not trusted from the JWT or frontend state. This
-    makes role changes effective immediately and prevents stale/forged client
-    state from granting control-panel access.
+    Роли намеренно не доверяются JWT и состоянию фронтенда. Поэтому изменение
+    ролей начинает действовать сразу, а устаревшее клиентское состояние не может
+    выдать дополнительный доступ к панели управления.
     """
     payload = getattr(request.state, "user", None) or {}
     raw_user_id = payload.get("sub")
@@ -72,13 +116,7 @@ async def _get_active_user_roles(
 
 
 def require_permission(permission: Permission):
-    """Create a FastAPI dependency enforcing one application permission.
-
-    Roles are loaded from the database on every protected request so permission
-    changes take effect immediately. The resolved permission set is exposed on
-    request.state for handlers/UI capability payloads, but authorization never
-    trusts frontend state or JWT role claims.
-    """
+    """Создаёт зависимость FastAPI для проверки одного прикладного права."""
     async def dependency(
         request: Request,
         db_session: AsyncSession = Depends(get_db_session),
@@ -87,8 +125,16 @@ def require_permission(permission: Permission):
         roles = await _get_active_user_roles(request, db_session)
         permissions = permissions_for_roles(roles)
         request.state.permissions = {item.value for item in permissions}
+        allowed = permission in permissions
+        await _trace_authorization(
+            request=request,
+            required_permission=permission.value,
+            roles=roles,
+            permissions=permissions,
+            allowed=allowed,
+        )
 
-        if permission not in permissions:
+        if not allowed:
             request.state.audit_error_code = "permission_denied"
             request.state.audit_metadata = {
                 "required_permission": permission.value,
@@ -110,13 +156,21 @@ async def require_admin(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Compatibility dependency for control-panel access."""
+    """Совместимая проверка доступа к панели управления."""
     await auth_middle(request)
     roles = await _get_active_user_roles(request, db_session)
     permissions = permissions_for_roles(roles)
     request.state.permissions = {item.value for item in permissions}
+    allowed = Permission.CONTROL_PANEL_ACCESS in permissions
+    await _trace_authorization(
+        request=request,
+        required_permission=Permission.CONTROL_PANEL_ACCESS.value,
+        roles=roles,
+        permissions=permissions,
+        allowed=allowed,
+    )
 
-    if Permission.CONTROL_PANEL_ACCESS not in permissions:
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"status": "error", "error_type": "admin_required"},
@@ -127,13 +181,21 @@ async def require_super_admin(
     request: Request,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> None:
-    """Compatibility dependency for super-admin-only operations."""
+    """Совместимая проверка операций, доступных только системному администратору."""
     await auth_middle(request)
     roles = await _get_active_user_roles(request, db_session)
     permissions = permissions_for_roles(roles)
     request.state.permissions = {item.value for item in permissions}
+    allowed = Permission.SYSTEM_MANAGE in permissions
+    await _trace_authorization(
+        request=request,
+        required_permission=Permission.SYSTEM_MANAGE.value,
+        roles=roles,
+        permissions=permissions,
+        allowed=allowed,
+    )
 
-    if Permission.SYSTEM_MANAGE not in permissions:
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"status": "error", "error_type": "super_admin_required"},
