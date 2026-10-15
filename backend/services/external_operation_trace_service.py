@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.operation_context import get_operation_context
 from services.operation_log_service import persist_current_operation_event
 
 
@@ -26,6 +27,8 @@ async def trace_external_request(
     input_data: dict[str, Any] | None = None,
     attempt: int | None = None,
 ) -> None:
+    if get_operation_context() is None:
+        return
     await persist_current_operation_event(
         domain="external_api",
         operation=f"{provider}_request",
@@ -61,6 +64,8 @@ async def trace_external_response(
     message: str | None = None,
     attempt: int | None = None,
 ) -> None:
+    if get_operation_context() is None:
+        return
     status, severity = _response_status(http_status)
     await persist_current_operation_event(
         domain="external_api",
