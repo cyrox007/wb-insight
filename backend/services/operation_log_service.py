@@ -26,6 +26,7 @@ _SAFE_IDENTIFIER_KEYS = {
     "user_id",
 }
 _SECRET_KEYS = {
+    "token",
     "authorization",
     "cookie",
     "set_cookie",
