@@ -1,0 +1,38 @@
+name: Branch policy
+
+on:
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  branch-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Проверить направление pull request
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$BASE_REF" == "main" && "$HEAD_REF" != "dev" ]]; then
+            echo "Ошибка: ветка main принимает только проверенное повышение из dev." >&2
+            exit 1
+          fi
+
+          if [[ "$BASE_REF" == "dev" && "$HEAD_REF" == "main" ]]; then
+            echo "Ошибка: обратное слияние main в dev через рабочий PR запрещено." >&2
+            exit 1
+          fi
+
+          echo "Направление pull request соответствует правилам проекта: $HEAD_REF -> $BASE_REF"
+
+      - name: Подтвердить ручной запуск проверки
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "Контракт веток загружен и доступен для pull request в dev/main."
