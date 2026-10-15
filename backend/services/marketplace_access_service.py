@@ -21,6 +21,15 @@ from utils.token_crypto import decrypt_token
 logger = setup_logger(__name__)
 
 
+def _subscription_diagnostics(subscription) -> dict:
+    status = getattr(subscription, "status", None)
+    return {
+        "subscription_id": getattr(subscription, "id", None),
+        "subscription_status": getattr(status, "value", status),
+        "tariff_id": getattr(subscription, "tariff_id", None),
+    }
+
+
 async def _trace_marketplace_access(
     *,
     user_id: UUID,
@@ -84,9 +93,7 @@ async def get_wb_account_limit(
         severity="info" if limit > 0 else "warning",
         error_code=None if limit > 0 else "WB_ACCOUNT_LIMIT_ZERO",
         output_data={
-            "subscription_id": subscription.id,
-            "subscription_status": subscription.status.value,
-            "tariff_id": subscription.tariff_id,
+            **_subscription_diagnostics(subscription),
             "wb_accounts_limit": limit,
             "limit_configured": tariff_limit is not None,
         },
@@ -124,8 +131,7 @@ async def get_wb_sync_frequency_hours(
         user_id=user_id,
         step="sync_frequency_resolved",
         output_data={
-            "subscription_id": subscription.id,
-            "tariff_id": subscription.tariff_id,
+            **_subscription_diagnostics(subscription),
             "sync_frequency_hours": value,
         },
     )
