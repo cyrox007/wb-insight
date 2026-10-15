@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.operation_context import get_operation_context
 from models.sync_job_model import SyncJob
 from services.operation_log_service import record_operation_event
 from settings import config
@@ -56,17 +57,30 @@ async def create_sync_job(
     if job_id is None:
         return False
 
+    context = get_operation_context()
+    parent_operation_id = None
+    actor_user_id = None
+    request_id = None
+    if context is not None:
+        actor_user_id = context.actor_user_id
+        request_id = context.request_id
+        if context.operation_id != job_id:
+            parent_operation_id = context.operation_id
+
     await record_operation_event(
         session,
         operation_id=job_id,
+        parent_operation_id=parent_operation_id,
         domain="sync",
         operation="marketplace_sync",
         step="job_created",
         status="started",
         user_id=user_id,
+        actor_user_id=actor_user_id,
         subject_type="sync_job",
         subject_id=job_id,
         provider="wildberries",
+        request_id=request_id,
         message=f"Создана задача синхронизации '{entity}'",
         input_data={
             "token_id": token_id,
