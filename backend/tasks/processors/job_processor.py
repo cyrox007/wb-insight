@@ -210,9 +210,9 @@ async def process_job(session: AsyncSession, job: SyncJob) -> None:
         message="Подключение прошло локальные проверки и допущено к запросу Wildberries",
         output_data={
             "token_id": token.id,
-            "token_type": token.token_type,
+            "token_type": getattr(token, "token_type", None),
             "entity": job.entity,
-            "expires_at": token.expires_at,
+            "expires_at": getattr(token, "expires_at", None),
         },
     )
 
