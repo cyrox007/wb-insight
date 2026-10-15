@@ -14,6 +14,14 @@ from tasks.processors import job_processor
 from tasks.schedulers import state_scheduler
 
 
+@pytest.fixture(autouse=True)
+def disable_operation_trace(monkeypatch):
+    async def noop_trace(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(job_processor, "record_operation_event", noop_trace)
+
+
 def test_active_sync_job_uniqueness_is_account_scoped():
     index = next(index for index in SyncJob.__table__.indexes if index.name == "uq_job_active")
 
