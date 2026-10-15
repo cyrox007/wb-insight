@@ -100,3 +100,50 @@ async def get_complete_operation_trace(
     )
     events = list(result.scalars().all())
     return root_id, sorted(known_ids, key=str), events
+
+
+async def get_complete_request_trace(
+    session: AsyncSession,
+    request_id: str,
+    *,
+    max_depth: int = 12,
+    max_operations: int = 500,
+) -> tuple[list[UUID], list[UUID], list[OperationLogEvent]]:
+    """Раскрывает HTTP-запрос вместе со всеми дочерними бизнес-операциями."""
+
+    normalized = str(request_id or "").strip()[:64]
+    result = await session.execute(
+        select(OperationLogEvent.operation_id)
+        .where(OperationLogEvent.request_id == normalized)
+        .distinct()
+    )
+    direct_operation_ids = set(result.scalars().all())
+    if not direct_operation_ids:
+        return [], [], []
+
+    roots: set[UUID] = set()
+    operation_ids: set[UUID] = set()
+    for operation_id in sorted(direct_operation_ids, key=str):
+        root_id, linked_ids, _ = await get_complete_operation_trace(
+            session,
+            operation_id,
+            max_depth=max_depth,
+            max_operations=max_operations,
+        )
+        roots.add(root_id)
+        operation_ids.update(linked_ids)
+        if len(operation_ids) >= max_operations:
+            break
+
+    selected_ids = sorted(operation_ids, key=str)[:max_operations]
+    result = await session.execute(
+        select(OperationLogEvent)
+        .where(OperationLogEvent.operation_id.in_(selected_ids))
+        .order_by(
+            OperationLogEvent.created_at,
+            OperationLogEvent.sequence_no.asc().nullslast(),
+            OperationLogEvent.id,
+        )
+    )
+    events = list(result.scalars().all())
+    return sorted(roots, key=str), selected_ids, events
