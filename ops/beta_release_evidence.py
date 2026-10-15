@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Canonical beta manifest entrypoint with mandatory and conditional P40 subproofs."""
+"""Канонический beta manifest с обязательными и условными поддоказательствами P40."""
 
 from __future__ import annotations
 
@@ -37,9 +37,9 @@ def _load_json(path: Path, *, label: str) -> dict:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError(f"{label} must be valid UTF-8 JSON") from exc
+        raise ValueError(f"{label}: требуется корректный UTF-8 JSON") from exc
     if not isinstance(value, dict):
-        raise ValueError(f"{label} must contain a JSON object")
+        raise ValueError(f"{label}: ожидается JSON-объект")
     return value
 
 
@@ -50,35 +50,47 @@ def _artifact_path(artifacts: list[str], kind: str) -> Path:
         if parsed_kind == kind:
             matches.append(path)
     if len(matches) != 1:
-        raise ValueError(f"beta evidence requires exactly one {kind} artifact")
+        raise ValueError(f"Beta evidence требует ровно один артефакт {kind}")
     return matches[0]
 
 
 def _validate_beta_mail_gateway_binding(core_smoke_path: Path) -> None:
-    """Require the current P40 beta candidate to prove the RuSender auth-mail path."""
-    report = _load_json(core_smoke_path, label="core_smoke artifact")
+    """Проверяет реальную готовность auth-mail без привязки к поставщику."""
+    report = _load_json(core_smoke_path, label="артефакт core_smoke")
     checks = report.get("checks")
     if not isinstance(checks, dict) or checks.get("mail_gateway_ready") is not True:
-        raise ValueError("beta core_smoke must prove authenticated mail gateway readiness")
+        raise ValueError("Beta core_smoke должен подтверждать готовность почтового шлюза")
 
     gateway = report.get("mail_gateway")
     if not isinstance(gateway, dict):
-        raise ValueError("beta core_smoke is missing sanitized mail gateway metadata")
+        raise ValueError("Beta core_smoke не содержит безопасные metadata почтового шлюза")
 
     provider = str(gateway.get("provider") or "").strip().lower()
+    if not provider:
+        raise ValueError("Beta mail evidence не содержит фактический почтовый провайдер")
+
     expected_provider = str(gateway.get("expected_provider") or "").strip().lower()
-    if provider != "rusender" or expected_provider != "rusender":
+    if expected_provider and expected_provider != provider:
         raise ValueError(
-            "P40 beta mail evidence must pin and observe the RuSender provider"
+            "Beta mail evidence не совпадает с ожидаемым провайдером: "
+            f"ожидался {expected_provider}, получен {provider}"
         )
+
+    if gateway.get("transactional") is not True:
+        raise ValueError("Beta mail evidence должен подтверждать transactional capability")
+
+    transport_kind = str(gateway.get("transport_kind") or "").strip().lower()
+    if not transport_kind or transport_kind == "unknown":
+        raise ValueError("Beta mail evidence не содержит тип почтового транспорта")
+
     if gateway.get("email_verification_ready") is not True:
-        raise ValueError("P40 beta mail evidence must prove email verification readiness")
+        raise ValueError("Beta mail evidence должен подтверждать готовность email verification")
     if gateway.get("password_reset_ready") is not True:
-        raise ValueError("P40 beta mail evidence must prove password reset readiness")
+        raise ValueError("Beta mail evidence должен подтверждать готовность password reset")
 
     source = str(gateway.get("source") or "").strip().lower()
     if source not in {"database", "environment"}:
-        raise ValueError("P40 beta mail evidence has an invalid effective config source")
+        raise ValueError("Beta mail evidence содержит неверный источник эффективной конфигурации")
 
 
 def _validate_wb_live_binding(
@@ -97,25 +109,25 @@ def _validate_wb_live_binding(
         commit=commit,
         environment=environment,
     )
-    accuracy_report = _load_json(data_accuracy_path, label="data_accuracy artifact")
-    accuracy_input = _load_json(accuracy_input_path, label="data-accuracy input")
+    accuracy_report = _load_json(data_accuracy_path, label="артефакт data_accuracy")
+    accuracy_input = _load_json(accuracy_input_path, label="вход data-accuracy")
     accuracy_input_hash = _sha256(accuracy_input_path)
     if str(proof.get("data_accuracy_sha256") or "").lower() != _sha256(data_accuracy_path).lower():
-        raise ValueError("WB live data proof is not bound to the supplied data_accuracy artifact")
+        raise ValueError("WB live data proof не связан с переданным артефактом data_accuracy")
     if str(proof.get("accuracy_input_sha256") or "").lower() != accuracy_input_hash.lower():
-        raise ValueError("WB live data proof is not bound to the supplied accuracy input")
+        raise ValueError("WB live data proof не связан с переданным accuracy input")
     if str(accuracy_report.get("input_sha256") or "").lower() != accuracy_input_hash.lower():
-        raise ValueError("data_accuracy artifact is not bound to the supplied accuracy input")
+        raise ValueError("Артефакт data_accuracy не связан с переданным accuracy input")
     if str(accuracy_input.get("wb_account_fingerprint") or "").lower() != str(
         proof.get("wb_account_fingerprint") or ""
     ).lower():
-        raise ValueError("accuracy input and WB live data proof identify different seller accounts")
+        raise ValueError("Accuracy input и WB live data proof относятся к разным seller account")
 
-    deployment = _load_json(deployment_path, label="deployment artifact")
+    deployment = _load_json(deployment_path, label="артефакт deployment")
     deployment_origin = str(deployment.get("public_origin") or "").rstrip("/")
     proof_origin = str(proof.get("public_origin") or "").rstrip("/")
     if not deployment_origin or proof_origin != deployment_origin:
-        raise ValueError("WB live data proof and deployment must target the same public origin")
+        raise ValueError("WB live data proof и deployment должны использовать один public origin")
 
 
 def _bind_beta_proofs(
@@ -126,14 +138,14 @@ def _bind_beta_proofs(
     accuracy_input_path: Path,
     sber_sandbox_path: Path | None,
 ) -> None:
-    manifest = _load_json(manifest_path, label="generated candidate manifest")
+    manifest = _load_json(manifest_path, label="сгенерированный candidate manifest")
     if manifest.get("status") != "complete":
-        raise ValueError("generated candidate manifest is not complete")
+        raise ValueError("Сгенерированный candidate manifest не завершён")
 
     required = manifest.get("required_artifact_kinds")
     artifacts = manifest.get("artifacts")
     if not isinstance(required, list) or not isinstance(artifacts, list):
-        raise ValueError("generated candidate manifest has invalid artifact metadata")
+        raise ValueError("Candidate manifest содержит неверные metadata артефактов")
     if "backup_restore" not in required:
         required.append("backup_restore")
         required.sort()
@@ -158,7 +170,7 @@ def _bind_beta_proofs(
 
     subproofs = manifest.setdefault("candidate_subproofs", {})
     if not isinstance(subproofs, dict):
-        raise ValueError("generated candidate manifest has invalid candidate_subproofs")
+        raise ValueError("Candidate manifest содержит неверный candidate_subproofs")
     for name, proof_path in (
         ("backup_restore", backup_restore_path),
         ("wb_live_data", wb_live_data_path),
@@ -201,7 +213,7 @@ def main() -> int:
     parser.add_argument(
         "--sber-sandbox-proof",
         type=Path,
-        help="Optional P40 Sber sandbox merchant proof; validated and hash-bound when provided",
+        help="Необязательный merchant proof Sber sandbox; при наличии проверяется и связывается по hash",
     )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -209,10 +221,10 @@ def main() -> int:
     environment = args.environment.strip()
     commit = args.commit.strip()
     if not environment:
-        print("beta_release_error=environment must be non-empty", file=sys.stderr)
+        print("beta_release_error=environment не должен быть пустым", file=sys.stderr)
         return 2
     if SHA40_RE.fullmatch(commit) is None:
-        print("beta_release_error=commit must be a full 40-character Git SHA", file=sys.stderr)
+        print("beta_release_error=commit должен быть полным 40-символьным Git SHA", file=sys.stderr)
         return 2
 
     try:
@@ -240,10 +252,10 @@ def main() -> int:
         )
 
         if args.sber_sandbox_proof is not None:
-            deployment = _load_json(deployment_path, label="deployment artifact")
+            deployment = _load_json(deployment_path, label="артефакт deployment")
             public_origin = str(deployment.get("public_origin") or "").strip()
             if not public_origin:
-                raise ValueError("deployment artifact is missing public_origin")
+                raise ValueError("Артефакт deployment не содержит public_origin")
             validate_sber_sandbox_evidence(
                 args.sber_sandbox_proof,
                 version=version,
@@ -301,7 +313,7 @@ def main() -> int:
         return 2
 
     suffix = " + Sber sandbox proof" if args.sber_sandbox_proof is not None else ""
-    print(f"[ok] strict beta evidence manifest with WB/data + backup/restore proof{suffix}: {args.output}")
+    print(f"[ok] строгий beta evidence manifest с WB/data + backup/restore proof{suffix}: {args.output}")
     return 0
 
 
