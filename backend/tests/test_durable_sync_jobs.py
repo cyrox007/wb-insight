@@ -55,7 +55,6 @@ def _job_identity():
         "user_id": uuid4(),
         "token_id": uuid4(),
         "entity": "sales",
-        "payload": {},
     }
 
 
