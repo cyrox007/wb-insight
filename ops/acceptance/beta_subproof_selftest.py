@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-test strict beta subproof binding for WB/data, backup and optional Sber."""
+"""Самопроверка обязательных и условных beta-поддоказательств."""
 
 from __future__ import annotations
 
@@ -31,6 +31,27 @@ def _manifest() -> dict:
     }
 
 
+def _mail_gateway(provider: str, *, expected_provider: str | None = None) -> dict:
+    return {
+        "schema_version": 1,
+        "kind": "release_smoke",
+        "status": "pass",
+        "checks": {"mail_gateway_ready": True},
+        "mail_gateway": {
+            "provider": provider,
+            "expected_provider": expected_provider,
+            "source": "database",
+            "config_source": "auto",
+            "transport_kind": "https_api",
+            "transactional": True,
+            "marketing": True,
+            "one_click_unsubscribe": True,
+            "email_verification_ready": True,
+            "password_reset_ready": True,
+        },
+    }
+
+
 def main() -> int:
     with TemporaryDirectory() as raw_tmp:
         tmp = Path(raw_tmp)
@@ -46,34 +67,31 @@ def main() -> int:
         _write(sber, {"kind": "sber_sandbox", "status": "pass"})
 
         core_smoke = tmp / "core-smoke.json"
-        _write(
-            core_smoke,
-            {
-                "schema_version": 1,
-                "kind": "release_smoke",
-                "status": "pass",
-                "checks": {"mail_gateway_ready": True},
-                "mail_gateway": {
-                    "provider": "rusender",
-                    "expected_provider": "rusender",
-                    "source": "database",
-                    "config_source": "auto",
-                    "email_verification_ready": True,
-                    "password_reset_ready": True,
-                },
-            },
-        )
+
+        _write(core_smoke, _mail_gateway("resend", expected_provider="resend"))
         _validate_beta_mail_gateway_binding(core_smoke)
 
-        broken_mail = json.loads(core_smoke.read_text(encoding="utf-8"))
-        broken_mail["mail_gateway"]["provider"] = "smtp"
+        _write(core_smoke, _mail_gateway("smtp"))
+        _validate_beta_mail_gateway_binding(core_smoke)
+
+        broken_mail = _mail_gateway("resend", expected_provider="rusender")
         _write(core_smoke, broken_mail)
         try:
             _validate_beta_mail_gateway_binding(core_smoke)
         except ValueError as exc:
-            assert "RuSender" in str(exc)
+            assert "ожидаемым провайдером" in str(exc)
         else:
-            raise AssertionError("SMTP mail evidence unexpectedly passed P40 beta binding")
+            raise AssertionError("Несовпадающий ожидаемый провайдер неожиданно прошёл beta binding")
+
+        broken_capability = _mail_gateway("resend")
+        broken_capability["mail_gateway"]["transactional"] = False
+        _write(core_smoke, broken_capability)
+        try:
+            _validate_beta_mail_gateway_binding(core_smoke)
+        except ValueError as exc:
+            assert "transactional capability" in str(exc)
+        else:
+            raise AssertionError("Провайдер без transactional capability неожиданно прошёл beta binding")
 
         _write(manifest, _manifest())
         _bind_beta_proofs(
@@ -110,7 +128,7 @@ def main() -> int:
         assert "sber_sandbox" not in report["candidate_subproofs"]
         assert "beta_sber_sandbox_evidence_present" not in report
 
-    print("[ok] beta mandatory/conditional subproof binding self-test")
+    print("[ok] provider-neutral beta subproof self-test")
     return 0
 
 
