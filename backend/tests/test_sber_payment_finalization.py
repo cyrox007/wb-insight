@@ -13,6 +13,14 @@ class FakeSession:
         return None
 
 
+@pytest.fixture(autouse=True)
+def disable_operation_trace(monkeypatch):
+    async def noop_trace(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(payment_service, "record_operation_event", noop_trace)
+
+
 def make_payment():
     return SimpleNamespace(
         id=uuid4(),
