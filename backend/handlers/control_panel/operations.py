@@ -7,7 +7,8 @@ from core.access_control import Permission
 from core.authorization import require_permission
 from core.dependencies import get_db_session
 from services.operation_log_service import (
-    get_operation_timeline,
+    get_operation_trace,
+    get_request_timeline,
     list_operation_events,
     operation_event_payload,
     sanitize_operation_data,
@@ -90,7 +91,10 @@ async def get_operation_diagnostics(
     operation_id: UUID,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    events = await get_operation_timeline(db_session, operation_id)
+    root_operation_id, operation_ids, events = await get_operation_trace(
+        db_session,
+        operation_id,
+    )
     if not events:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -98,7 +102,39 @@ async def get_operation_diagnostics(
         )
     return sanitize_operation_data(
         {
-            "operation_id": str(operation_id),
+            "requested_operation_id": str(operation_id),
+            "root_operation_id": str(root_operation_id),
+            "operation_ids": [str(item) for item in operation_ids],
+            "events": [operation_event_payload(item) for item in events],
+        }
+    )
+
+
+@router.get(
+    "/diagnostics/requests/{request_id}",
+    dependencies=[Depends(require_permission(Permission.DIAGNOSTICS_READ))],
+)
+async def get_request_diagnostics(
+    request_id: str,
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    normalized = str(request_id or "").strip()
+    if len(normalized) < 8 or len(normalized) > 64:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Некорректный request_id",
+        )
+    events = await get_request_timeline(db_session, normalized)
+    if not events:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="HTTP-запрос в диагностическом журнале не найден",
+        )
+    operation_ids = sorted({str(item.operation_id) for item in events})
+    return sanitize_operation_data(
+        {
+            "request_id": normalized,
+            "operation_ids": operation_ids,
             "events": [operation_event_payload(item) for item in events],
         }
     )
@@ -109,22 +145,32 @@ async def get_operation_diagnostics(
     dependencies=[Depends(require_permission(Permission.DIAGNOSTICS_READ))],
 )
 async def list_diagnostic_events(
+    operation_id: UUID | None = Query(default=None),
     user_id: UUID | None = Query(default=None),
     domain: str | None = Query(default=None, max_length=32),
     event_status: str | None = Query(default=None, alias="status", max_length=16),
     severity: str | None = Query(default=None, max_length=16),
+    component: str | None = Query(default=None, max_length=96),
     request_id: str | None = Query(default=None, max_length=64),
+    subject_type: str | None = Query(default=None, max_length=64),
+    subject_id: str | None = Query(default=None, max_length=160),
+    provider: str | None = Query(default=None, max_length=64),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
     events = await list_operation_events(
         db_session,
+        operation_id=operation_id,
         user_id=user_id,
         domain=domain,
         status=event_status,
         severity=severity,
+        component=component,
         request_id=request_id,
+        subject_type=subject_type,
+        subject_id=subject_id,
+        provider=provider,
         limit=limit,
         offset=offset,
     )
