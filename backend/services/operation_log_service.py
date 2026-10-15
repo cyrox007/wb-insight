@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import Database
 from core.logger import setup_logger
+from core.operation_context import get_operation_context
 from models.operation_log_event import OperationLogEvent
 
 
@@ -200,12 +201,53 @@ async def persist_operation_event(**kwargs: Any) -> OperationLogEvent | None:
         await session.rollback()
         logger.exception(
             "Не удалось сохранить событие операционной диагностики: operation=%s step=%s",
-            kwargs.get("operation"),
-            kwargs.get("step"),
+            kwargs.get("operation"), kwargs.get("step"),
         )
         return None
     finally:
         await session.close()
+
+
+async def persist_current_operation_event(
+    *,
+    domain: str,
+    operation: str,
+    step: str,
+    status: str,
+    operation_id: UUID | str | None = None,
+    parent_operation_id: UUID | str | None = None,
+    user_id: UUID | str | None = None,
+    actor_user_id: UUID | str | None = None,
+    request_id: str | None = None,
+    **kwargs: Any,
+) -> OperationLogEvent | None:
+    """Добавляет шаг к текущей сквозной операции без передачи контекста вручную."""
+
+    context = get_operation_context()
+    resolved_operation_id = operation_id or (context.operation_id if context else None)
+    if resolved_operation_id is None:
+        resolved_operation_id = uuid4()
+
+    resolved_actor = actor_user_id
+    if resolved_actor is None and context is not None:
+        resolved_actor = context.actor_user_id
+    resolved_user = user_id if user_id is not None else resolved_actor
+    resolved_request_id = request_id
+    if resolved_request_id is None and context is not None:
+        resolved_request_id = context.request_id
+
+    return await persist_operation_event(
+        operation_id=resolved_operation_id,
+        parent_operation_id=parent_operation_id,
+        domain=domain,
+        operation=operation,
+        step=step,
+        status=status,
+        user_id=resolved_user,
+        actor_user_id=resolved_actor,
+        request_id=resolved_request_id,
+        **kwargs,
+    )
 
 
 def operation_event_payload(event: OperationLogEvent) -> dict[str, Any]:
@@ -247,18 +289,72 @@ async def get_operation_timeline(
     return list(result.scalars().all())
 
 
+async def get_operation_trace(
+    session: AsyncSession,
+    operation_id: UUID,
+    *,
+    max_depth: int = 8,
+) -> tuple[UUID, list[UUID], list[OperationLogEvent]]:
+    """Восстанавливает родительскую и дочерние операции одной цепочки."""
+
+    known_ids: set[UUID] = {operation_id}
+    root_id = operation_id
+
+    for _ in range(max(1, max_depth)):
+        result = await session.execute(
+            select(OperationLogEvent.parent_operation_id)
+            .where(
+                OperationLogEvent.operation_id == root_id,
+                OperationLogEvent.parent_operation_id.is_not(None),
+            )
+            .limit(1)
+        )
+        parent_id = result.scalar_one_or_none()
+        if parent_id is None or parent_id in known_ids:
+            break
+        known_ids.add(parent_id)
+        root_id = parent_id
+
+    frontier = {root_id}
+    for _ in range(max(1, max_depth)):
+        result = await session.execute(
+            select(OperationLogEvent.operation_id)
+            .where(OperationLogEvent.parent_operation_id.in_(frontier))
+            .distinct()
+        )
+        children = set(result.scalars().all()) - known_ids
+        if not children:
+            break
+        known_ids.update(children)
+        frontier = children
+
+    result = await session.execute(
+        select(OperationLogEvent)
+        .where(OperationLogEvent.operation_id.in_(known_ids))
+        .order_by(OperationLogEvent.created_at, OperationLogEvent.id)
+    )
+    events = list(result.scalars().all())
+    return root_id, sorted(known_ids, key=str), events
+
+
 async def list_operation_events(
     session: AsyncSession,
     *,
+    operation_id: UUID | None = None,
     user_id: UUID | None = None,
     domain: str | None = None,
     status: str | None = None,
     severity: str | None = None,
     request_id: str | None = None,
+    subject_type: str | None = None,
+    subject_id: str | None = None,
+    provider: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[OperationLogEvent]:
     statement = select(OperationLogEvent)
+    if operation_id is not None:
+        statement = statement.where(OperationLogEvent.operation_id == operation_id)
     if user_id is not None:
         statement = statement.where(OperationLogEvent.user_id == user_id)
     if domain:
@@ -269,6 +365,12 @@ async def list_operation_events(
         statement = statement.where(OperationLogEvent.severity == severity)
     if request_id:
         statement = statement.where(OperationLogEvent.request_id == request_id)
+    if subject_type:
+        statement = statement.where(OperationLogEvent.subject_type == subject_type)
+    if subject_id:
+        statement = statement.where(OperationLogEvent.subject_id == subject_id)
+    if provider:
+        statement = statement.where(OperationLogEvent.provider == provider)
     statement = statement.order_by(desc(OperationLogEvent.created_at), desc(OperationLogEvent.id))
     statement = statement.limit(max(1, min(limit, 500))).offset(max(0, offset))
     result = await session.execute(statement)
