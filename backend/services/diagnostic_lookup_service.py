@@ -13,6 +13,7 @@ from models.sync_job_model import SyncJob
 from models.tariffs_model import TariffPlan
 from models.tokens_model import APIToken
 from models.users_model import User
+from services.operation_context_snapshot_service import build_operation_user_snapshot
 from services.operation_log_service import operation_event_payload
 
 
@@ -54,6 +55,7 @@ async def resolve_diagnostic_query(
             "query": normalized,
             "matches": [],
             "user_ids": [],
+            "user_contexts": [],
             "operation_ids": [],
             "request_ids": [],
             "events": [],
@@ -230,10 +232,18 @@ async def resolve_diagnostic_query(
         if event.user_id:
             user_ids.add(event.user_id)
 
+    sorted_user_ids = sorted(user_ids, key=str)
+    user_contexts = [
+        await build_operation_user_snapshot(user_id)
+        for user_id in sorted_user_ids[:5]
+    ]
+
     return {
         "query": normalized,
         "matches": matches,
-        "user_ids": sorted((str(item) for item in user_ids)),
+        "user_ids": [str(item) for item in sorted_user_ids],
+        "user_contexts": user_contexts,
+        "contexts_truncated": len(sorted_user_ids) > 5,
         "operation_ids": sorted((str(item) for item in operation_ids)),
         "request_ids": sorted(request_ids),
         "events": [operation_event_payload(item) for item in events],
