@@ -6,11 +6,11 @@
 
 На release PR автоматически проверяются backend/frontend dependency audits и test suites, frontend production build, Alembic clean upgrade/check, production images/Compose/gateway routing, encrypted PostgreSQL backup/restore, canonical version metadata, data-accuracy/evidence contracts и синтаксис release tooling.
 
-CI не доказывает доступность Wildberries/эквайринга/mail provider из production-like environment и не заменяет сверку денежных показателей на реальном seller account.
+CI не доказывает доступность Wildberries, эквайринга и почтового провайдера из production-like окружения и не заменяет сверку денежных показателей на реальном seller account.
 
 ## 2. Production-like core smoke
 
-Канонический runner: `ops/release_smoke.py`. Он запускается только против отдельного HTTPS environment и не должен печатать passwords, access/refresh tokens, marketplace credentials, mail verification/reset tokens или содержимое тестовых писем.
+Канонический runner: `ops/release_smoke.py`. Общая логика жизненного цикла вынесена в `ops/release_smoke_core.py`, а entrypoint содержит актуальную release-policy. Runner запускается только против отдельного HTTPS environment и не должен печатать пароли, access/refresh tokens, marketplace credentials, mail verification/reset tokens или содержимое тестовых писем.
 
 Базовый запуск:
 
@@ -21,11 +21,11 @@ export SMOKE_PASSWORD='...'
 python3 ops/release_smoke.py
 ```
 
-`SMOKE_BASE_URL` — публичный HTTPS origin production-like окружения. Допустимо также передать `https://staging.example.com/api`; runner нормализует оба варианта и отправляет backend-запросы через публичный nginx prefix `/api` ровно один раз. Произвольные path в `SMOKE_BASE_URL` отвергаются, а sanitized evidence по-прежнему привязывается к чистому HTTPS origin без `/api`.
+`SMOKE_BASE_URL` — публичный HTTPS origin production-like окружения. Допустимо также передать `https://staging.example.com/api`; runner нормализует оба варианта и отправляет backend-запросы через публичный nginx prefix `/api` ровно один раз.
 
 `SMOKE_EMAIL`/`SMOKE_PASSWORD` — заранее подготовленный smoke user. Для `SMOKE_AUDIT=true` этот пользователь должен иметь `AUDIT_READ` (`admin`/`super_admin`).
 
-При записи `--evidence-output` runner работает fail-closed: evidence обязано содержать exact Git commit и environment. `--commit` по умолчанию берётся из `RELEASE_SHA` либо из текущего `git rev-parse HEAD`; environment передаётся через `--environment` или `ACCEPTANCE_ENVIRONMENT`. Поэтому sanitized `core_smoke`/`account_lifecycle` нельзя переиспользовать для другого candidate commit с той же версией.
+При записи `--evidence-output` runner работает fail-closed: evidence обязано содержать exact Git commit и environment. `--commit` по умолчанию берётся из `RELEASE_SHA` либо из текущего `git rev-parse HEAD`; environment передаётся через `--environment` или `ACCEPTANCE_ENVIRONMENT`.
 
 Полный core smoke состоит из двух изолированных частей: disposable registration lifecycle и основной authenticated smoke. Проверяются health/readiness/version, legal registry, registration/legal evidence/demo, login/refresh/logout, dashboard contract, deactivation и невозможность использовать отозванную сессию.
 
@@ -37,39 +37,42 @@ python3 ops/release_smoke.py --base-url https://staging.example.com --public-onl
 
 `--skip-disposable-registration` / `SMOKE_SKIP_DISPOSABLE_REGISTRATION=true` разрешён только для диагностики. Такой прогон не закрывает beta gate.
 
-Для фактического P40 используется fail-closed режим `--beta-gate` (или `SMOKE_BETA_GATE=true`). Он проверяет обязательные inputs **до первого сетевого запроса** и не позволяет случайно собрать неполный beta smoke. Режим требует:
+Для фактического P40 используется fail-closed режим `--beta-gate` или `SMOKE_BETA_GATE=true`. Он проверяет обязательные входы до первого сетевого запроса и требует:
 
 - HTTPS production-like origin и `VERSION=*-beta.N`;
 - structured `--evidence-output`;
 - disposable registration без skip;
-- real email verification + password reset;
-- mail-gateway preflight с exact provider `rusender`;
+- реальное email verification и password reset;
+- authenticated mail-gateway preflight;
 - staff/admin credentials, provider-neutral inbox hook и доставляемый `{uuid}` address;
 - durable audit smoke;
 - реальный `SMOKE_WB_TOKEN`.
 
-Обычный smoke остаётся гибким для диагностики; `--beta-gate` — канонический release-вариант.
+**Beta gate больше не требует RuSender или другого конкретного поставщика.** Готовность почты определяется реальным состоянием шлюза и capabilities выбранного адаптера.
 
-## 3. P40: реальная email verification и password recovery через RuSender
+## 3. Реальная email verification и password recovery
 
-После P38/P39/P42/P43 beta smoke обязан доказать реальную доставку писем. Нельзя закрывать beta с `EMAIL_VERIFICATION_ENABLED=false` или адресом `@smoke.invalid`. Текущий production-like transactional transport — RuSender HTTPS API, поэтому SMTP-порты хостинга не участвуют в этом acceptance.
+Beta smoke обязан доказать реальную доставку писем. Нельзя закрывать beta с `EMAIL_VERIFICATION_ENABLED=false`, `PASSWORD_RESET_ENABLED=false` или адресом `@smoke.invalid`.
 
-Runner поддерживает provider-neutral inbox hook. Нужны:
+WB Insight может использовать SMTP либо HTTPS API-провайдеры, зарегистрированные в почтовом слое. RuSender и Resend являются текущими HTTPS-адаптерами и работают через исходящий порт 443; SMTP остаётся отдельным транспортом. Release acceptance не делает название провайдера частью бизнес-контракта.
+
+Для реального mail flow нужны:
 
 ```bash
 export SMOKE_DISPOSABLE_EMAIL_TEMPLATE='release-smoke+{uuid}@qa.example.com'
-export SMOKE_MAIL_TOKEN_COMMAND='/opt/wb-smoke/read-mail-token'
+export SMOKE_MAIL_TOKEN_COMMAND='python3 ops/imap_mail_token_hook.py'
 export SMOKE_REQUIRE_EMAIL_VERIFICATION=true
 export SMOKE_REQUIRE_PASSWORD_RESET=true
+export SMOKE_MAIL_GATEWAY=true
 ```
 
 `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` обязан содержать `{uuid}` и формировать реально доставляемый уникальный адрес/catch-all mailbox.
 
-`SMOKE_MAIL_TOKEN_COMMAND` запускается **без shell**. Runner передаёт ему два последних argv: `KIND EMAIL`; те же значения доступны как `WB_SMOKE_MAIL_KIND` и `WB_SMOKE_EMAIL`. `KIND` сейчас принимает `email_verification` или `password_reset`. Helper должен дождаться соответствующего письма и вывести в stdout ровно одно значение: raw token либо полный URL, где secret находится только во fragment `#token=...`.
+`SMOKE_MAIL_TOKEN_COMMAND` запускается без shell. Runner передаёт ему два последних argv: `KIND EMAIL`; те же значения доступны как `WB_SMOKE_MAIL_KIND` и `WB_SMOKE_EMAIL`. `KIND` принимает `email_verification` или `password_reset`. Helper должен дождаться соответствующего письма и вывести в stdout ровно одно значение: raw token либо полный URL, где secret находится только во fragment `#token=...`.
 
-Runner захватывает stdout/stderr helper-а и никогда не печатает их при ошибке. URL с `?token=` отвергается. Таймаут регулируется `SMOKE_MAIL_TOKEN_TIMEOUT_SECONDS` (по умолчанию 180 секунд, максимум 1800).
+Runner захватывает stdout/stderr helper-а и не печатает их при ошибке. URL с `?token=` отвергается. Таймаут регулируется `SMOKE_MAIL_TOKEN_TIMEOUT_SECONDS` — по умолчанию 180 секунд, максимум 1800.
 
-В репозитории есть готовый provider-neutral helper `ops/imap_mail_token_hook.py`. Он подходит для отдельного acceptance mailbox, catch-all или alias, если почтовый провайдер даёт IMAP. Credentials передаются только через environment:
+В репозитории есть provider-neutral helper `ops/imap_mail_token_hook.py`. Credentials передаются только через environment:
 
 ```bash
 export SMOKE_IMAP_HOST=imap.provider.example
@@ -80,26 +83,39 @@ export SMOKE_IMAP_MAILBOX=INBOX
 export SMOKE_MAIL_TOKEN_COMMAND='python3 ops/imap_mail_token_hook.py'
 ```
 
-Helper открывает mailbox в read-only режиме, проверяет точного получателя и ожидаемый subject, берёт только bounded recent tail и выводит stdout только verification/reset URL с `#token=`. Message body, IMAP credentials и server authentication responses не попадают в release evidence. Для `SMOKE_DISPOSABLE_EMAIL_TEMPLATE` всё равно нужен уникальный доставляемый адрес с `{uuid}` — например provider alias/plus-addressing или catch-all.
+### Mail gateway preflight
 
-Перед обязательным real-mail flow включается admin preflight почтового шлюза:
+До создания disposable account runner открывает отдельную короткоживущую staff/admin сессию и вызывает `GET /control-panel/mail/gateway`.
+
+Обязательно проверяются:
+
+- `ready=true`;
+- фактический provider присутствует;
+- реестр `capabilities` присутствует;
+- `transactional=true`;
+- при `SMOKE_REQUIRE_EMAIL_VERIFICATION=true` готов verification-контур;
+- при `SMOKE_REQUIRE_PASSWORD_RESET=true` готов recovery-контур.
+
+Если необходимо дополнительно закрепить конкретную конфигурацию окружения, можно передать:
 
 ```bash
-export SMOKE_BETA_GATE=true
-export SMOKE_MAIL_GATEWAY=true
-export SMOKE_EXPECTED_MAIL_PROVIDER=rusender
+export SMOKE_EXPECTED_MAIL_PROVIDER=resend
 ```
 
-Runner **до создания disposable account** открывает отдельную короткоживущую staff/admin сессию, вызывает `GET /control-panel/mail/gateway`, fail-fast проверяет transport и затем отзывает preflight-сессию:
+Это **не обязательное требование beta gate**, а дополнительная точная проверка: observed provider должен совпасть с указанным. Допустимый код не ограничен списком `smtp/rusender/resend`; корректность и возможности реального адаптера подтверждаются ответом backend.
 
-- effective transport имеет `ready=true`;
-- provider совпадает с ожидаемым, если задан `SMOKE_EXPECTED_MAIL_PROVIDER`;
-- при `SMOKE_REQUIRE_EMAIL_VERIFICATION=true` готов именно verification-контур, а не только transport;
-- при `SMOKE_REQUIRE_PASSWORD_RESET=true` готов именно recovery-контур.
+При `--evidence-output` сохраняется только безопасная mail metadata:
 
-Для этой фазы `SMOKE_EMAIL` должен принадлежать staff/admin аккаунту с `mail:read`. Проверка не отправляет письмо и не раскрывает credentials. Если provider/config/verification/recovery не готовы, smoke завершается **до регистрации тестового пользователя и до ожидания почты**, поэтому причина blocker-а не маскируется timeout-ом inbox hook.
+- фактический provider;
+- необязательный expected provider;
+- config source;
+- `transport_kind`;
+- признаки `transactional`, `marketing`, `one_click_unsubscribe`;
+- readiness verification/recovery.
 
-При `--evidence-output` runner сохраняет только безопасную mail metadata: observed/expected provider, effective config source и boolean readiness verification/recovery. Host credentials, API token, Key ID, sender address и provider response body в evidence не попадают. Для structured evidence `SMOKE_EXPECTED_MAIL_PROVIDER` обязателен; strict P40 beta binder требует, чтобы expected и observed provider были `rusender`.
+Host credentials, API token, Key ID, sender address и provider response body в evidence не попадают.
+
+`ops/beta_release_evidence.py` проверяет именно этот provider-neutral контракт. Beta binder требует готовый transactional transport и фактически доказанные verification/password-reset, но не требует конкретного бренда почтового сервиса.
 
 Beta disposable flow доказывает:
 
@@ -110,18 +126,19 @@ Beta disposable flow доказывает:
 5. session identity содержит `email_verified=true`;
 6. demo активируется после ownership proof;
 7. exact legal consent evidence сохранён;
-8. password reset проходит через тот же реальный RuSender transport;
-9. два немедленных recovery-запроса возвращают одинаковый anti-enumeration response, а staff-only PII-free diagnostic подтверждает, что для нового disposable user материализована ровно одна durable `password_reset` mail row;
+8. password reset проходит через тот же эффективный transactional transport;
+9. два немедленных recovery-запроса возвращают одинаковый anti-enumeration response, а staff-only PII-free diagnostic подтверждает одну durable `password_reset` mail row;
 10. после reset ранее выданный access JWT получает `session_revoked`, а новый пароль восстанавливает ту же identity;
 11. refresh lifecycle и soft-deactivation остаются корректными.
 
-Throttle proof использует только UUID disposable user и агрегат `password_reset_messages + resend_seconds` из `GET /control-panel/mail/diagnostics/password-reset/{user_id}`. Endpoint требует `mail:read` и не возвращает email, message/provider IDs, subject/body или token. Поэтому release evidence фиксирует только boolean checks `password_reset_throttle=true` и `password_reset_session_revoked=true`, без PII.
-
-Для локального smoke контракта без сети:
+Для локальной проверки контракта без сети:
 
 ```bash
 python3 ops/release_smoke.py --self-test
+PYTHONPATH=ops python3 ops/acceptance/beta_subproof_selftest.py
 ```
+
+Self-test отдельно закрепляет, что `resend` и `smtp` не отклоняются только из-за имени провайдера, а провайдер без `transactional` capability не проходит beta evidence.
 
 ## 4. Durable audit correlation smoke
 
@@ -138,9 +155,9 @@ Runner отправляет security-sensitive Control Panel read с уника�
 
 В dedicated seller account runner использует отдельно переданный через environment `SMOKE_WB_TOKEN`; токен не следует передавать CLI-аргументом или сохранять в evidence. Проверяется актуальный marketplace legal requirement, live credential validation и обязательный storage/cleanup временного credential.
 
-Для **P40 beta** strict candidate gate требует, чтобы sanitized `core_smoke` содержал `wb_credential=true`, поэтому production-like core smoke запускается с реальным `SMOKE_WB_TOKEN`. Отдельный live-WB/data provenance gate дополнительно связывает data-accuracy с конкретным seller account.
+Для beta sanitized `core_smoke` должен содержать `wb_credential=true`. Отдельный live-WB/data provenance gate дополнительно связывает data-accuracy с конкретным seller account.
 
-Для RC выполняется уже полный Celery sync заявленных доменов и отсутствие необъяснённых auth/permission/rate-limit ошибок; sanitized результат сохраняется как evidence kind `wb_full_sync`.
+Для RC выполняется полный Celery sync заявленных доменов и отсутствие необъяснённых auth/permission/rate-limit ошибок; sanitized результат сохраняется как evidence kind `wb_full_sync`.
 
 ## 6. Data-accuracy acceptance
 
@@ -165,7 +182,7 @@ python3 ops/release_smoke.py
 
 ## 8. Operations smoke
 
-Перед beta/RC по соответствующему gate подтверждаются deployment/rollback, active backend/Celery/Beat, `/health/ready`, secrets review, desktop/mobile UX, role-aware staff workspace, RuSender mail delivery, durable audit, backup/restore. Перед RC дополнительно подключаются внешний uptime monitor, alert destination, centralized logs, off-host encrypted backup и измеренный restore drill/RPO/RTO.
+Перед beta/RC по соответствующему gate подтверждаются deployment/rollback, active backend/Celery/Beat, `/health/ready`, secrets review, desktop/mobile UX, role-aware staff workspace, реальная transactional mail delivery, durable audit, backup/restore. Перед RC дополнительно подключаются внешний uptime monitor, alert destination, centralized logs, off-host encrypted backup и измеренный restore drill/RPO/RTO.
 
 ## WB Web v1 checklist
 
@@ -178,7 +195,7 @@ python3 ops/release_smoke.py
 - [ ] role-aware staff workspace для super_admin/admin/manager/support/analyst;
 - [ ] Control Panel overview/users/user-detail/roles/tariffs/payments/audit/mail desktop/mobile;
 - [ ] user-detail inactive/unverified/staff states;
-- [ ] RuSender gateway state и тестовая transactional доставка;
+- [ ] готовый transactional mail gateway и реальная тестовая доставка независимо от бренда провайдера;
 - [ ] real WB seller connection + full sync;
 - [ ] data-accuracy acceptance;
 - [ ] Overview / Unit Economy / Finance / Inventory / Prices / Ads;
@@ -193,6 +210,6 @@ python3 ops/release_smoke.py
 
 После фактического прогона evidence связывается с exact commit/version через `ops/release_evidence.py`; contract описан в `RELEASE_EVIDENCE.md`.
 
-Для beta manifest v2 обязательны `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`. Real email verification/password reset и P37 audit smoke входят в sanitized `core_smoke`/`account_lifecycle` evidence, а не создают обход существующего manifest contract.
+Для beta manifest v2 обязательны `ci`, `deployment`, `core_smoke`, `account_lifecycle`, `ux_smoke`, `secrets_review`, `data_accuracy`. Real email verification/password reset и audit smoke входят в sanitized `core_smoke`/`account_lifecycle` evidence.
 
 Release evidence не должно содержать passwords, session values, mail tokens, marketplace credentials, merchant credentials или raw customer PII.

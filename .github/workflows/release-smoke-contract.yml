@@ -7,6 +7,7 @@ on:
     paths:
       - VERSION
       - ops/release_smoke.py
+      - ops/release_smoke_core.py
       - ops/systemd_acceptance.py
       - ops/database_upgrade_acceptance.py
       - ops/payment_acceptance.py
@@ -42,12 +43,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate release acceptance CLIs and secret-safe helpers
+      - name: Проверить release acceptance CLI и безопасные helper-скрипты
         shell: bash
         run: |
           set -euo pipefail
           python3 -m py_compile \
             ops/release_smoke.py \
+            ops/release_smoke_core.py \
             ops/systemd_acceptance.py \
             ops/database_upgrade_acceptance.py \
             ops/payment_acceptance.py \
