@@ -48,6 +48,10 @@ _SECRET_KEYS = {
     "cvc",
     "cryptogram",
     "credentials",
+    "form_url",
+    "formurl",
+    "confirmation_url",
+    "payment_url",
 }
 _ALLOWED_STATUSES = {"started", "success", "warning", "failed", "info"}
 _ALLOWED_SEVERITIES = {"info", "warning", "error", "critical"}
