@@ -35,7 +35,7 @@ def _route_permissions(router, path: str, method: str) -> set[str]:
                 )
             )
         }
-    raise AssertionError(f"Route not found: {method} {path}")
+    raise AssertionError(f"Маршрут не найден: {method} {path}")
 
 
 def test_role_permission_matrix_is_explicit():
@@ -47,6 +47,7 @@ def test_role_permission_matrix_is_explicit():
     assert Permission.USERS_WRITE in admin_permissions
     assert Permission.USERS_DELETE in admin_permissions
     assert Permission.TARIFFS_WRITE in admin_permissions
+    assert Permission.DIAGNOSTICS_READ in admin_permissions
     assert Permission.ROLES_WRITE not in admin_permissions
     assert Permission.PAYMENTS_WRITE not in admin_permissions
     assert Permission.MAIL_WRITE not in admin_permissions
@@ -60,6 +61,7 @@ def test_role_permission_matrix_is_explicit():
         Permission.PAYMENTS_READ,
         Permission.MAIL_READ,
         Permission.AUDIT_READ,
+        Permission.DIAGNOSTICS_READ,
     } <= set(manager_permissions)
     assert Permission.USERS_WRITE not in manager_permissions
     assert Permission.USERS_DELETE not in manager_permissions
@@ -73,6 +75,7 @@ def test_role_permission_matrix_is_explicit():
         Permission.CONTROL_PANEL_ACCESS,
         Permission.USERS_READ,
         Permission.AUDIT_READ,
+        Permission.DIAGNOSTICS_READ,
     }
 
     analyst_permissions = permissions_for_role(UserRole.ANALYST)
@@ -294,7 +297,27 @@ def test_control_panel_routes_enforce_granular_permissions():
     ) == {
         "system:manage"
     }
-
+    assert _route_permissions(
+        operations_router,
+        "/control-panel/operations/diagnostics/users",
+        "GET",
+    ) == {
+        "diagnostics:read"
+    }
+    assert _route_permissions(
+        operations_router,
+        "/control-panel/operations/diagnostics/users/{user_id}",
+        "GET",
+    ) == {
+        "diagnostics:read"
+    }
+    assert _route_permissions(
+        operations_router,
+        "/control-panel/operations/diagnostics/operations/{operation_id}",
+        "GET",
+    ) == {
+        "diagnostics:read"
+    }
 
 
 class RoleRequestStub:
@@ -414,7 +437,7 @@ async def test_super_admin_cannot_remove_own_super_admin_role(monkeypatch):
         return object()
 
     async def must_not_lock(*_args, **_kwargs):
-        raise AssertionError("Self-demotion должна блокироваться до удаления роли")
+        raise AssertionError("Самопонижение должно блокироваться до удаления роли")
 
     monkeypatch.setattr(
         roles_handler,

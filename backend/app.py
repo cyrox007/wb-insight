@@ -10,6 +10,7 @@ from core.audit import AuditMiddleware
 from core.auth_security import PublicAuthSecurityMiddleware
 from core.http_metrics import HTTPMetricsMiddleware
 from core.logger import setup_logger
+from core.operation_trace import OperationTraceMiddleware
 from core.session_security import SessionSecurityMiddleware
 from core.version import APP_VERSION
 from handlers.account_lifecycle_handler import account_router, auth_router as account_auth_router
@@ -46,6 +47,7 @@ from utils.responce_helps import response_error
 
 ALLOWED_ORIGINS = config.get_allowed_origins
 ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+TRACE_RESPONSE_HEADERS = ["X-Request-ID", "X-Operation-ID"]
 STATIC_DIRECTORIES = {"static": "/static", "uploads": "/uploads"}
 logger = setup_logger(__name__)
 
@@ -57,6 +59,7 @@ def _setup_cors(app: FastAPI) -> None:
         allow_credentials=True,
         allow_methods=ALLOWED_METHODS,
         allow_headers=["*"],
+        expose_headers=TRACE_RESPONSE_HEADERS,
     )
 
 
@@ -131,6 +134,7 @@ def create_app() -> FastAPI:
     app.add_middleware(PublicAuthSecurityMiddleware)
     app.add_middleware(AuditMiddleware)
     _setup_cors(app)
+    app.add_middleware(OperationTraceMiddleware)
     _setup_static_files(app)
     _register_routers(app)
     return app

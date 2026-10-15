@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request, status
@@ -8,10 +9,13 @@ from core.access_control import Permission, permissions_for_roles
 from core.database import Database
 from core.logger import setup_logger
 from core.middleware import auth_middle
+from core.operation_context import get_operation_context
 from models.users_model import User, UserRole, UserRoleAssociation
+from services.operation_log_service import persist_current_operation_event
 
 
 logger = setup_logger(__name__)
+_MAX_DB_CHANGE_ITEMS = 100
 
 
 def _conflict(error_type: str) -> HTTPException:
@@ -148,14 +152,97 @@ async def _authorize_control_panel(request: Request, db_session: AsyncSession) -
         await _guard_user_mutation(request, db_session, user_id, permissions)
 
 
+def _object_reference(instance: Any, state: str) -> dict[str, Any]:
+    identifier = getattr(instance, "id", None)
+    return {
+        "model": type(instance).__name__,
+        "id": str(identifier) if identifier is not None else None,
+        "state": state,
+    }
+
+
+def _session_change_summary(db_session: AsyncSession) -> dict[str, Any]:
+    sync_session = db_session.sync_session
+    created = list(sync_session.new)
+    changed = list(sync_session.dirty)
+    deleted = list(sync_session.deleted)
+    items = (
+        [_object_reference(item, "created") for item in created]
+        + [_object_reference(item, "changed") for item in changed]
+        + [_object_reference(item, "deleted") for item in deleted]
+    )
+    return {
+        "created": len(created),
+        "changed": len(changed),
+        "deleted": len(deleted),
+        "items": items[:_MAX_DB_CHANGE_ITEMS],
+        "truncated": len(items) > _MAX_DB_CHANGE_ITEMS,
+    }
+
+
+async def _trace_database_step(
+    step: str,
+    status_value: str,
+    *,
+    request: Request,
+    changes: dict[str, Any] | None = None,
+    error_code: str | None = None,
+) -> None:
+    if get_operation_context() is None:
+        return
+    await persist_current_operation_event(
+        domain="database",
+        operation="request_transaction",
+        step=step,
+        status=status_value,
+        severity="error" if status_value == "failed" else "info",
+        event_kind="database_transaction",
+        component="sqlalchemy",
+        direction="internal",
+        error_code=error_code,
+        message=f"Транзакция БД: {step}",
+        input_data={
+            "method": request.method,
+            "path": request.url.path,
+        },
+        output_data={"changes": changes or {}},
+    )
+
+
 async def get_db_session(request: Request) -> AsyncSession:  # type: ignore
     db_session = await Database.get_session()
+    await _trace_database_step(
+        "session_opened",
+        "started",
+        request=request,
+    )
     try:
         await _authorize_control_panel(request, db_session)
         yield db_session  # type: ignore
+        changes = _session_change_summary(db_session)
+        await _trace_database_step(
+            "commit_started",
+            "started",
+            request=request,
+            changes=changes,
+        )
         await db_session.commit()
-    except Exception:
+        await _trace_database_step(
+            "commit_completed",
+            "success",
+            request=request,
+            changes=changes,
+        )
+    except Exception as exc:
+        changes = _session_change_summary(db_session)
         await db_session.rollback()
+        await _trace_database_step(
+            "transaction_rolled_back",
+            "failed",
+            request=request,
+            changes=changes,
+            error_code=type(exc).__name__,
+        )
         raise
     finally:
         await db_session.close()

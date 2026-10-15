@@ -8,6 +8,7 @@ from integrations.wildberries.client import WBClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from services.sync_job_service import persist_job_checkpoint
+from services.sync_operation_trace_service import trace_sync_stage
 from services.wb_operational_service import save_orders, save_sales
 
 
@@ -33,29 +34,69 @@ async def _process_operational_feed(
     payload = dict(job.payload or {})
     current_cursor = str(payload.get("dateFrom") or "")
     if not current_cursor:
-        raise ValueError(f"{entity} sync requires dateFrom")
+        raise ValueError(f"Для синхронизации '{entity}' требуется dateFrom")
 
     total_saved = 0
     pages = 0
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_started",
+        status="started",
+        input_data={"date_from": current_cursor, "entity": entity},
+    )
 
     while True:
         rows = await fetch_page(payload)
         if not rows:
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="source_exhausted",
+                status="success",
+                output_data={"pages": pages, "rows_saved": total_saved},
+            )
             break
 
-        saved = await save_page(session, job.user_id, token.id, rows)
-        total_saved += saved
         pages += 1
-
         next_cursor_raw = rows[-1].get("lastChangeDate")
         if not next_cursor_raw:
             raise RuntimeError(
-                f"WB {entity} response did not provide lastChangeDate on the last row"
+                f"В ответе WB '{entity}' отсутствует lastChangeDate в последней строке"
             )
         next_cursor = str(next_cursor_raw)
 
         if next_cursor < current_cursor:
-            raise RuntimeError(f"WB {entity} lastChangeDate moved backwards")
+            raise RuntimeError(
+                f"Курсор lastChangeDate WB для '{entity}' переместился назад"
+            )
+
+        await trace_sync_stage(
+            job=job,
+            token=token,
+            step="source_page_validated",
+            status="success",
+            output_data={
+                "page": pages,
+                "rows": len(rows),
+                "current_cursor": current_cursor,
+                "next_cursor": next_cursor,
+            },
+        )
+        saved = await save_page(session, job.user_id, token.id, rows)
+        total_saved += saved
+        await trace_sync_stage(
+            job=job,
+            token=token,
+            step="rows_persisted",
+            status="success",
+            output_data={
+                "page": pages,
+                "rows_received": len(rows),
+                "rows_saved": saved,
+                "total_saved": total_saved,
+            },
+        )
 
         payload["dateFrom"] = next_cursor
         payload["flag"] = 0
@@ -64,10 +105,10 @@ async def _process_operational_feed(
         if next_cursor == current_cursor:
             if len(rows) >= OPERATIONAL_PAGE_LIMIT:
                 raise RuntimeError(
-                    f"WB {entity} cursor stalled on a full page; refusing to skip data"
+                    f"Курсор WB '{entity}' остановился на полной странице; пропуск данных запрещён"
                 )
             logger.info(
-                "[%s] reached inclusive cursor boundary token_id=%s pages=%s",
+                "[%s] достигнута включительная граница курсора идентификатор_токена=%s страниц=%s",
                 entity.upper(),
                 token.id,
                 pages,
@@ -76,8 +117,19 @@ async def _process_operational_feed(
 
         current_cursor = next_cursor
 
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_completed",
+        status="success",
+        output_data={
+            "pages": pages,
+            "rows_saved": total_saved,
+            "cursor": payload.get("dateFrom"),
+        },
+    )
     logger.info(
-        "[%s] success token_id=%s pages=%s rows=%s cursor=%s",
+        "[%s] завершено идентификатор_токена=%s страниц=%s строк=%s курсор=%s",
         entity.upper(),
         token.id,
         pages,

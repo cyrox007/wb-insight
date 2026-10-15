@@ -8,6 +8,7 @@ from integrations.wildberries.client import WBClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from services.sync_job_service import persist_job_checkpoint
+from services.sync_operation_trace_service import trace_sync_stage
 from services.wb_advertising_ingest_service import save_advertising_fullstats
 
 
@@ -74,7 +75,7 @@ async def process_advertising(
     end_date = payload.get("endDate")
     begin_date = _date(begin_date_raw)
     if begin_date is None or not end_date:
-        raise ValueError("advertising sync requires beginDate and endDate")
+        raise ValueError("Для синхронизации рекламы требуются beginDate и endDate")
 
     campaign_ids = [
         int(value)
@@ -83,6 +84,20 @@ async def process_advertising(
     ]
     offset = max(0, int(payload.get("campaign_offset", 0) or 0))
     total_rows = 0
+    batch_number = 0
+
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_started",
+        status="started",
+        input_data={
+            "begin_date": begin_date,
+            "end_date": end_date,
+            "resume_campaigns": len(campaign_ids),
+            "campaign_offset": offset,
+        },
+    )
 
     async with WBClient(token) as client:
         if not campaign_ids:
@@ -91,6 +106,17 @@ async def process_advertising(
             )
             campaign_ids = _campaign_ids(campaign_response, begin_date)
             offset = 0
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="campaigns_selected",
+                status="success",
+                output_data={
+                    "campaigns": len(campaign_ids),
+                    "campaign_ids": campaign_ids,
+                    "eligible_statuses": ELIGIBLE_STATUSES,
+                },
+            )
 
         while offset < len(campaign_ids):
             batch = campaign_ids[offset : offset + CAMPAIGN_BATCH_SIZE]
@@ -102,11 +128,36 @@ async def process_advertising(
                 }
             )
             stats = response if isinstance(response, list) else []
-            total_rows += await save_advertising_fullstats(
+            batch_number += 1
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="source_page_validated",
+                status="success",
+                output_data={
+                    "batch": batch_number,
+                    "campaign_ids": batch,
+                    "facts_received": len(stats),
+                },
+            )
+            saved = await save_advertising_fullstats(
                 session,
                 job.user_id,
                 token.id,
                 stats,
+            )
+            total_rows += saved
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="rows_persisted",
+                status="success",
+                output_data={
+                    "batch": batch_number,
+                    "facts_received": len(stats),
+                    "facts_saved": saved,
+                    "total_saved": total_rows,
+                },
             )
 
             offset += len(batch)
@@ -114,8 +165,20 @@ async def process_advertising(
             payload["campaign_offset"] = offset
             await persist_job_checkpoint(session, job, payload)
 
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_completed",
+        status="success",
+        output_data={
+            "campaigns": len(campaign_ids),
+            "facts_saved": total_rows,
+            "period_from": begin_date,
+            "period_to": end_date,
+        },
+    )
     logger.info(
-        "[ADVERTISING] success token_id=%s campaigns=%s facts=%s period=%s..%s",
+        "[РЕКЛАМА] завершено идентификатор_токена=%s кампаний=%s фактов=%s период=%s..%s",
         token.id,
         len(campaign_ids),
         total_rows,

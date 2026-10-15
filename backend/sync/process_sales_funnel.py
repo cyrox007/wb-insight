@@ -9,6 +9,7 @@ from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from models.wb_product import WbProduct
 from services.sync_job_service import persist_job_checkpoint
+from services.sync_operation_trace_service import trace_sync_stage
 from services.wb_sales_funnel_service import save_sales_funnel_history
 from settings import config
 
@@ -47,7 +48,9 @@ async def process_sales_funnel(
     start = selected_period.get("start") if isinstance(selected_period, dict) else None
     end = selected_period.get("end") if isinstance(selected_period, dict) else None
     if not start or not end:
-        raise ValueError("sales funnel sync requires selectedPeriod.start/end")
+        raise ValueError(
+            "Для синхронизации воронки продаж требуются selectedPeriod.start и selectedPeriod.end"
+        )
 
     nm_ids = _valid_nm_ids(payload.get("nm_ids") or [])
     if not nm_ids:
@@ -55,9 +58,32 @@ async def process_sales_funnel(
 
     offset = max(0, int(payload.get("nm_offset", 0) or 0))
     total_rows = 0
+    batch_number = 0
+
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_started",
+        status="started",
+        input_data={
+            "period_from": start,
+            "period_to": end,
+            "products": len(nm_ids),
+            "nm_offset": offset,
+        },
+    )
 
     if not nm_ids:
-        logger.info("[FUNNEL] no products token_id=%s", token.id)
+        await trace_sync_stage(
+            job=job,
+            token=token,
+            step="source_empty",
+            status="warning",
+            severity="warning",
+            error_code="FUNNEL_PRODUCTS_MISSING",
+            message="В кабинете нет товаров для запроса воронки продаж",
+        )
+        logger.info("[ВОРОНКА] нет товаров идентификатор_токена=%s", token.id)
         return
 
     async with WBClient(token) as client:
@@ -72,11 +98,36 @@ async def process_sales_funnel(
                 }
             )
             rows = response if isinstance(response, list) else []
-            total_rows += await save_sales_funnel_history(
+            batch_number += 1
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="source_page_validated",
+                status="success",
+                output_data={
+                    "batch": batch_number,
+                    "nm_ids": batch,
+                    "rows_received": len(rows),
+                },
+            )
+            saved = await save_sales_funnel_history(
                 session,
                 job.user_id,
                 token.id,
                 rows,
+            )
+            total_rows += saved
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="rows_persisted",
+                status="success",
+                output_data={
+                    "batch": batch_number,
+                    "rows_received": len(rows),
+                    "rows_saved": saved,
+                    "total_saved": total_rows,
+                },
             )
 
             offset += len(batch)
@@ -84,8 +135,20 @@ async def process_sales_funnel(
             payload["nm_offset"] = offset
             await persist_job_checkpoint(session, job, payload)
 
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_completed",
+        status="success",
+        output_data={
+            "products": len(nm_ids),
+            "facts_saved": total_rows,
+            "period_from": start,
+            "period_to": end,
+        },
+    )
     logger.info(
-        "[FUNNEL] success token_id=%s products=%s facts=%s period=%s..%s",
+        "[ВОРОНКА] завершено идентификатор_токена=%s товаров=%s фактов=%s период=%s..%s",
         token.id,
         len(nm_ids),
         total_rows,

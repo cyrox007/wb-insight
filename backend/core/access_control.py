@@ -19,6 +19,7 @@ class Permission(str, Enum):
     PAYMENTS_READ = "payments:read"
     PAYMENTS_WRITE = "payments:write"
     AUDIT_READ = "audit:read"
+    DIAGNOSTICS_READ = "diagnostics:read"
     MAIL_READ = "mail:read"
     MAIL_WRITE = "mail:write"
 
@@ -38,6 +39,7 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.TARIFFS_WRITE,
             Permission.PAYMENTS_READ,
             Permission.AUDIT_READ,
+            Permission.DIAGNOSTICS_READ,
             Permission.MAIL_READ,
         }
     ),
@@ -52,6 +54,7 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.PAYMENTS_READ,
             Permission.MAIL_READ,
             Permission.AUDIT_READ,
+            Permission.DIAGNOSTICS_READ,
         }
     ),
     UserRole.SUPPORT: frozenset(
@@ -59,6 +62,7 @@ _ROLE_PERMISSIONS: dict[UserRole, frozenset[Permission]] = {
             Permission.CONTROL_PANEL_ACCESS,
             Permission.USERS_READ,
             Permission.AUDIT_READ,
+            Permission.DIAGNOSTICS_READ,
         }
     ),
     UserRole.ANALYST: frozenset(

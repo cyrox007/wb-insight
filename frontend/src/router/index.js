@@ -62,6 +62,7 @@ const router = createRouter({
 				{ path: 'tariffs', name: 'control-panel.tariffs', component: () => import('../pages/ControlPanel/Tariffs/index.vue'), meta: { title: 'Тарифы', requestAuth: true } },
 				{ path: 'tariffs/:id/edit-tariff', name: 'control-panel.edit-tariff', component: () => import('../pages/ControlPanel/Tariffs/edit.vue'), meta: { title: 'Редактировать тариф', requestAuth: true } },
 				{ path: 'payments', name: 'control-panel.payments', component: () => import('../pages/ControlPanel/Payments/index.vue'), meta: { title: 'Платежи', requestAuth: true } },
+				{ path: 'diagnostics', name: 'control-panel.diagnostics', component: () => import('../pages/ControlPanel/Diagnostics/Hub.vue'), meta: { title: 'Сквозная диагностика', requestAuth: true } },
 				{ path: 'mail', name: 'control-panel.mail', component: () => import('../pages/ControlPanel/Mail/index.vue'), meta: { title: 'Рассылки', requestAuth: true } },
 				{ path: 'audit', name: 'control-panel.audit', component: () => import('../pages/ControlPanel/Audit/index.vue'), meta: { title: 'Аудит действий', requestAuth: true } }
 			]
@@ -83,7 +84,7 @@ router.onError((error, to) => {
 
 	const target = to?.fullPath || window.location.pathname + window.location.search + window.location.hash
 	if (sessionStorage.getItem(STALE_ASSET_RELOAD_KEY) === target) {
-		console.error('Route asset reload already attempted; leaving the original error visible.', error)
+		console.error('Ошибка повторной загрузки ресурсов маршрута:', error)
 		return
 	}
 

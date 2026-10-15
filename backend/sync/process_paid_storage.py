@@ -8,6 +8,7 @@ from integrations.wildberries.client import WBAPIError, WBClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from services.sync_job_service import persist_job_checkpoint
+from services.sync_operation_trace_service import trace_sync_stage
 from services.wb_paid_storage_service import replace_paid_storage_period
 from settings import config
 
@@ -20,14 +21,18 @@ def _parse_date(value: Any, field: str) -> date:
     try:
         return date.fromisoformat(str(value)[:10])
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"paid storage sync requires valid {field}") from exc
+        raise ValueError(
+            f"Для синхронизации платного хранения требуется корректное поле {field}"
+        ) from exc
 
 
 def _created_task_id(response: Any) -> str:
     data = response.get("data") if isinstance(response, dict) else None
     task_id = data.get("taskId") if isinstance(data, dict) else None
     if not task_id:
-        raise RuntimeError("WB paid storage task creation returned no taskId")
+        raise RuntimeError(
+            "Wildberries не вернул taskId при создании отчёта платного хранения"
+        )
     return str(task_id)
 
 
@@ -35,7 +40,9 @@ def _task_status(response: Any) -> str:
     data = response.get("data") if isinstance(response, dict) else None
     status = data.get("status") if isinstance(data, dict) else None
     if not status:
-        raise RuntimeError("WB paid storage task status response has no status")
+        raise RuntimeError(
+            "Wildberries не вернул статус задачи отчёта платного хранения"
+        )
     return str(status).strip().lower()
 
 
@@ -63,12 +70,24 @@ async def process_paid_storage(
         "currentDateFrom",
     )
     if overall_end < overall_start:
-        raise ValueError("paid storage dateTo must be on or after dateFrom")
+        raise ValueError("dateTo платного хранения не может быть раньше dateFrom")
     if current < overall_start:
         current = overall_start
 
     total_rows = 0
     completed_chunks = 0
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_started",
+        status="started",
+        input_data={
+            "period_from": overall_start,
+            "period_to": overall_end,
+            "resume_from": current,
+            "existing_task_id": payload.get("taskId"),
+        },
+    )
 
     async with WBClient(token) as client:
         while current <= overall_end:
@@ -77,11 +96,37 @@ async def process_paid_storage(
             task_from = payload.get("taskDateFrom")
             task_to = payload.get("taskDateTo")
 
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="storage_chunk_started",
+                status="started",
+                input_data={
+                    "chunk_from": current,
+                    "chunk_to": chunk_end,
+                    "resume_task_id": task_id,
+                },
+            )
+
             if task_id and (
                 str(task_from) != current.isoformat()
                 or str(task_to) != chunk_end.isoformat()
             ):
-                # Never attach an old generated report to a different date chunk.
+                # Не связываем старый сформированный отчёт с другим интервалом дат.
+                await trace_sync_stage(
+                    job=job,
+                    token=token,
+                    step="stale_storage_task_discarded",
+                    status="warning",
+                    severity="warning",
+                    output_data={
+                        "task_id": task_id,
+                        "task_date_from": task_from,
+                        "task_date_to": task_to,
+                        "expected_from": current,
+                        "expected_to": chunk_end,
+                    },
+                )
                 await _clear_task(session, job, payload)
                 task_id = None
 
@@ -96,40 +141,72 @@ async def process_paid_storage(
                 payload["taskId"] = task_id
                 payload["taskDateFrom"] = current.isoformat()
                 payload["taskDateTo"] = chunk_end.isoformat()
-                # Persist before polling. A killed worker resumes this exact WB task.
+                await trace_sync_stage(
+                    job=job,
+                    token=token,
+                    step="storage_task_created",
+                    status="success",
+                    output_data={
+                        "task_id": task_id,
+                        "chunk_from": current,
+                        "chunk_to": chunk_end,
+                    },
+                )
+                # Фиксируем taskId до опроса. После остановки worker продолжит эту же задачу WB.
                 await persist_job_checkpoint(session, job, payload)
 
             try:
-                status = ""
-                for _ in range(config.WB_STORAGE_STATUS_MAX_POLLS):
-                    status = _task_status(
+                task_status = ""
+                for poll_number in range(1, config.WB_STORAGE_STATUS_MAX_POLLS + 1):
+                    task_status = _task_status(
                         await client.get_paid_storage_report_status(str(task_id))
                     )
-                    if status == "done":
+                    await trace_sync_stage(
+                        job=job,
+                        token=token,
+                        step="storage_task_status_received",
+                        status="success" if task_status == "done" else "info",
+                        output_data={
+                            "task_id": task_id,
+                            "poll": poll_number,
+                            "task_status": task_status,
+                        },
+                    )
+                    if task_status == "done":
                         break
-                    if status not in PENDING_STATUSES:
+                    if task_status not in PENDING_STATUSES:
                         await _clear_task(session, job, payload)
                         raise RuntimeError(
-                            f"WB paid storage task ended with status '{status}'"
+                            f"Задача платного хранения WB завершилась со статусом '{task_status}'"
                         )
                 else:
-                    # Keep taskId so a retry continues the same generated report.
+                    # Сохраняем taskId, чтобы повтор продолжил тот же сформированный отчёт.
                     raise RuntimeError(
-                        "WB paid storage task did not finish within polling budget"
+                        "Задача платного хранения WB не завершилась за допустимое число проверок"
                     )
 
                 report = await client.download_paid_storage_report(str(task_id))
             except WBAPIError as exc:
                 if exc.status_code == 404:
-                    # Generated reports expire. Retry with a fresh task.
+                    # Сформированные отчёты имеют срок жизни. Повтор создаст новую задачу.
                     await _clear_task(session, job, payload)
                     raise RuntimeError(
-                        "WB paid storage task expired before it could be downloaded"
+                        "Задача платного хранения WB истекла до скачивания отчёта"
                     ) from exc
                 raise
 
             rows = report if isinstance(report, list) else []
-            total_rows += await replace_paid_storage_period(
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="storage_report_downloaded",
+                status="success",
+                output_data={
+                    "task_id": task_id,
+                    "rows_received": len(rows),
+                },
+            )
+            saved = await replace_paid_storage_period(
                 session,
                 user_id=job.user_id,
                 token_id=token.id,
@@ -138,6 +215,20 @@ async def process_paid_storage(
                 end_date=chunk_end,
                 data=rows,
             )
+            total_rows += saved
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="rows_persisted",
+                status="success",
+                output_data={
+                    "task_id": task_id,
+                    "rows_received": len(rows),
+                    "rows_saved": saved,
+                    "period_from": current,
+                    "period_to": chunk_end,
+                },
+            )
 
             completed_chunks += 1
             payload["completedThrough"] = chunk_end.isoformat()
@@ -145,12 +236,35 @@ async def process_paid_storage(
             payload["taskId"] = None
             payload["taskDateFrom"] = None
             payload["taskDateTo"] = None
-            # This commit makes both the chunk replacement and its cursor durable.
+            # Одна фиксация делает долговечными замену интервала и курсор продолжения.
             await persist_job_checkpoint(session, job, payload)
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="storage_chunk_completed",
+                status="success",
+                output_data={
+                    "completed_through": chunk_end,
+                    "next_from": payload["currentDateFrom"],
+                    "completed_chunks": completed_chunks,
+                },
+            )
             current = chunk_end + timedelta(days=1)
 
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_completed",
+        status="success",
+        output_data={
+            "chunks": completed_chunks,
+            "rows_saved": total_rows,
+            "period_from": overall_start,
+            "period_to": overall_end,
+        },
+    )
     logger.info(
-        "[PAID_STORAGE] success token_id=%s chunks=%s rows=%s period=%s..%s",
+        "[ПЛАТНОЕ_ХРАНЕНИЕ] завершено идентификатор_токена=%s интервалов=%s строк=%s период=%s..%s",
         token.id,
         completed_chunks,
         total_rows,

@@ -41,6 +41,23 @@ class FakeSession:
         self.committed += 1
 
 
+@pytest.fixture(autouse=True)
+def disable_operation_trace(monkeypatch):
+    async def noop_trace(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(sync_job_service, "record_operation_event", noop_trace)
+
+
+def _job_identity():
+    return {
+        "id": uuid4(),
+        "user_id": uuid4(),
+        "token_id": uuid4(),
+        "entity": "sales",
+    }
+
+
 def test_sync_job_model_has_durable_execution_fields():
     assert "attempt_count" in SyncJob.__table__.columns
     assert "available_at" in SyncJob.__table__.columns
@@ -56,7 +73,7 @@ async def test_recover_stale_jobs_requeues_or_fails_by_retry_budget(monkeypatch)
     monkeypatch.setattr(sync_job_service.config, "SYNC_JOB_MAX_ATTEMPTS", 3)
 
     retryable = SimpleNamespace(
-        id=uuid4(),
+        **_job_identity(),
         status="processing",
         is_active=True,
         attempt_count=2,
@@ -67,7 +84,7 @@ async def test_recover_stale_jobs_requeues_or_fails_by_retry_budget(monkeypatch)
         error=None,
     )
     exhausted = SimpleNamespace(
-        id=uuid4(),
+        **_job_identity(),
         status="processing",
         is_active=True,
         attempt_count=3,
@@ -102,6 +119,7 @@ async def test_claim_next_job_increments_attempt_and_sets_lease(monkeypatch):
     now = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(sync_job_service.config, "SYNC_JOB_LEASE_SECONDS", 120)
     job = SimpleNamespace(
+        **_job_identity(),
         status="pending",
         started_at=None,
         finished_at=now - timedelta(days=1),
@@ -127,7 +145,12 @@ async def test_claim_next_job_increments_attempt_and_sets_lease(monkeypatch):
 async def test_checkpoint_commits_cursor_and_renews_lease(monkeypatch):
     monkeypatch.setattr(sync_job_service.config, "SYNC_JOB_LEASE_SECONDS", 120)
     old_lease = datetime.now(timezone.utc) - timedelta(seconds=1)
-    job = SimpleNamespace(payload={"rrdId": 0}, lease_expires_at=old_lease)
+    job = SimpleNamespace(
+        **_job_identity(),
+        payload={"rrdId": 0},
+        lease_expires_at=old_lease,
+        attempt_count=1,
+    )
     session = FakeSession()
 
     await sync_job_service.persist_job_checkpoint(
@@ -148,6 +171,7 @@ async def test_retry_job_keeps_job_active_and_delays_next_claim(monkeypatch):
     monkeypatch.setattr(sync_job_service.config, "SYNC_JOB_RETRY_BASE_SECONDS", 60)
     monkeypatch.setattr(sync_job_service.config, "SYNC_JOB_RETRY_MAX_SECONDS", 300)
     job = SimpleNamespace(
+        **_job_identity(),
         attempt_count=2,
         status="processing",
         error=None,

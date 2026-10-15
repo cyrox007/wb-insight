@@ -1,7 +1,13 @@
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+from services.external_operation_trace_service import (
+    trace_external_request,
+    trace_external_response,
+)
 
 
 class SberAcquiringError(RuntimeError):
@@ -65,23 +71,65 @@ class SberAcquiringClient:
             await self._client.aclose()
 
     async def _post(self, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+        url = f"{self._base_url}/{endpoint}"
+        await trace_external_request(
+            provider="sber",
+            endpoint=endpoint,
+            method="POST",
+            url=url,
+            subject_type="payment_gateway",
+            subject_id="sber",
+            input_data={"json": payload},
+        )
+
         body = {
             "userName": self._username,
             "password": self._password,
             **payload,
         }
+        started = time.perf_counter()
         try:
             response = await self._client.post(
-                f"{self._base_url}/{endpoint}",
+                url,
                 json=body,
                 headers={"Content-Type": "application/json"},
             )
         except httpx.TransportError as exc:
+            await trace_external_response(
+                provider="sber",
+                endpoint=endpoint,
+                http_status=None,
+                duration_ms=max(0, int((time.perf_counter() - started) * 1000)),
+                subject_type="payment_gateway",
+                subject_id="sber",
+                error_code=type(exc).__name__,
+                message="Транспортная ошибка платёжного шлюза Сбера",
+            )
             raise SberAcquiringError(
                 "Платёжный шлюз Сбера временно недоступен",
                 code="SBER_GATEWAY_UNAVAILABLE",
                 retryable=True,
             ) from exc
+
+        try:
+            diagnostic_data = response.json()
+        except ValueError:
+            diagnostic_data = {"body": response.text[:2000]}
+
+        await trace_external_response(
+            provider="sber",
+            endpoint=endpoint,
+            http_status=response.status_code,
+            duration_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            subject_type="payment_gateway",
+            subject_id="sber",
+            output_data={"body": diagnostic_data},
+            error_code=(
+                None
+                if response.is_success
+                else f"SBER_HTTP_{response.status_code}"
+            ),
+        )
 
         if response.status_code >= 500:
             raise SberAcquiringError(

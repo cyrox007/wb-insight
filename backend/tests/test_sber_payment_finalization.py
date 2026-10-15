@@ -13,6 +13,14 @@ class FakeSession:
         return None
 
 
+@pytest.fixture(autouse=True)
+def disable_operation_trace(monkeypatch):
+    async def noop_trace(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(payment_service, "_trace_payment_operation", noop_trace)
+
+
 def make_payment():
     return SimpleNamespace(
         id=uuid4(),
@@ -113,7 +121,7 @@ async def test_deposited_payment_activates_subscription_once(monkeypatch):
     assert second_subscription is created_subscription
     assert calls["deactivate"] == 1
     assert calls["create"] == 1
-    assert calls["event"] == 2
+    assert calls["event"] == 3
 
 
 @pytest.mark.asyncio

@@ -23,6 +23,7 @@ const usersActive = computed(() => ['control-panel.users', 'control-panel.edit-u
 const rolesActive = computed(() => route.name === 'control-panel.roles')
 const tariffsActive = computed(() => ['control-panel.tariffs', 'control-panel.edit-tariff'].includes(route.name))
 const paymentsActive = computed(() => route.name === 'control-panel.payments')
+const diagnosticsActive = computed(() => route.name === 'control-panel.diagnostics')
 const mailActive = computed(() => route.name === 'control-panel.mail')
 const auditActive = computed(() => route.name === 'control-panel.audit')
 const can = (permission) => permissions.value.includes(permission)
@@ -56,7 +57,7 @@ onMounted(loadOverview)
 			<div>
 				<p class="cp-eyebrow">WB Insight · управление</p>
 				<h1 class="cp-title">Панель управления</h1>
-				<p class="cp-subtitle">Пользователи, роли, тарифы, платежи, рассылки, аудит и системные настройки в едином административном интерфейсе.</p>
+				<p class="cp-subtitle">Пользователи, роли, тарифы, платежи, диагностика, рассылки и аудит в едином административном интерфейсе.</p>
 			</div>
 		</header>
 
@@ -66,6 +67,7 @@ onMounted(loadOverview)
 			<router-link v-if="can('roles:read')" :to="{ name: 'control-panel.roles' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': rolesActive }" :aria-current="rolesActive ? 'page' : undefined">Роли</router-link>
 			<router-link v-if="can('tariffs:read')" :to="{ name: 'control-panel.tariffs' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': tariffsActive }" :aria-current="tariffsActive ? 'page' : undefined">Тарифы</router-link>
 			<router-link v-if="can('payments:read')" :to="{ name: 'control-panel.payments' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': paymentsActive }" :aria-current="paymentsActive ? 'page' : undefined">Платежи</router-link>
+			<router-link v-if="can('diagnostics:read')" :to="{ name: 'control-panel.diagnostics' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': diagnosticsActive }" :aria-current="diagnosticsActive ? 'page' : undefined">Диагностика</router-link>
 			<router-link v-if="can('mail:read')" :to="{ name: 'control-panel.mail' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': mailActive }" :aria-current="mailActive ? 'page' : undefined">Рассылки</router-link>
 			<router-link v-if="can('audit:read')" :to="{ name: 'control-panel.audit' }" class="cp-nav__link" active-class="" :class="{ 'router-link-active': auditActive }" :aria-current="auditActive ? 'page' : undefined">Аудит</router-link>
 		</nav>
@@ -103,7 +105,8 @@ onMounted(loadOverview)
 					<router-link v-if="can('users:read')" :to="{ name: 'control-panel.users' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Аккаунты</span><h2 class="cp-shortcut-card__title">Управление пользователями</h2><p class="cp-card-note">Статус, профиль, верификация и безопасность аккаунтов.</p></div><span class="cp-shortcut-card__action">Открыть пользователей →</span></router-link>
 					<router-link v-if="can('roles:read')" :to="{ name: 'control-panel.roles' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Доступ</span><h2 class="cp-shortcut-card__title">Роли и права</h2><p class="cp-card-note">Матрица доступа и назначения системных ролей.</p></div><span class="cp-shortcut-card__action">Открыть роли →</span></router-link>
 					<router-link v-if="can('tariffs:read')" :to="{ name: 'control-panel.tariffs' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Монетизация</span><h2 class="cp-shortcut-card__title">Тарифные планы</h2><p class="cp-card-note">Стоимость, доступность и продуктовые лимиты.</p></div><span class="cp-shortcut-card__action">Открыть тарифы →</span></router-link>
-					<router-link v-if="can('payments:read')" :to="{ name: 'control-panel.payments' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Платежи</span><h2 class="cp-shortcut-card__title">Платёжные системы</h2><p class="cp-card-note">Test/live режимы, credentials и журнал оплат тарифов.</p></div><span class="cp-shortcut-card__action">Открыть платежи →</span></router-link>
+					<router-link v-if="can('payments:read')" :to="{ name: 'control-panel.payments' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Платежи</span><h2 class="cp-shortcut-card__title">Платёжные системы</h2><p class="cp-card-note">Test/live режимы, учётные данные и журнал оплат тарифов.</p></div><span class="cp-shortcut-card__action">Открыть платежи →</span></router-link>
+					<router-link v-if="can('diagnostics:read')" :to="{ name: 'control-panel.diagnostics' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Поддержка</span><h2 class="cp-shortcut-card__title">Диагностика пользователя</h2><p class="cp-card-note">Платежи, кабинеты WB, полнота данных, фоновые задания и единая временная шкала.</p></div><span class="cp-shortcut-card__action">Открыть диагностику →</span></router-link>
 					<router-link v-if="can('mail:read')" :to="{ name: 'control-panel.mail' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Коммуникации</span><h2 class="cp-shortcut-card__title">Рассылки</h2><p class="cp-card-note">Транзакционная почта, кампании и журнал доставки.</p></div><span class="cp-shortcut-card__action">Открыть рассылки →</span></router-link>
 					<router-link v-if="can('audit:read')" :to="{ name: 'control-panel.audit' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Инциденты</span><h2 class="cp-shortcut-card__title">Аудит действий</h2><p class="cp-card-note">Кто, когда и что изменил — с результатом и request-корреляцией.</p></div><span class="cp-shortcut-card__action">Открыть аудит →</span></router-link>
 				</section>
