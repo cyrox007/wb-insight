@@ -229,7 +229,7 @@ async def test_operational_processor_fails_closed_on_stalled_full_page(monkeypat
     )
     token = SimpleNamespace(id=uuid4())
 
-    with pytest.raises(RuntimeError, match="cursor stalled on a full page"):
+    with pytest.raises(RuntimeError, match="Курсор WB 'orders' остановился на полной странице"):
         await process_operational._process_operational_feed(
             object(),
             job,
