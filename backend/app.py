@@ -47,6 +47,7 @@ from utils.responce_helps import response_error
 
 ALLOWED_ORIGINS = config.get_allowed_origins
 ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+TRACE_RESPONSE_HEADERS = ["X-Request-ID", "X-Operation-ID"]
 STATIC_DIRECTORIES = {"static": "/static", "uploads": "/uploads"}
 logger = setup_logger(__name__)
 
@@ -58,6 +59,7 @@ def _setup_cors(app: FastAPI) -> None:
         allow_credentials=True,
         allow_methods=ALLOWED_METHODS,
         allow_headers=["*"],
+        expose_headers=TRACE_RESPONSE_HEADERS,
     )
 
 
