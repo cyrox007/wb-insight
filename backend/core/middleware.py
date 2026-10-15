@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from core.database import Database
 from core.logger import setup_logger
+from core.operation_context import bind_actor_user
 from models.users_model import User
 from settings import config
 from utils.jwt import verify_token
@@ -53,6 +54,7 @@ async def auth_middle(request: Request):
         # Совместимость только для тестов разработки и старых локальных токенов.
         # В рабочем окружении привязка к версии сессии обязательна.
         request.state.user = user_data
+        bind_actor_user(user_data.get("sub"))
         return
 
     try:
@@ -76,3 +78,4 @@ async def auth_middle(request: Request):
         )
 
     request.state.user = user_data
+    bind_actor_user(user_id)
