@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import Database
 from core.logger import setup_logger
-from core.operation_context import get_operation_context
+from core.operation_context import (
+    get_actor_user_id,
+    get_operation_context,
+    get_operation_id,
+    get_request_id,
+    next_operation_sequence,
+)
 from models.operation_log_event import OperationLogEvent
 
 
@@ -25,6 +31,9 @@ _SAFE_IDENTIFIER_KEYS = {
     "request_id",
     "order_id",
     "user_id",
+    "subscription_id",
+    "tariff_id",
+    "job_id",
 }
 _SECRET_KEYS = {
     "token",
@@ -57,6 +66,7 @@ _SECRET_KEYS = {
 }
 _ALLOWED_STATUSES = {"started", "success", "warning", "failed", "info"}
 _ALLOWED_SEVERITIES = {"info", "warning", "error", "critical"}
+_ALLOWED_DIRECTIONS = {"incoming", "internal", "outgoing"}
 
 
 def _normalized_key(value: str) -> str:
@@ -136,10 +146,36 @@ def _optional_uuid(value: UUID | str | None) -> UUID | None:
         return None
 
 
+def _resolved_parent_operation_id(
+    operation_id: UUID,
+    parent_operation_id: UUID | str | None,
+) -> UUID | None:
+    explicit_parent = _optional_uuid(parent_operation_id)
+    if explicit_parent is not None:
+        return explicit_parent
+    root_operation_id = get_operation_id()
+    if root_operation_id is not None and root_operation_id != operation_id:
+        return root_operation_id
+    return None
+
+
+def _trace_context_payload() -> dict[str, Any]:
+    context = get_operation_context()
+    if context is None:
+        return {}
+    return {
+        "root_operation_id": str(context.operation_id),
+        "request_id": context.request_id,
+        "actor_user_id": (
+            str(context.actor_user_id) if context.actor_user_id else None
+        ),
+    }
+
+
 async def record_operation_event(
     session: AsyncSession,
     *,
-    operation_id: UUID | str,
+    operation_id: UUID | str | None = None,
     domain: str,
     operation: str,
     step: str,
@@ -148,6 +184,10 @@ async def record_operation_event(
     actor_user_id: UUID | str | None = None,
     parent_operation_id: UUID | str | None = None,
     severity: str = "info",
+    sequence_no: int | None = None,
+    event_kind: str = "business_step",
+    component: str | None = None,
+    direction: str = "internal",
     subject_type: str | None = None,
     subject_id: str | UUID | None = None,
     provider: str | None = None,
@@ -159,23 +199,50 @@ async def record_operation_event(
     input_data: dict[str, Any] | None = None,
     output_data: dict[str, Any] | None = None,
     metrics: dict[str, Any] | None = None,
+    context_data: dict[str, Any] | None = None,
 ) -> OperationLogEvent:
+    root_operation_id = get_operation_id()
+    normalized_operation_id = normalize_operation_id(operation_id or root_operation_id)
+    trace_actor = get_actor_user_id()
+    resolved_actor = _optional_uuid(actor_user_id) or trace_actor
+    resolved_user = _optional_uuid(user_id) or resolved_actor
+    resolved_request_id = request_id or get_request_id()
+    resolved_sequence = sequence_no
+    if resolved_sequence is None:
+        resolved_sequence = next_operation_sequence()
+
     normalized_status = status if status in _ALLOWED_STATUSES else "info"
     normalized_severity = severity if severity in _ALLOWED_SEVERITIES else "info"
+    normalized_direction = direction if direction in _ALLOWED_DIRECTIONS else "internal"
+    merged_context = _trace_context_payload()
+    if context_data:
+        merged_context.update(context_data)
+
     event = OperationLogEvent(
-        operation_id=normalize_operation_id(operation_id),
-        parent_operation_id=_optional_uuid(parent_operation_id),
-        user_id=_optional_uuid(user_id),
-        actor_user_id=_optional_uuid(actor_user_id),
+        operation_id=normalized_operation_id,
+        parent_operation_id=_resolved_parent_operation_id(
+            normalized_operation_id,
+            parent_operation_id,
+        ),
+        user_id=resolved_user,
+        actor_user_id=resolved_actor,
         domain=str(domain or "system")[:32],
         operation=str(operation or "unknown")[:64],
         step=str(step or "unknown")[:96],
         status=normalized_status,
         severity=normalized_severity,
+        sequence_no=(
+            max(0, int(resolved_sequence))
+            if resolved_sequence is not None
+            else None
+        ),
+        event_kind=str(event_kind or "business_step")[:32],
+        component=str(component)[:96] if component else None,
+        direction=normalized_direction,
         subject_type=str(subject_type)[:64] if subject_type else None,
         subject_id=str(subject_id)[:160] if subject_id is not None else None,
         provider=str(provider)[:64] if provider else None,
-        request_id=str(request_id)[:64] if request_id else None,
+        request_id=str(resolved_request_id)[:64] if resolved_request_id else None,
         http_status=int(http_status) if http_status is not None else None,
         duration_ms=max(0, int(duration_ms)) if duration_ms is not None else None,
         error_code=str(error_code)[:96] if error_code else None,
@@ -183,6 +250,7 @@ async def record_operation_event(
         input_data=sanitize_operation_data(input_data or {}),
         output_data=sanitize_operation_data(output_data or {}),
         metrics=sanitize_operation_data(metrics or {}),
+        context_data=sanitize_operation_data(merged_context),
     )
     session.add(event)
     await session.flush()
@@ -262,6 +330,10 @@ def operation_event_payload(event: OperationLogEvent) -> dict[str, Any]:
         "step": event.step,
         "status": event.status,
         "severity": event.severity,
+        "sequence_no": event.sequence_no,
+        "event_kind": event.event_kind,
+        "component": event.component,
+        "direction": event.direction,
         "subject_type": event.subject_type,
         "subject_id": event.subject_id,
         "provider": event.provider,
@@ -273,6 +345,7 @@ def operation_event_payload(event: OperationLogEvent) -> dict[str, Any]:
         "input": event.input_data or {},
         "output": event.output_data or {},
         "metrics": event.metrics or {},
+        "context": event.context_data or {},
         "created_at": event.created_at.isoformat() if event.created_at else None,
     }
 
@@ -284,7 +357,27 @@ async def get_operation_timeline(
     result = await session.execute(
         select(OperationLogEvent)
         .where(OperationLogEvent.operation_id == operation_id)
-        .order_by(OperationLogEvent.created_at, OperationLogEvent.id)
+        .order_by(
+            OperationLogEvent.sequence_no.asc().nullslast(),
+            OperationLogEvent.created_at,
+            OperationLogEvent.id,
+        )
+    )
+    return list(result.scalars().all())
+
+
+async def get_request_timeline(
+    session: AsyncSession,
+    request_id: str,
+) -> list[OperationLogEvent]:
+    result = await session.execute(
+        select(OperationLogEvent)
+        .where(OperationLogEvent.request_id == str(request_id)[:64])
+        .order_by(
+            OperationLogEvent.sequence_no.asc().nullslast(),
+            OperationLogEvent.created_at,
+            OperationLogEvent.id,
+        )
     )
     return list(result.scalars().all())
 
@@ -331,7 +424,11 @@ async def get_operation_trace(
     result = await session.execute(
         select(OperationLogEvent)
         .where(OperationLogEvent.operation_id.in_(known_ids))
-        .order_by(OperationLogEvent.created_at, OperationLogEvent.id)
+        .order_by(
+            OperationLogEvent.sequence_no.asc().nullslast(),
+            OperationLogEvent.created_at,
+            OperationLogEvent.id,
+        )
     )
     events = list(result.scalars().all())
     return root_id, sorted(known_ids, key=str), events
@@ -345,6 +442,7 @@ async def list_operation_events(
     domain: str | None = None,
     status: str | None = None,
     severity: str | None = None,
+    component: str | None = None,
     request_id: str | None = None,
     subject_type: str | None = None,
     subject_id: str | None = None,
@@ -363,6 +461,8 @@ async def list_operation_events(
         statement = statement.where(OperationLogEvent.status == status)
     if severity:
         statement = statement.where(OperationLogEvent.severity == severity)
+    if component:
+        statement = statement.where(OperationLogEvent.component == component)
     if request_id:
         statement = statement.where(OperationLogEvent.request_id == request_id)
     if subject_type:
