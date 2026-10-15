@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sync_job_model import SyncJob
+from services.operation_log_service import record_operation_event
 from settings import config
 
 
@@ -32,15 +33,16 @@ async def create_sync_job(
     entity: str,
     payload: dict | None = None,
 ) -> bool:
-    """Create one active job per marketplace credential + entity."""
+    """Создаёт не более одной активной задачи на кабинет и тип данных."""
     now = _now()
+    job_payload = payload or {}
     stmt = (
         insert(SyncJob)
         .values(
             user_id=user_id,
             token_id=token_id,
             entity=entity,
-            payload=payload or {},
+            payload=job_payload,
             status="pending",
             is_active=True,
             attempt_count=0,
@@ -50,7 +52,29 @@ async def create_sync_job(
         .returning(SyncJob.id)
     )
     result = await session.execute(stmt)
-    return result.scalar_one_or_none() is not None
+    job_id = result.scalar_one_or_none()
+    if job_id is None:
+        return False
+
+    await record_operation_event(
+        session,
+        operation_id=job_id,
+        domain="sync",
+        operation="marketplace_sync",
+        step="job_created",
+        status="started",
+        user_id=user_id,
+        subject_type="sync_job",
+        subject_id=job_id,
+        provider="wildberries",
+        message=f"Создана задача синхронизации '{entity}'",
+        input_data={
+            "token_id": token_id,
+            "entity": entity,
+            "checkpoint": job_payload,
+        },
+    )
+    return True
 
 
 async def recover_stale_jobs(
@@ -58,10 +82,7 @@ async def recover_stale_jobs(
     *,
     now: datetime | None = None,
 ) -> tuple[int, int]:
-    """Release expired processing leases or fail jobs with exhausted attempts.
-
-    Returns `(requeued, failed)`.
-    """
+    """Возвращает просроченные задачи в очередь или завершает исчерпанные."""
     current = now or _now()
     stmt = (
         select(SyncJob)
@@ -80,20 +101,60 @@ async def recover_stale_jobs(
     requeued = 0
     failed = 0
     for job in jobs:
+        expired_at = job.lease_expires_at
         job.lease_expires_at = None
         if job.attempt_count >= config.SYNC_JOB_MAX_ATTEMPTS:
             job.status = "failed"
             job.is_active = False
             job.finished_at = current
-            job.error = "Worker lease expired and retry budget was exhausted"
+            job.error = "Истекла аренда worker, лимит повторов исчерпан"
             failed += 1
+            await record_operation_event(
+                session,
+                operation_id=job.id,
+                domain="sync",
+                operation="marketplace_sync",
+                step="lease_expired",
+                status="failed",
+                severity="error",
+                user_id=job.user_id,
+                subject_type="sync_job",
+                subject_id=job.id,
+                provider="wildberries",
+                error_code="SYNC_RETRY_BUDGET_EXHAUSTED",
+                message="Задача остановлена после истечения аренды и исчерпания повторов",
+                metrics={
+                    "entity": job.entity,
+                    "attempt_count": job.attempt_count,
+                    "lease_expires_at": expired_at,
+                },
+            )
             continue
 
         job.status = "pending"
         job.started_at = None
         job.available_at = current
-        job.error = "Worker lease expired; job requeued"
+        job.error = "Истекла аренда worker; задача возвращена в очередь"
         requeued += 1
+        await record_operation_event(
+            session,
+            operation_id=job.id,
+            domain="sync",
+            operation="marketplace_sync",
+            step="lease_recovered",
+            status="warning",
+            severity="warning",
+            user_id=job.user_id,
+            subject_type="sync_job",
+            subject_id=job.id,
+            provider="wildberries",
+            message="Просроченная задача возвращена в очередь",
+            metrics={
+                "entity": job.entity,
+                "attempt_count": job.attempt_count,
+                "lease_expires_at": expired_at,
+            },
+        )
 
     if jobs:
         await session.flush()
@@ -105,7 +166,7 @@ async def claim_next_job(
     *,
     now: datetime | None = None,
 ) -> SyncJob | None:
-    """Atomically claim one due job using SKIP LOCKED."""
+    """Атомарно забирает одну готовую задачу через SKIP LOCKED."""
     current = now or _now()
     stmt = (
         select(SyncJob)
@@ -129,6 +190,25 @@ async def claim_next_job(
     job.lease_expires_at = _lease_deadline(current)
     job.attempt_count = int(job.attempt_count or 0) + 1
     job.error = None
+    await record_operation_event(
+        session,
+        operation_id=job.id,
+        domain="sync",
+        operation="marketplace_sync",
+        step="attempt_started",
+        status="started",
+        user_id=job.user_id,
+        subject_type="sync_job",
+        subject_id=job.id,
+        provider="wildberries",
+        message=f"Начата попытка синхронизации '{job.entity}'",
+        metrics={
+            "entity": job.entity,
+            "attempt_count": job.attempt_count,
+            "max_attempts": config.SYNC_JOB_MAX_ATTEMPTS,
+            "lease_expires_at": job.lease_expires_at,
+        },
+    )
     await session.flush()
     return job
 
@@ -138,9 +218,27 @@ async def persist_job_checkpoint(
     job: SyncJob,
     payload: dict,
 ) -> None:
-    """Commit one fully persisted page together with its continuation cursor."""
+    """Фиксирует полностью сохранённую страницу вместе с курсором продолжения."""
     job.payload = deepcopy(payload)
     job.lease_expires_at = _lease_deadline()
+    await record_operation_event(
+        session,
+        operation_id=job.id,
+        domain="sync",
+        operation="marketplace_sync",
+        step="checkpoint_saved",
+        status="info",
+        user_id=job.user_id,
+        subject_type="sync_job",
+        subject_id=job.id,
+        provider="wildberries",
+        message=f"Сохранена контрольная точка синхронизации '{job.entity}'",
+        metrics={
+            "entity": job.entity,
+            "attempt_count": job.attempt_count,
+            "checkpoint": payload,
+        },
+    )
     await session.flush()
     await session.commit()
 
@@ -157,6 +255,28 @@ async def complete_job(
     job.is_active = False
     job.lease_expires_at = None
     job.finished_at = current
+    duration_ms = None
+    if job.started_at is not None:
+        duration_ms = max(0, int((current - job.started_at).total_seconds() * 1000))
+    await record_operation_event(
+        session,
+        operation_id=job.id,
+        domain="sync",
+        operation="marketplace_sync",
+        step="completed",
+        status="success",
+        user_id=job.user_id,
+        subject_type="sync_job",
+        subject_id=job.id,
+        provider="wildberries",
+        duration_ms=duration_ms,
+        message=f"Синхронизация '{job.entity}' завершена",
+        metrics={
+            "entity": job.entity,
+            "attempt_count": job.attempt_count,
+            "checkpoint": job.payload or {},
+        },
+    )
     await session.flush()
 
 
@@ -176,6 +296,27 @@ async def retry_job(
     job.lease_expires_at = None
     job.available_at = current + timedelta(seconds=delay)
     job.is_active = True
+    await record_operation_event(
+        session,
+        operation_id=job.id,
+        domain="sync",
+        operation="marketplace_sync",
+        step="retry_scheduled",
+        status="warning",
+        severity="warning",
+        user_id=job.user_id,
+        subject_type="sync_job",
+        subject_id=job.id,
+        provider="wildberries",
+        error_code="SYNC_RETRY_SCHEDULED",
+        message=error[:1000],
+        metrics={
+            "entity": job.entity,
+            "attempt_count": job.attempt_count,
+            "retry_delay_seconds": delay,
+            "available_at": job.available_at,
+        },
+    )
     await session.flush()
 
 
@@ -192,11 +333,31 @@ async def fail_job(
     job.is_active = False
     job.lease_expires_at = None
     job.finished_at = current
+    await record_operation_event(
+        session,
+        operation_id=job.id,
+        domain="sync",
+        operation="marketplace_sync",
+        step="failed",
+        status="failed",
+        severity="error",
+        user_id=job.user_id,
+        subject_type="sync_job",
+        subject_id=job.id,
+        provider="wildberries",
+        error_code="SYNC_JOB_FAILED",
+        message=error[:1000],
+        metrics={
+            "entity": job.entity,
+            "attempt_count": job.attempt_count,
+            "checkpoint": job.payload or {},
+        },
+    )
     await session.flush()
 
 
-# Compatibility helpers retained for existing tests/callers. New worker code uses
-# claim_next_job so jobs are never pre-claimed as a batch.
+# Совместимые функции сохранены для существующих тестов и старых вызовов.
+# Новый worker забирает задачи по одной через claim_next_job.
 async def get_next_jobs(
     session: AsyncSession,
     limit: int = 10,
