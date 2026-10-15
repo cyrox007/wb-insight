@@ -1,28 +1,50 @@
 # WB Insight — разработка
 
-## Branch / PR workflow
+## Ветки и pull request
 
-Работа выполняется в отдельных ветках от `dev`.
+Работа выполняется в отдельных ветках от актуального `dev`.
 
 Канонический поток:
 
-1. `feature/*`, `fix/*`, `chore/*` создаются от актуального `dev`;
-2. рабочие PR направляются в `dev`;
-3. `dev` является интеграционной веткой и накапливает завершённые задачи текущей release-линии;
-4. `main` не используется как рабочая интеграционная ветка;
-5. тяжёлый CI не гоняется после каждого рабочего merge в `dev`: перед promotion запускается consolidated exact-head набор через `workflow_dispatch` на текущем `dev` head;
-6. promotion `dev -> main` выполняется отдельным release/release-candidate PR только после этого green набора и требуемого acceptance/evidence; сам promotion PR повторно запускает release checks.
+1. рабочая ветка `feature/*`, `fix/*`, `chore/*` или именованная ветка задачи создаётся от актуального `dev`;
+2. рабочий pull request направляется в `dev`;
+3. перед слиянием проверяется, что ветка не отстаёт от текущего `dev` и CI относится к точному head-коммиту pull request;
+4. `dev` является интеграционной веткой текущей линии разработки;
+5. `main` не используется для повседневной интеграции;
+6. повышение `dev -> main` выполняется отдельным release/release-candidate pull request только после обязательной приёмки и фиксации доказательств на точном выпускаемом SHA;
+7. срочный hotfix опубликованного релиза после выпуска обязательно синхронизируется обратно в `dev`.
 
-Прямой merge рабочих веток в `main` запрещён. Срочные hotfix для уже опубликованного production-релиза оформляются отдельно и после выпуска обязательно синхронизируются обратно в `dev`.
+Прямые рабочие изменения в `main` запрещены процессом проекта. После включения GitHub branch protection это ограничение должно также обеспечиваться технически.
 
-Основные checks:
+## Обязательные проверки
 
-- Backend security/tests;
-- Frontend build/security audit;
-- Database migrations;
-- Release integrity.
+Перед выпуском точный candidate commit должен иметь успешные результаты всех шести основных workflow:
 
-## Backend
+- `Frontend build`;
+- `Backend security`;
+- `Database migrations`;
+- `Release integrity`;
+- `Systemd updater`;
+- `Release smoke contract`.
+
+Успех этих workflow на предыдущем SHA не считается проверкой нового кандидата.
+
+### Текущее ограничение управления ветками
+
+На ревизии 15 октября 2026 года GitHub API сообщает `protected=false` для `dev`, а repository rulesets отсутствуют. Административный endpoint branch protection недоступен используемой GitHub App, поэтому защита не может считаться включённой или быть включена из текущего автоматизированного контура.
+
+До stable владелец репозитория должен включить для `dev` и `main`:
+
+- merge только через pull request;
+- обязательные status checks;
+- актуальность ветки перед merge;
+- запрет force-push;
+- запрет удаления защищённых веток;
+- для `main` — только проверенное повышение release-линии.
+
+После настройки состояние необходимо проверить повторно и зафиксировать в release evidence. Пока этого нет, отсутствие защиты веток является release blocker.
+
+## Серверная часть
 
 ```bash
 cd backend
@@ -33,9 +55,9 @@ pytest -q tests
 pip-audit -r requirements.txt --progress-spinner off
 ```
 
-Новая backend capability должна иметь тесты на happy path и критичные failure/security cases.
+Новая серверная возможность должна иметь тесты основного сценария и критичных сценариев ошибок/безопасности.
 
-## Frontend
+## Клиентская часть
 
 ```bash
 cd frontend
@@ -45,17 +67,17 @@ npm audit --audit-level=high
 npm run build
 ```
 
-Persistent browser storage для access JWT запрещён CI guard-ом.
+Постоянное браузерное хранилище для access JWT запрещено проверкой CI.
 
-## Миграции
+## Миграции базы данных
 
 После изменения SQLAlchemy metadata:
 
-1. создать/проверить Alembic migration;
+1. создать и проверить миграцию Alembic;
 2. проверить upgrade на чистой PostgreSQL;
 3. выполнить `alembic check`;
-4. убедиться, что downgrade/rollback assumptions задокументированы;
-5. не смешивать ручное создание таблиц и migration history.
+4. задокументировать предположения о downgrade/rollback;
+5. не смешивать ручное создание таблиц с историей миграций.
 
 Команды:
 
@@ -67,78 +89,92 @@ alembic check
 
 ## Бизнес-метрики
 
-Изменение формулы требует regression test и обновления `DATA_AND_METRICS.md`. Если значение видимо пользователю, изменение фиксируется в CHANGELOG.
+Изменение формулы требует регрессионного теста и обновления `DATA_AND_METRICS.md`. Если показатель видим пользователю, изменение фиксируется в истории изменений.
 
-Нельзя переносить критичные формулы во frontend ради удобства UI.
+Критичные формулы нельзя переносить в клиентскую часть ради удобства интерфейса.
 
-## Marketplace integrations
+Если себестоимость известна не для всех операций, расчётная прибыль должна явно сообщать о неполноте данных; нулевая подстановка не должна выглядеть как достоверная прибыль.
 
-External API code должен использовать общий transport/adapters layer там, где он предусмотрен. Требования:
+## Интеграции маркетплейсов
 
-- account scope;
-- typed errors;
-- bounded retries;
-- уважение rate limits/Retry-After;
-- checkpoint/restart safety;
-- отсутствие секретов в logs.
+Внешние API используют общий транспортный/адаптерный слой там, где он предусмотрен. Обязательны:
 
-## Security-sensitive changes
+- область конкретного кабинета;
+- типизированные ошибки;
+- ограниченные повторы запросов;
+- соблюдение rate limits и `Retry-After`;
+- безопасное продолжение после остановки;
+- отсутствие секретов в журналах.
 
-При изменении auth, billing, credentials, roles, legal consent или admin flows обязательно проверяются обходные/legacy endpoints. Наличие нового безопасного endpoint не считается исправлением, если старый endpoint позволяет обойти правило.
+## Изменения, влияющие на безопасность
 
-## Frontend UX
+При изменении auth, billing, credentials, roles, legal consent или административных сценариев обязательно проверяются альтернативные и устаревшие endpoint'ы. Новый безопасный endpoint не считается исправлением, если старый путь позволяет обойти правило.
+
+## Клиентский UX
 
 Каждый аналитический экран должен иметь осмысленные состояния:
 
-- loading;
-- syncing;
-- empty;
-- error;
-- success.
+- загрузка;
+- синхронизация;
+- отсутствие данных;
+- ошибка;
+- успешное состояние.
 
-Не используйте hardcoded/demo KPI как fallback для production data.
+Демонстрационные KPI нельзя использовать как скрытую подмену production-данных.
+
+## Русский системный контракт
+
+Пользовательские и операторские сообщения, документация, комментарии/docstring в исходном коде и сообщения об ошибках, которые формирует WB Insight, пишутся на русском языке.
+
+Допустимо сохранять исходное написание технических идентификаторов и общепринятых имён протоколов/продуктов: `HTTP`, `JWT`, `Redis`, `PostgreSQL`, `Alembic`, `systemd`, `nginx`, `API`, имена переменных, путей, команд и внешних кодов ошибок.
+
+Новая логика не должна добавлять англоязычный пользовательский текст. При изменении существующего модуля старые сообщения в затронутой области также приводятся к русскому контракту.
 
 ## Версии
 
-Root `VERSION` — source of truth. Release change синхронизирует:
+Корневой `VERSION` — единственный источник версии. Release-изменение синхронизирует:
 
 - `VERSION`;
 - `frontend/package.json`;
 - `CHANGELOG.md`;
-- при milestone — `docs/VERSION_HISTORY.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
+- для milestone — `docs/VERSION_HISTORY.md`, `VERSIONING.md`, `RELEASE_READINESS.md`.
 
-## Документация как часть Definition of Done
+## Документация как часть готовности задачи
 
-Изменение считается незавершённым, если публичный contract изменился, а соответствующий canonical doc остался старым. Навигация документов — `docs/README.md`.
+Изменение считается незавершённым, если публичный контракт изменился, а соответствующий канонический документ остался старым. Навигация документов — `docs/README.md`.
 
-## Release branches/stages
+Исторические acceptance-кандидаты нельзя описывать как текущую версию. Текущая готовность фиксируется в `RELEASE_READINESS.md`, исторические evidence — отдельно.
 
-Текущая последовательность до v1:
+## Стадии релиза
 
-`alpha` -> `beta` -> `rc` -> `stable`.
+Последовательность до v1:
 
-Stage gates определяются не количеством коммитов, а `RELEASE_ROADMAP.md` и `RELEASE_READINESS.md`.
+`alpha -> beta -> rc -> stable`.
+
+Переход стадии определяется не количеством коммитов, а выполнением `RELEASE_ROADMAP.md`, `RELEASE_READINESS.md` и соответствующего evidence-контракта.
 
 ## Что нельзя коммитить
 
 - реальные `.env`;
-- пароли/secret keys;
-- WB seller secrets;
-- bank merchant credentials;
-- refresh/access sessions;
-- production backup passphrase;
+- пароли и секретные ключи;
+- токены кабинетов Wildberries;
+- банковские merchant credentials;
+- refresh/access session values;
+- ключевую фразу production backup;
 - персональные данные пользователей;
-- production database dumps.
+- дампы production-базы данных.
 
-## Self-review перед PR
+## Самопроверка перед pull request
 
-Перед ожиданием CI проверить:
+До ожидания CI проверить:
 
-- альтернативные/legacy API paths;
+- альтернативные/устаревшие API-пути;
 - tenant/account isolation;
-- idempotency;
-- timezone/date boundaries;
-- empty/error states;
+- идемпотентность;
+- границы timezone/date;
+- состояния empty/error;
 - migration drift;
-- logs на наличие secrets;
-- docs/version metadata.
+- журналы на наличие секретов;
+- русские системные сообщения и комментарии;
+- документацию и metadata версии;
+- соответствие ветки текущему `dev`.
