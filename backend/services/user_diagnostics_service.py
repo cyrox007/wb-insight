@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.ops_config import ops_config
@@ -14,7 +15,36 @@ from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from models.user_sync_state_model import UserSyncState
 from models.users_model import User
+from services.dashboard.account_scope import resolve_dashboard_scope
+from services.dashboard.financial_semantics import calculate_financial_metrics_scoped
 from services.operation_log_service import list_operation_events, operation_event_payload
+
+
+_CALCULATION_FIELDS = (
+    "sales_without_spp",
+    "sales_with_spp",
+    "returns_amount",
+    "ppvz_for_pay",
+    "ppvz_sales_commission",
+    "acquiring_fee",
+    "delivery_rub",
+    "storage_fee",
+    "penalty",
+    "deduction",
+    "acceptance",
+    "tax",
+    "advertising_cost",
+    "other_expenses",
+    "product_cost",
+    "total_costs",
+    "profit",
+    "drr",
+    "margin",
+    "financial_adjustments",
+    "compensation",
+    "unallocated_wb_expenses",
+    "unallocated_financial_adjustments",
+)
 
 
 async def find_user_for_diagnostics(
@@ -107,7 +137,17 @@ def _sync_job_payload(job: SyncJob) -> dict[str, Any]:
         "checkpoint": {
             key: value
             for key, value in (job.payload or {}).items()
-            if key in {"dateFrom", "completedThrough", "page", "offset", "cursor", "total", "processed", "saved"}
+            if key
+            in {
+                "dateFrom",
+                "completedThrough",
+                "page",
+                "offset",
+                "cursor",
+                "total",
+                "processed",
+                "saved",
+            }
         },
     }
 
@@ -147,7 +187,10 @@ def _payment_anomalies(
         item.payment_id for item in subscriptions if item.payment_id is not None
     }
     for payment in payments:
-        if payment.status == PaymentStatus.SUCCEEDED and payment.id not in subscription_payment_ids:
+        if (
+            payment.status == PaymentStatus.SUCCEEDED
+            and payment.id not in subscription_payment_ids
+        ):
             anomalies.append(
                 _anomaly(
                     "PAID_WITHOUT_SUBSCRIPTION",
@@ -264,6 +307,123 @@ def _sync_anomalies(
     return anomalies
 
 
+def _finite_number(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return round(number, 2) if math.isfinite(number) else 0.0
+
+
+async def _build_calculation_diagnostics(
+    session: AsyncSession,
+    user_id: UUID,
+    current: datetime,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Пересчитывает текущую финансовую семантику без дублирования формул."""
+    period_end = current.date()
+    period_start = period_end - timedelta(days=29)
+    try:
+        scope = await resolve_dashboard_scope(session, user_id, None)
+        if not scope.token_ids:
+            return (
+                {
+                    "status": "not_available",
+                    "semantic_version": "financial_semantics_p115",
+                    "period_from": period_start.isoformat(),
+                    "period_to": period_end.isoformat(),
+                    "reason": "Нет доступных кабинетов Wildberries для расчёта",
+                    "token_ids": [],
+                },
+                [],
+            )
+
+        result = await calculate_financial_metrics_scoped(
+            session,
+            user_id,
+            period_start,
+            period_end,
+            scope,
+        )
+    except Exception as exc:
+        return (
+            {
+                "status": "error",
+                "semantic_version": "financial_semantics_p115",
+                "period_from": period_start.isoformat(),
+                "period_to": period_end.isoformat(),
+                "error_code": type(exc).__name__,
+                "message": str(exc)[:500],
+            },
+            [
+                _anomaly(
+                    "DASHBOARD_CALCULATION_FAILED",
+                    "error",
+                    "Не удалось воспроизвести расчёт финансового дашборда",
+                    {"error_code": type(exc).__name__},
+                )
+            ],
+        )
+
+    calculation = {
+        "status": "ok" if not result.metrics.empty else "empty",
+        "semantic_version": "financial_semantics_p115",
+        "period_from": period_start.isoformat(),
+        "period_to": period_end.isoformat(),
+        "token_ids": [str(item) for item in scope.token_ids],
+        "profit_complete": bool(result.profit_complete),
+        "cost_coverage_percent": _finite_number(result.cost_coverage_percent),
+        "cost_missing_operations": int(result.cost_missing_operations),
+        "products_with_cost": int(result.products_with_cost),
+        "products_without_cost": int(result.products_without_cost),
+        "product_rows": max(0, len(result.metrics.index) - 1),
+        "metrics": {},
+    }
+    anomalies: list[dict[str, Any]] = []
+
+    if result.metrics.empty:
+        anomalies.append(
+            _anomaly(
+                "DASHBOARD_FINANCE_EMPTY",
+                "warning",
+                "За последние 30 дней нет финансовых строк для расчёта",
+                {"period_from": period_start.isoformat(), "period_to": period_end.isoformat()},
+            )
+        )
+        return calculation, anomalies
+
+    summary = result.metrics.iloc[0]
+    calculation["metrics"] = {
+        field: _finite_number(summary.get(field, 0)) for field in _CALCULATION_FIELDS
+    }
+
+    if not result.profit_complete:
+        anomalies.append(
+            _anomaly(
+                "CALCULATION_COST_INCOMPLETE",
+                "warning",
+                "Прибыль рассчитана по неполной себестоимости",
+                {
+                    "coverage_percent": calculation["cost_coverage_percent"],
+                    "missing_operations": calculation["cost_missing_operations"],
+                    "products_without_cost": calculation["products_without_cost"],
+                },
+            )
+        )
+
+    unallocated = calculation["metrics"].get("unallocated_wb_expenses", 0.0)
+    if abs(unallocated) >= 0.01:
+        anomalies.append(
+            _anomaly(
+                "UNALLOCATED_WB_EXPENSES",
+                "warning",
+                "В расчёте есть расходы WB без привязки к товару",
+                {"amount": unallocated},
+            )
+        )
+    return calculation, anomalies
+
+
 async def build_user_diagnostics(
     session: AsyncSession,
     user: User,
@@ -339,6 +499,11 @@ async def build_user_diagnostics(
         user_id=user.id,
         limit=max(1, min(event_limit, 500)),
     )
+    calculation, calculation_anomalies = await _build_calculation_diagnostics(
+        session,
+        user.id,
+        current,
+    )
 
     events_by_payment: dict[UUID, list[dict[str, Any]]] = {}
     for event in payment_events:
@@ -350,6 +515,7 @@ async def build_user_diagnostics(
         *_payment_anomalies(payments, subscriptions),
         *_credential_anomalies(tokens),
         *_sync_anomalies(states, jobs, now=current),
+        *calculation_anomalies,
     ]
     severity_order = {"critical": 0, "error": 1, "warning": 2, "info": 3}
     anomalies.sort(key=lambda item: severity_order.get(item["severity"], 9))
@@ -375,13 +541,17 @@ async def build_user_diagnostics(
         "summary": {
             "anomalies": len(anomalies),
             "critical": sum(1 for item in anomalies if item["severity"] == "critical"),
-            "failed_payments": sum(1 for item in payments if item.status == PaymentStatus.FAILED),
+            "failed_payments": sum(
+                1 for item in payments if item.status == PaymentStatus.FAILED
+            ),
             "active_subscriptions": len(active_subscriptions),
             "credentials": len(tokens),
             "valid_credentials": sum(1 for item in tokens if item.is_valid),
             "sync_entities": len(states),
             "sync_errors": sum(1 for item in states if item.last_error),
             "failed_jobs": sum(1 for item in jobs if item.status == "failed"),
+            "calculation_status": calculation.get("status"),
+            "profit_complete": calculation.get("profit_complete"),
         },
         "anomalies": anomalies,
         "payments": [
@@ -395,5 +565,8 @@ async def build_user_diagnostics(
         "credentials": [_credential_payload(item) for item in tokens],
         "sync_states": [_sync_state_payload(item) for item in states],
         "sync_jobs": [_sync_job_payload(item) for item in jobs],
-        "operation_timeline": [operation_event_payload(item) for item in operation_events],
+        "calculation": calculation,
+        "operation_timeline": [
+            operation_event_payload(item) for item in operation_events
+        ],
     }
