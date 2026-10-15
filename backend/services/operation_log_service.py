@@ -258,22 +258,40 @@ async def record_operation_event(
 
 
 async def persist_operation_event(**kwargs: Any) -> OperationLogEvent | None:
-    """Пишет диагностическое событие независимо от бизнес-транзакции."""
+    """Пишет диагностическое событие независимо от бизнес-транзакции.
 
-    session = await Database.get_session()
+    Ошибка диагностического контура не должна влиять на платёж, синхронизацию,
+    авторизацию или другой пользовательский сценарий.
+    """
+
+    session: AsyncSession | None = None
     try:
+        session = await Database.get_session()
         event = await record_operation_event(session, **kwargs)
         await session.commit()
         return event
     except Exception:
-        await session.rollback()
+        if session is not None:
+            try:
+                await session.rollback()
+            except Exception:
+                logger.exception(
+                    "Не удалось откатить транзакцию журнала операционной диагностики"
+                )
         logger.exception(
-            "Не удалось сохранить событие операционной диагностики: operation=%s step=%s",
-            kwargs.get("operation"), kwargs.get("step"),
+            "Не удалось сохранить событие операционной диагностики: операция=%s шаг=%s",
+            kwargs.get("operation"),
+            kwargs.get("step"),
         )
         return None
     finally:
-        await session.close()
+        if session is not None:
+            try:
+                await session.close()
+            except Exception:
+                logger.exception(
+                    "Не удалось закрыть сессию журнала операционной диагностики"
+                )
 
 
 async def persist_current_operation_event(
