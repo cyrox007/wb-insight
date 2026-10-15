@@ -191,7 +191,7 @@ function safeJson(value) {
 				<div v-else class="diagnostic-payments">
 					<details v-for="payment in payments" :key="payment.id" class="diagnostic-details">
 						<summary><span><strong>{{ payment.amount }} {{ payment.currency }}</strong> · {{ payment.provider }}</span><span class="cp-chip" :class="chipClass(payment.status)">{{ statusText(payment.status) }}</span></summary>
-						<div class="diagnostic-details__body"><p class="cp-card-note">Payment ID: {{ payment.id }} · Provider ID: {{ payment.external_payment_id || '—' }} · статус провайдера: {{ payment.provider_status || '—' }}</p><ol class="diagnostic-events"><li v-for="event in payment.events" :key="event.id"><span>{{ formatDate(event.created_at) }}</span><strong>{{ event.event_type }}</strong><span>{{ event.provider_status || '—' }}</span><pre>{{ safeJson(event.provider_data) }}</pre></li></ol></div>
+						<div class="diagnostic-details__body"><p class="cp-card-note">ID платежа: {{ payment.id }} · ID у провайдера: {{ payment.external_payment_id || '—' }} · статус провайдера: {{ payment.provider_status || '—' }}</p><ol class="diagnostic-events"><li v-for="event in payment.events" :key="event.id"><span>{{ formatDate(event.created_at) }}</span><strong>{{ event.event_type }}</strong><span>{{ event.provider_status || '—' }}</span><pre>{{ safeJson(event.provider_data) }}</pre></li></ol></div>
 					</details>
 				</div>
 			</section>
@@ -202,7 +202,7 @@ function safeJson(value) {
 				<div v-else class="diagnostic-timeline">
 					<details v-for="event in timeline" :key="event.id" class="diagnostic-details diagnostic-timeline__item">
 						<summary><span class="diagnostic-time">{{ formatDate(event.created_at) }}</span><span><strong>{{ event.domain }} · {{ event.step }}</strong><small>{{ event.message || event.operation }}</small></span><span class="cp-chip" :class="chipClass(event.status)">{{ statusText(event.status) }}</span></summary>
-						<div class="diagnostic-details__body diagnostic-grid"><div><span>Operation ID</span><code>{{ event.operation_id }}</code></div><div><span>Request ID</span><code>{{ event.request_id || '—' }}</code></div><div><span>Provider</span><strong>{{ event.provider || '—' }}</strong></div><div><span>HTTP / время</span><strong>{{ event.http_status || '—' }} · {{ event.duration_ms ?? '—' }} мс</strong></div><div><span>Ошибка</span><strong>{{ event.error_code || '—' }}</strong></div><div class="diagnostic-json"><span>Что отправлялось</span><pre>{{ safeJson(event.input) }}</pre></div><div class="diagnostic-json"><span>Что получено</span><pre>{{ safeJson(event.output) }}</pre></div><div class="diagnostic-json"><span>Метрики</span><pre>{{ safeJson(event.metrics) }}</pre></div></div>
+						<div class="diagnostic-details__body diagnostic-grid"><div><span>ID операции</span><code>{{ event.operation_id }}</code></div><div><span>ID запроса</span><code>{{ event.request_id || '—' }}</code></div><div><span>Провайдер</span><strong>{{ event.provider || '—' }}</strong></div><div><span>HTTP / время</span><strong>{{ event.http_status || '—' }} · {{ event.duration_ms ?? '—' }} мс</strong></div><div><span>Ошибка</span><strong>{{ event.error_code || '—' }}</strong></div><div class="diagnostic-json"><span>Что отправлялось</span><pre>{{ safeJson(event.input) }}</pre></div><div class="diagnostic-json"><span>Что получено</span><pre>{{ safeJson(event.output) }}</pre></div><div class="diagnostic-json"><span>Метрики</span><pre>{{ safeJson(event.metrics) }}</pre></div></div>
 					</details>
 				</div>
 			</section>
