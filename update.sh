@@ -51,7 +51,7 @@ resolve_target() {
   target_commit="$(git -C "$PROJECT_DIR" rev-parse "origin/$TARGET_BRANCH")"
 
   if ! git -C "$PROJECT_DIR" merge-base --is-ancestor "$previous_commit" "$target_commit"; then
-    fail "origin/$TARGET_BRANCH не является fast-forward продолжением текущего commit"
+    fail "origin/$TARGET_BRANCH не является продолжением текущего коммита без переписывания истории"
   fi
 
   export WB_UPDATE_PREVIOUS_COMMIT="$previous_commit"
@@ -71,7 +71,7 @@ resolve_target() {
   git -C "$PROJECT_DIR" show "$target_commit:ops/update_systemd.sh" >"$BOOTSTRAP_FILE"
   chmod 0700 "$BOOTSTRAP_FILE"
 
-  printf 'Обновлятор подготовлен из целевого commit %s без переключения рабочего дерева.\n' "$target_commit"
+  printf 'Обновлятор подготовлен из целевого коммита %s без переключения рабочего дерева.\n' "$target_commit"
   exec env \
     PROJECT_DIR="$PROJECT_DIR" \
     TARGET_BRANCH="$TARGET_BRANCH" \
