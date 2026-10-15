@@ -21,6 +21,7 @@ def test_operation_sanitizer_hides_secrets_but_preserves_identifiers():
             "authorization": "Bearer raw",
             "card_number": "4111111111111111",
             "cvv": "123",
+            "formUrl": "https://bank.example/pay?secret=1",
             "payment_id": "pay-id",
             "nested": {"refresh_token": "secret", "order_id": "order-1"},
         }
@@ -31,6 +32,7 @@ def test_operation_sanitizer_hides_secrets_but_preserves_identifiers():
     assert payload["authorization"] == "[СКРЫТО]"
     assert payload["card_number"] == "[СКРЫТО]"
     assert payload["cvv"] == "[СКРЫТО]"
+    assert payload["formUrl"] == "[СКРЫТО]"
     assert payload["nested"]["refresh_token"] == "[СКРЫТО]"
     assert payload["token_id"] == "safe-id"
     assert payload["payment_id"] == "pay-id"
@@ -79,5 +81,6 @@ def test_diagnostic_page_exposes_calculation_and_correlation_sections():
     ).read_text(encoding="utf-8")
 
     assert "Операционный журнал" in page
-    assert "Operation ID" in page
+    assert "ID операции" in page
     assert "Платёжные операции" in page
+    assert "Расчёт дашборда" in page
