@@ -9,6 +9,7 @@ from integrations.wildberries.finance_client import WBFinanceClient
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken
 from services.sync_job_service import persist_job_checkpoint
+from services.sync_operation_trace_service import trace_sync_stage
 from services.wb_finance_summary_service import (
     save_finance_balance,
     save_finance_report_summaries,
@@ -23,13 +24,28 @@ async def process_finance_summary(
     job: SyncJob,
     token: APIToken,
 ):
-    logger.info("[FINANCE_SUMMARY] start token_id=%s", token.id)
+    logger.info("[ФИНАНСОВАЯ_СВОДКА] запуск идентификатор_токена=%s", token.id)
 
     payload: dict[str, Any] = dict(job.payload or {})
     limit = min(max(int(payload.get("limit") or 1000), 1), 1000)
     offset = max(int(payload.get("offset") or 0), 0)
     observed_at = datetime.now(timezone.utc)
     loaded = 0
+    page_number = 0
+
+    await trace_sync_stage(
+        job=job,
+        token=token,
+        step="source_read_started",
+        status="started",
+        input_data={
+            "date_from": payload.get("dateFrom"),
+            "date_to": payload.get("dateTo"),
+            "period": payload.get("period") or "weekly",
+            "offset": offset,
+            "balance_fetched": bool(payload.get("balanceFetched")),
+        },
+    )
 
     try:
         async with WBFinanceClient(token) as client:
@@ -37,15 +53,29 @@ async def process_finance_summary(
                 balance = await client.get_balance()
                 if not isinstance(balance, dict):
                     raise WBAPIError(
-                        "Wildberries finance balance response has unexpected shape",
+                        "Wildberries вернул баланс в неожиданном формате",
                         endpoint="finance.balance",
                     )
+                await trace_sync_stage(
+                    job=job,
+                    token=token,
+                    step="balance_received",
+                    status="success",
+                    output_data={"fields": sorted(balance.keys())},
+                )
                 await save_finance_balance(
                     session,
                     user_id=job.user_id,
                     token_id=token.id,
                     payload=balance,
                     observed_at=observed_at,
+                )
+                await trace_sync_stage(
+                    job=job,
+                    token=token,
+                    step="balance_persisted",
+                    status="success",
+                    output_data={"observed_at": observed_at},
                 )
                 payload["balanceFetched"] = True
                 await persist_job_checkpoint(session, job, payload)
@@ -63,10 +93,22 @@ async def process_finance_summary(
                     break
                 if not isinstance(page, list):
                     raise WBAPIError(
-                        "Wildberries finance report list has unexpected shape",
+                        "Wildberries вернул список финансовых отчётов в неожиданном формате",
                         endpoint="finance.sales_reports_list",
                     )
 
+                page_number += 1
+                await trace_sync_stage(
+                    job=job,
+                    token=token,
+                    step="source_page_validated",
+                    status="success",
+                    output_data={
+                        "page": page_number,
+                        "rows": len(page),
+                        "offset": offset,
+                    },
+                )
                 await save_finance_report_summaries(
                     session,
                     user_id=job.user_id,
@@ -75,6 +117,18 @@ async def process_finance_summary(
                     observed_at=observed_at,
                 )
                 loaded += len(page)
+                await trace_sync_stage(
+                    job=job,
+                    token=token,
+                    step="rows_persisted",
+                    status="success",
+                    output_data={
+                        "page": page_number,
+                        "rows_submitted": len(page),
+                        "total_submitted": loaded,
+                        "observed_at": observed_at,
+                    },
+                )
                 offset += len(page)
                 payload["offset"] = offset
                 await persist_job_checkpoint(session, job, payload)
@@ -92,14 +146,26 @@ async def process_finance_summary(
             "completedAt": datetime.now(timezone.utc).isoformat(),
         }
         await session.flush()
+        await trace_sync_stage(
+            job=job,
+            token=token,
+            step="source_read_completed",
+            status="success",
+            output_data={
+                "pages": page_number,
+                "reports": loaded,
+                "period_from": payload["dateFrom"],
+                "period_to": payload["dateTo"],
+            },
+        )
         logger.info(
-            "[FINANCE_SUMMARY] success token_id=%s reports=%s",
+            "[ФИНАНСОВАЯ_СВОДКА] завершено идентификатор_токена=%s отчётов=%s",
             token.id,
             loaded,
         )
     except Exception as exc:
         logger.warning(
-            "[FINANCE_SUMMARY] failed token_id=%s offset=%s error=%s",
+            "[ФИНАНСОВАЯ_СВОДКА] ошибка идентификатор_токена=%s смещение=%s тип_ошибки=%s",
             token.id,
             offset,
             type(exc).__name__,
