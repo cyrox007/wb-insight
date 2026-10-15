@@ -1,8 +1,11 @@
+import time
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from integrations.marketplace import MarketplaceAdapter
 from models.sync_job_model import SyncJob
 from models.tokens_model import APIToken, Marketplace
+from services.sync_operation_trace_service import trace_sync_stage
 from sync.process_advertising import process_advertising
 from sync.process_finance_summary import process_finance_summary
 from sync.process_operational import process_orders, process_sales
@@ -38,8 +41,50 @@ class WildberriesAdapter(MarketplaceAdapter):
     ) -> None:
         handler = self.handlers.get(job.entity)
         if handler is None:
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="handler_not_found",
+                status="failed",
+                severity="error",
+                error_code="SYNC_HANDLER_NOT_FOUND",
+                output_data={"available_entities": sorted(self.handlers)},
+            )
             raise ValueError(
                 f"Неизвестная сущность {self.marketplace.value}: {job.entity}"
             )
 
-        await handler(session, job, token)
+        await trace_sync_stage(
+            job=job,
+            token=token,
+            step="handler_selected",
+            status="success",
+            output_data={"handler": handler.__name__},
+        )
+        started = time.perf_counter()
+        try:
+            await handler(session, job, token)
+        except Exception as exc:
+            await trace_sync_stage(
+                job=job,
+                token=token,
+                step="handler_failed",
+                status="failed",
+                severity="error",
+                error_code=type(exc).__name__,
+                message=f"Обработчик синхронизации '{job.entity}' завершился ошибкой",
+                metrics={
+                    "duration_ms": max(0, int((time.perf_counter() - started) * 1000)),
+                },
+            )
+            raise
+
+        await trace_sync_stage(
+            job=job,
+            token=token,
+            step="handler_completed",
+            status="success",
+            metrics={
+                "duration_ms": max(0, int((time.perf_counter() - started) * 1000)),
+            },
+        )
