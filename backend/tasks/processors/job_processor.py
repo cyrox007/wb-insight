@@ -6,6 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from celery_app import celery_app
 from core.database_celery import get_session
 from core.logger import setup_logger
+from core.operation_context import (
+    OperationContext,
+    bind_operation_context,
+    reset_operation_context,
+)
 from integrations.wildberries.client import (
     WBAPIError,
     WBAuthError,
@@ -152,6 +157,12 @@ async def worker_loop(session: AsyncSession, limit: int = 10) -> int:
 
         job_id = job.id
         await session.commit()
+        operation_token = bind_operation_context(
+            OperationContext(
+                operation_id=job.id,
+                actor_user_id=job.user_id,
+            )
+        )
 
         try:
             await process_job(session, job)
@@ -167,6 +178,7 @@ async def worker_loop(session: AsyncSession, limit: int = 10) -> int:
             await _record_failure(session, fresh_job, exc)
             await session.commit()
         finally:
+            reset_operation_context(operation_token)
             processed += 1
 
     return processed
