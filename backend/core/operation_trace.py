@@ -39,12 +39,15 @@ _SAFE_REQUEST_HEADERS = {
     "x-forwarded-for",
     "x-real-ip",
     "x-request-id",
+    "x-operation-id",
 }
 _SAFE_RESPONSE_HEADERS = {
     "content-length",
     "content-type",
     "location",
     "retry-after",
+    "x-request-id",
+    "x-operation-id",
 }
 
 
@@ -114,11 +117,12 @@ def _decode_body(
     digest: str,
     content_type: str | None,
 ) -> dict[str, Any]:
+    truncated = total_bytes > len(captured)
     metadata: dict[str, Any] = {
         "bytes": total_bytes,
         "captured_bytes": len(captured),
         "sha256": digest,
-        "truncated": total_bytes > len(captured),
+        "truncated": truncated,
         "content_type": content_type,
     }
     if total_bytes == 0:
@@ -132,13 +136,19 @@ def _decode_body(
 
     text = captured.decode("utf-8", errors="replace")
     if "application/json" in lowered or "+json" in lowered:
+        if truncated:
+            metadata["data"] = "[JSON ОБРЕЗАН; ПОЛНОЕ ТЕЛО ИДЕНТИФИЦИРУЕТСЯ ПО SHA256]"
+            return metadata
         try:
             metadata["data"] = sanitize_operation_data(json.loads(text))
         except (TypeError, ValueError):
-            metadata["data"] = text
+            metadata["data"] = "[НЕКОРРЕКТНЫЙ JSON; ТЕЛО НЕ СОХРАНЕНО]"
         return metadata
 
     if "application/x-www-form-urlencoded" in lowered:
+        if truncated:
+            metadata["data"] = "[ФОРМА ОБРЕЗАНА; ПОЛНОЕ ТЕЛО ИДЕНТИФИЦИРУЕТСЯ ПО SHA256]"
+            return metadata
         parsed = {
             key: values[0] if len(values) == 1 else values
             for key, values in parse_qs(text, keep_blank_values=True).items()
@@ -147,7 +157,11 @@ def _decode_body(
         return metadata
 
     if lowered.startswith("text/"):
-        metadata["data"] = text
+        metadata["data"] = (
+            text
+            if not truncated
+            else "[ТЕКСТОВОЕ ТЕЛО ОБРЕЗАНО; ПОЛНАЯ ВЕРСИЯ ИДЕНТИФИЦИРУЕТСЯ ПО SHA256]"
+        )
         return metadata
 
     metadata["data"] = "[ДВОИЧНОЕ ТЕЛО НЕ СОХРАНЯЕТСЯ]"
@@ -233,6 +247,9 @@ class OperationTraceMiddleware:
             operation="request",
             step="request_received",
             status="started",
+            event_kind="http_request",
+            component="api",
+            direction="incoming",
             request_id=request_id,
             message=f"Получен HTTP-запрос {scope.get('method', 'GET')} {path}",
             input_data={
@@ -335,6 +352,9 @@ class OperationTraceMiddleware:
                 step="request_failed" if caught is not None else "request_completed",
                 status=status_value,
                 severity=severity,
+                event_kind="http_response",
+                component="api",
+                direction="outgoing",
                 user_id=actor_user_id,
                 actor_user_id=actor_user_id,
                 request_id=request_id,
@@ -375,6 +395,10 @@ class OperationTraceMiddleware:
                     "request_bytes": request_total,
                     "response_bytes": response_total,
                     "duration_ms": duration_ms,
+                },
+                context_data={
+                    "route": route_path,
+                    "actor_snapshot": user_snapshot,
                 },
             )
             reset_operation_context(token)
