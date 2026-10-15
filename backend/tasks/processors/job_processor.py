@@ -9,6 +9,7 @@ from core.logger import setup_logger
 from core.operation_context import (
     OperationContext,
     bind_operation_context,
+    get_operation_context,
     reset_operation_context,
 )
 from integrations.wildberries.client import (
@@ -21,7 +22,7 @@ from integrations.wildberries.client import (
 from models.sync_job_model import SyncJob
 from models.tokens_model import Marketplace
 from services.marketplace_access_service import get_allowed_wb_tokens
-from services.operation_log_service import record_operation_event
+from services.operation_log_service import persist_current_operation_event
 from services.sync_job_service import (
     claim_next_job,
     complete_job,
@@ -97,6 +98,13 @@ def _failure_step(exc: Exception) -> str:
     }[_failure_code(exc)]
 
 
+async def _trace_job_event(**kwargs) -> None:
+    """Пишет шаг задачи отдельно от её рабочей транзакции и никогда её не блокирует."""
+    if get_operation_context() is None:
+        return
+    await persist_current_operation_event(**kwargs)
+
+
 async def _record_structured_failure(
     session: AsyncSession,
     job: SyncJob,
@@ -104,8 +112,7 @@ async def _record_structured_failure(
 ) -> None:
     endpoint = getattr(exc, "endpoint", None)
     http_status = getattr(exc, "status_code", None)
-    await record_operation_event(
-        session,
+    await _trace_job_event(
         operation_id=job.id,
         domain="sync",
         operation="marketplace_sync",
@@ -208,8 +215,7 @@ async def process_job(session: AsyncSession, job: SyncJob) -> None:
     )
     state.last_sync_at = datetime.now(timezone.utc)
 
-    await record_operation_event(
-        session,
+    await _trace_job_event(
         operation_id=job.id,
         domain="sync",
         operation="marketplace_sync",
