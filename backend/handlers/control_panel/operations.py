@@ -6,13 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.access_control import Permission
 from core.authorization import require_permission
 from core.dependencies import get_db_session
+from services.diagnostic_lookup_service import resolve_diagnostic_query
 from services.operation_log_service import (
-    get_operation_trace,
     get_request_timeline,
     list_operation_events,
     operation_event_payload,
     sanitize_operation_data,
 )
+from services.operation_trace_query_service import get_complete_operation_trace
 from services.operational_monitoring_service import build_operational_snapshot
 from services.user_diagnostics_service import (
     build_user_diagnostics,
@@ -35,6 +36,24 @@ async def get_operational_health(
 ) -> dict:
     """Возвращает агрегированное техническое состояние без секретов продавцов."""
     return await build_operational_snapshot(db_session)
+
+
+@router.get(
+    "/diagnostics/search",
+    dependencies=[Depends(require_permission(Permission.DIAGNOSTICS_READ))],
+)
+async def search_diagnostics(
+    query: str = Query(min_length=1, max_length=254),
+    event_limit: int = Query(default=100, ge=1, le=500),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Ищет диагностику по email, пользователю, токену, тарифу, платежу, задаче или ID трассировки."""
+    payload = await resolve_diagnostic_query(
+        db_session,
+        query,
+        event_limit=event_limit,
+    )
+    return sanitize_operation_data(payload)
 
 
 @router.get(
@@ -91,7 +110,7 @@ async def get_operation_diagnostics(
     operation_id: UUID,
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    root_operation_id, operation_ids, events = await get_operation_trace(
+    root_operation_id, operation_ids, events = await get_complete_operation_trace(
         db_session,
         operation_id,
     )
