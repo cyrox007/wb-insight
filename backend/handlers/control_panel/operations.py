@@ -10,6 +10,7 @@ from services.operation_log_service import (
     get_operation_timeline,
     list_operation_events,
     operation_event_payload,
+    sanitize_operation_data,
 )
 from services.operational_monitoring_service import build_operational_snapshot
 from services.user_diagnostics_service import (
@@ -59,7 +60,8 @@ async def find_user_diagnostics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь для диагностики не найден",
         )
-    return await build_user_diagnostics(db_session, user)
+    payload = await build_user_diagnostics(db_session, user)
+    return sanitize_operation_data(payload)
 
 
 @router.get(
@@ -76,7 +78,8 @@ async def get_user_diagnostics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь для диагностики не найден",
         )
-    return await build_user_diagnostics(db_session, user)
+    payload = await build_user_diagnostics(db_session, user)
+    return sanitize_operation_data(payload)
 
 
 @router.get(
@@ -93,10 +96,12 @@ async def get_operation_diagnostics(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Операция в диагностическом журнале не найдена",
         )
-    return {
-        "operation_id": str(operation_id),
-        "events": [operation_event_payload(item) for item in events],
-    }
+    return sanitize_operation_data(
+        {
+            "operation_id": str(operation_id),
+            "events": [operation_event_payload(item) for item in events],
+        }
+    )
 
 
 @router.get(
@@ -123,8 +128,10 @@ async def list_diagnostic_events(
         limit=limit,
         offset=offset,
     )
-    return {
-        "items": [operation_event_payload(item) for item in events],
-        "limit": limit,
-        "offset": offset,
-    }
+    return sanitize_operation_data(
+        {
+            "items": [operation_event_payload(item) for item in events],
+            "limit": limit,
+            "offset": offset,
+        }
+    )
