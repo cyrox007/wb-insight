@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import false, func, or_, select
+from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.operation_log_event import OperationLogEvent
@@ -112,7 +112,11 @@ async def _resolve_payment_ids(session: AsyncSession, query: str | None) -> set[
         return set()
 
     parsed_uuid = _uuid(normalized)
-    clauses = [func.lower(func.coalesce(Payment.external_payment_id, "")).contains(normalized.lower())]
+    clauses = [
+        func.lower(func.coalesce(Payment.external_payment_id, "")).contains(
+            normalized.lower()
+        )
+    ]
     if parsed_uuid is not None:
         clauses.append(Payment.id == parsed_uuid)
 
@@ -225,8 +229,9 @@ def _unfinished_clause():
     terminal_operations = select(OperationLogEvent.operation_id).where(
         OperationLogEvent.status.in_(_TERMINAL_OPERATION_STATUSES)
     )
-    return OperationLogEvent.operation_id.in_(started_operations).where(
-        ~OperationLogEvent.operation_id.in_(terminal_operations)
+    return and_(
+        OperationLogEvent.operation_id.in_(started_operations),
+        ~OperationLogEvent.operation_id.in_(terminal_operations),
     )
 
 
