@@ -83,6 +83,8 @@ services:
     environment:
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
+      CELERY_QUEUE_NAME: wb-insight.celery
+      CELERY_REDIS_KEY_PREFIX: "wb-insight:celery:"
     command:
       [
         "celery",
@@ -91,6 +93,7 @@ services:
         "worker",
         "--loglevel=INFO",
         "--concurrency=1",
+        "--queues=wb-insight.celery",
       ]
     depends_on:
       migrate:
@@ -110,6 +113,8 @@ services:
     environment:
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
+      CELERY_QUEUE_NAME: wb-insight.celery
+      CELERY_REDIS_KEY_PREFIX: "wb-insight:celery:"
     command:
       [
         "celery",
