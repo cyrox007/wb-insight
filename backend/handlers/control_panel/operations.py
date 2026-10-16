@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,8 +8,8 @@ from core.access_control import Permission
 from core.authorization import require_permission
 from core.dependencies import get_db_session
 from services.diagnostic_lookup_service import resolve_diagnostic_query
+from services.operation_filter_service import query_operation_events
 from services.operation_log_service import (
-    list_operation_events,
     operation_event_payload,
     sanitize_operation_data,
 )
@@ -171,37 +172,82 @@ async def get_request_diagnostics(
 async def list_diagnostic_events(
     operation_id: UUID | None = Query(default=None),
     user_id: UUID | None = Query(default=None),
+    actor_user_id: UUID | None = Query(default=None),
+    user_query: str | None = Query(default=None, max_length=254),
+    token_query: str | None = Query(default=None, max_length=255),
+    payment_query: str | None = Query(default=None, max_length=255),
+    tariff_query: str | None = Query(default=None, max_length=255),
+    job_query: str | None = Query(default=None, max_length=255),
     domain: str | None = Query(default=None, max_length=32),
+    operation: str | None = Query(default=None, max_length=64),
     event_status: str | None = Query(default=None, alias="status", max_length=16),
     severity: str | None = Query(default=None, max_length=16),
     component: str | None = Query(default=None, max_length=96),
+    event_kind: str | None = Query(default=None, max_length=32),
+    direction: str | None = Query(default=None, max_length=16),
     request_id: str | None = Query(default=None, max_length=64),
     subject_type: str | None = Query(default=None, max_length=64),
     subject_id: str | None = Query(default=None, max_length=160),
     provider: str | None = Query(default=None, max_length=64),
+    http_statuses: str | None = Query(default=None, max_length=64),
+    http_status_group: str | None = Query(default=None, max_length=16),
+    error_code: str | None = Query(default=None, max_length=96),
+    min_duration_ms: int | None = Query(default=None, ge=0, le=3_600_000),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
+    attention_only: bool = Query(default=False),
+    unfinished_only: bool = Query(default=False),
+    retry_only: bool = Query(default=False),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db_session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    events = await list_operation_events(
-        db_session,
-        operation_id=operation_id,
-        user_id=user_id,
-        domain=domain,
-        status=event_status,
-        severity=severity,
-        component=component,
-        request_id=request_id,
-        subject_type=subject_type,
-        subject_id=subject_id,
-        provider=provider,
-        limit=limit,
-        offset=offset,
-    )
-    return sanitize_operation_data(
-        {
-            "items": [operation_event_payload(item) for item in events],
-            "limit": limit,
-            "offset": offset,
-        }
-    )
+    """Фильтрует операционный журнал по пользователю, объектам и техническим признакам."""
+
+    if created_from is not None and created_to is not None and created_from > created_to:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Начало периода не может быть позже конца периода",
+        )
+
+    try:
+        payload = await query_operation_events(
+            db_session,
+            operation_id=operation_id,
+            user_id=user_id,
+            actor_user_id=actor_user_id,
+            user_query=user_query,
+            token_query=token_query,
+            payment_query=payment_query,
+            tariff_query=tariff_query,
+            job_query=job_query,
+            domain=domain,
+            operation=operation,
+            status=event_status,
+            severity=severity,
+            component=component,
+            event_kind=event_kind,
+            direction=direction,
+            request_id=request_id,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            provider=provider,
+            http_statuses=http_statuses,
+            http_status_group=http_status_group,
+            error_code=error_code,
+            min_duration_ms=min_duration_ms,
+            created_from=created_from,
+            created_to=created_to,
+            attention_only=attention_only,
+            unfinished_only=unfinished_only,
+            retry_only=retry_only,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    return sanitize_operation_data(payload)
