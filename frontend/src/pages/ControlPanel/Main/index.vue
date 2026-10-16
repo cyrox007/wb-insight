@@ -28,6 +28,22 @@ const mailActive = computed(() => route.name === 'control-panel.mail')
 const auditActive = computed(() => route.name === 'control-panel.audit')
 const can = (permission) => permissions.value.includes(permission)
 
+const diagnosticsContextLink = computed(() => {
+	if (route.name === 'control-panel.edit-user' && route.params.id) {
+		return {
+			label: 'Диагностика пользователя',
+			to: { name: 'control-panel.diagnostics', query: { user_query: String(route.params.id) } },
+		}
+	}
+	if (route.name === 'control-panel.edit-tariff' && route.params.id) {
+		return {
+			label: 'Диагностика тарифа',
+			to: { name: 'control-panel.diagnostics', query: { tariff_query: String(route.params.id) } },
+		}
+	}
+	return null
+})
+
 async function loadOverview() {
 	isLoading.value = true
 	loadError.value = ''
@@ -59,6 +75,13 @@ onMounted(loadOverview)
 				<h1 class="cp-title">Панель управления</h1>
 				<p class="cp-subtitle">Пользователи, роли, тарифы, платежи, диагностика, рассылки и аудит в едином административном интерфейсе.</p>
 			</div>
+			<router-link
+				v-if="diagnosticsContextLink && can('diagnostics:read')"
+				:to="diagnosticsContextLink.to"
+				class="cp-context-diagnostics"
+			>
+				{{ diagnosticsContextLink.label }} →
+			</router-link>
 		</header>
 
 		<nav class="cp-nav" aria-label="Разделы панели управления">
@@ -126,6 +149,27 @@ onMounted(loadOverview)
 </template>
 
 <style scoped>
+.cp-shell__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.cp-context-diagnostics {
+	flex: 0 0 auto;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: var(--surface-soft);
+	color: var(--text-color);
+	padding: 0.6rem 0.8rem;
+	text-decoration: none;
+}
+
+.cp-context-diagnostics:hover {
+	border-color: var(--primary-color);
+}
+
 .cp-route-frame {
 	min-width: 0;
 	transform-origin: 50% 10%;
@@ -152,6 +196,16 @@ onMounted(loadOverview)
 .cp-page-motion-leave-to {
 	opacity: 0;
 	transform: translateY(-3px) scale(0.999);
+}
+
+@media (max-width: 720px) {
+	.cp-shell__header {
+		flex-direction: column;
+	}
+
+	.cp-context-diagnostics {
+		width: 100%;
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {

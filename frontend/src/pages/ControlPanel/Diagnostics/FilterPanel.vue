@@ -60,6 +60,18 @@ function toIso(value) {
 	return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
 }
 
+function toLocalDateTime(value) {
+	if (!value) return ''
+	const date = new Date(value)
+	if (Number.isNaN(date.getTime())) return ''
+	const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+	return local.toISOString().slice(0, 16)
+}
+
+function toBoolean(value) {
+	return value === true || value === 'true' || value === '1' || value === 1
+}
+
 function payload() {
 	const result = {}
 	for (const [key, value] of Object.entries(filters)) {
@@ -85,6 +97,29 @@ function applyFilters() {
 function resetFilters({ notify = true } = {}) {
 	Object.assign(filters, defaults())
 	if (notify) emit('reset')
+}
+
+function setFilters(values, { apply = true } = {}) {
+	resetFilters({ notify: false })
+	const booleanKeys = new Set(['attention_only', 'unfinished_only', 'retry_only'])
+	for (const [key, rawValue] of Object.entries(values || {})) {
+		if (!(key in filters) || rawValue === undefined || rawValue === null) continue
+		if (booleanKeys.has(key)) {
+			filters[key] = toBoolean(rawValue)
+			continue
+		}
+		if (key === 'limit') {
+			const parsed = Number(rawValue)
+			filters.limit = [50, 100, 200, 500].includes(parsed) ? parsed : 100
+			continue
+		}
+		if (key === 'created_from' || key === 'created_to') {
+			filters[key] = toLocalDateTime(rawValue)
+			continue
+		}
+		filters[key] = String(rawValue)
+	}
+	if (apply) applyFilters()
 }
 
 function applyPreset(key) {
@@ -129,7 +164,7 @@ function applyMatch(item) {
 	applyFilters()
 }
 
-defineExpose({ applyMatch, resetFilters })
+defineExpose({ applyMatch, resetFilters, setFilters })
 </script>
 
 <template>
