@@ -1,5 +1,7 @@
 # celery_app.py
 
+import os
+
 from celery import Celery
 
 import models
@@ -7,6 +9,18 @@ from core.lifecycle_config import lifecycle_config
 from core.ops_config import ops_config
 from settings import config
 
+
+# На сервере Redis разделяют несколько проектов. У WB должны быть собственные
+# очередь и служебные ключи, иначе чужой worker может забрать и отбросить задачу.
+CELERY_QUEUE_NAME = os.getenv("CELERY_QUEUE_NAME", "wb-insight.celery").strip()
+CELERY_REDIS_KEY_PREFIX = os.getenv(
+    "CELERY_REDIS_KEY_PREFIX", "wb-insight:celery:"
+).strip()
+
+if not CELERY_QUEUE_NAME:
+    raise RuntimeError("CELERY_QUEUE_NAME не может быть пустым")
+if not CELERY_REDIS_KEY_PREFIX:
+    raise RuntimeError("CELERY_REDIS_KEY_PREFIX не может быть пустым")
 
 celery_app = Celery(
     "wb_analytics",
@@ -42,13 +56,39 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_max_tasks_per_child=100,
     mail_delivery_enabled=mail_delivery_enabled,
+    task_default_queue=CELERY_QUEUE_NAME,
+    task_default_exchange=CELERY_QUEUE_NAME,
+    task_default_routing_key=CELERY_QUEUE_NAME,
+    task_routes={"*": {"queue": CELERY_QUEUE_NAME, "routing_key": CELERY_QUEUE_NAME}},
+    broker_transport_options={"global_keyprefix": CELERY_REDIS_KEY_PREFIX},
+    result_backend_transport_options={"global_keyprefix": CELERY_REDIS_KEY_PREFIX},
 )
 
+
+def _scheduled_task(task: str, schedule: float) -> dict:
+    """Создаёт расписание, жёстко привязанное к очереди WB."""
+    return {
+        "task": task,
+        "schedule": schedule,
+        "options": {
+            "queue": CELERY_QUEUE_NAME,
+            "routing_key": CELERY_QUEUE_NAME,
+        },
+    }
+
+
 celery_app.conf.beat_schedule = {
-    "wb-global-sync-scheduler": {"task": "tasks.schedulers.state_scheduler.schedule_sync", "schedule": 60.0},
-    "wb-global-sync-scheduler-2": {"task": "tasks.schedulers.create_state_scheduler.schedule_sync", "schedule": 600.0},
-    "wb-job-worker": {"task": "tasks.processors.job_processor.run", "schedule": 300.0},
-    "operations-monitor": {"task": "tasks.processors.operations_monitor.run", "schedule": float(ops_config.ALERT_CHECK_INTERVAL_SECONDS)},
-    "mail-campaign-scheduler": {"task": "mail.campaign.scan", "schedule": 30.0},
-    "mail-delivery": {"task": "mail.delivery.scan", "schedule": 15.0},
+    "wb-global-sync-scheduler": _scheduled_task(
+        "tasks.schedulers.state_scheduler.schedule_sync", 60.0
+    ),
+    "wb-global-sync-scheduler-2": _scheduled_task(
+        "tasks.schedulers.create_state_scheduler.schedule_sync", 600.0
+    ),
+    "wb-job-worker": _scheduled_task("tasks.processors.job_processor.run", 300.0),
+    "operations-monitor": _scheduled_task(
+        "tasks.processors.operations_monitor.run",
+        float(ops_config.ALERT_CHECK_INTERVAL_SECONDS),
+    ),
+    "mail-campaign-scheduler": _scheduled_task("mail.campaign.scan", 30.0),
+    "mail-delivery": _scheduled_task("mail.delivery.scan", 15.0),
 }
