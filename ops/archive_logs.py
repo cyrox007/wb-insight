@@ -11,7 +11,7 @@ import json
 import os
 import sys
 import tempfile
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable
@@ -363,6 +363,8 @@ def archive_logs(
                         "sha256": _sha256(final_path),
                     }
                 )
+        except psycopg2.Error as exc:
+            raise LogArchiveError("Не удалось прочитать журналы PostgreSQL") from exc
         finally:
             connection.close()
 
