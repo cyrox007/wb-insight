@@ -73,9 +73,16 @@ def _database_connection_kwargs() -> dict[str, Any]:
     if password is None:
         raise LogArchiveError("Переменная DB_PASSWORD не задана")
 
+    try:
+        port = int(os.getenv("DB_PORT", "5432"))
+    except ValueError as exc:
+        raise LogArchiveError("Переменная DB_PORT должна быть целым числом") from exc
+    if port < 1 or port > 65535:
+        raise LogArchiveError("Переменная DB_PORT должна быть в диапазоне 1–65535")
+
     return {
         "host": os.getenv("DB_HOST", "localhost"),
-        "port": int(os.getenv("DB_PORT", "5432")),
+        "port": port,
         "dbname": os.getenv("DB_NAME", "wb"),
         "user": os.getenv("DB_USER", "postgres"),
         "password": password,
@@ -260,11 +267,22 @@ def _verify_manifest(path: Path) -> dict[str, Any]:
         filename = str(item.get("filename") or "")
         expected_sha = str(item.get("sha256") or "")
         expected_rows = item.get("rows")
-        if not filename or len(expected_sha) != 64 or not isinstance(expected_rows, int):
+        valid_sha = len(expected_sha) == 64 and all(
+            symbol in "0123456789abcdefABCDEF" for symbol in expected_sha
+        )
+        if (
+            not filename
+            or Path(filename).name != filename
+            or not valid_sha
+            or not isinstance(expected_rows, int)
+            or expected_rows < 0
+        ):
             raise LogArchiveError("Некорректные метаданные файла в манифесте")
         archive_path = path.parent / filename
-        if not archive_path.is_file():
-            raise LogArchiveError(f"Файл архива {filename} отсутствует")
+        if archive_path.is_symlink() or not archive_path.is_file():
+            raise LogArchiveError(f"Файл архива {filename} отсутствует или является ссылкой")
+        if archive_path.resolve().parent != path.parent.resolve():
+            raise LogArchiveError(f"Файл архива {filename} находится вне каталога манифеста")
         if _sha256(archive_path) != expected_sha:
             raise LogArchiveError(f"Контрольная сумма {filename} не совпадает")
         _verify_archive_file(
@@ -322,7 +340,11 @@ def archive_logs(
             raise LogArchiveError("Не удалось подключиться к PostgreSQL") from exc
 
         try:
-            connection.set_session(readonly=True, autocommit=False)
+            connection.set_session(
+                readonly=True,
+                autocommit=False,
+                isolation_level="REPEATABLE READ",
+            )
             for kind in kinds:
                 table = SUPPORTED_TABLES[kind]
                 filename = _safe_archive_name(table, cutoff)
