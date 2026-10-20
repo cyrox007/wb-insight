@@ -5,6 +5,7 @@ import BaseButton from '@/components/UI/Buttons/BaseButton.vue'
 import CP_Diagnostics from '@/API/ControlPanel/CP_Diagnostics'
 import EventTimeline from './EventTimeline.vue'
 import FilterPanel from './FilterPanel.vue'
+import IncidentCenter from './IncidentCenter.vue'
 import UserDiagnostics from './index.vue'
 
 const route = useRoute()
@@ -169,6 +170,13 @@ async function resetFiltered() {
 	await syncFilterRoute({}, 0)
 }
 
+function openIncidentDiagnostics(params) {
+	if (!params || !Object.keys(params).length) return
+	filterPanel.value?.setFilters(params)
+	if (params.operation_id) loadOperation(params.operation_id)
+	else if (params.request_id) loadRequest(params.request_id)
+}
+
 function applyMatchAsFilter(item) {
 	filterPanel.value?.applyMatch(item)
 }
@@ -227,6 +235,8 @@ watch(
 				<p class="cp-subtitle">Поиск и комбинируемые фильтры связывают пользователя, тариф, кабинет маркетплейса, платёж, HTTP-запрос, фоновые задачи, внешние API и итоговый ответ приложения.</p>
 			</div>
 		</header>
+
+		<IncidentCenter @open="openIncidentDiagnostics" />
 
 		<form class="cp-card trace-search" @submit.prevent="runSearch">
 			<label class="cp-field-label trace-search__field">

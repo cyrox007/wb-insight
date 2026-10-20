@@ -1,4 +1,4 @@
-# WB Insight — operations runbook
+# WB Insight — эксплуатационный регламент
 
 Документ описывает эксплуатационный baseline WB Web v1: health, monitoring, alerts, backup/restore и incident triage. Он дополняет `PRODUCTION_DEPLOYMENT.md`.
 
@@ -113,7 +113,10 @@ Release evidence должно содержать:
 - duration;
 - success/failure.
 
-## Incident triage
+## Разбор инцидентов
+
+Перед ручным разбором открыть **Панель управления → Диагностика → Требует внимания**. P125 собирает актуальные сбои платежей, WB-подключений, синхронизации и операционного журнала в одну очередь и даёт переход в точный `operation_id/request_id` либо фильтр сущности. Полный контракт описан в [INCIDENT_TRIAGE.md](INCIDENT_TRIAGE.md).
+
 
 ### PostgreSQL/Redis not ready
 Проверить provider/container, network, credentials и storage capacity. Не маскировать downstream outage бесконечным restart API.

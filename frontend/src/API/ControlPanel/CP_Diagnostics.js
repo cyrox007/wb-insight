@@ -23,6 +23,10 @@ export default class CP_Diagnostics {
 		return await $api.get(`/control-panel/operations/diagnostics/requests/${encodeURIComponent(requestId)}`)
 	}
 
+	static async getIncidents(params = {}) {
+		return await $api.get('/control-panel/operations/diagnostics/incidents', { params })
+	}
+
 	static async getEvents(params = {}) {
 		return await $api.get('/control-panel/operations/diagnostics/events', { params })
 	}
