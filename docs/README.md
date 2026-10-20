@@ -28,6 +28,7 @@
 - [`ADMIN_GUIDE.md`](ADMIN_GUIDE.md) — роли, пользователи, тарифы и панель управления.
 - [`OPERATIONS.md`](OPERATIONS.md) — health, monitoring, alerts, backup/restore и incident triage.
 - [`INCIDENT_TRIAGE.md`](INCIDENT_TRIAGE.md) — глобальная очередь проблем, приоритизация и переход в сквозную диагностику.
+- [`LOG_RETENTION_ARCHIVE.md`](LOG_RETENTION_ARCHIVE.md) — проверяемое архивирование audit/diagnostic журналов без автоматического удаления.
 - [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) — канонический container deploy/upgrade/rollback.
 - [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md) — эксплуатация существующей Ubuntu/systemd-установки и транзакционное обновление.
 - [`ACCOUNT_LIFECYCLE.md`](ACCOUNT_LIFECYCLE.md) — жизненный цикл аккаунта и оставшиеся release-gaps.
@@ -60,4 +61,4 @@
 7. Исторический release candidate не должен описываться как текущая версия после дальнейшего развития `dev`.
 8. Пользовательские и операторские сообщения, комментарии и документация проекта ведутся на русском языке; технические идентификаторы и названия протоколов сохраняют исходное написание.
 
-Дата полной ревизии: **15 октября 2026 года**.
+Дата полной ревизии: **20 октября 2026 года**.

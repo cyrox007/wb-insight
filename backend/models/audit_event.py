@@ -9,12 +9,11 @@ from core.database import Database
 
 
 class AuditEvent(Database.Base):
-    """Append-only security/business audit event.
+    """Неизменяемое событие аудита безопасности и бизнес-действий.
 
-    The table deliberately has no foreign keys to mutable business entities: an
-    audit record must survive account, payment or sync-object lifecycle changes.
-    Application code exposes read-only access; the migration also installs a
-    database trigger rejecting UPDATE/DELETE operations.
+    Таблица намеренно не содержит внешних ключей на изменяемые бизнес-сущности:
+    запись должна переживать удаление аккаунта, платежа или объекта синхронизации.
+    Приложение предоставляет только чтение, а триггер БД запрещает UPDATE/DELETE.
     """
 
     __tablename__ = "audit_events"

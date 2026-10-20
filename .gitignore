@@ -5,9 +5,13 @@
 __pycache__/
 .DS_Store
 
-# Deployment/runtime virtualenv artifacts created by update/rollback flows.
-# No trailing slash here: some artifacts are symlinks, not directories.
+# Артефакты virtualenv, создаваемые обновлением и откатом.
+# Без завершающего слеша: часть артефактов может быть символическими ссылками.
 backend/venv.broken.*
 backend/venv.previous.*
 backend/venv.release.*
 backend/venv.releases
+
+# Локальные архивы журналов не должны попадать в Git.
+/log-archive/
+/.artifacts/log-archive/

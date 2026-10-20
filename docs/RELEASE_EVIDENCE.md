@@ -223,13 +223,21 @@ UX template нельзя отмечать `pass` без фактической �
 
 Наличие файлов само по себе не заменяет реальное выполнение проверок. Manifest обеспечивает полноту набора, stage/version binding и целостность artifacts; factual provenance human UX review и real-seller data-accuracy evidence должна сохраняться владельцем релиза.
 
+## Архив журналов P126
+
+Перед RC/stable оператор должен сформировать и повторно проверить архив `audit_events`/`operation_log_events` по утверждённой дате отсечения через `ops/archive_logs.py`. Манифест архива и его SHA-256 хранятся в защищённом evidence storage рядом с release evidence.
+
+Это supporting proof для операционного контракта, а не новый top-level artifact kind `release_evidence.py`: сам release manifest не должен копировать содержащие персональные/операционные данные архивные строки.
+
+Факт успешного локального экспорта не закрывает retention gate без утверждённого срока хранения и подтверждённой off-host копии.
+
 ## RC evidence
 
 Для `rc` требуется весь beta-набор и дополнительно:
 
 - `wb_full_sync` — реальный production WB credential/full-sync smoke;
 - `sber_payment` — реальный acquiring/refund/reconciliation smoke;
-- `operations` — active monitoring/alerts/logging evidence;
+- `operations` — active monitoring/alerts/logging evidence, включая ссылку/контрольную сумму проверенного P126 archive manifest;
 - `backup_restore` — off-host encrypted backup и production-like restore drill;
 - `legal` — опубликованные non-draft legal documents и operator details.
 

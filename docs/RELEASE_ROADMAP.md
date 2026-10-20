@@ -1,6 +1,6 @@
 # WB Insight — дорожная карта до стабильного релиза
 
-Дата актуализации: 22 сентября 2026 года.
+Дата актуализации: 20 октября 2026 года.
 
 Цель: первый публичный стабильный релиз **WB Insight Web v1 / `1.0.0` для продавцов Wildberries**.
 
@@ -33,6 +33,10 @@
 - P57–P59 mail preflight/evidence provenance hardening закрыт PR #135–#137;
 - P60 password-reset throttle/session-revocation acceptance proof закрыт PR #138, merge `569547acaa3d12ed808bc906703ec2869f39c532`;
 - P61 fail-closed beta smoke mode закрыт PR #139, merge `8f5f001bb4f8321e31cc50f96627e84025e39eb2`;
+- P115–P119 закрыли аудит финансовой семантики, обновлятора, auth, provider-neutral release acceptance и документации;
+- P120/P121 закрыли frontend dependency blocker и подготовили проверяемый контракт защиты `dev`/`main`; фактическое административное включение защиты остаётся внешним blocker;
+- P122–P125 добавили сквозную операционную диагностику, серверные фильтры, deep-link из рабочих экранов и глобальный центр инцидентов;
+- P126 добавляет проверяемое архивирование append-only audit/diagnostic журналов без автоматического удаления; утверждение фактического retention срока остаётся внешним blocker;
 - dependency audits, release integrity, data-accuracy tooling и evidence manifest v2 остаются постоянными release gates;
 - **WB Web v1 feature scope заморожен**: новые продуктовые функции не добавляются до beta, кроме исправления обнаруженных blocker-дефектов;
 - текущий этап — **P40 / issue #78: production-like beta acceptance и закрытие evidence**;
