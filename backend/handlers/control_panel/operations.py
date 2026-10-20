@@ -8,6 +8,7 @@ from core.access_control import Permission
 from core.authorization import require_permission
 from core.dependencies import get_db_session
 from services.diagnostic_lookup_service import resolve_diagnostic_query
+from services.incident_triage_service import build_incident_feed
 from services.operation_filter_service import query_operation_events
 from services.operation_log_service import (
     operation_event_payload,
@@ -163,6 +164,39 @@ async def get_request_diagnostics(
             "events": [operation_event_payload(item) for item in events],
         }
     )
+
+
+@router.get(
+    "/diagnostics/incidents",
+    dependencies=[Depends(require_permission(Permission.DIAGNOSTICS_READ))],
+)
+async def list_diagnostic_incidents(
+    lookback_hours: int = Query(default=72, ge=1, le=24 * 30),
+    severity: str | None = Query(default=None, max_length=16),
+    domain: str | None = Query(default=None, max_length=32),
+    user_query: str | None = Query(default=None, max_length=254),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db_session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Возвращает глобальную очередь проблем с переходом в сквозную диагностику."""
+
+    try:
+        payload = await build_incident_feed(
+            db_session,
+            lookback_hours=lookback_hours,
+            severity=severity,
+            domain=domain,
+            user_query=user_query,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return sanitize_operation_data(payload)
 
 
 @router.get(
