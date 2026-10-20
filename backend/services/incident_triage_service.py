@@ -109,7 +109,6 @@ def _incident(
 ) -> dict[str, Any]:
     return {
         "id": _fingerprint(
-            source,
             code,
             domain,
             user_id,
@@ -261,6 +260,7 @@ async def _payment_incidents(
     session: AsyncSession,
     *,
     cutoff: datetime,
+    current: datetime,
     user_ids: set[UUID] | None,
 ) -> list[dict[str, Any]]:
     statement = select(Payment).where(Payment.updated_at >= cutoff)
@@ -283,7 +283,7 @@ async def _payment_incidents(
     )
 
     incidents: list[dict[str, Any]] = []
-    pending_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    pending_cutoff = current - timedelta(hours=24)
     for payment in payments:
         created_at = payment.created_at or payment.updated_at
         last_seen = payment.updated_at or created_at
@@ -322,6 +322,33 @@ async def _payment_incidents(
                     severity="error",
                     domain="payment",
                     title="Платёж завершился отказом или ошибкой",
+                    source="payment_state",
+                    user_id=payment.user_id,
+                    subject_type="payment",
+                    subject_id=str(payment.id),
+                    first_seen_at=created_at,
+                    last_seen_at=last_seen,
+                    details={
+                        "payment_id": str(payment.id),
+                        "provider": payment.provider.value,
+                        "mode": payment.mode,
+                        "provider_status": payment.provider_status,
+                    },
+                    diagnostics=_diagnostic_query(
+                        user_id=payment.user_id,
+                        payment_id=payment.id,
+                    ),
+                )
+            )
+            continue
+
+        if payment.status == PaymentStatus.CANCELLED:
+            incidents.append(
+                _incident(
+                    code="PAYMENT_CANCELLED",
+                    severity="warning",
+                    domain="payment",
+                    title="Платёж отменён до подтверждения оплаты",
                     source="payment_state",
                     user_id=payment.user_id,
                     subject_type="payment",
@@ -503,7 +530,7 @@ async def _sync_incidents(
                     subject_type="marketplace_credential",
                     subject_id=str(state.token_id),
                     first_seen_at=state.created_at,
-                    last_seen_at=state.last_success_at or state.created_at,
+                    last_seen_at=current,
                     details={
                         "token_id": str(state.token_id),
                         "entity": state.entity,
@@ -676,6 +703,7 @@ async def build_incident_feed(
         *await _payment_incidents(
             session,
             cutoff=cutoff,
+            current=current,
             user_ids=user_ids,
         ),
         *await _sync_incidents(
