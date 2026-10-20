@@ -30,13 +30,10 @@ const auditActive = computed(() => route.name === 'control-panel.audit')
 const can = (permission) => permissions.value.includes(permission)
 
 const attentionCount = computed(() => {
-	const users = attention.value?.users || {}
 	const mail = attention.value?.mail || {}
 	const payments = attention.value?.payments || {}
 	const system = attention.value?.system || {}
-	return Number(users.unverified || 0)
-		+ Number(users.inactive || 0)
-		+ Number(mail.failed_recent || 0)
+	return Number(mail.failed_recent || 0)
 		+ Number(mail.stale_queued || 0)
 		+ Number(payments.failed_24h || 0)
 		+ Number(payments.pending_over_24h || 0)
