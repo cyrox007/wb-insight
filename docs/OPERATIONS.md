@@ -136,6 +136,14 @@ Worker recovery должен вернуть job в retry либо terminal faile
 ### Payment incident
 Проверять server-side provider state, idempotency и связь payment/subscription. Клиентский screenshot не является доказательством статуса.
 
+## Архивирование журналов
+
+P126 добавляет read-only экспорт неизменяемых таблиц `audit_events` и `operation_log_events` через `ops/archive_logs.py`. Инструмент формирует gzip JSONL, SHA-256 и манифест, повторно проверяет содержимое и не удаляет исходные строки.
+
+Дата отсечения задаётся оператором явно и должна соответствовать утверждённой политике хранения. Автоматического purge нет: репозиторий не назначает юридический срок хранения самостоятельно.
+
+Подробная процедура, формат манифеста и повторная проверка описаны в [LOG_RETENTION_ARCHIVE.md](LOG_RETENTION_ARCHIVE.md).
+
 ## RC operational gate
 
 До `1.0.0-rc.1` требуется фактическое подтверждение:
