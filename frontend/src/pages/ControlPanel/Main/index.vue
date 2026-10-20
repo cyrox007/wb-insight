@@ -15,6 +15,7 @@ const accountHealth = ref({
 	staff: 0,
 })
 const permissions = ref([])
+const attention = ref({})
 const isLoading = ref(false)
 const loadError = ref('')
 
@@ -27,6 +28,35 @@ const diagnosticsActive = computed(() => route.name === 'control-panel.diagnosti
 const mailActive = computed(() => route.name === 'control-panel.mail')
 const auditActive = computed(() => route.name === 'control-panel.audit')
 const can = (permission) => permissions.value.includes(permission)
+
+const attentionCount = computed(() => {
+	const users = attention.value?.users || {}
+	const mail = attention.value?.mail || {}
+	const payments = attention.value?.payments || {}
+	const system = attention.value?.system || {}
+	return Number(users.unverified || 0)
+		+ Number(users.inactive || 0)
+		+ Number(mail.failed_recent || 0)
+		+ Number(mail.stale_queued || 0)
+		+ Number(payments.failed_24h || 0)
+		+ Number(payments.pending_over_24h || 0)
+		+ Number(system.issue_count || 0)
+})
+
+const attentionHint = computed(() => {
+	const parts = []
+	const payments = attention.value?.payments || {}
+	const mail = attention.value?.mail || {}
+	const system = attention.value?.system || {}
+	if (Number(payments.failed_24h || 0) + Number(payments.pending_over_24h || 0) > 0) {
+		parts.push(`платежи: ${Number(payments.failed_24h || 0) + Number(payments.pending_over_24h || 0)}`)
+	}
+	if (Number(mail.failed_recent || 0) + Number(mail.stale_queued || 0) > 0) {
+		parts.push(`почта: ${Number(mail.failed_recent || 0) + Number(mail.stale_queued || 0)}`)
+	}
+	if (Number(system.issue_count || 0) > 0) parts.push(`система: ${Number(system.issue_count)}`)
+	return parts.join(' · ') || 'Откройте центр инцидентов для подробной проверки'
+})
 
 const diagnosticsContextLink = computed(() => {
 	if (route.name === 'control-panel.edit-user' && route.params.id) {
@@ -56,6 +86,7 @@ async function loadOverview() {
 			...(response.data?.account_health || {}),
 		}
 		permissions.value = Array.isArray(response.data?.permissions) ? response.data.permissions : []
+		attention.value = response.data?.attention || {}
 	} catch (error) {
 		console.error('Ошибка загрузки панели управления:', error)
 		loadError.value = 'Не удалось загрузить сводку панели управления.'
@@ -124,6 +155,19 @@ onMounted(loadOverview)
 					</article>
 				</section>
 
+				<router-link
+					v-if="can('diagnostics:read') && attentionCount > 0"
+					:to="{ name: 'control-panel.diagnostics' }"
+					class="cp-card cp-attention-card"
+				>
+					<div>
+						<span class="cp-eyebrow">Требует внимания</span>
+						<strong>{{ attentionCount }} сигналов</strong>
+						<p class="cp-card-note">{{ attentionHint }}</p>
+					</div>
+					<span class="cp-shortcut-card__action">Разобрать инциденты →</span>
+				</router-link>
+
 				<section class="cp-overview-grid cp-overview-grid--shortcuts">
 					<router-link v-if="can('users:read')" :to="{ name: 'control-panel.users' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Аккаунты</span><h2 class="cp-shortcut-card__title">Управление пользователями</h2><p class="cp-card-note">Статус, профиль, верификация и безопасность аккаунтов.</p></div><span class="cp-shortcut-card__action">Открыть пользователей →</span></router-link>
 					<router-link v-if="can('roles:read')" :to="{ name: 'control-panel.roles' }" class="cp-card cp-shortcut-card"><div><span class="cp-eyebrow">Доступ</span><h2 class="cp-shortcut-card__title">Роли и права</h2><p class="cp-card-note">Матрица доступа и назначения системных ролей.</p></div><span class="cp-shortcut-card__action">Открыть роли →</span></router-link>
@@ -169,6 +213,23 @@ onMounted(loadOverview)
 .cp-context-diagnostics:hover {
 	border-color: var(--primary-color);
 }
+
+.cp-attention-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	text-decoration: none;
+	color: var(--text-color);
+	border-color: color-mix(in srgb, var(--danger-color, #c43d3d) 30%, var(--border-color));
+}
+
+.cp-attention-card strong {
+	display: block;
+	font-size: 1.3rem;
+	margin-top: 0.15rem;
+}
+
 
 .cp-route-frame {
 	min-width: 0;
