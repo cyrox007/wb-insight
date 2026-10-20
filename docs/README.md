@@ -27,6 +27,7 @@
 
 - [`ADMIN_GUIDE.md`](ADMIN_GUIDE.md) — роли, пользователи, тарифы и панель управления.
 - [`OPERATIONS.md`](OPERATIONS.md) — health, monitoring, alerts, backup/restore и incident triage.
+- [`INCIDENT_TRIAGE.md`](INCIDENT_TRIAGE.md) — глобальная очередь проблем, приоритизация и переход в сквозную диагностику.
 - [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) — канонический container deploy/upgrade/rollback.
 - [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md) — эксплуатация существующей Ubuntu/systemd-установки и транзакционное обновление.
 - [`ACCOUNT_LIFECYCLE.md`](ACCOUNT_LIFECYCLE.md) — жизненный цикл аккаунта и оставшиеся release-gaps.
