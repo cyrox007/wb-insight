@@ -17,8 +17,6 @@ from pathlib import Path
 from typing import Any, Iterable
 from uuid import UUID
 
-import psycopg2
-from psycopg2.extras import RealDictCursor
 
 
 SUPPORTED_TABLES = {
@@ -158,9 +156,10 @@ def _iter_table_rows(
     table: str,
     cutoff: datetime,
     batch_size: int,
+    cursor_factory,
 ):
     cursor_name = f"archive_{table}_{os.getpid()}"
-    with connection.cursor(name=cursor_name, cursor_factory=RealDictCursor) as cursor:
+    with connection.cursor(name=cursor_name, cursor_factory=cursor_factory) as cursor:
         cursor.itersize = batch_size
         cursor.execute(
             f'SELECT * FROM "{table}" WHERE created_at < %s '
@@ -309,7 +308,19 @@ def archive_logs(
     file_entries: list[dict[str, Any]] = []
 
     try:
-        connection = psycopg2.connect(**_database_connection_kwargs())
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+        except ImportError as exc:
+            raise LogArchiveError(
+                "Для подключения к PostgreSQL требуется установленный psycopg2"
+            ) from exc
+
+        try:
+            connection = psycopg2.connect(**_database_connection_kwargs())
+        except psycopg2.Error as exc:
+            raise LogArchiveError("Не удалось подключиться к PostgreSQL") from exc
+
         try:
             connection.set_session(readonly=True, autocommit=False)
             for kind in kinds:
@@ -327,6 +338,7 @@ def archive_logs(
                     table=table,
                     cutoff=cutoff,
                     batch_size=batch_size,
+                    cursor_factory=RealDictCursor,
                 )
                 row_count, first_created_at, last_created_at = _write_rows(
                     partial_path,
@@ -500,7 +512,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except LogArchiveError as exc:
         print(f"[ошибка] {exc}", file=sys.stderr)
-        raise SystemExit(1)
-    except psycopg2.Error:
-        print("[ошибка] Не удалось архивировать журналы из PostgreSQL", file=sys.stderr)
         raise SystemExit(1)
