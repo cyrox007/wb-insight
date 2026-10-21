@@ -123,6 +123,7 @@ async def create_expense(
         if nm_id is not None and nm_id <= 0:
             raise ValueError("Некорректный артикул WB")
     except (TypeError, ValueError) as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message=str(exc), code="INVALID_EXPENSE")
 
     expense = ManualExpense(
@@ -160,34 +161,43 @@ async def update_expense(
     if expense is None:
         return response_error(message="Расход не найден", code="NOT_FOUND")
 
+    # Проверяем весь набор изменений до изменения ORM-сущности.
+    changes = {}
     try:
         token_id = UUID(str(payload.get("token_id", expense.token_id)))
-        await _specific_scope(db_session, user_id, token_id)
-        expense.token_id = token_id
+        scope = await _specific_scope(db_session, user_id, token_id)
+        if scope.selected_token_id != token_id:
+            raise ValueError("Кабинет недоступен")
+        changes["token_id"] = token_id
         if "date" in payload:
-            expense.date = _parse_date(payload.get("date"))
+            changes["date"] = _parse_date(payload.get("date"))
         if "amount" in payload:
-            expense.amount = parse_expense_amount(payload.get("amount"))
+            changes["amount"] = parse_expense_amount(payload.get("amount"))
         if "category" in payload:
             category = str(payload.get("category") or "").strip()
             if not category or len(category) > 100:
                 raise ValueError("Укажите категорию расхода")
-            expense.category = category
+            changes["category"] = category
         if "currency" in payload:
-            expense.currency = str(payload.get("currency") or "RUB").upper()
+            changes["currency"] = str(payload.get("currency") or "RUB").upper()
         if "nm_id" in payload:
             nm_raw = payload.get("nm_id")
-            expense.nm_id = int(nm_raw) if nm_raw not in (None, "") else None
-            if expense.nm_id is not None and expense.nm_id <= 0:
+            nm_id = int(nm_raw) if nm_raw not in (None, "") else None
+            if nm_id is not None and nm_id <= 0:
                 raise ValueError("Некорректный артикул WB")
+            changes["nm_id"] = nm_id
         if "description" in payload:
-            expense.description = (
+            changes["description"] = (
                 str(payload.get("description")).strip()
                 if payload.get("description")
                 else None
             )
     except (TypeError, ValueError) as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message=str(exc), code="INVALID_EXPENSE")
+
+    for field, value in changes.items():
+        setattr(expense, field, value)
 
     await db_session.flush()
     return response_success(data=_serialize(expense), message="Расход обновлён")
