@@ -28,6 +28,7 @@
 - [`ADMIN_GUIDE.md`](ADMIN_GUIDE.md) — роли, пользователи, тарифы и панель управления.
 - [`OPERATIONS.md`](OPERATIONS.md) — health, monitoring, alerts, backup/restore и incident triage.
 - [`INCIDENT_TRIAGE.md`](INCIDENT_TRIAGE.md) — глобальная очередь проблем, приоритизация и переход в сквозную диагностику.
+- [`DIAGNOSTIC_ENTRY_POINTS.md`](DIAGNOSTIC_ENTRY_POINTS.md) — переходы в диагностику из платежей, пользователей, тарифов и кабинетов.
 - [`LOG_RETENTION_ARCHIVE.md`](LOG_RETENTION_ARCHIVE.md) — проверяемое архивирование audit/diagnostic журналов без автоматического удаления.
 - [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md) — канонический container deploy/upgrade/rollback.
 - [`SYSTEMD_DEPLOYMENT.md`](SYSTEMD_DEPLOYMENT.md) — эксплуатация существующей Ubuntu/systemd-установки и транзакционное обновление.
