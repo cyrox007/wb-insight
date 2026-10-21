@@ -342,7 +342,17 @@ onMounted(loadProviders)
 								<td><span class="cp-chip" :class="payment.mode === 'live' ? 'cp-chip--active' : 'cp-chip--warning'">{{ modeLabel(payment.mode) }}</span></td>
 								<td>{{ statusLabel(payment.status) }}</td>
 								<td><code class="cp-code">{{ payment.external_payment_id || '—' }}</code></td>
-								<td><BaseButton variant="ghost" size="small" text="Детали" @click="openPayment(payment)" /></td>
+								<td>
+									<div class="payment-row-actions">
+										<BaseButton variant="ghost" size="small" text="Детали" @click="openPayment(payment)" />
+										<router-link
+											:to="{ name: 'control-panel.diagnostics', query: { payment_query: payment.id } }"
+											class="payment-diagnostics-link"
+										>
+											Диагностика
+										</router-link>
+									</div>
+								</td>
 							</tr>
 						</tbody>
 					</table>
@@ -351,7 +361,18 @@ onMounted(loadProviders)
 
 			<div v-if="detailLoading" class="cp-state">Загружаем карточку платежа…</div>
 			<article v-else-if="paymentDetail" class="cp-card payment-detail">
-				<div class="payment-detail__head"><div><p class="cp-eyebrow">Платёж</p><h3>{{ paymentDetail.id }}</h3></div><BaseButton variant="ghost" size="small" text="Закрыть" @click="paymentDetail = null" /></div>
+				<div class="payment-detail__head">
+					<div><p class="cp-eyebrow">Платёж</p><h3>{{ paymentDetail.id }}</h3></div>
+					<div class="payment-detail__actions">
+						<router-link
+							:to="{ name: 'control-panel.diagnostics', query: { payment_query: paymentDetail.id } }"
+							class="payment-diagnostics-link"
+						>
+							Открыть в диагностике
+						</router-link>
+						<BaseButton variant="ghost" size="small" text="Закрыть" @click="paymentDetail = null" />
+					</div>
+				</div>
 				<div class="provider-meta"><div><span>Пользователь</span><strong>{{ paymentDetail.user_email }}</strong></div><div><span>Тариф</span><strong>{{ paymentDetail.tariff_name }}</strong></div><div><span>Статус</span><strong>{{ statusLabel(paymentDetail.status) }}</strong></div><div><span>Провайдер</span><strong>{{ providerLabel(paymentDetail.provider) }} · {{ modeLabel(paymentDetail.mode) }}</strong></div></div>
 				<h4>События</h4>
 				<div v-if="!paymentDetail.events?.length" class="cp-muted">Событий пока нет.</div>
@@ -383,8 +404,11 @@ onMounted(loadProviders)
 .provider-clear { display:block; margin:8px 0 14px; color:var(--text-muted,#91a4bf); font-size:13px; }
 .payment-detail { padding:18px; }
 .payment-detail h3 { margin:2px 0 0; font-size:16px; word-break:break-all; }
+.payment-row-actions,.payment-detail__actions { display:flex; align-items:center; gap:8px; }
+.payment-diagnostics-link { border:1px solid var(--border-color); border-radius:8px; color:var(--text-color); padding:6px 9px; text-decoration:none; white-space:nowrap; }
+.payment-diagnostics-link:hover { border-color:var(--primary-color); }
 .payment-event { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--border-color); }
 .payment-event > div { display:flex; flex-direction:column; gap:2px; }
 .payment-event span { font-size:12px; color:var(--text-muted,#91a4bf); }
-@media (max-width:760px) { .provider-grid { grid-template-columns:1fr; }.provider-form__row,.payments-summary { flex-direction:column; align-items:stretch; }.provider-meta { grid-template-columns:1fr; }.provider-card { padding:16px; } }
+@media (max-width:760px) { .provider-grid { grid-template-columns:1fr; }.provider-form__row,.payments-summary,.payment-detail__actions { flex-direction:column; align-items:stretch; }.provider-meta { grid-template-columns:1fr; }.provider-card { padding:16px; } }
 </style>
