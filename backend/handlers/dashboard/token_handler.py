@@ -18,6 +18,7 @@ from services.token_services import (
     get_token_by_id,
     insert_token,
 )
+from utils.request_payload import request_json_object
 from utils.responce_helps import response_error, response_success
 
 
@@ -41,7 +42,14 @@ async def create_token(
             used=quota["used"],
         )
 
-    data = await request.json()
+    data = await request_json_object(request)
+    if data is None:
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="REQUEST_PAYLOAD_INVALID",
+            message="Ожидается JSON-объект подключения Wildberries",
+        )
+
     raw_token = str(data.get("token") or "").strip()
     if not raw_token:
         response.status_code = status.HTTP_400_BAD_REQUEST
