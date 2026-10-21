@@ -59,3 +59,30 @@ def test_safe_json_contract_returns_explicit_client_error():
         source = (root / "handlers" / "dashboard" / filename).read_text(encoding="utf-8")
         assert "REQUEST_PAYLOAD_INVALID" in source
         assert "HTTP_400_BAD_REQUEST" in source
+
+
+def test_expense_mutations_reject_invalid_fields_with_http_400():
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "handlers" / "dashboard" / "expense_handler.py").read_text(
+        encoding="utf-8"
+    )
+    # Создание и изменение должны назначать статус перед ответом об ошибке.
+    assert source.count('response.status_code = status.HTTP_400_BAD_REQUEST') >= 4
+    assert source.count('code="INVALID_EXPENSE"') == 2
+
+
+def test_expense_update_validates_before_mutating_orm():
+    root = Path(__file__).resolve().parents[1]
+    source = (root / "handlers" / "dashboard" / "expense_handler.py").read_text(
+        encoding="utf-8"
+    )
+    update_source = source.split("async def update_expense(", 1)[1].split(
+        "@router.delete", 1
+    )[0]
+    validation_end = update_source.index('code="INVALID_EXPENSE"')
+    mutation_start = update_source.index("for field, value in changes.items():")
+    assert validation_end < mutation_start
+    assert "setattr(expense, field, value)" in update_source[mutation_start:]
+    assert "expense.date =" not in update_source
+    assert "expense.amount =" not in update_source
+    assert "expense.category =" not in update_source
