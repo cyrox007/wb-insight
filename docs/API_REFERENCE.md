@@ -21,7 +21,8 @@
 - timestamps должны иметь однозначную timezone semantics;
 - ошибки внешних систем преобразуются в безопасный внутренний contract;
 - операции, способные создать дубликат бизнес-сущности, проектируются с idempotent semantics;
-- изменение существующего response contract требует проверки frontend consumers и regression tests.
+- изменение существующего response contract требует проверки frontend consumers и regression tests;
+- mutation-endpoint'ы, которые принимают JSON-объект, fail-closed отклоняют битый JSON, массивы, строки и другие JSON-типы с HTTP 400 вместо внутренней ошибки приложения.
 
 ## Development
 
