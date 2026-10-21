@@ -24,6 +24,8 @@
 - изменение существующего response contract требует проверки frontend consumers и regression tests;
 - mutation-endpoint'ы, которые принимают JSON-объект, fail-closed отклоняют битый JSON, массивы, строки и другие JSON-типы с HTTP 400 вместо внутренней ошибки приложения.
 
+Для `/dashboard/expenses` ошибочные поля создания/редактирования возвращают HTTP 400 с кодом `INVALID_EXPENSE`. При редактировании запись не изменяется, если любое из переданных полей не прошло проверку.
+
 ## Development
 
 При включённой стандартной FastAPI документации используйте OpenAPI/Swagger приложения для точных request/response schemas текущего commit. Код и generated schema имеют приоритет над устаревшими примерами.
