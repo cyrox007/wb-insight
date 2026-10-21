@@ -86,3 +86,21 @@ def test_expense_update_validates_before_mutating_orm():
     assert "expense.date =" not in update_source
     assert "expense.amount =" not in update_source
     assert "expense.category =" not in update_source
+
+
+def test_cost_batch_rejects_non_object_entries_and_returns_http_400():
+    root = Path(__file__).resolve().parents[1]
+    handler = (root / "handlers" / "dashboard" / "cost_price_handler.py").read_text(
+        encoding="utf-8"
+    )
+    service = (root / "services" / "cost_price_service.py").read_text(
+        encoding="utf-8"
+    )
+    batch = handler.split('async def batch_update_cost_prices(', 1)[1].split(
+        '@router.delete', 1
+    )[0]
+    assert 'any(not isinstance(item, dict) for item in items)' in batch
+    assert 'message="Каждый товар должен быть JSON-объектом"' in batch
+    assert batch.count('response.status_code = status.HTTP_400_BAD_REQUEST') >= 4
+    assert 'if not isinstance(item, dict):' in service
+    assert 'raise ValueError("Каждый товар должен быть объектом")' in service

@@ -58,6 +58,8 @@ async def upsert_cost_prices(
     now = datetime.now(timezone.utc)
 
     for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("Каждый товар должен быть объектом")
         nm_id = int(item.get("nm_id") or 0)
         if nm_id <= 0:
             raise ValueError("Артикул WB должен быть положительным")
