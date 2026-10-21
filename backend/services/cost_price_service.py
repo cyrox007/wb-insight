@@ -37,11 +37,18 @@ def _parse_effective_from(value) -> date:
 def _parse_cost(value) -> Decimal:
     try:
         parsed = Decimal(str(value))
+        if not parsed.is_finite():
+            raise ValueError("Себестоимость должна быть конечным числом")
+        if parsed < 0:
+            raise ValueError("Себестоимость не может быть отрицательной")
+        rounded = parsed.quantize(Decimal("0.01"))
+        if rounded >= Decimal("10000000000000"):
+            raise ValueError("Себестоимость превышает допустимый размер")
+        return rounded
     except (InvalidOperation, TypeError, ValueError) as exc:
+        if isinstance(exc, ValueError) and str(exc).startswith("Себестоимость"):
+            raise
         raise ValueError("Некорректная себестоимость") from exc
-    if parsed < 0:
-        raise ValueError("Себестоимость не может быть отрицательной")
-    return parsed.quantize(Decimal("0.01"))
 
 
 async def upsert_cost_prices(
