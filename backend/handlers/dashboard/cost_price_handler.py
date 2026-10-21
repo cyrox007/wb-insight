@@ -168,6 +168,12 @@ async def batch_update_cost_prices(
         )
 
     items = raw_items or []
+    if any(not isinstance(item, dict) for item in items):
+        response.status_code = status.HTTP_400_BAD_REQUEST
+        return response_error(
+            code="INVALID_DATA",
+            message="Каждый товар должен быть JSON-объектом",
+        )
     if not items:
         response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message="Список товаров пуст", code="EMPTY_LIST")
@@ -179,6 +185,7 @@ async def batch_update_cost_prices(
             items=items,
         )
     except (TypeError, ValueError) as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message=str(exc), code="INVALID_DATA")
 
     return response_success(
