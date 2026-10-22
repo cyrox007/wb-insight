@@ -17,6 +17,7 @@ from services.cost_price_service import (
     get_dashboard_unit_economy,
     get_product_list_with_costs,
     upsert_cost_prices,
+    _parse_cost,
 )
 from utils.request_payload import request_json_object
 from utils.responce_helps import response_error, response_success
@@ -27,6 +28,32 @@ router = APIRouter(prefix="/cost-prices", tags=["cost_prices"])
 
 def _user_id(request: Request) -> UUID:
     return UUID(str(request.state.user["sub"]))
+
+
+def _parse_csv_cost_rows(content: str) -> list[dict]:
+    """Читает CSV без промежуточного преобразования денежных значений в float."""
+    items = []
+    for row in csv.DictReader(io.StringIO(content)):
+        try:
+            nm_id = int(row.get("nm_id") or 0)
+            if nm_id <= 0:
+                continue
+            cost_price = _parse_cost(row.get("cost_price") or "0")
+        except (TypeError, ValueError):
+            continue
+
+        items.append(
+            {
+                "nm_id": nm_id,
+                "seller_sku": row.get("seller_sku"),
+                "product_name": row.get("product_name"),
+                "cost_price": cost_price,
+                "currency": row.get("currency") or "RUB",
+                "comment": row.get("comment"),
+                "effective_from": row.get("effective_from") or None,
+            }
+        )
+    return items
 
 
 @router.get("/unit-economy", dependencies=[Depends(auth_middle)])
@@ -99,37 +126,20 @@ async def get_products_with_costs(
 @router.post("/upload", dependencies=[Depends(auth_middle)])
 async def upload_cost_prices(
     request: Request,
+    response: Response,
     db_session: AsyncSession = Depends(get_db_session),
     file: Optional[UploadFile] = File(None),
 ):
     if not file:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message="Файл не предоставлен", code="NO_FILE")
 
     try:
         content = await file.read()
         content_str = content.decode("utf-8-sig")
-        items = []
-        for row in csv.DictReader(io.StringIO(content_str)):
-            try:
-                nm_id = int(row.get("nm_id") or 0)
-                cost_price = float(row.get("cost_price") or 0)
-                if nm_id <= 0 or cost_price < 0:
-                    continue
-                items.append(
-                    {
-                        "nm_id": nm_id,
-                        "seller_sku": row.get("seller_sku"),
-                        "product_name": row.get("product_name"),
-                        "cost_price": cost_price,
-                        "currency": row.get("currency") or "RUB",
-                        "comment": row.get("comment"),
-                        "effective_from": row.get("effective_from") or None,
-                    }
-                )
-            except (TypeError, ValueError):
-                continue
-
+        items = _parse_csv_cost_rows(content_str)
         if not items:
+            response.status_code = status.HTTP_400_BAD_REQUEST
             return response_error(message="Нет валидных данных в файле", code="INVALID_DATA")
 
         count = await upsert_cost_prices(
@@ -141,7 +151,8 @@ async def upload_cost_prices(
             message=f"Успешно загружено {count} строк себестоимости",
             data={"uploaded_count": count},
         )
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, ValueError, csv.Error) as exc:
+        response.status_code = status.HTTP_400_BAD_REQUEST
         return response_error(message=str(exc), code="FILE_ERROR")
 
 
