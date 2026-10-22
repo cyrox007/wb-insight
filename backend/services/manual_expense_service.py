@@ -11,11 +11,24 @@ from services.dashboard.account_scope import DashboardAccountScope
 
 def parse_expense_amount(value) -> Decimal:
     try:
-        amount = Decimal(str(value)).quantize(Decimal("0.01"))
+        amount = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
         raise ValueError("Некорректная сумма расхода") from exc
+
+    if not amount.is_finite():
+        raise ValueError("Сумма расхода должна быть конечным числом")
     if amount <= 0:
         raise ValueError("Сумма расхода должна быть больше нуля")
+
+    try:
+        amount = amount.quantize(Decimal("0.01"))
+    except InvalidOperation as exc:
+        raise ValueError("Сумма расхода превышает допустимую точность") from exc
+
+    if amount <= 0:
+        raise ValueError("Сумма расхода после округления должна быть больше нуля")
+    if amount >= Decimal("10000000000000000"):
+        raise ValueError("Сумма расхода превышает допустимый размер")
     return amount
 
 
