@@ -66,6 +66,7 @@ async def upsert_cost_prices(
     version. Back-dated corrections never overwrite a newer current snapshot.
     """
     normalized: list[dict] = []
+    seen_versions: set[tuple[int, date]] = set()
     now = datetime.now(timezone.utc)
 
     for item in items:
@@ -74,6 +75,13 @@ async def upsert_cost_prices(
         nm_id = int(item.get("nm_id") or 0)
         if nm_id <= 0:
             raise ValueError("Артикул WB должен быть положительным")
+        effective_from = _parse_effective_from(item.get("effective_from"))
+        version_key = (nm_id, effective_from)
+        if version_key in seen_versions:
+            raise ValueError(
+                f"Дубликат себестоимости: артикул {nm_id}, дата {effective_from.isoformat()}"
+            )
+        seen_versions.add(version_key)
         normalized.append(
             {
                 "user_id": user_id,
@@ -83,7 +91,7 @@ async def upsert_cost_prices(
                 "cost_price": _parse_cost(item.get("cost_price", 0)),
                 "currency": str(item.get("currency") or "RUB").upper(),
                 "comment": item.get("comment"),
-                "effective_from": _parse_effective_from(item.get("effective_from")),
+                "effective_from": effective_from,
                 "created_at": now,
                 "updated_at": now,
             }
